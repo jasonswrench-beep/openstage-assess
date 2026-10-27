@@ -180,9 +180,21 @@ export function checkAnswerKey(question: Question): Finding[] {
 export function hasUsableKey(question: Question): boolean {
   if (checkAnswerKey(question).some((f) => f.severity === "error")) return false;
   return !question.findings.some(
-    (f) =>
-      f.severity === "error" &&
-      !f.dismissed &&
-      (f.code === FindingCode.NoAnswerKey || f.code === FindingCode.MultipleKeysOnSingleAnswer),
+    (f) => f.severity === "error" && !f.dismissed && STORED_KEY_PROBLEMS.has(f.code),
   );
 }
+
+/**
+ * Problems an importer records that the body no longer shows. The last three
+ * are placeholders: the importer had to put text such as "(missing)" into an
+ * option so the question would be storable, and a question carrying one must
+ * not be treated as usable. The check cannot see this from the body, because
+ * the placeholder looks like any other option.
+ */
+const STORED_KEY_PROBLEMS: ReadonlySet<string> = new Set<string>([
+  FindingCode.NoAnswerKey,
+  FindingCode.MultipleKeysOnSingleAnswer,
+  FindingCode.NoOptions,
+  FindingCode.TooFewOptions,
+  FindingCode.EmptyOption,
+]);

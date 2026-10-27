@@ -160,30 +160,54 @@ marked both. An unrecognised `Type:` line was ignored without a word. An
 `Answers:` heading is now always a key heading, so it can no longer be absorbed
 into the option above it.
 
+### An unkeyed import could refuse to save the whole bank
+
+A keyless fill-in-the-blank produced `accepted: [""]`, which the schema
+rejected, so `openassess import file.txt --out bank.openassess` printed the
+verdicts and then aborted with nothing written. `Points: 5000` failed the same
+way at `Bank.add`. That contradicted the rule that an unkeyed question has to be
+storable so it can be repaired beside its source text.
+
+The rule now holds: **the importer only emits questions that pass
+`validateQuestion`.** Feeding it shuffled files found six shapes that did not,
+and each is handled so that the question is stored and says it failed:
+
+- **An unkeyed blank.** The schema now accepts an empty string in `accepted`
+  (fill in the blank and short answer), because that is how an unkeyed blank is
+  stored and `checkAnswerKey` already reads whitespace there as "no key". A
+  placeholder such as `(missing)` was the alternative and was rejected: it reads
+  as a real answer, and the next edit would recompute the error away and leave a
+  question that scores the word "(missing)" as correct.
+- **Points over 1000.** The default is used, `PointsAssumed` (a warning) quotes
+  what the file gave, and `MAX_POINTS` is one constant shared by the schema and
+  the importer. `PointsAssumed` had been defined and never raised.
+- **A choice question with one option.** A placeholder second option is added and
+  `TooFewOptions` is an error. It used to import as a clean, parsed question.
+- **An option with a letter and no text.** It keeps its place, so the key still
+  points at the right option, with placeholder content and an `EmptyOption`
+  error. In a matching question the empty entry is left out with a warning.
+- **`Type: MA` with no options** had a placeholder body with no `partialCredit`.
+- **A metadata label with no value,** such as a blank `REF:`, was stored as an
+  empty string. It carries nothing and is skipped.
+
+A placeholder only ever sits beside an error, and `hasUsableKey` now also refuses
+a question carrying `NoOptions`, `TooFewOptions` or `EmptyOption`, because the
+placeholder looks like any other option and the body alone cannot show it.
+
+The `todo` test is now an assertion, over 800 generated files, and the generator
+has a wider vocabulary: empty and half-empty options, matching pairs, every type
+hint, points past the ceiling, long titles, images and raw HTML. The wider
+vocabulary also exercised the "nothing is lost" property and found three more
+places text vanished, fixed the same way (the words are quoted in the finding):
+a title cut at 64 characters, the other half of a matching entry missing one
+side, and option text on a `Type: TF` question that is not True or False.
+
 ---
 
 ## Open, and roughly in the order I would take them
 
-Item 1 was the scanner and is fixed above. The numbers are kept so that
-references to the others stay valid.
-
-### 2. An unkeyed import can refuse to save the whole bank
-
-A keyless fill-in-the-blank produces `accepted: [""]`, which the schema
-rejects, so `openassess import file.txt --out bank.openassess` prints the
-verdicts and then aborts with nothing written. This contradicts the design rule
-that an unkeyed question must be storable so it can be repaired beside its
-source text. `Points: 5000` fails the same way at `Bank.add`.
-
-The rule to adopt: the importer may only emit questions that pass
-`validateQuestion`, with placeholders chosen to satisfy the schema rather than
-to look like placeholders.
-
-The other shapes that fail the same way, found by feeding the scanner shuffled
-files: a multiple choice with a single option, and a `Type: MA` question with no
-options, whose placeholder body has no `partialCredit`. The `todo` test in
-`test/standard-text-scanner.test.ts` measures all of them over 400 generated
-files. When this item is done, remove its `todo` and it becomes an assertion.
+Items 1 and 2 were the scanner and the importer's output, and are fixed above.
+The numbers are kept so that references to the others stay valid.
 
 ### 3. Decide what the delivery payload may carry
 
@@ -262,7 +286,6 @@ Media is never garbage collected either.
   never checked on open.
 - Five of the eleven types have no import path, and `shortAnswer` is in
   `RELEASE_1_TYPES`.
-- `FindingCode.PointsAssumed` is defined and never raised.
 
 ### 8. Found while rewriting the scanner, not yet fixed
 
@@ -271,8 +294,20 @@ Media is never garbage collected either.
   `1. C` produces a clean question. The asterisks win, which is a reasonable
   rule, but the disagreement should be a finding.
 - **A true or false question keeps only its answer.** `Type: TF` with options
-  that are not True and False (Yes and No, say) is flagged for having no key,
-  but the option words are not retained.
+  that are not True and False (Yes and No, say) is flagged for having no key.
+  The option words are now quoted in an `OptionNotKept` warning rather than
+  vanishing, but they are still not stored.
+- **`hasUsableKey` accepts a question whose key names a missing option.** `Type:
+  MA` with options a to c and the entry `1. A, E` is `failed` (a
+  `KeyLetterMissing` error) and still returns true, because that code is not
+  among the stored problems it reads. An exporter relying on it would emit a
+  multiple-response question missing one of its answers. The fix is one entry in
+  `STORED_KEY_PROBLEMS`.
+- **A matching question padded with `(missing)` pairs loses its error on the next
+  edit.** The padding satisfies the schema, but its error is `NoAnswerKey`, which
+  `withRecomputedFindings` re-derives from the body, and `checkAnswerKey` sees
+  two complete pairs. The choice placeholders use codes that are not re-derived,
+  so they are safe; matching needs a code of its own.
 - **A numbered line inside a stem starts a question.** A stem that lists steps as
   `1. Plan`, `2. Do` is cut at the first of them. The scanner cannot tell the
   two apart from the line alone; a run of numbers that continues the stem's own

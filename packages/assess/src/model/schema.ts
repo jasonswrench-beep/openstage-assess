@@ -15,6 +15,7 @@ import { isId } from "./ids.ts";
 import {
   BLOOM_LEVELS,
   DIFFICULTIES,
+  MAX_POINTS,
   MAX_TITLE_LENGTH,
   QUESTION_TYPES,
   STATUSES,
@@ -216,8 +217,11 @@ function checkBody(c: Checker, type: QuestionType, body: unknown): void {
         c.string(raw["id"], `${bp}.id`);
         if (raw["label"] !== undefined) c.string(raw["label"], `${bp}.label`);
         if (c.array(raw["accepted"], `${bp}.accepted`, { min: 1 })) {
+          // An empty string is how an unkeyed blank is stored. The answer-key
+          // check is what refuses it, and a placeholder such as "(missing)"
+          // would be worse: it reads as a real answer, so the check would pass.
           (raw["accepted"] as unknown[]).forEach((a, j) =>
-            c.string(a, `${bp}.accepted.${j}`),
+            c.string(a, `${bp}.accepted.${j}`, { allowEmpty: true }),
           );
         }
       });
@@ -292,7 +296,10 @@ function checkBody(c: Checker, type: QuestionType, body: unknown): void {
       c.noUnknownKeys(body, p, new Set(["caseSensitive", "accepted"]));
       c.boolean(body["caseSensitive"], `${p}.caseSensitive`);
       if (c.array(body["accepted"], `${p}.accepted`, { min: 1 })) {
-        (body["accepted"] as unknown[]).forEach((a, i) => c.string(a, `${p}.accepted.${i}`));
+        // Empty is storable for the same reason as in a fill in the blank.
+        (body["accepted"] as unknown[]).forEach((a, i) =>
+          c.string(a, `${p}.accepted.${i}`, { allowEmpty: true }),
+        );
       }
       return;
     }
@@ -474,7 +481,7 @@ export function validateQuestion(raw: unknown): ValidationResult {
   c.number(raw["version"], "version", { min: 1 });
   c.string(raw["title"], "title", { max: MAX_TITLE_LENGTH });
   c.richText(raw["stem"], "stem", { allowEmpty: false });
-  c.number(raw["points"], "points", { min: 0, max: 1000 });
+  c.number(raw["points"], "points", { min: 0, max: MAX_POINTS });
 
   if (c.oneOf(raw["type"], "type", QUESTION_TYPES)) {
     checkBody(c, raw["type"] as QuestionType, raw["body"]);

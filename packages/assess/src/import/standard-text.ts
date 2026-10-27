@@ -45,6 +45,7 @@ import {
 import { addFindings, createQuestion, DEFAULT_POINTS, emptyMetadata } from "../model/create.ts";
 import { checkAnswerKey } from "../quality/answer-key.ts";
 import {
+  MAX_POINTS,
   MAX_TITLE_LENGTH,
   titleFromStem,
   type BloomLevel,
@@ -74,6 +75,13 @@ import {
 } from "./types.ts";
 
 export const PROFILE_ID = "standard-text";
+
+/**
+ * The text put where the schema insists on content and the source had none.
+ * Only ever beside an error finding, so that the question fails and cannot be
+ * mistaken for one that was authored this way. See `STORED_KEY_PROBLEMS`.
+ */
+const PLACEHOLDER = "(missing)";
 
 const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?\s*\]/gi;
 const HTML_BLOCK = /\[HTML\]([\s\S]*?)\[\/HTML\]/gi;
@@ -231,6 +239,9 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
     const source: SourceRef = { file, firstBlock: entry.block, lastBlock: entry.block };
     const key = METADATA_LABELS[entry.label.toLowerCase()];
     const value = entry.value;
+    // A label with nothing after it, such as `REF:` left blank in a template,
+    // carries no information, and an empty string is not a valid metadata value.
+    if (value.trim().length === 0) continue;
 
     if (key === "difficulty") {
       const parsed = DIFFICULTY_WORDS[value.trim().toLowerCase()];
@@ -440,6 +451,10 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
   return { correct, tokens, unresolved, shared };
 }
 
+function placeholderOption(index: number): Option {
+  return { id: localId("o", index), content: plainToRich(PLACEHOLDER), correct: false };
+}
+
 function buildOptions(
   raw: RawQuestion,
   correct: ReadonlySet<number>,
@@ -456,9 +471,22 @@ function buildOptions(
     media.push(...converted.media);
     findings.push(...converted.findings);
 
+    // An option with a letter and no text, or only an empty block of HTML. It is
+    // kept in its place, so that the key's letters still point at the right
+    // options, and its content is a placeholder beside an error.
+    const empty = richTextToPlain(converted.rich).length === 0 && converted.media.length === 0;
+    if (empty) {
+      findings.push(
+        finding(FindingCode.EmptyOption, "error", `Option ${option.letter.toUpperCase()} has no text.`, {
+          source,
+          field: `body.options.${i}.content`,
+        }),
+      );
+    }
+
     const built: Option = {
       id: localId("o", i),
-      content: converted.rich,
+      content: empty ? plainToRich(PLACEHOLDER) : converted.rich,
       correct: correct.has(i),
     };
     if (option.feedback.length > 0) {
@@ -505,6 +533,27 @@ function buildBody(
         break;
       }
 
+      // The body of a true or false question is its answer and nothing else, so
+      // options saying anything but True or False have nowhere to go. They used
+      // to vanish; now the words are in the message.
+      // Only an option that is exactly True or False is redundant. One that begins
+      // with the word and carries more, such as a wrapped line of other text,
+      // would lose the rest.
+      const justTrueOrFalse = /^(t|true|f|false)\s*[.!]?$/i;
+      const unkeptOptions = raw.options
+        .map((o) => o.lines.join(" ").trim())
+        .filter((text) => text.length > 0 && !justTrueOrFalse.test(text));
+      if (unkeptOptions.length > 0) {
+        findings.push(
+          finding(
+            FindingCode.OptionNotKept,
+            "warn",
+            `A true or false question keeps only its answer, so these options were not kept: "${unkeptOptions.join(" / ")}".`,
+            { source, field: "body" },
+          ),
+        );
+      }
+
       if (resolved === undefined) {
         // Left unset on purpose. Storing False here would be a guessed answer
         // key that nothing downstream could tell apart from an authored one.
@@ -536,6 +585,9 @@ function buildBody(
         findings.push(
           finding(FindingCode.NoAnswerKey, "error", "No accepted answer was given for this fill in the blank question.", { source, field: "body.blanks" }),
         );
+        // Empty on purpose. The schema stores an unkeyed blank as an empty
+        // answer, and the answer-key check re-derives the error from it. Text
+        // such as "(missing)" would read as a real answer and clear the error.
         return { body: { caseSensitive: false, blanks: [{ id: "b1", accepted: [""] }] }, media, findings };
       }
       return { body: { caseSensitive: false, blanks: [{ id: "b1", accepted }] }, media, findings };
@@ -548,6 +600,14 @@ function buildBody(
         const text = option.lines.join(" ");
         const at = text.indexOf("=");
         if (at === -1) {
+          // A distractor with no text has nothing to keep, and the schema refuses
+          // an empty one. It is reported, so the gap is not silent.
+          if (text.trim().length === 0) {
+            findings.push(
+              finding(FindingCode.EmptyOption, "warn", `Matching entry ${i + 1} has no text, so it was left out.`, { source, field: `body.distractors` }),
+            );
+            return;
+          }
           distractors.push(text.trim());
           return;
         }
@@ -555,7 +615,12 @@ function buildBody(
         const right = text.slice(at + 1).trim();
         if (left.length === 0 || right.length === 0) {
           findings.push(
-            finding(FindingCode.OptionWithoutLetter, "warn", `Matching entry ${i + 1} is missing one side of the pair.`, { source, field: `body.pairs.${i}` }),
+            finding(
+              FindingCode.OptionWithoutLetter,
+              "warn",
+              `Matching entry ${i + 1} is missing one side of the pair, so it was left out. It said: "${text.trim()}".`,
+              { source, field: `body.pairs.${i}` },
+            ),
           );
           return;
         }
@@ -567,7 +632,7 @@ function buildBody(
           finding(FindingCode.NoAnswerKey, "error", "A matching question needs at least two complete pairs.", { source, field: "body.pairs" }),
         );
         while (pairs.length < 2) {
-          pairs.push({ id: localId("p", pairs.length), left: plainToRich("(missing)"), right: "(missing)" });
+          pairs.push({ id: localId("p", pairs.length), left: plainToRich(PLACEHOLDER), right: PLACEHOLDER });
         }
       }
       return { body: { pairs, distractors, shuffle: true }, media, findings };
@@ -579,14 +644,12 @@ function buildBody(
         findings.push(
           finding(FindingCode.NoOptions, "error", "This question has no answer options.", { source, field: "body.options" }),
         );
+        const placeholders = [0, 1].map((i) => placeholderOption(i));
         return {
-          body: {
-            shuffle: true,
-            options: [
-              { id: "o1", content: plainToRich("(missing)"), correct: false },
-              { id: "o2", content: plainToRich("(missing)"), correct: false },
-            ],
-          },
+          body:
+            type === "multipleResponse"
+              ? { shuffle: true, partialCredit: true, options: placeholders }
+              : { shuffle: true, options: placeholders },
           media,
           findings,
         };
@@ -595,6 +658,21 @@ function buildBody(
       const built = buildOptions(raw, key.correct, file, idPrefix);
       media.push(...built.media);
       findings.push(...built.findings);
+
+      // The schema wants two options at least, and one is not a question. The
+      // real option stays as it was; a placeholder takes the second place and the
+      // error says so, rather than the question being dropped or stored invalid.
+      if (built.options.length === 1) {
+        built.options.push(placeholderOption(1));
+        findings.push(
+          finding(
+            FindingCode.TooFewOptions,
+            "error",
+            "This question has only one answer option, and a choice question needs at least two. A placeholder option was added so the question could be stored. Replace it.",
+            { source, field: "body.options" },
+          ),
+        );
+      }
 
       for (const name of key.unresolved) {
         findings.push(
@@ -749,11 +827,27 @@ function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef)
 function buildQuestion(
   raw: RawQuestion,
   file: string,
-  options: Required<Pick<ImportOptions, "author" | "at">>,
+  options: Required<Pick<ImportOptions, "author" | "at" | "defaultPoints">>,
 ): Question {
   const source: SourceRef = { file, firstBlock: raw.firstBlock, lastBlock: raw.lastBlock };
   const findings: Finding[] = [];
   const idPrefix = `q${raw.number}`;
+
+  // A value the schema would refuse, such as `Points: 5000`, used to get as far
+  // as saving the bank and then abort it. The default is used instead, and the
+  // value the file gave is in the message so that it is not lost.
+  let points = raw.points;
+  if (!(points >= 0 && points <= MAX_POINTS)) {
+    points = options.defaultPoints;
+    findings.push(
+      finding(
+        FindingCode.PointsAssumed,
+        "warn",
+        `The file gave ${raw.points} points, which is more than the ${MAX_POINTS} a question may be worth, so ${points} was used. Check it.`,
+        { source, field: "points" },
+      ),
+    );
+  }
 
   const { type, inferred, unknownHint } = inferType(raw);
   if (inferred) {
@@ -783,7 +877,12 @@ function buildQuestion(
   let title = raw.title?.trim();
   if (title && title.length > MAX_TITLE_LENGTH) {
     findings.push(
-      finding(FindingCode.TitleTruncated, "warn", `The title was longer than ${MAX_TITLE_LENGTH} characters and was shortened.`, { source, field: "title" }),
+      finding(
+        FindingCode.TitleTruncated,
+        "warn",
+        `The title was longer than ${MAX_TITLE_LENGTH} characters and was shortened. The file gave: "${title}".`,
+        { source, field: "title" },
+      ),
     );
     title = title.slice(0, MAX_TITLE_LENGTH);
   }
@@ -795,7 +894,7 @@ function buildQuestion(
     stem: richTextToPlain(stem.rich).length > 0 ? stem.rich : plainToRich("(no stem text in the source)"),
     body: body.body,
     ...(title ? { title } : { title: titleFromStem(richTextToPlain(stem.rich)) }),
-    points: raw.points,
+    points,
     feedback: {
       ...(raw.correctFeedback.length > 0 ? { correct: plainToRich(raw.correctFeedback.join("\n")) } : {}),
       ...(raw.incorrectFeedback.length > 0 ? { incorrect: plainToRich(raw.incorrectFeedback.join("\n")) } : {}),
@@ -832,8 +931,9 @@ export const standardTextImporter: Importer = {
     const at = options.at ?? new Date().toISOString();
     const author = options.author ?? "import";
 
-    const scanned = scanStandardText(blocks, file, options.defaultPoints ?? DEFAULT_POINTS);
-    const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at }));
+    const defaultPoints = options.defaultPoints ?? DEFAULT_POINTS;
+    const scanned = scanStandardText(blocks, file, defaultPoints);
+    const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints }));
 
     return {
       profile: PROFILE_ID,

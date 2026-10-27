@@ -46,6 +46,8 @@ export const FindingCode = {
   KeyLetterMissing: "import.key-letter-missing",
   MultipleKeysOnSingleAnswer: "import.multiple-keys-on-single-answer",
   NoOptions: "import.no-options",
+  TooFewOptions: "import.too-few-options",
+  EmptyOption: "import.empty-option",
   EmptyStem: "import.empty-stem",
   UnparsedBlock: "import.unparsed-block",
 
@@ -63,6 +65,7 @@ export const FindingCode = {
   DuplicateMetadataLabel: "import.duplicate-metadata-label",
   StemSpansBlankLine: "import.stem-spans-blank-line",
   OptionFeedbackNotKept: "import.option-feedback-not-kept",
+  OptionNotKept: "import.option-not-kept",
   KeyTextNotUsed: "import.key-text-not-used",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
