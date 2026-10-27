@@ -20,6 +20,7 @@ import { richTextToPlain } from "../src/model/richtext.ts";
 import { optionsOf } from "../src/model/question.ts";
 import { FindingCode } from "../src/model/findings.ts";
 import { validateQuestion } from "../src/model/schema.ts";
+import { checkAnswerKey, hasUsableKey } from "../src/quality/answer-key.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(here, "..", "..", "..", "fixtures", "standard-format");
@@ -314,7 +315,7 @@ describe("every line is accounted for", () => {
    * "was anything lost" is a question about whether the marker came out
    * somewhere, not about what the scanner decided the line meant.
    */
-  function soup(seed: number): { text: string; markers: string[] } {
+  function soup(seed: number, wide = false): { text: string; markers: string[] } {
     const g = generator(seed);
     const markers: string[] = [];
     const mark = () => {
@@ -341,6 +342,37 @@ describe("every line is accounted for", () => {
       () => "",
       () => "",
     ];
+    // Shapes that reach the model's own limits rather than the scanner's: empty
+    // options and values, matching pairs, true and false, every type hint, points
+    // beyond the ceiling, a title too long to keep, images and raw HTML.
+    if (wide) {
+      kinds.push(
+        () => "a. ",
+        () => "a.   ",
+        () => `Type: ${g.pick(["F", "TF", "MT", "MC", "MA", "E"])}`,
+        () => `a. x${mark()} = y`,
+        () => `b. p${mark()} = q`,
+        () => `c. z${mark()} =`,
+        () => `d. = w${mark()}`,
+        () => `Points: ${g.pick(["5000", "0", "1000", "1001", "99999999999999999999999999"])}`,
+        () => `Title: ${"long title ".repeat(8)}${mark()}`,
+        () => "Title:",
+        () => `z [ img: "" ] ${mark()}`,
+        () => `a. [ img: "x.png" "alt" ] ${mark()}`,
+        () => "[HTML]<script>x</script>[/HTML]",
+        () => "[HTML][/HTML]",
+        () => "a. [HTML][/HTML]",
+        () => `ABC: value ${mark()}`,
+        () => `DIF: ${g.pick(["hard", "weird"])}`,
+        () => "REF:    ",
+        () => `Topic: a; b ${mark()}`,
+        () => "a. True",
+        () => "b. False",
+        () => `1. ${g.pick(["True", "T", "F", "essay text here"])}`,
+        () => "~ ",
+        () => "@ ",
+      );
+    }
     const lines: string[] = [];
     const length = 1 + Math.floor(g.chance(0.5) ? 12 : 40);
     for (let i = 0; i < length; i++) lines.push(g.pick(kinds)());
@@ -368,17 +400,103 @@ describe("every line is accounted for", () => {
     }
   });
 
-  // Not yet true, and not caused by the scanner: a question with a single
-  // option, or an unkeyed fill in the blank, does not satisfy the schema. That is
-  // open item 2 in docs/review-findings.md. The test stays here so the item has
-  // a measure, and so it becomes an ordinary assertion the day it is fixed.
-  test("generated files only ever produce questions that satisfy the model", { todo: "review-findings item 2" }, () => {
+  test("generated files never lose a line, in the wider vocabulary either", () => {
     for (let seed = 1; seed <= 400; seed++) {
-      const { text } = soup(seed);
-      for (const question of parse(text).questions) {
-        const check = validateQuestion(question);
-        assert.ok(check.ok, `seed ${seed}: ${check.issues.map((i) => i.message).join("; ")}\n${text}`);
+      const { text, markers } = soup(seed, true);
+      const scanned = scanStandardText(linesToBlocks(text), "soup.txt", 1);
+      assert.equal(scanned.unattributed, 0, `seed ${seed}: ${UNATTRIBUTED_REASON}\n${text}`);
+
+      const result = parse(text);
+      const everything = JSON.stringify([result.questions, result.orphans, result.fileFindings]);
+      for (const marker of markers) {
+        assert.ok(everything.includes(marker), `seed ${seed}: ${marker} was lost\n${text}`);
       }
     }
+  });
+
+  test("generated files only ever produce questions that satisfy the model", () => {
+    let questions = 0;
+    for (const wide of [false, true]) {
+      for (let seed = 1; seed <= 400; seed++) {
+        const { text } = soup(seed, wide);
+        for (const question of parse(text).questions) {
+          questions++;
+          const check = validateQuestion(question);
+          assert.ok(check.ok, `seed ${seed}: ${check.issues.map((i) => `${i.path} ${i.message}`).join("; ")}\n${text}`);
+        }
+      }
+    }
+    assert.ok(questions > 1000, `only ${questions} questions were generated, which is too few to mean anything`);
+  });
+});
+
+describe("a question that cannot be built as written is still storable, and says it failed", () => {
+  const storable = (text: string) => {
+    const result = parse(text);
+    for (const q of result.questions) {
+      const check = validateQuestion(q);
+      assert.ok(check.ok, check.issues.map((i) => `${i.path} ${i.message}`).join("; "));
+    }
+    return result;
+  };
+
+  test("a fill in the blank with no answer keeps an empty answer, so the key check still catches it", () => {
+    const [q] = storable(`Type: F\n1) The capital of France is ____.\n`).questions;
+    assert.equal(verdictOf(q!), "failed");
+    assert.deepEqual((q!.body as { blanks: Array<{ accepted: string[] }> }).blanks[0]?.accepted, [""]);
+    assert.ok(checkAnswerKey(q!).some((f) => f.code === FindingCode.NoAnswerKey && f.severity === "error"));
+    assert.equal(hasUsableKey(q!), false);
+  });
+
+  test("points beyond the ceiling fall back to the default and say what the file gave", () => {
+    const [q] = storable(`Points: 5000\n1) Q?\n*a. Yes\nb. No\n`).questions;
+    assert.equal(q!.points, 1);
+    const found = q!.findings.find((f) => f.code === FindingCode.PointsAssumed);
+    assert.equal(found?.severity, "warn");
+    assert.match(found?.message ?? "", /5000/);
+    assert.equal(verdictOf(q!), "needsReview");
+  });
+
+  test("the ceiling itself is allowed, and the default the caller chose is the fallback", () => {
+    assert.equal(storable(`Points: 1000\n1) Q?\n*a. Yes\nb. No\n`).questions[0]!.points, 1000);
+    const result = standardTextImporter.parse(`Points: 1001\n1) Q?\n*a. Yes\nb. No\n`, { file: "t.txt", defaultPoints: 4 });
+    assert.equal(result.questions[0]!.points, 4);
+  });
+
+  test("a choice question with one option gets a placeholder second option and fails", () => {
+    const [q] = storable(`1) Q?\n*a. Only\n`).questions;
+    assert.equal(verdictOf(q!), "failed");
+    assert.deepEqual(correctIndexes(q!), [0]);
+    assert.equal(optionsOf(q!).length, 2);
+    assert.ok(codes(q!).includes(FindingCode.TooFewOptions));
+    assert.equal(hasUsableKey(q!), false, "a placeholder option must keep the question out of an export");
+  });
+
+  test("a multiple answer question with no options is storable too", () => {
+    const [q] = storable(`Type: MA\n1) Pick all.\n`).questions;
+    assert.equal(verdictOf(q!), "failed");
+    assert.ok(codes(q!).includes(FindingCode.NoOptions));
+    assert.equal(hasUsableKey(q!), false);
+  });
+
+  test("an option with a letter and no text keeps its place and fails", () => {
+    const [q] = storable(`1) Q?\na. First\nb.  \n*c. Third\n`).questions;
+    assert.equal(optionsOf(q!).length, 3);
+    assert.deepEqual(correctIndexes(q!), [2], "the key still points at C, not at whatever moved up");
+    assert.ok(codes(q!).includes(FindingCode.EmptyOption));
+    assert.equal(verdictOf(q!), "failed");
+    assert.equal(hasUsableKey(q!), false);
+  });
+
+  test("an empty matching entry is left out with a warning, not stored empty", () => {
+    const [q] = storable(`Type: MT\n1) Match.\na. one = 1\nb. two = 2\nc.  \n`).questions;
+    assert.ok(codes(q!).includes(FindingCode.EmptyOption));
+    assert.equal(verdictOf(q!), "needsReview");
+  });
+
+  test("a metadata label with nothing after it is not stored as an empty value", () => {
+    const [q] = storable(`1) Q?\n*a. Yes\nb. No\nREF:   \nXYZ:   \n`).questions;
+    assert.equal(q!.metadata.page, undefined);
+    assert.equal(q!.metadata.custom, undefined);
   });
 });
