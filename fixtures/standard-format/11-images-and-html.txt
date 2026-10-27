@@ -1,0 +1,11 @@
+1) The instrument shown here [ img: "interferometer.png" "A Michelson interferometer" ] was used by whom?
+*a. Michelson
+b. Edison
+
+2) Read the note [HTML]<strong>Bold</strong> and <em>italic</em> text[/HTML] and choose the correct statement.
+a. The note is in bold only
+*b. The note has bold and italic text
+
+3) Open the page [HTML]<script>bad()</script>safely[/HTML] and answer.
+*a. Yes
+b. No

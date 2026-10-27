@@ -1,0 +1,17 @@
+1) What does the median represent?
+*a. The middle value
+b. The average value
+c. The most frequent value
+
+Section 4.2 Measures of Spread
+
+2) Which measure of spread uses the mean?
+a. Range
+*b. Standard deviation
+DIF: Medium
+
+The next questions are harder.
+
+3) What is the range?
+*a. Maximum minus minimum
+b. Mean minus median

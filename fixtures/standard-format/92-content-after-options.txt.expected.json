@@ -1,0 +1,10 @@
+{
+  "file": "92-content-after-options.txt",
+  "note": "A section heading and a sentence sit between questions. They used to be folded into the stem of the question before them. They are orphans, and the questions are untouched.",
+  "orphans": 2,
+  "questions": [
+    { "type": "multipleChoice", "stem": "What does the median represent?", "options": ["The middle value", "The average value", "The most frequent value"], "correct": [0] },
+    { "type": "multipleChoice", "stem": "Which measure of spread uses the mean?", "options": ["Range", "Standard deviation"], "correct": [1], "metadata": { "difficulty": "medium" } },
+    { "type": "multipleChoice", "stem": "What is the range?", "options": ["Maximum minus minimum", "Mean minus median"], "correct": [0] }
+  ]
+}

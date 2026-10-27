@@ -1,0 +1,15 @@
+{
+  "file": "11-images-and-html.txt",
+  "note": "An image with alternative text, a raw HTML block that stays inside the supported subset, and one that does not. The script is removed and the question is flagged for review rather than passed through.",
+  "orphans": 0,
+  "questions": [
+    { "type": "multipleChoice", "stem": "The instrument shown here was used by whom?", "options": ["Michelson", "Edison"], "correct": [0] },
+    {
+      "type": "multipleChoice",
+      "stem": "Read the note Bold and italic text and choose the correct statement.",
+      "options": ["The note is in bold only", "The note has bold and italic text"],
+      "correct": [1]
+    },
+    { "type": "multipleChoice", "stem": "Open the page safely and answer.", "options": ["Yes", "No"], "correct": [0], "verdict": "needsReview" }
+  ]
+}

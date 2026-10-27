@@ -1,0 +1,15 @@
+{
+  "file": "93-duplicate-labels.txt",
+  "note": "Each label appears twice with different values. The second used to overwrite the first while the warning claimed the value was kept. Both are kept, and the question is flagged for review.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "stem": "What is the primary purpose of a literature review?",
+      "options": ["To summarise earlier work", "To place a study in context", "To report results"],
+      "correct": [1],
+      "verdict": "needsReview",
+      "metadata": { "page": "87; 90", "MSC": "Conceptual; Applied" }
+    }
+  ]
+}

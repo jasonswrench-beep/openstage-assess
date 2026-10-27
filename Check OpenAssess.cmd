@@ -28,7 +28,7 @@ set RUN=node --experimental-strip-types --no-warnings
 echo ----------------------------------------------------------------
 echo  1 of 3  Tests
 echo ----------------------------------------------------------------
-%RUN% --test "%ENGINE%\test\model.test.ts" "%ENGINE%\test\bank.test.ts" "%ENGINE%\test\read-contract.test.ts" "%ENGINE%\test\import.test.ts" "%ENGINE%\test\answer-key.test.ts" "%ENGINE%\test\harness.test.ts" "%ENGINE%\test\richtext-enforcement.test.ts" "%ENGINE%\test\store-resilience.test.ts"
+%RUN% --test "%ENGINE%\test\model.test.ts" "%ENGINE%\test\bank.test.ts" "%ENGINE%\test\read-contract.test.ts" "%ENGINE%\test\import.test.ts" "%ENGINE%\test\answer-key.test.ts" "%ENGINE%\test\harness.test.ts" "%ENGINE%\test\richtext-enforcement.test.ts" "%ENGINE%\test\store-resilience.test.ts" "%ENGINE%\test\standard-text-scanner.test.ts"
 if errorlevel 1 goto failed
 echo.
 

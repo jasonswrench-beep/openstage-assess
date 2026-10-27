@@ -1,0 +1,11 @@
+{
+  "file": "06-answers-between-chapters.txt",
+  "note": "A key after every chapter, with numbering that restarts at 1. The old scanner never closed the key block, so the first question of chapter 2 was swallowed into an answer entry. The two chapter headings are orphans.",
+  "orphans": 2,
+  "questions": [
+    { "type": "multipleChoice", "stem": "Who measured the speed of light with an interferometer?", "options": ["Einstein", "Michelson", "Edison"], "correct": [1] },
+    { "type": "multipleChoice", "stem": "Light travels fastest in which medium?", "options": ["Water", "Glass", "A vacuum"], "correct": [2] },
+    { "type": "multipleChoice", "stem": "Who is credited with the first practical radio?", "options": ["Marconi", "Tesla", "Morse"], "correct": [0] },
+    { "type": "multipleChoice", "stem": "Which wave type carries radio signals?", "options": ["Sound", "Electromagnetic", "Seismic"], "correct": [1] }
+  ]
+}
