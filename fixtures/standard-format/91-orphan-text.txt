@@ -1,0 +1,9 @@
+Chapter 4 Descriptive Statistics
+
+The following questions cover sections 4.1 through 4.3.
+
+15) What does the median represent?
+*a. The middle value
+b. The average value
+c. The most frequent value
+d. The spread of values

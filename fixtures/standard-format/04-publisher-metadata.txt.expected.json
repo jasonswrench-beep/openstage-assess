@@ -1,0 +1,28 @@
+{
+  "file": "04-publisher-metadata.txt",
+  "note": "Publisher metadata codes after the options. MSC is not a label this profile knows, so it is kept under metadata.custom rather than dropped.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "stem": "What is the primary purpose of a research question?",
+      "options": [
+        "To summarise the literature",
+        "To focus the investigation",
+        "To report the findings",
+        "To cite the sources"
+      ],
+      "correct": [
+        1
+      ],
+      "metadata": {
+        "difficulty": "easy",
+        "page": "87",
+        "objective": "3.2",
+        "bloom": "understand",
+        "MSC": "Conceptual"
+      },
+      "verdict": "needsReview"
+    }
+  ]
+}

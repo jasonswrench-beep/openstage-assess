@@ -1,0 +1,14 @@
+OpenAssess
+Copyright 2026 Jason S. Wrench
+
+This product includes software developed by Jason S. Wrench as part of the
+OpenStage suite of free tools for higher education.
+
+The engine (@openstage/assess) has no third-party runtime dependencies. It
+uses only the Node.js standard library.
+
+The plain-text import profile reads the question layout documented in the
+test-bank vendor's user guide. That layout is a de facto convention used by many
+publisher test banks. No the test-bank vendor code, text or data is included in this
+project, and this project is not affiliated with or endorsed by its owner
+the test-bank vendor is a registered trademark of its owner

@@ -1,0 +1,22 @@
+{
+  "file": "01-clean-multiple-choice.txt",
+  "note": "Asterisk keys, a Title line on the first question only, no metadata.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "title": "Speed of light",
+      "stem": "Who determined the exact speed of light?",
+      "options": ["Albert Einstein", "Albert Michelson", "Thomas Edison", "Guglielmo Marconi"],
+      "correct": [1],
+      "points": 1
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "Which scientist is credited with the first practical radio?",
+      "options": ["Albert Einstein", "Albert Michelson", "Thomas Edison", "Guglielmo Marconi"],
+      "correct": [3],
+      "points": 1
+    }
+  ]
+}

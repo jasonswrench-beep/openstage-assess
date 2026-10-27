@@ -1,0 +1,33 @@
+{
+  "file": "03-mixed-types.txt",
+  "note": "One of each explicit type code: E, F, MT and MA.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "essay",
+      "title": "Michelson-Morley",
+      "stem": "How is the Michelson-Morley experiment related to the theory of relativity?"
+    },
+    {
+      "type": "fillInBlank",
+      "title": "Father of television",
+      "stem": "Who is known as the father of television?",
+      "accepted": ["Zworykin", "Vladimir Zworykin", "Vladimir Kosma Zworykin"]
+    },
+    {
+      "type": "matching",
+      "stem": "Match the name to the discovery.",
+      "pairs": [
+        "Michelson-Morley = Speed of light",
+        "Einstein = Theory of relativity",
+        "Marconi = Radio waves"
+      ]
+    },
+    {
+      "type": "multipleResponse",
+      "stem": "Which individuals are credited with determining the exact speed of light?",
+      "options": ["Albert Einstein", "Albert Michelson", "Thomas Edison", "Edward Williams Morley"],
+      "correct": [1, 3]
+    }
+  ]
+}

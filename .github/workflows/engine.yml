@@ -1,0 +1,37 @@
+name: engine
+
+# The gate the plan asks for: a drop in the import score fails the build
+# rather than being noticed later. The engine has no runtime dependencies,
+# so the only install here is the type checker.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the type checker
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Import accuracy against the fixture corpus
+        run: node --experimental-strip-types --no-warnings packages/assess/src/cli/index.ts score fixtures/standard-format
+
+      - name: Speed on a 500-question bank
+        run: node --experimental-strip-types --no-warnings packages/assess/src/cli/index.ts perf --count 500
