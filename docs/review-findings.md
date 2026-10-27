@@ -108,39 +108,64 @@ findings inherited the staleness. `editQuestion` now recomputes the codes the
 engine can re-derive and reapplies dismissals, which are decisions about the
 item rather than about one evaluation of it.
 
+### The Standard Format scanner was one state machine with no context
+
+Six data-loss findings came from one cause: `scan` in
+`src/import/standard-text.ts` was a single mutable `target` whose pattern checks
+ran before any check of context. It is now `src/import/standard-text-scan.ts`,
+an explicit mode machine (`outside`, `stem`, `option`, `optionFeedback`,
+`questionFeedback`, `tail`, `key`), and the builder stays in `standard-text.ts`.
+
+- **A question after a mid-file answer key was destroyed.** The key never
+  closed, and its entry pattern also matches a question line, so the next
+  question was appended to an answer entry. A key block now closes at the first
+  line that is not an entry for the questions it covers. A key belongs to the
+  questions since the previous key, so numbering that restarts every chapter
+  works, and a model answer only continues onto a following line when that line
+  directly follows a prose value.
+- **Multiple-choice options containing `=` became matching pairs.** Matching is
+  now inferred only when nothing marks an answer (no asterisk, no key entry) and
+  the left sides are distinct. Anything else is a multiple choice, and an
+  unkeyed one fails instead of being guessed.
+- **A stem line reading `Points: 20` reset every later question.** Title, Type
+  and Points count as directives only when a question follows them, so inside a
+  stem they are text. A directive that a later one replaces, or that has no
+  question after it, is reported as an orphan.
+- **Content after the options was relocated into the stem.** After a blank line,
+  a feedback line or a label, text that is not structure is an orphan. A stem
+  still runs over several paragraphs before its first option, and a question
+  with no options at all is flagged when its stem continues past a blank line,
+  because there a heading and a paragraph look the same.
+- **Duplicate publisher labels overwrote each other.** Different values are
+  joined with a semicolon and flagged; an identical repeat says nothing.
+- **Duplicate question numbers shared one key.** An entry for a number that two
+  questions of the same stretch share is applied to neither, both fail, and the
+  file says the numbers repeat.
+
+The rule that holds it together: every non-blank line is owned by a question, a
+key, a directive that a question used, or an orphan. A final sweep turns anything
+the machine missed into an orphan and counts it in `unattributed`, which the tests
+require to be zero. `test/standard-text-scanner.test.ts` also generates 400
+shuffled files, each line carrying a unique marker, and requires every marker to
+come out somewhere.
+
+That property test found three more places text was lost, all fixed the same way
+(the words are quoted in the finding): feedback under an option on a type with
+no per-option feedback, an Answers entry that was ambiguous or unmatched, and
+key text that a question type cannot use.
+
+Four smaller ones came out of the same pass. A key naming "True" against a
+False-first list marked the False option. A key letter shared by two options
+marked both. An unrecognised `Type:` line was ignored without a word. An
+`Answers:` heading is now always a key heading, so it can no longer be absorbed
+into the option above it.
+
 ---
 
 ## Open, and roughly in the order I would take them
 
-### 1. The Standard Format scanner needs rewriting, not patching
-
-Six separate data-loss findings come from one cause: `scan` in
-`src/import/standard-text.ts` is a single mutable `target` state machine whose
-pattern checks run before any context check.
-
-- **A question following a mid-file answer key is destroyed.** `inAnswers` is
-  set once and never cleared, and the answer-entry pattern matches a question
-  line, so the next question's text is appended to an answer entry. Two
-  questions with a key block after each parse as one, with no orphan and only a
-  generic warning. Per-chapter answer keys are a normal publisher layout.
-- **Multiple-choice options containing `=` become a matching question** and the
-  key is destroyed. `a. x = 1 / *b. x = 3` turns into matching pairs whose left
-  sides all collapse to `x`, the `*b` is dropped because the matching branch
-  never reads `correct`, and the verdict is only `needsReview`. Algebraic
-  options are common.
-- **A stem line reading exactly `Points: 20` is eaten** and resets the sticky
-  point value for every later question. Same for a bare `Title:` or `Type:`.
-- **Content after the options is silently relocated into the stem** rather than
-  orphaned.
-- **Duplicate publisher labels overwrite each other**, and the warning does not
-  say anything was lost.
-- **Duplicate question numbers share one answer key**, so one question gets a
-  key belonging to another. Nothing detects duplicate numbering.
-
-The shape that fixes these structurally: an explicit state machine, an answer
-key section that can close, a per-question block range that must be fully
-accounted for, and a rule that every consumed line is either attributed to a
-question or emitted as an orphan.
+Item 1 was the scanner and is fixed above. The numbers are kept so that
+references to the others stay valid.
 
 ### 2. An unkeyed import can refuse to save the whole bank
 
@@ -153,6 +178,12 @@ source text. `Points: 5000` fails the same way at `Bank.add`.
 The rule to adopt: the importer may only emit questions that pass
 `validateQuestion`, with placeholders chosen to satisfy the schema rather than
 to look like placeholders.
+
+The other shapes that fail the same way, found by feeding the scanner shuffled
+files: a multiple choice with a single option, and a `Type: MA` question with no
+options, whose placeholder body has no `partialCredit`. The `todo` test in
+`test/standard-text-scanner.test.ts` measures all of them over 400 generated
+files. When this item is done, remove its `todo` and it becomes an assertion.
 
 ### 3. Decide what the delivery payload may carry
 
@@ -233,19 +264,42 @@ Media is never garbage collected either.
   `RELEASE_1_TYPES`.
 - `FindingCode.PointsAssumed` is defined and never raised.
 
+### 8. Found while rewriting the scanner, not yet fixed
+
+- **A key list that disagrees with the asterisks is ignored silently.** When a
+  question has asterisks, its Answers entry is never read, so `*b` against
+  `1. C` produces a clean question. The asterisks win, which is a reasonable
+  rule, but the disagreement should be a finding.
+- **A true or false question keeps only its answer.** `Type: TF` with options
+  that are not True and False (Yes and No, say) is flagged for having no key,
+  but the option words are not retained.
+- **A numbered line inside a stem starts a question.** A stem that lists steps as
+  `1. Plan`, `2. Do` is cut at the first of them. The scanner cannot tell the
+  two apart from the line alone; a run of numbers that continues the stem's own
+  numbering would.
+- **Feedback over several paragraphs is cut at the first blank line.** The rest
+  is now an orphan, where it used to be appended. Visible, but not what the
+  author wrote.
+- **A question with no options can read as a key entry.** After an `Answers:`
+  heading, a line such as `10) Explain X.` is taken as an entry when 10 is a
+  number the stretch above already used and no options follow it. The words are
+  quoted in a finding, so nothing is lost, but the question is.
+
 ---
 
 ## The corpus is too small to be an accuracy measurement
 
-The gate runs on 15 questions across 7 files, about 105 lines. At that size one
-wrong question costs 6.7 points, so a 95 percent threshold really means "all 15
-must pass", which makes it a regression test rather than a measurement.
+The gate runs on 42 questions across 16 files. At that size one wrong question
+costs 2.4 points, so a 95 percent threshold still means "at most one may fail",
+which makes it closer to a regression test than a measurement.
 
-Nothing in it exercises `Type: TF`, a `T`/`F` answer key, an unkeyed true or
-false, a mid-file answers block, images, `[HTML]`, duplicate numbering, options
-containing `=`, or any non-ASCII content. **Every finding in sections 1 and 2
-above lives in a gap in this corpus.** Unit tests now cover the fixed ones, but
-the corpus itself should grow alongside the scanner rewrite.
+It used to run on 15 questions and exercise none of: `Type: TF`, a `T`/`F`
+answer key, an unkeyed true or false, a mid-file answers block, images, `[HTML]`,
+duplicate numbering, options containing `=`, or any non-ASCII content. Fixtures
+06 to 11 and 92 to 94 now cover each of them. Run against the scanner before the
+rewrite, the new corpus scored 68.2 percent (06, 07, 08, 92 and 94 fail), so
+the gaps were real and the fixtures catch what they were written for. The
+rewrite scores 100 percent.
 
 The scorer also matches questions to expectations by array index, so one missed
 question misaligns everything after it and a single structural bug reads as a

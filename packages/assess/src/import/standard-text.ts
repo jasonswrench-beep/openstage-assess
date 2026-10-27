@@ -17,9 +17,12 @@
  *   a. left = right       a matching pair
  *   ~ text                feedback for a correct answer
  *   @ text                feedback for an incorrect answer, or for the option above
- *   Answers:              a key list at the end, by question number
+ *   Answers:              a key list, by question number, covering the questions before it
  *   [ img: "f.jpg" "alt" ]  an image with alternative text
  *   [HTML] ... [/HTML]    a block of raw HTML
+ *
+ * Reading the lines into questions is `standard-text-scan.ts`. This file turns
+ * what the scanner found into the question model.
  *
  * Two behaviours in the the test-bank vendor specification are defects, and are fixed
  * rather than copied. When no correct answer is marked, the test-bank vendor silently
@@ -54,69 +57,26 @@ import {
   type QuestionType,
 } from "../model/question.ts";
 import {
+  KEY_SPLIT,
+  KEY_VALUE,
+  METADATA_LABELS,
+  scanStandardText,
+  type RawOption,
+  type RawQuestion,
+} from "./standard-text-scan.ts";
+import {
   countVerdicts,
   linesToBlocks,
   type Importer,
   type ImportOptions,
   type ImportResult,
-  type Orphan,
   type SourceBlock,
 } from "./types.ts";
 
 export const PROFILE_ID = "standard-text";
 
-// ---------------------------------------------------------------------------
-// Line patterns
-// ---------------------------------------------------------------------------
-
-const QUESTION_START = /^\s*(\d{1,4})\s*[.)]\s+(.*)$/;
-const OPTION_START = /^\s*(\*?)\s*([a-tA-T])\s*[.)]\s+(.*)$/;
-const TITLE_LINE = /^\s*Title\s*:\s*(.*)$/i;
-const TYPE_LINE = /^\s*Type\s*:\s*([A-Za-z]{1,2})\s*$/i;
-const POINTS_LINE = /^\s*Points\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$/i;
-const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
-const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
-const INCORRECT_FEEDBACK = /^\s*@\s*(.*)$/;
-const ANSWER_ENTRY = /^\s*(\d{1,4})\s*[.)]\s*(.*)$/;
 const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?\s*\]/gi;
 const HTML_BLOCK = /\[HTML\]([\s\S]*?)\[\/HTML\]/gi;
-
-/**
- * Metadata labels publishers actually use. Anything matching the shape of a
- * label but not on this list is kept in metadata.custom rather than dropped,
- * which is what makes "nothing is dropped" true of metadata lines too.
- */
-const METADATA_LABELS: Record<string, keyof Metadata | "bloom" | "difficulty"> = {
-  objective: "objective",
-  "learning objective": "objective",
-  obj: "objective",
-  lo: "objective",
-  chapter: "chapter",
-  chap: "chapter",
-  ch: "chapter",
-  section: "section",
-  sec: "section",
-  page: "page",
-  pages: "page",
-  ref: "page",
-  "page reference": "page",
-  difficulty: "difficulty",
-  dif: "difficulty",
-  diff: "difficulty",
-  bloom: "bloom",
-  "bloom's": "bloom",
-  "blooms": "bloom",
-  "bloom's level": "bloom",
-  "cognitive level": "bloom",
-  topic: "tags",
-  top: "tags",
-  tags: "tags",
-  keywords: "tags",
-};
-
-/** An all-capital short code such as NOT, MSC or NAT that a bank may invent. */
-const UNKNOWN_LABEL = /^\s*([A-Za-z][A-Za-z'\- ]{0,28})\s*:\s*(.+)$/;
-const CODE_LABEL = /^[A-Z]{2,6}$/;
 
 const DIFFICULTY_WORDS: Record<string, Difficulty> = {
   easy: "easy",
@@ -154,253 +114,6 @@ const BLOOM_WORDS: Record<string, BloomLevel> = {
   create: "create",
   creating: "create",
 };
-
-// ---------------------------------------------------------------------------
-// Intermediate shapes
-// ---------------------------------------------------------------------------
-
-interface RawOption {
-  letter: string;
-  starred: boolean;
-  lines: string[];
-  feedback: string[];
-  firstBlock: number;
-  lastBlock: number;
-}
-
-interface RawQuestion {
-  number: number;
-  typeHint?: string;
-  title?: string;
-  points: number;
-  stemLines: string[];
-  options: RawOption[];
-  correctFeedback: string[];
-  incorrectFeedback: string[];
-  metadata: Array<{ label: string; value: string; block: number }>;
-  firstBlock: number;
-  lastBlock: number;
-}
-
-type Target =
-  | { kind: "stem"; question: RawQuestion }
-  | { kind: "option"; option: RawOption }
-  | { kind: "optionFeedback"; option: RawOption }
-  | { kind: "correctFeedback"; question: RawQuestion }
-  | { kind: "incorrectFeedback"; question: RawQuestion }
-  | { kind: "none" };
-
-// ---------------------------------------------------------------------------
-// Pass one: text to raw questions
-// ---------------------------------------------------------------------------
-
-interface ScanResult {
-  questions: RawQuestion[];
-  answerKey: Map<number, string[]>;
-  orphans: Orphan[];
-  fileFindings: Finding[];
-}
-
-function scan(blocks: SourceBlock[], file: string, defaultPoints: number): ScanResult {
-  const questions: RawQuestion[] = [];
-  const answerKey = new Map<number, string[]>();
-  const orphans: Orphan[] = [];
-  const fileFindings: Finding[] = [];
-
-  let points = defaultPoints;
-  let pendingType: string | undefined;
-  let pendingTitle: string | undefined;
-  let current: RawQuestion | undefined;
-  let target: Target = { kind: "none" };
-  let inAnswers = false;
-  let lastAnswerNumber: number | undefined;
-
-  const orphan = (block: SourceBlock, reason: string) => {
-    orphans.push({
-      source: { file, firstBlock: block.index, lastBlock: block.index },
-      text: block.text.trim(),
-      reason,
-    });
-  };
-
-  for (const block of blocks) {
-    const line = block.text;
-    const trimmed = line.trim();
-
-    if (ANSWERS_HEADER.test(line)) {
-      inAnswers = true;
-      current = undefined;
-      target = { kind: "none" };
-      continue;
-    }
-
-    if (inAnswers) {
-      if (trimmed.length === 0) continue;
-      const entry = ANSWER_ENTRY.exec(line);
-      if (entry) {
-        const number = Number(entry[1]);
-        const value = (entry[2] ?? "").trim();
-        const existing = answerKey.get(number) ?? [];
-        if (value.length > 0) existing.push(value);
-        answerKey.set(number, existing);
-        lastAnswerNumber = number;
-      } else if (lastAnswerNumber !== undefined) {
-        // A multi-line essay answer continues the previous entry.
-        const existing = answerKey.get(lastAnswerNumber) ?? [];
-        if (existing.length === 0) existing.push(trimmed);
-        else existing[existing.length - 1] = `${existing[existing.length - 1]} ${trimmed}`;
-        answerKey.set(lastAnswerNumber, existing);
-      } else {
-        orphan(block, "after the Answers heading but not an answer entry");
-      }
-      continue;
-    }
-
-    if (trimmed.length === 0) {
-      // A blank line ends the current paragraph but not the question, so a
-      // stem and its options can be separated by blank lines.
-      if (target.kind === "option" || target.kind === "optionFeedback") target = { kind: "none" };
-      continue;
-    }
-
-    const titleMatch = TITLE_LINE.exec(line);
-    if (titleMatch) {
-      pendingTitle = (titleMatch[1] ?? "").trim();
-      continue;
-    }
-
-    const typeMatch = TYPE_LINE.exec(line);
-    if (typeMatch) {
-      pendingType = (typeMatch[1] ?? "").toUpperCase();
-      continue;
-    }
-
-    const pointsMatch = POINTS_LINE.exec(line);
-    if (pointsMatch) {
-      points = Number(pointsMatch[1]);
-      continue;
-    }
-
-    const questionMatch = QUESTION_START.exec(line);
-    if (questionMatch) {
-      current = {
-        number: Number(questionMatch[1]),
-        ...(pendingType ? { typeHint: pendingType } : {}),
-        ...(pendingTitle ? { title: pendingTitle } : {}),
-        points,
-        stemLines: [(questionMatch[2] ?? "").trim()],
-        options: [],
-        correctFeedback: [],
-        incorrectFeedback: [],
-        metadata: [],
-        firstBlock: block.index,
-        lastBlock: block.index,
-      };
-      questions.push(current);
-      pendingType = undefined;
-      pendingTitle = undefined;
-      target = { kind: "stem", question: current };
-      continue;
-    }
-
-    if (!current) {
-      orphan(block, "before the first question");
-      continue;
-    }
-    current.lastBlock = block.index;
-
-    const optionMatch = OPTION_START.exec(line);
-    if (optionMatch) {
-      const option: RawOption = {
-        letter: (optionMatch[2] ?? "").toLowerCase(),
-        starred: optionMatch[1] === "*",
-        lines: [(optionMatch[3] ?? "").trim()],
-        feedback: [],
-        firstBlock: block.index,
-        lastBlock: block.index,
-      };
-      current.options.push(option);
-      target = { kind: "option", option };
-      continue;
-    }
-
-    const correctMatch = CORRECT_FEEDBACK.exec(line);
-    if (correctMatch) {
-      current.correctFeedback.push((correctMatch[1] ?? "").trim());
-      target = { kind: "correctFeedback", question: current };
-      continue;
-    }
-
-    const incorrectMatch = INCORRECT_FEEDBACK.exec(line);
-    if (incorrectMatch) {
-      const value = (incorrectMatch[1] ?? "").trim();
-      // An @ line straight after an option is that option's feedback; an @
-      // line before any option is the question's incorrect-answer feedback.
-      if (target.kind === "option" || target.kind === "optionFeedback") {
-        const attached: RawOption = target.option;
-        attached.feedback.push(value);
-        attached.lastBlock = block.index;
-        target = { kind: "optionFeedback", option: attached };
-      } else {
-        current.incorrectFeedback.push(value);
-        target = { kind: "incorrectFeedback", question: current };
-      }
-      continue;
-    }
-
-    // A metadata line is recognised wherever it appears, because publisher
-    // banks put these lines after the options as often as before them. The
-    // label has to be one this profile knows, or an all-capital short code, so
-    // that an ordinary colon inside a stem or an option is not mistaken for
-    // one.
-    const labelMatch = UNKNOWN_LABEL.exec(line);
-    if (labelMatch) {
-      const label = (labelMatch[1] ?? "").trim();
-      const value = (labelMatch[2] ?? "").trim();
-      if (METADATA_LABELS[label.toLowerCase()] || CODE_LABEL.test(label)) {
-        current.metadata.push({ label, value, block: block.index });
-        target = { kind: "none" };
-        continue;
-      }
-    }
-
-    // Anything else continues whatever is open.
-    switch (target.kind) {
-      case "stem":
-        target.question.stemLines.push(trimmed);
-        break;
-      case "option":
-        target.option.lines.push(trimmed);
-        target.option.lastBlock = block.index;
-        break;
-      case "optionFeedback":
-        target.option.feedback.push(trimmed);
-        target.option.lastBlock = block.index;
-        break;
-      case "correctFeedback":
-        target.question.correctFeedback.push(trimmed);
-        break;
-      case "incorrectFeedback":
-        target.question.incorrectFeedback.push(trimmed);
-        break;
-      case "none":
-        current.stemLines.push(trimmed);
-        break;
-    }
-  }
-
-  if (questions.length === 0) {
-    fileFindings.push(
-      finding(
-        FindingCode.UnparsedBlock,
-        "error",
-        "No questions were found. The file may use a layout this profile does not read, or the question numbers may be automatic list numbers rather than typed text.",
-      ),
-    );
-  }
-
-  return { questions, answerKey, orphans, fileFindings };
-}
 
 // ---------------------------------------------------------------------------
 // Pass two: raw questions to the model
@@ -488,35 +201,98 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
   const findings: Finding[] = [];
   const custom: Record<string, string> = {};
 
+  /**
+   * Keep a value under metadata.custom. A label that appears twice used to
+   * overwrite itself while the warning still claimed the value had been kept,
+   * so the earlier one was lost and the message said otherwise. A repeat with a
+   * different value is now joined to the first and reported; an identical
+   * repeat loses nothing and says nothing.
+   */
+  const addCustom = (label: string, value: string, source: SourceRef): "new" | "same" | "joined" => {
+    const existing = custom[label];
+    if (existing === undefined) {
+      custom[label] = value;
+      return "new";
+    }
+    if (existing.split("; ").includes(value)) return "same";
+    custom[label] = `${existing}; ${value}`;
+    findings.push(
+      finding(
+        FindingCode.DuplicateMetadataLabel,
+        "warn",
+        `"${label}" appears more than once with different values. Both were kept, joined with a semicolon, rather than the later one replacing the earlier.`,
+        { source, field: `metadata.custom.${label}` },
+      ),
+    );
+    return "joined";
+  };
+
   for (const entry of raw.metadata) {
     const source: SourceRef = { file, firstBlock: entry.block, lastBlock: entry.block };
     const key = METADATA_LABELS[entry.label.toLowerCase()];
+    const value = entry.value;
+
     if (key === "difficulty") {
-      const value = DIFFICULTY_WORDS[entry.value.trim().toLowerCase()];
-      if (value) metadata.difficulty = value;
-      else {
-        custom[entry.label] = entry.value;
+      const parsed = DIFFICULTY_WORDS[value.trim().toLowerCase()];
+      if (!parsed) {
+        if (addCustom(entry.label, value, source) === "new") {
+          findings.push(
+            finding(FindingCode.UnknownMetadataLabel, "warn", `Difficulty "${value}" was not recognised, so it was kept as written.`, { source, field: "metadata.difficulty" }),
+          );
+        }
+      } else if (metadata.difficulty === undefined) {
+        metadata.difficulty = parsed;
+      } else if (metadata.difficulty !== parsed && addCustom(entry.label, value, source) === "new") {
         findings.push(
-          finding(FindingCode.UnknownMetadataLabel, "warn", `Difficulty "${entry.value}" was not recognised, so it was kept as written.`, { source, field: "metadata.difficulty" }),
+          finding(
+            FindingCode.DuplicateMetadataLabel,
+            "warn",
+            `Difficulty was given as ${metadata.difficulty} and again as "${value}". The first was used and the second is kept in metadata.custom.${entry.label}.`,
+            { source, field: "metadata.difficulty" },
+          ),
         );
       }
     } else if (key === "bloom") {
-      const value = BLOOM_WORDS[entry.value.trim().toLowerCase()];
-      if (value) metadata.bloom = value;
-      else {
-        custom[entry.label] = entry.value;
+      const parsed = BLOOM_WORDS[value.trim().toLowerCase()];
+      if (!parsed) {
+        if (addCustom(entry.label, value, source) === "new") {
+          findings.push(
+            finding(FindingCode.UnknownMetadataLabel, "warn", `Bloom level "${value}" was not recognised, so it was kept as written.`, { source, field: "metadata.bloom" }),
+          );
+        }
+      } else if (metadata.bloom === undefined) {
+        metadata.bloom = parsed;
+      } else if (metadata.bloom !== parsed && addCustom(entry.label, value, source) === "new") {
         findings.push(
-          finding(FindingCode.UnknownMetadataLabel, "warn", `Bloom level "${entry.value}" was not recognised, so it was kept as written.`, { source, field: "metadata.bloom" }),
+          finding(
+            FindingCode.DuplicateMetadataLabel,
+            "warn",
+            `Bloom level was given as ${metadata.bloom} and again as "${value}". The first was used and the second is kept in metadata.custom.${entry.label}.`,
+            { source, field: "metadata.bloom" },
+          ),
         );
       }
     } else if (key === "tags") {
-      for (const tag of entry.value.split(/[;,]/).map((t) => t.trim()).filter(Boolean)) {
+      for (const tag of value.split(/[;,]/).map((t) => t.trim()).filter(Boolean)) {
         if (!metadata.tags.includes(tag)) metadata.tags.push(tag);
       }
     } else if (key) {
-      (metadata as unknown as Record<string, unknown>)[key] = entry.value;
-    } else {
-      custom[entry.label] = entry.value;
+      const slot = metadata as unknown as Record<string, string | undefined>;
+      const existing = slot[key];
+      if (existing === undefined) {
+        slot[key] = value;
+      } else if (existing !== value && !existing.split("; ").includes(value)) {
+        slot[key] = `${existing}; ${value}`;
+        findings.push(
+          finding(
+            FindingCode.DuplicateMetadataLabel,
+            "warn",
+            `More than one value was given for ${key}: "${existing}" and "${value}". Both were kept, joined with a semicolon, rather than the later one replacing the earlier.`,
+            { source, field: `metadata.${key}` },
+          ),
+        );
+      }
+    } else if (addCustom(entry.label, value, source) === "new") {
       findings.push(
         finding(
           FindingCode.UnknownMetadataLabel,
@@ -532,15 +308,35 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
   return { metadata, findings };
 }
 
-function inferType(raw: RawQuestion): { type: QuestionType; inferred: boolean } {
-  const hint = raw.typeHint;
-  if (hint === "E") return { type: "essay", inferred: false };
-  if (hint === "F") return { type: "fillInBlank", inferred: false };
-  if (hint === "MT") return { type: "matching", inferred: false };
-  if (hint === "MA") return { type: "multipleResponse", inferred: false };
-  if (hint === "MC") return { type: "multipleChoice", inferred: false };
-  if (hint === "TF") return { type: "trueFalse", inferred: false };
+const TYPE_HINTS: Record<string, QuestionType> = {
+  E: "essay",
+  F: "fillInBlank",
+  MT: "matching",
+  MA: "multipleResponse",
+  MC: "multipleChoice",
+  TF: "trueFalse",
+};
 
+interface TypeReading {
+  type: QuestionType;
+  inferred: boolean;
+  /** A Type line was present but is not one this profile knows. */
+  unknownHint?: string;
+}
+
+function inferType(raw: RawQuestion): TypeReading {
+  const hint = raw.typeHint;
+  const stated = hint ? TYPE_HINTS[hint] : undefined;
+  if (stated) return { type: stated, inferred: false };
+
+  const guess = guessType(raw);
+  // A Type line that is not on the list used to be ignored without a word, so a
+  // short-answer question typed "Type: SA" came out as multiple choice with
+  // nothing to say that the file had asked for something else.
+  return hint ? { ...guess, inferred: true, unknownHint: hint } : guess;
+}
+
+function guessType(raw: RawQuestion): TypeReading {
   // No options and no type line could be an essay or a short answer. That is a
   // real guess, and it is flagged.
   if (raw.options.length === 0) return { type: "essay", inferred: true };
@@ -557,8 +353,21 @@ function inferType(raw: RawQuestion): { type: QuestionType; inferred: boolean } 
     if (isTrue && isFalse) return { type: "trueFalse", inferred: false };
   }
 
-  if (raw.options.every((o) => o.lines.join(" ").includes("="))) {
-    return { type: "matching", inferred: true };
+  // Matching, but only when nothing says these are answer options. Every option
+  // containing "=" used to be enough, which turned `a. x = 1 / *b. x = 3` into
+  // matching pairs: the asterisk was dropped, the left sides collapsed to "x",
+  // and the question looked as though it had been read. An asterisk or a key
+  // list entry means an answer is being marked, and pairs whose left sides
+  // repeat are not a matching exercise.
+  const marked = raw.options.some((o) => o.starred) || raw.keyValues.length > 0 || raw.keyAmbiguous;
+  if (!marked && raw.options.every((o) => o.lines.join(" ").includes("="))) {
+    const lefts = raw.options.map((o) => {
+      const text = o.lines.join(" ");
+      return text.slice(0, text.indexOf("=")).trim().toLowerCase();
+    });
+    if (lefts.every((l) => l.length > 0) && new Set(lefts).size === lefts.length) {
+      return { type: "matching", inferred: true };
+    }
   }
 
   const starred = raw.options.filter((o) => o.starred).length;
@@ -567,40 +376,73 @@ function inferType(raw: RawQuestion): { type: QuestionType; inferred: boolean } 
   return { type: "multipleChoice", inferred: false };
 }
 
+interface ResolvedKey {
+  /** Indexes into raw.options of the options the key marks correct. */
+  correct: Set<number>;
+  /** The raw tokens, because t and f are ambiguous until the question type is known. */
+  tokens: string[];
+  /** Names the key uses that no option carries. */
+  unresolved: string[];
+  /** Names the key uses that more than one option carries, so none can be chosen. */
+  shared: string[];
+}
+
 /**
- * Correct letters for a question, from asterisks or from the Answers list.
+ * Correct options for a question, from asterisks or from its Answers entry.
  *
- * The raw tokens come back beside the letters because `t` and `f` are
+ * The raw tokens come back beside the options because `t` and `f` are
  * ambiguous: they are valid option letters and they are also the usual
  * shorthand for True and False. Deciding here would be guessing, since this
  * function does not know the question type. A true or false question resolves
  * them against its own options instead; see the trueFalse branch of buildBody.
+ *
+ * Options are identified by position, not by letter. Two options sharing a
+ * letter used to be marked together, so a key naming "A" made both correct.
+ * The words True and False are looked up in the option text for the same
+ * reason: a bank that lists False first would otherwise have "True" read as
+ * option A, which is the False option.
  */
-function correctLetters(
-  raw: RawQuestion,
-  answerKey: Map<number, string[]>,
-): { letters: Set<string>; tokens: string[]; fromKeyList: boolean } {
-  const starred = raw.options.filter((o) => o.starred).map((o) => o.letter);
-  if (starred.length > 0) return { letters: new Set(starred), tokens: [...starred], fromKeyList: false };
-
-  const entries = answerKey.get(raw.number) ?? [];
-  const letters = new Set<string>();
+function resolveKey(raw: RawQuestion): ResolvedKey {
+  const correct = new Set<number>();
   const tokens: string[] = [];
-  for (const entry of entries) {
-    for (const piece of entry.split(/[\s,]+/).filter(Boolean)) {
+  const unresolved: string[] = [];
+  const shared: string[] = [];
+
+  const starred = raw.options.flatMap((o, i) => (o.starred ? [i] : []));
+  if (starred.length > 0) {
+    for (const i of starred) {
+      correct.add(i);
+      tokens.push((raw.options[i] as RawOption).letter);
+    }
+    return { correct, tokens, unresolved, shared };
+  }
+
+  const where = (matches: (o: RawOption) => boolean): number[] =>
+    raw.options.flatMap((o, i) => (matches(o) ? [i] : []));
+  const settle = (hits: number[], name: string): void => {
+    if (hits.length === 0) unresolved.push(name);
+    else if (hits.length === 1) correct.add(hits[0] as number);
+    else shared.push(name);
+  };
+
+  for (const entry of raw.keyValues) {
+    for (const piece of entry.split(KEY_SPLIT)) {
       const value = piece.trim().toLowerCase();
+      if (value.length === 0) continue;
       tokens.push(value);
-      if (/^[a-t]$/.test(value)) letters.add(value);
-      else if (value === "true") letters.add("a");
-      else if (value === "false") letters.add("b");
+      if (/^[a-t]$/.test(value)) {
+        settle(where((o) => o.letter === value), value);
+      } else if (value === "true" || value === "false") {
+        settle(where((o) => o.lines.join(" ").trim().toLowerCase().replace(/\.$/, "") === value), value);
+      }
     }
   }
-  return { letters, tokens, fromKeyList: letters.size > 0 };
+  return { correct, tokens, unresolved, shared };
 }
 
 function buildOptions(
   raw: RawQuestion,
-  correct: Set<string>,
+  correct: ReadonlySet<number>,
   file: string,
   idPrefix: string,
 ): { options: Option[]; media: MediaRef[]; findings: Finding[] } {
@@ -617,7 +459,7 @@ function buildOptions(
     const built: Option = {
       id: localId("o", i),
       content: converted.rich,
-      correct: correct.has(option.letter),
+      correct: correct.has(i),
     };
     if (option.feedback.length > 0) {
       built.feedback = plainToRich(option.feedback.join("\n"));
@@ -631,9 +473,7 @@ function buildOptions(
 function buildBody(
   raw: RawQuestion,
   type: QuestionType,
-  correct: Set<string>,
-  tokens: readonly string[],
-  answerKey: Map<number, string[]>,
+  key: ResolvedKey,
   file: string,
   idPrefix: string,
 ): { body: QuestionBody; media: MediaRef[]; findings: Finding[] } {
@@ -656,7 +496,7 @@ function buildBody(
       const falseLetter = letterFor(saysFalse);
 
       let resolved: boolean | undefined;
-      for (const token of tokens) {
+      for (const token of key.tokens) {
         if (token === "true" || (token === "t" && trueLetter !== "t")) resolved = true;
         else if (token === "false" || (token === "f" && falseLetter !== "f")) resolved = false;
         else if (trueLetter !== undefined && token === trueLetter) resolved = true;
@@ -678,9 +518,8 @@ function buildBody(
     }
 
     case "essay": {
-      const answers = answerKey.get(raw.number) ?? [];
       const inline = raw.options.map((o) => o.lines.join("\n"));
-      const answerText = [...inline, ...answers].filter((a) => a.trim().length > 0).join("\n\n");
+      const answerText = [...inline, ...raw.keyValues].filter((a) => a.trim().length > 0).join("\n\n");
       const body: QuestionBody = answerText.length > 0 ? { modelAnswer: plainToRich(answerText) } : {};
       return { body, media, findings };
     }
@@ -688,7 +527,7 @@ function buildBody(
     case "fillInBlank": {
       const accepted = [
         ...raw.options.map((o) => richTextToPlain(plainToRich(o.lines.join(" ")))),
-        ...(answerKey.get(raw.number) ?? []),
+        ...raw.keyValues,
       ]
         .map((a) => a.trim())
         .filter((a) => a.length > 0);
@@ -753,22 +592,29 @@ function buildBody(
         };
       }
 
-      const built = buildOptions(raw, correct, file, idPrefix);
+      const built = buildOptions(raw, key.correct, file, idPrefix);
       media.push(...built.media);
       findings.push(...built.findings);
 
-      const letters = new Set(raw.options.map((o) => o.letter));
-      for (const letter of correct) {
-        if (!letters.has(letter)) {
-          findings.push(
-            finding(
-              FindingCode.KeyLetterMissing,
-              "error",
-              `The answer key names option "${letter.toUpperCase()}", which this question does not have.`,
-              { source, field: "body.options" },
-            ),
-          );
-        }
+      for (const name of key.unresolved) {
+        findings.push(
+          finding(
+            FindingCode.KeyLetterMissing,
+            "error",
+            `The answer key names option "${name.toUpperCase()}", which this question does not have.`,
+            { source, field: "body.options" },
+          ),
+        );
+      }
+      for (const name of key.shared) {
+        findings.push(
+          finding(
+            FindingCode.KeyLetterMissing,
+            "error",
+            `The answer key names option "${name.toUpperCase()}", but more than one option carries that name, so it was not applied.`,
+            { source, field: "body.options" },
+          ),
+        );
       }
 
       const markedCorrect = built.options.filter((o) => o.correct).length;
@@ -809,6 +655,92 @@ function buildBody(
   }
 }
 
+/** Findings about how the scanner had to read the layout, as opposed to what the question says. */
+function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef): Finding[] {
+  const found: Finding[] = [];
+
+  if (raw.keyAmbiguous) {
+    const said = raw.ambiguousKeyValues.length > 0 ? ` It said: "${raw.ambiguousKeyValues.join(" ")}".` : "";
+    found.push(
+      finding(
+        FindingCode.DuplicateQuestionNumber,
+        "warn",
+        `Another question in the same part of the file is also numbered ${raw.number}, so the Answers entry for ${raw.number} was not applied to this one. Nothing was guessed.${said}`,
+        { source, field: "origin" },
+      ),
+    );
+  }
+
+  // Key text that this type of question has no use for. Letters and the words
+  // True and False are read by the choice types; essay and fill in the blank
+  // take the whole entry as an answer; nothing else reads a key at all. What is
+  // left over used to vanish, including the case where a question had been
+  // mistaken for a key entry and its words were all that was in it.
+  const unusedKey =
+    type === "essay" || type === "fillInBlank"
+      ? []
+      : type === "matching"
+        ? raw.keyValues
+        : raw.keyValues.filter((value) => !KEY_VALUE.test(value));
+  if (unusedKey.length > 0) {
+    found.push(
+      finding(
+        FindingCode.KeyTextNotUsed,
+        "warn",
+        `The Answers list gave "${unusedKey.join(" / ")}" for this question, which a ${type} question cannot use as a key, so it was not applied.`,
+        { source, field: "origin" },
+      ),
+    );
+  }
+
+  const letters = new Map<string, number>();
+  for (const option of raw.options) letters.set(option.letter, (letters.get(option.letter) ?? 0) + 1);
+  const repeated = [...letters].filter(([, n]) => n > 1).map(([letter]) => letter.toUpperCase());
+  if (repeated.length > 0) {
+    found.push(
+      finding(
+        FindingCode.DuplicateOptionLetter,
+        "warn",
+        `More than one option is lettered ${repeated.join(", ")}, so an answer key that names ${repeated.length === 1 ? "that letter" : "those letters"} cannot say which option it means.`,
+        { source, field: "body.options" },
+      ),
+    );
+  }
+
+  // Only the two choice types have feedback for each option. On any other type
+  // the options become something else (a model answer, accepted answers, pairs)
+  // and the feedback beneath them has nowhere to go. It used to disappear with
+  // no trace, which is the one thing this importer is not allowed to do.
+  // The words are quoted in the message so that they are not lost with it.
+  const unkept = raw.options.flatMap((o) => o.feedback);
+  if (type !== "multipleChoice" && type !== "multipleResponse" && unkept.length > 0) {
+    found.push(
+      finding(
+        FindingCode.OptionFeedbackNotKept,
+        "warn",
+        `Feedback written under an option was not kept, because a ${type} question has no feedback for each option: "${unkept.join(" / ")}".`,
+        { source, field: "body.options" },
+      ),
+    );
+  }
+
+  // Without options there is nothing to close the stem, so text after a blank
+  // line is taken as more of it. That is right for a long essay prompt and
+  // wrong for a heading that follows the question; the two look the same.
+  if (raw.options.length === 0 && raw.stemAfterBlank) {
+    found.push(
+      finding(
+        FindingCode.StemSpansBlankLine,
+        "warn",
+        "This question has no options, and its stem continues after a blank line. If the later text is a heading or belongs to the next section, it has been read as part of the stem. Check it.",
+        { source, field: "stem" },
+      ),
+    );
+  }
+
+  return found;
+}
+
 /**
  * The model requires a valid question even when the source was broken, so a
  * failed item still opens in the editor beside its original text. The findings
@@ -816,7 +748,6 @@ function buildBody(
  */
 function buildQuestion(
   raw: RawQuestion,
-  answerKey: Map<number, string[]>,
   file: string,
   options: Required<Pick<ImportOptions, "author" | "at">>,
 ): Question {
@@ -824,24 +755,26 @@ function buildQuestion(
   const findings: Finding[] = [];
   const idPrefix = `q${raw.number}`;
 
-  const { type, inferred } = inferType(raw);
+  const { type, inferred, unknownHint } = inferType(raw);
   if (inferred) {
     findings.push(
       finding(
         FindingCode.TypeInferred,
         "warn",
-        `The file did not say what kind of question this is, so it was read as ${type}. Check it.`,
+        unknownHint
+          ? `The Type line said "${unknownHint}", which this profile does not know, so the type was worked out from the question and read as ${type}. Check it.`
+          : `The file did not say what kind of question this is, so it was read as ${type}. Check it.`,
         { source, field: "type" },
       ),
     );
   }
 
-  const key = correctLetters(raw, answerKey);
+  const key = resolveKey(raw);
   const stem = toRichText(raw.stemLines, source, idPrefix);
-  const body = buildBody(raw, type, key.letters, key.tokens, answerKey, file, idPrefix);
+  const body = buildBody(raw, type, key, file, idPrefix);
   const meta = applyMetadata(raw, file);
 
-  findings.push(...stem.findings, ...body.findings, ...meta.findings);
+  findings.push(...stem.findings, ...body.findings, ...meta.findings, ...layoutFindings(raw, type, source));
 
   if (richTextToPlain(stem.rich).length === 0) {
     findings.push(finding(FindingCode.EmptyStem, "error", "This question has no stem text.", { source, field: "stem" }));
@@ -899,21 +832,8 @@ export const standardTextImporter: Importer = {
     const at = options.at ?? new Date().toISOString();
     const author = options.author ?? "import";
 
-    const scanned = scan(blocks, file, options.defaultPoints ?? DEFAULT_POINTS);
-    const questions = scanned.questions.map((raw) => buildQuestion(raw, scanned.answerKey, file, { author, at }));
-
-    const usedNumbers = new Set(scanned.questions.map((q) => q.number));
-    for (const number of scanned.answerKey.keys()) {
-      if (!usedNumbers.has(number)) {
-        scanned.fileFindings.push(
-          finding(
-            FindingCode.KeyLetterMissing,
-            "warn",
-            `The Answers list has an entry for question ${number}, but no question ${number} was found in the file.`,
-          ),
-        );
-      }
-    }
+    const scanned = scanStandardText(blocks, file, options.defaultPoints ?? DEFAULT_POINTS);
+    const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at }));
 
     return {
       profile: PROFILE_ID,

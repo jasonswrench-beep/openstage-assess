@@ -1,0 +1,10 @@
+{
+  "file": "07-options-with-equals.txt",
+  "note": "Algebraic options all contain an equals sign. They used to be read as matching pairs, which dropped the asterisk. The third question has no key anywhere and must fail rather than be guessed.",
+  "orphans": 0,
+  "questions": [
+    { "type": "multipleChoice", "stem": "Solve 2x + 1 = 7 for x.", "options": ["x = 2", "x = 3", "x = 4", "x = 6"], "correct": [1] },
+    { "type": "multipleChoice", "stem": "Which equation is correct?", "options": ["2 + 2 = 5", "2 + 2 = 4", "2 + 2 = 22"], "correct": [1] },
+    { "type": "multipleChoice", "stem": "Which value satisfies x + 1 = 4?", "options": ["x = 1", "x = 3", "x = 5"], "correct": [], "verdict": "failed" }
+  ]
+}

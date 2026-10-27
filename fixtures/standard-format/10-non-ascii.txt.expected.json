@@ -1,0 +1,10 @@
+{
+  "file": "10-non-ascii.txt",
+  "note": "Accents, an umlaut, a ring and smart quotes. Search later has to find these, so they have to survive import unchanged apart from the quote straightening.",
+  "orphans": 0,
+  "questions": [
+    { "type": "multipleChoice", "stem": "¿Cuál es el núcleo de la célula?", "options": ["La membrana", "El núcleo", "El citoplasma"], "correct": [1] },
+    { "type": "multipleChoice", "stem": "Wie sagt man \"thank you\" auf Deutsch, für ein Café?", "options": ["Danke für alles", "Merci beaucoup", "Gracias"], "correct": [0] },
+    { "type": "multipleChoice", "stem": "Which unit measures wavelength: the ångström or the \"lumen\"?", "options": ["The ångström", "The lumen"], "correct": [0] }
+  ]
+}

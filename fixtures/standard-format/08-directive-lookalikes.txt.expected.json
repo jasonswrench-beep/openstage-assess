@@ -1,0 +1,16 @@
+{
+  "file": "08-directive-lookalikes.txt",
+  "note": "Stem lines that read exactly Points: 20, Title: and Type: A are text, not directives, because no question follows them. They used to reset the point value for every later question. The real Points line before question 2 still applies.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "title": "Reading a label",
+      "points": 2,
+      "stem": "Read the label that says: Points: 20 Title: Type: A Then answer the question below.",
+      "options": ["Voltage", "Current", "Resistance"],
+      "correct": [1]
+    },
+    { "type": "multipleChoice", "points": 3, "stem": "What does the second question ask?", "options": ["Nothing", "Everything"], "correct": [0] }
+  ]
+}

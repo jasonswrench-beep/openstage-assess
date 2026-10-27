@@ -1,0 +1,12 @@
+{
+  "file": "09-true-false-keys.txt",
+  "note": "Type TF, a T key, a letter key against a False-first list, an untyped True-first list, and a true or false question with no key at all. The last must fail, not become False.",
+  "orphans": 0,
+  "questions": [
+    { "type": "trueFalse", "stem": "The speed of light is constant in a vacuum.", "correctBoolean": true },
+    { "type": "trueFalse", "stem": "Sound travels faster than light.", "correctBoolean": false },
+    { "type": "trueFalse", "stem": "Radio waves are a form of electromagnetic radiation.", "correctBoolean": true },
+    { "type": "trueFalse", "stem": "Light is a mechanical wave.", "correctBoolean": false },
+    { "type": "trueFalse", "stem": "Marconi invented the telephone.", "verdict": "failed" }
+  ]
+}

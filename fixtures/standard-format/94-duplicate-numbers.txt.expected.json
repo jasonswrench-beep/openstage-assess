@@ -1,0 +1,10 @@
+{
+  "file": "94-duplicate-numbers.txt",
+  "note": "Two questions are numbered 3 and the list has one entry for 3. It used to be given to both. It is given to neither, and both fail. Question 4 is unaffected.",
+  "orphans": 0,
+  "questions": [
+    { "type": "multipleChoice", "stem": "Which planet has rings?", "options": ["Mars", "Saturn", "Venus"], "correct": [], "verdict": "failed" },
+    { "type": "multipleChoice", "stem": "Which planet is nearest the sun?", "options": ["Mercury", "Jupiter", "Neptune"], "correct": [], "verdict": "failed" },
+    { "type": "multipleChoice", "stem": "Which planet is red?", "options": ["Mars", "Earth", "Venus"], "correct": [0] }
+  ]
+}

@@ -1,0 +1,15 @@
+Points: 2
+Title: Reading a label
+1) Read the label that says:
+Points: 20
+Title:
+Type: A
+Then answer the question below.
+a. Voltage
+*b. Current
+c. Resistance
+
+Points: 3
+2) What does the second question ask?
+*a. Nothing
+b. Everything

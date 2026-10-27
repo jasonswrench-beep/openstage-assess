@@ -1,0 +1,8 @@
+1) What is the primary purpose of a literature review?
+a. To summarise earlier work
+*b. To place a study in context
+c. To report results
+REF: 87
+REF: 90
+MSC: Conceptual
+MSC: Applied

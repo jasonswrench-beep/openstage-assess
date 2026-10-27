@@ -1,0 +1,28 @@
+Type: TF
+1) The speed of light is constant in a vacuum.
+a. True
+b. False
+
+Type: TF
+2) Sound travels faster than light.
+a. False
+b. True
+
+3) Radio waves are a form of electromagnetic radiation.
+a. True
+b. False
+
+4) Light is a mechanical wave.
+a. True
+b. False
+
+Type: TF
+5) Marconi invented the telephone.
+a. True
+b. False
+
+Answers:
+1. T
+2. A
+3. A
+4. B

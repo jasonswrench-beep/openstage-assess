@@ -1,0 +1,18 @@
+1) Solve 2x + 1 = 7 for x.
+a. x = 2
+*b. x = 3
+c. x = 4
+d. x = 6
+
+2) Which equation is correct?
+a. 2 + 2 = 5
+b. 2 + 2 = 4
+c. 2 + 2 = 22
+
+Answers:
+2. B
+
+3) Which value satisfies x + 1 = 4?
+a. x = 1
+b. x = 3
+c. x = 5

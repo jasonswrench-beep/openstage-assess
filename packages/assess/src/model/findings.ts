@@ -58,6 +58,12 @@ export const FindingCode = {
   TrackedChangesPresent: "import.tracked-changes-present",
   MarkupRemoved: "import.markup-removed",
   EquationAsImage: "import.equation-as-image",
+  DuplicateQuestionNumber: "import.duplicate-question-number",
+  DuplicateOptionLetter: "import.duplicate-option-letter",
+  DuplicateMetadataLabel: "import.duplicate-metadata-label",
+  StemSpansBlankLine: "import.stem-spans-blank-line",
+  OptionFeedbackNotKept: "import.option-feedback-not-kept",
+  KeyTextNotUsed: "import.key-text-not-used",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",
