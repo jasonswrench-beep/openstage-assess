@@ -1,0 +1,16 @@
+Points: 2.5
+10) Which of the following is a measure of central tendency?
+~ Correct. The mean is a measure of central tendency.
+@ Not quite. Review the chapter on descriptive statistics.
+a. Standard deviation
+@ The standard deviation measures spread, not centre.
+*b. Mean
+@ Yes, the mean is a measure of central tendency.
+c. Range
+d. Variance
+
+11) Which of the following is a measure of spread?
+*a. Variance
+b. Mean
+c. Median
+d. Mode

@@ -1,0 +1,18 @@
+{
+  "file": "02-answers-at-end.txt",
+  "note": "The key list lives at the end, keyed by question number. Question 1 is true or false by the True-first convention.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "trueFalse",
+      "stem": "The Michelson-Morley experiment measured the speed of light in different directions.",
+      "correctBoolean": true
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "Who is known as the father of the electric light bulb in the United States?",
+      "options": ["Nikola Tesla", "Thomas Edison", "Guglielmo Marconi", "Albert Michelson"],
+      "correct": [1]
+    }
+  ]
+}

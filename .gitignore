@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Banks written while testing
+*.openassess
+*.openassess.writing
+!fixtures/**/*.openassess
+
+# Publisher test bank chapters used as fixtures.
+# These are read by the harness when present and skipped when absent, so the
+# coverage is there locally without the material ever entering the repository.
+fixtures/publisher/
+
+.DS_Store
+Thumbs.db

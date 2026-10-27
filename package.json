@@ -1,0 +1,21 @@
+{
+  "name": "openassess",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OpenAssess: a free desktop tool for writing, importing, organizing, and exporting assessment questions.",
+  "license": "Apache-2.0",
+  "author": "Jason S. Wrench",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "assess": "npm run --silent assess --workspace packages/assess --"
+  }
+}

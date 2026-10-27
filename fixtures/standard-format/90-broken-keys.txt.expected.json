@@ -1,0 +1,45 @@
+{
+  "file": "90-broken-keys.txt",
+  "note": "Three broken questions. The parser reads all three correctly; the file is what is wrong, so every question here should be read as expected AND carry an error.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "stem": "Which planet is closest to the sun?",
+      "options": [
+        "Mercury",
+        "Venus",
+        "Earth",
+        "Mars"
+      ],
+      "correct": [],
+      "verdict": "failed"
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "Which of these are prime numbers?",
+      "options": [
+        "2",
+        "3",
+        "4",
+        "6"
+      ],
+      "correct": [
+        0,
+        1
+      ],
+      "verdict": "failed"
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "What is the capital of France?",
+      "options": [
+        "Paris",
+        "Lyon",
+        "Marseille"
+      ],
+      "correct": [],
+      "verdict": "failed"
+    }
+  ]
+}

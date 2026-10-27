@@ -1,0 +1,41 @@
+{
+  "name": "@openstage/assess",
+  "version": "0.1.0",
+  "description": "The OpenAssess engine: the open question model, the bank container, importers, quality findings, and the frozen read contract for OpenStage Author and OpenStage Scroll.",
+  "license": "Apache-2.0",
+  "author": "Jason S. Wrench",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./read": {
+      "types": "./dist/read/index.d.ts",
+      "default": "./dist/read/index.js"
+    }
+  },
+  "bin": {
+    "openassess": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "assess": "node --experimental-strip-types --no-warnings src/cli/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

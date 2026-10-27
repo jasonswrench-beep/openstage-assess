@@ -1,0 +1,21 @@
+{
+  "file": "05-points-and-feedback.txt",
+  "note": "A Points line applies to the question that follows it and every question after, so both items are worth 2.5.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "stem": "Which of the following is a measure of central tendency?",
+      "options": ["Standard deviation", "Mean", "Range", "Variance"],
+      "correct": [1],
+      "points": 2.5
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "Which of the following is a measure of spread?",
+      "options": ["Variance", "Mean", "Median", "Mode"],
+      "correct": [0],
+      "points": 2.5
+    }
+  ]
+}

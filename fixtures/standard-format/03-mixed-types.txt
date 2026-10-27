@@ -1,0 +1,24 @@
+Type: E
+Title: Michelson-Morley
+5) How is the Michelson-Morley experiment related to the theory of relativity?
+a) In 1887 Michelson and Morley tried to detect the ether wind and found none.
+
+Type: F
+Title: Father of television
+6) Who is known as the father of television?
+a. Zworykin
+b. Vladimir Zworykin
+c. Vladimir Kosma Zworykin
+
+Type: MT
+7) Match the name to the discovery.
+a. Michelson-Morley = Speed of light
+b. Einstein = Theory of relativity
+c. Marconi = Radio waves
+
+Type: MA
+8) Which individuals are credited with determining the exact speed of light?
+a. Albert Einstein
+*b. Albert Michelson
+c. Thomas Edison
+*d. Edward Williams Morley

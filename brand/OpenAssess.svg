@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="1024" height="1024" viewBox="0 0 1024 1024" version="1.1" role="img" aria-labelledby="title description">
+  <title id="title">OpenStage Assess — OpenStage Suite icon</title>
+  <desc id="description">A warm orange assessment clipboard with three answer-choice circles, response lines, and a bold checkmark, on the shared navy rounded tile. Editable vector artwork with transparent outer corners.</desc>
+  <defs>
+    <linearGradient id="navy" x1="0" y1="0" x2="768" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#102037"/>
+      <stop offset="1" stop-color="#0B172A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="180" y1="160" x2="844" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFA861"/>
+      <stop offset="1" stop-color="#F08436"/>
+    </linearGradient>
+  </defs>
+  <g id="Tile" inkscape:label="Navy tile">
+    <rect id="navy-tile" x="0" y="0" width="1024" height="1024" rx="164" fill="url(#navy)"/>
+  </g>
+  <g id="Symbol" inkscape:label="OpenStage Assess symbol" fill="none" stroke="url(#accent)" stroke-width="52" stroke-linecap="round" stroke-linejoin="round">
+      <path id="clipboard-left-and-base" d="M320 208 H264 Q208 208 208 264 V788 Q208 844 264 844 H530"/>
+    <path id="clipboard-right" d="M660 208 H718 Q774 208 774 264 V526"/>
+    <rect id="clipboard-clip" x="360" y="150" width="260" height="112" rx="38"/>
+    <circle id="answer-choice-1" cx="320" cy="400" r="34" stroke-width="36"/>
+    <path id="answer-line-1" d="M408 400 H642"/>
+    <circle id="answer-choice-2" cx="320" cy="542" r="34" stroke-width="36"/>
+    <path id="answer-line-2" d="M408 542 H642"/>
+    <circle id="answer-choice-3" cx="320" cy="684" r="34" stroke-width="36"/>
+    <path id="answer-line-3" d="M408 684 H496"/>
+    <path id="assessment-checkmark" d="M578 728 L674 824 L882 616" stroke-width="64"/>
+    </g>
+</svg>

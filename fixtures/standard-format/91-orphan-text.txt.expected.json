@@ -1,0 +1,13 @@
+{
+  "file": "91-orphan-text.txt",
+  "note": "A chapter heading and a line of prose before the first question. Both are reported as orphans rather than swallowed into a stem.",
+  "orphans": 2,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "stem": "What does the median represent?",
+      "options": ["The middle value", "The average value", "The most frequent value", "The spread of values"],
+      "correct": [0]
+    }
+  ]
+}
