@@ -4,7 +4,7 @@ A free desktop tool for writing, importing, organizing and exporting assessment
 questions, so an instructor can turn a Word test bank into an LMS-ready quiz
 without retyping a single question.
 
-Part of the OpenStage suite. Apache 2.0.
+One of the OpenStage suite of tools; it stands on its own. Apache 2.0.
 
 This repository is at **phase 1 of 9**. There is no desktop application yet, on
 purpose. Phases 1 and 2 build and prove the engine, because the parse-accuracy
@@ -17,7 +17,8 @@ interface.
   migrations, a restricted rich-text subset.
 - The `.openassess` bank container: zip of JSON, read and write, folders, saved
   filters, history, an in-memory search index.
-- The read contract that OpenStage Author and OpenStage Scroll depend on.
+- A read API for other programs (`src/read/`). Nothing depends on it and it may
+  be removed; see `docs/design-plan.md`.
 - Profile one of the importer: the standard test-bank text format, read from plain
   text.
 - The accuracy harness and its fixture corpus.
@@ -85,8 +86,8 @@ claimed becomes a reported orphan rather than being discarded.
 **Delivery settings are not part of a question.** Attempts, time limits,
 feedback timing and weighting belong to a course or a quiz, not to an item, so
 the validator refuses them with an explanation. That boundary is what lets one
-bank serve an LMS export, a printed test, OpenStage Author and OpenStage
-Scroll without being rewritten for each.
+bank serve an LMS export, a printed test and a spreadsheet for OpenStage Author
+and OpenStage Scroll without being rewritten for each.
 
 ## Before publishing
 

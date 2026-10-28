@@ -1,0 +1,28 @@
+{
+  "file": "13-short-answer-forms.txt",
+  "note": "Type: S is short answer in the D2L and Moodle guides, written exactly like fill in the blank: every option, or every repeat of the question number in the Answers list, is another accepted form. Repeating the number used to turn the repeats into phantom essay questions and drop the alternatives, which was a regression from the scanner rewrite; no fixture covered it.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "shortAnswer",
+      "title": "Capital of Italy",
+      "stem": "What is the capital of Italy?",
+      "accepted": ["Rome", "Roma"]
+    },
+    {
+      "type": "shortAnswer",
+      "stem": "What is the chemical symbol for sodium?",
+      "accepted": ["Na"]
+    },
+    {
+      "type": "shortAnswer",
+      "stem": "Who painted the Mona Lisa?",
+      "accepted": ["Leonardo da Vinci", "Da Vinci", "Leonardo"]
+    },
+    {
+      "type": "fillInBlank",
+      "stem": "Who wrote the play Hamlet?",
+      "accepted": ["William Shakespeare", "Shakespeare"]
+    }
+  ]
+}

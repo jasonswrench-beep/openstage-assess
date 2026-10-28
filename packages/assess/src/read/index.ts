@@ -1,12 +1,14 @@
 /**
  * The read contract.
  *
- * This is the only surface OpenStage Author and OpenStage Scroll depend on.
- * They never read the zip themselves, never parse a .openassess file by hand,
- * and never need OpenAssess installed. When the bank format changes, this file
- * absorbs the migration and the consumers do not notice.
+ * Built so that other OpenStage tools could read a bank without parsing the zip
+ * themselves or needing OpenAssess installed. They do not: each OpenStage tool
+ * stands alone and the link between them is a file a person carries across (see
+ * docs/design-plan.md). Nothing depends on this module, so the shapes below are
+ * not a promise to anyone. It is kept and tested for now and may be removed once
+ * the desktop app exists. Do not build on it.
  *
- * Six operations, frozen at the end of phase 1:
+ * Six operations, as written at the end of phase 1:
  *
  *   openBank           bank metadata, folders, tags, counts
  *   listQuestions      summaries for picking
@@ -15,8 +17,8 @@
  *   supportedTypes     what a consumer can deliver, and the fallbacks
  *   toDeliveryPayload  a question reduced to what a consumer renders
  *
- * Adding an operation is a minor version. Changing the shape of one is a major
- * version and a conversation with both consumers first.
+ * The version number is kept so that a real consumer, if one ever appears, has
+ * something to pin. Until then the shapes may change freely.
  */
 
 import { Bank } from "../bank/store.ts";

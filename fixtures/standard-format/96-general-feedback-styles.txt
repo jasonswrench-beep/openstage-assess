@@ -1,0 +1,20 @@
+1) Which planet is known as the Red Planet?
+~ Correct. Mars has iron oxide on its surface.
+@ Not quite. The Red Planet is Mars.
+a. Venus
+*b. Mars
+c. Jupiter
+
+2) Which gas do plants take in for photosynthesis?
+@ Plants take in carbon dioxide and give out oxygen.
+a. Oxygen
+*b. Carbon dioxide
+c. Nitrogen
+
+3) Which ocean is the largest?
+a. Atlantic
+@ No. The Atlantic is the second largest.
+*b. Pacific
+@ Yes. The Pacific covers about a third of the Earth.
+c. Indian
+@ No. The Indian Ocean is smaller.

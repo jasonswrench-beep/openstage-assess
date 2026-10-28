@@ -44,7 +44,9 @@ import type { Orphan, SourceBlock } from "./types.ts";
 export const QUESTION_START = /^\s*(\d{1,4})\s*[.)]\s+(.*)$/;
 export const OPTION_START = /^\s*(\*?)\s*([a-tA-T])\s*[.)]\s+(.*)$/;
 const TITLE_LINE = /^\s*Title\s*:\s*(.*)$/i;
-const TYPE_LINE = /^\s*Type\s*:\s*([A-Za-z]{1,2})\s*$/i;
+// Up to three letters: the generic format has E, F, MT, MA and MC, and the D2L,
+// Moodle and Blackboard dialects add MR, S, FMB, ORD and JUM.
+const TYPE_LINE = /^\s*Type\s*:\s*([A-Za-z]{1,3})\s*$/i;
 const POINTS_LINE = /^\s*Points\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$/i;
 const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
 const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
@@ -142,6 +144,12 @@ export interface RawQuestion {
   ambiguousKeyValues: string[];
   /** Stem text continued after a blank line. */
   stemAfterBlank: boolean;
+  /**
+   * An @ line came straight after the stem, before any option. The generic
+   * format reads that as feedback for an incorrect answer; D2L and Moodle read
+   * it as general feedback. The scanner cannot tell which the file meant.
+   */
+  incorrectFeedbackBeforeOptions: boolean;
 }
 
 export interface KeyEntry {
@@ -257,8 +265,18 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   const belongsToKey = (i: number, number: number, value: string, block: KeyBlock): boolean => {
     if (bodyFollows(i)) return false;
     if (value.length === 0 || KEY_VALUE.test(value)) return true;
-    const covered = questions.some((q) => q.segment === block.segment && q.number === number);
-    return covered && !block.entries.has(number);
+    const covered = questions.filter((q) => q.segment === block.segment && q.number === number);
+    if (covered.length === 0) return false;
+    if (!block.entries.has(number)) return true;
+
+    // A number the list has already answered. the test-bank vendor repeats the number to
+    // give several accepted forms of one answer ("1. Van Hook" then "1. Dr. Van
+    // Hook"), but only for a fill in the blank or short answer. For any other
+    // type a repeat is the next chapter's question 1, so it stays a question.
+    // A value ending in a question mark is a question whatever the type. This
+    // case was lost when the key started closing: the old scanner never closed
+    // one, so every repeat was swallowed, and so was everything after it.
+    return covered.some((q) => q.typeHint === "F" || q.typeHint === "S") && !value.endsWith("?");
   };
 
   for (let i = 0; i < count; i++) {
@@ -376,6 +394,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         keyAmbiguous: false,
         ambiguousKeyValues: [],
         stemAfterBlank: false,
+        incorrectFeedbackBeforeOptions: false,
       };
       pending = {};
       questions.push(question);
@@ -427,6 +446,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         mode.option.lastBlock = block.index;
         mode = { kind: "optionFeedback", question, option: mode.option };
       } else {
+        if (question.options.length === 0) question.incorrectFeedbackBeforeOptions = true;
         question.incorrectFeedback.push(value);
         mode = { kind: "questionFeedback", question, which: "incorrect" };
       }

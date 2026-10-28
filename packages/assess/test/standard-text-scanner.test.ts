@@ -349,7 +349,7 @@ describe("every line is accounted for", () => {
       kinds.push(
         () => "a. ",
         () => "a.   ",
-        () => `Type: ${g.pick(["F", "TF", "MT", "MC", "MA", "E"])}`,
+        () => `Type: ${g.pick(["F", "TF", "MT", "MC", "MA", "E", "MR", "S", "FMB", "ORD", "JUM"])}`,
         () => `a. x${mark()} = y`,
         () => `b. p${mark()} = q`,
         () => `c. z${mark()} =`,
@@ -498,5 +498,164 @@ describe("a question that cannot be built as written is still storable, and says
     const [q] = storable(`1) Q?\n*a. Yes\nb. No\nREF:   \nXYZ:   \n`).questions;
     assert.equal(q!.metadata.page, undefined);
     assert.equal(q!.metadata.custom, undefined);
+  });
+});
+
+// The Standard Format is four dialects, not one: the generic and Canvas guides,
+// Moodle, D2L and Blackboard each document it slightly differently. The cases
+// here are the differences, written as the guides show them.
+describe("the dialects of the Standard Format", () => {
+  const only = (text: string) => {
+    const result = parse(text);
+    assert.equal(result.questions.length, 1, `expected one question, got ${result.questions.length}`);
+    for (const q of result.questions) assert.ok(validateQuestion(q).ok, "the question must satisfy the model");
+    return result;
+  };
+  const MULTI = "1) Which are prime?\na. 4\nb. 5\nc. 9\nd. 11\n";
+
+  describe("Type: MR is the same as Type: MA", () => {
+    test("with asterisks it is a clean multiple response", () => {
+      const [q] = only(`Type: MR\n1) Which are prime?\na. 4\n*b. 5\nc. 9\n*d. 11\n`).questions;
+      assert.equal(q!.type, "multipleResponse");
+      assert.deepEqual(correctIndexes(q!), [1, 3]);
+      assert.equal(verdictOf(q!), "parsed", "it used to be flagged as an unknown type");
+      assert.equal(codes(q!).includes(FindingCode.TypeInferred), false);
+    });
+
+    test("with an Answers list it is not read as single choice and failed", () => {
+      for (const key of ["b d", "b, d", "B,D"]) {
+        const [q] = only(`Type: MR\n${MULTI}\nAnswers:\n1. ${key}\n`).questions;
+        assert.equal(q!.type, "multipleResponse", key);
+        assert.deepEqual(correctIndexes(q!), [1, 3], key);
+        assert.equal(verdictOf(q!), "parsed", key);
+      }
+    });
+  });
+
+  describe("a Type code of up to three letters is a Type line", () => {
+    test("it is not reported as stray text before the question", () => {
+      for (const code of ["FMB", "ORD", "JUM", "S", "MR"]) {
+        const result = parse(`Type: ${code}\n1) Q?\na. x\n*b. y\n`);
+        assert.equal(result.orphans.length, 0, `Type: ${code} was left as an orphan`);
+      }
+    });
+
+    test("a longer word is still not a Type line", () => {
+      const result = parse(`Type: Essay\n1) Q?\n*a. x\nb. y\n`);
+      assert.deepEqual(result.orphans.map((o) => o.text), ["Type: Essay"]);
+    });
+  });
+
+  describe("Type: S is short answer", () => {
+    test("every option is an accepted answer, as in fill in the blank", () => {
+      const [q] = only(`Type: S\n1) Capital of Italy?\na. Rome\nb. Roma\n`).questions;
+      assert.equal(q!.type, "shortAnswer");
+      assert.deepEqual((q!.body as { accepted: string[] }).accepted, ["Rome", "Roma"]);
+      assert.equal(verdictOf(q!), "parsed");
+    });
+
+    test("repeating the question number in the Answers list adds forms", () => {
+      const result = only(`Type: S\n1) Who painted the Mona Lisa?\n\nAnswers:\n1. Leonardo da Vinci\n1. Da Vinci\n1. Leonardo\n`);
+      assert.deepEqual((result.questions[0]!.body as { accepted: string[] }).accepted, ["Leonardo da Vinci", "Da Vinci", "Leonardo"]);
+      assert.equal(verdictOf(result.questions[0]!), "parsed");
+      assert.equal(codes(result.questions[0]!).includes(FindingCode.KeyTextNotUsed), false);
+    });
+
+    test("with no answer it fails and is not usable, and nothing is guessed", () => {
+      const [q] = only(`Type: S\n1) Capital of Italy?\n`).questions;
+      assert.equal(verdictOf(q!), "failed");
+      assert.deepEqual((q!.body as { accepted: string[] }).accepted, [""]);
+      assert.equal(hasUsableKey(q!), false);
+    });
+  });
+
+  describe("repeating a question number in an Answers list", () => {
+    // This was lost in the scanner rewrite. The old scanner never closed a key,
+    // so every repeat was swallowed; the new one closed it at the first repeat
+    // and turned each remaining form into a phantom essay question.
+    test("gives a fill in the blank all its forms and invents no questions", () => {
+      const result = parse(
+        `Type: F\n1) Who is the Chancellor?\n\nType: F\n2) Who painted the Mona Lisa?\n\nAnswers:\n1. Dianne Van Hook\n1. Dr. Dianne Van Hook\n1. Dr. Van Hook\n2. Leonardo da Vinci\n2. Da Vinci\n`,
+      );
+      assert.equal(result.questions.length, 2);
+      const accepted = result.questions.map((q) => (q.body as { blanks: Array<{ accepted: string[] }> }).blanks[0]!.accepted);
+      assert.deepEqual(accepted, [["Dianne Van Hook", "Dr. Dianne Van Hook", "Dr. Van Hook"], ["Leonardo da Vinci", "Da Vinci"]]);
+      assert.deepEqual(result.questions.map(verdictOf), ["parsed", "parsed"]);
+    });
+
+    test("is a question, not a form, when options follow it", () => {
+      const result = parse(`Type: F\n1) Q?\n\nAnswers:\n1. Na\n\n1) Next chapter?\na. Yes\n*b. No\n`);
+      assert.equal(result.questions.length, 2);
+      assert.equal(richTextToPlain(result.questions[1]!.stem), "Next chapter?");
+    });
+
+    test("is a question, not a form, when it ends in a question mark", () => {
+      const result = parse(`Type: F\n1) Q?\n\nAnswers:\n1. Na\n1) Why is the sky blue?\n`);
+      assert.equal(result.questions.length, 2);
+    });
+
+    test("is a question for any type that does not take several forms", () => {
+      const result = parse(`1) First?\na. x\nb. y\n\nAnswers:\n1. A\n1. Second chapter question\n*a. p\nb. q\n`);
+      assert.equal(result.questions.length, 2, "a repeat after a multiple choice key is the next chapter");
+    });
+  });
+
+  describe("Type: FMB, ORD and JUM are refused by name", () => {
+    const cases: Array<[string, string, string]> = [
+      ["FMB", "The [sun] rises in the [east].", ""],
+      ["ORD", "Put these in order.\na. Evaporation\nb. Condensation\nc. Rain", "Evaporation"],
+      ["JUM", "The [quick] brown [fox] jumps.\na. slow\nb. red", "slow"],
+    ];
+    for (const [code, body, optionText] of cases) {
+      test(`${code} fails, keeps its text, and is not usable`, () => {
+        const result = only(`Type: ${code}\n1) ${body}\n`);
+        const q = result.questions[0]!;
+        assert.equal(verdictOf(q), "failed");
+        assert.equal(q.type, "essay", "kept as an essay so that its text has somewhere to live");
+        const found = q.findings.find((f) => f.code === FindingCode.UnsupportedType);
+        assert.equal(found?.severity, "error");
+        assert.match(found?.message ?? "", new RegExp(`Type: ${code}`));
+        assert.equal(result.orphans.length, 0);
+        assert.equal(hasUsableKey(q), false, "an essay is graded by a person, so only the finding keeps it out of an export");
+        assert.ok(JSON.stringify(q).includes(body.split("\n")[0]!.replace(/"/g, '\\"')), "the stem, brackets and all, is kept");
+        if (optionText) assert.ok(JSON.stringify(q.body).includes(optionText), "the options are kept in the model answer");
+      });
+    }
+
+    test("the question after one is read as normal", () => {
+      const result = parse(`Type: ORD\n1) Order.\na. x\nb. y\n\n2) Next?\na. p\n*b. q\n`);
+      assert.deepEqual(result.questions.map(verdictOf), ["failed", "parsed"]);
+    });
+  });
+
+  describe("an @ line straight after the question is ambiguous", () => {
+    // The generic, Canvas and Blackboard guides write feedback for an incorrect
+    // answer with @ beside a ~ line. D2L and Moodle write general feedback with
+    // a single @ and no ~. A lone @ could be either.
+    const ambiguous = (q: ReturnType<typeof parse>["questions"][number]) => codes(q).includes(FindingCode.AmbiguousFeedback);
+
+    test("a lone @ is kept as incorrect-answer feedback and flagged for review", () => {
+      const [q] = only(`1) Which is largest?\n@ Plants take in carbon dioxide.\na. Oxygen\n*b. Carbon dioxide\nc. Nitrogen\n`).questions;
+      assert.equal(ambiguous(q!), true);
+      assert.equal(verdictOf(q!), "needsReview");
+      assert.equal(richTextToPlain(q!.feedback.incorrect!), "Plants take in carbon dioxide.", "nothing is lost");
+    });
+
+    test("@ beside a ~ line is the generic style and is not flagged", () => {
+      const [q] = only(`1) Q?\n~ Right.\n@ Wrong.\na. x\n*b. y\n`).questions;
+      assert.equal(ambiguous(q!), false);
+      assert.equal(verdictOf(q!), "parsed");
+    });
+
+    test("@ under an option is that option's feedback and is not flagged", () => {
+      const [q] = only(`1) Q?\na. x\n@ No.\n*b. y\n@ Yes.\n`).questions;
+      assert.equal(ambiguous(q!), false);
+      assert.equal(verdictOf(q!), "parsed");
+    });
+
+    test("~ alone is not flagged", () => {
+      const [q] = only(`1) Q?\n~ Right.\na. x\n*b. y\n`).questions;
+      assert.equal(ambiguous(q!), false);
+    });
   });
 });

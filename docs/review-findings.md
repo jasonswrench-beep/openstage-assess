@@ -213,6 +213,50 @@ one of its right answers. `KeyLetterMissing` is now in `STORED_KEY_PROBLEMS`, a
 dismissal still lifts it, and `test/answer-key.test.ts` covers the multiple
 answer case, the single answer case and the dismissal.
 
+### The Standard Format is four dialects, and the importer read one
+
+The test-bank vendor's guides for the generic (IMS QTI), Canvas, Moodle, D2L and
+Blackboard personalities each describe the format a little differently. The
+importer implemented the generic one, and testing the guides' own examples
+against it found five gaps:
+
+- **`Type: MR` was unknown.** Moodle and D2L write multiple response as MR, the
+  generic and Canvas guides as MA, and the Word formatting handout uses MR. It
+  is now read as MA. With asterisks it was flagged for review; with an Answers
+  list (`1. a d`, the handout's own example) it was read as single choice and
+  failed.
+- **A Type code of three letters was not a Type line.** The pattern allowed two.
+  `Type: ORD` was reported as stray text and the question read as something
+  else. It now allows three.
+- **`Type: S` was unknown.** It is short answer in D2L and Moodle, written like a
+  fill in the blank, and now imports as `shortAnswer`. This gives the type its
+  first import path.
+- **`FMB`, `ORD` and `JUM` were misread.** Fill in multiple blanks, ordering and
+  Blackboard's jumbled sentence came out as a multiple choice with no key, or an
+  essay marked only for review. They are now refused by name: kept as an essay
+  with the options as its model answer, so no text is lost, with an
+  `UnsupportedType` error so that the question fails. `hasUsableKey` reads that
+  code too, since an essay is graded by a person and would otherwise pass.
+- **A lone `@` after the stem was silently reinterpreted.** The generic, Canvas
+  and Blackboard guides write feedback for an incorrect answer with `@` beside a
+  `~` line. D2L and Moodle write general feedback with a single `@`. A lone one
+  is stored as incorrect-answer feedback, as before, but is now flagged
+  `AmbiguousFeedback` instead of coming out as parsed with nothing to say.
+
+One more was my own regression. The guides repeat the question number in an
+Answers list to give several accepted forms of one fill in the blank or short
+answer (`1. Van Hook`, `1. Dr. Van Hook`). The scanner rewrite closed a key at
+the first prose line that repeated a number, so each repeat became a phantom
+essay question and the alternatives were dropped. The old scanner got this right
+by accident, because it never closed a key. A repeat now belongs to the key when
+the question is typed F or S, and stays a question when options follow it, when
+it ends in a question mark, or for any other type. No fixture covered it, which
+is why the gate stayed green.
+
+Fixtures 12, 13, 95 and 96 cover these, written as original questions in the
+formats the guides show. Run against the code before this change they scored 25,
+0, 20 and 66.7 percent, and the whole corpus 74.2 percent.
+
 ---
 
 ## Open, and roughly in the order I would take them
@@ -220,7 +264,13 @@ answer case, the single answer case and the dismissal.
 Items 1 and 2 were the scanner and the importer's output, and are fixed above.
 The numbers are kept so that references to the others stay valid.
 
-### 3. Decide what the delivery payload may carry
+### 3. Decide what the delivery payload may carry (closed)
+
+**Closed on 27 October 2026 by `docs/design-plan.md`.** OpenAssess is standalone
+and nothing consumes this payload, so there is no consumer whose needs this
+decision would serve. A table of questions carries its answers, as every LMS
+import does. The question returns only if a web-quiz export is built (milestone
+3), and it is decided there. The original note follows, for the record.
 
 `toDeliveryPayload` hands the full answer key to the consumer: `correct` per
 option, `accepted` for text, `right` for matching, `position` for ordering.
@@ -295,10 +345,36 @@ Media is never garbage collected either.
   fsync before the rename and leaves a stray `.writing` file if the rename
   fails. `rebuildIndex()` never clears. `manifest.questionCount` is written but
   never checked on open.
-- Five of the eleven types have no import path, and `shortAnswer` is in
-  `RELEASE_1_TYPES`.
+- Four of the eleven types have no import path: ordering, numeric, hotspot and
+  calculated. The D2L and Blackboard dialects document ordering, so it is refused
+  by name rather than missing.
 
-### 8. Found while rewriting the scanner, not yet fixed
+### 8. Found while rewriting the scanner and reading the the test-bank vendor guides, not yet fixed
+
+- **The importer has no notion of dialect.** the test-bank vendor asks which LMS
+  "personality" a file is for. Here a lone `@` has to be guessed, and the guess
+  is only flagged. The Type codes are a usable signal: MR and S point to D2L or
+  Moodle, FMB and ORD to D2L or Blackboard, JUM to Blackboard. Detecting the
+  dialect from them, with a setting to override it, would settle the `@`
+  question without asking the author.
+- **`FMB` and `ORD` are documented and the model could hold them.** `fillInBlank`
+  already has a `blanks` list, and `ordering` is a type. Both are written plainly
+  (`[rose, red flower]` in the stem; options in the correct order). `JUM` has no
+  model type.
+- **A `~` under an option is read as question-level feedback.** The Word
+  formatting handout shows `~` after the correct option as that answer's own
+  feedback; the guide appendix uses `@` there, even on the correct answer. Both
+  styles exist, and the second is handled. No text is lost, but the meaning
+  moves.
+- **the test-bank vendor ignores everything after the answer list; this importer does not.**
+  Deliberate, since a question after a mid-file key is more likely real than
+  meant to be dropped. Recorded so nobody restores the stricter behaviour.
+- **For the Word engine.** The appendix recommends the Answers list "when using
+  Auto Numbering and Auto Lettering", because those numbers are not in the text.
+  The Word handout tells authors to remove lists, tabs, indents and all bold,
+  italic and underline for the same reason. Rebuilding question numbers and
+  option letters from Word's list definitions, and keeping the formatting, is
+  where this importer can do better than the tool it reads.
 
 - **A key list that disagrees with the asterisks is ignored silently.** When a
   question has asterisks, its Answers entry is never read, so `*b` against
@@ -329,8 +405,8 @@ Media is never garbage collected either.
 
 ## The corpus is too small to be an accuracy measurement
 
-The gate runs on 42 questions across 16 files. At that size one wrong question
-costs 2.4 points, so a 95 percent threshold still means "at most one may fail",
+The gate runs on 57 questions across 20 files. At that size one wrong question
+costs 1.8 points, so a 95 percent threshold still means "at most two may fail",
 which makes it closer to a regression test than a measurement.
 
 It used to run on 15 questions and exercise none of: `Type: TF`, a `T`/`F`
@@ -339,7 +415,10 @@ duplicate numbering, options containing `=`, or any non-ASCII content. Fixtures
 06 to 11 and 92 to 94 now cover each of them. Run against the scanner before the
 rewrite, the new corpus scored 68.2 percent (06, 07, 08, 92 and 94 fail), so
 the gaps were real and the fixtures catch what they were written for. The
-rewrite scores 100 percent.
+rewrite scores 100 percent. Fixtures 12, 13, 95 and 96 add the dialect
+differences from the the test-bank vendor guides: `Type: MR`, `Type: S` with repeated
+answer numbers, the types that are refused by name, and a lone `@` after the
+stem.
 
 The scorer also matches questions to expectations by array index, so one missed
 question misaligns everything after it and a single structural bug reads as a

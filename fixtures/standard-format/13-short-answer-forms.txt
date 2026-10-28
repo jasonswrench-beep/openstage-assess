@@ -1,0 +1,22 @@
+Type: S
+Title: Capital of Italy
+1) What is the capital of Italy?
+a. Rome
+b. Roma
+
+Type: S
+2) What is the chemical symbol for sodium?
+
+Type: S
+3) Who painted the Mona Lisa?
+
+Type: F
+4) Who wrote the play Hamlet?
+
+Answers:
+2. Na
+3. Leonardo da Vinci
+3. Da Vinci
+3. Leonardo
+4. William Shakespeare
+4. Shakespeare

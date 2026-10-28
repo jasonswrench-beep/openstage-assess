@@ -1,0 +1,28 @@
+{
+  "file": "95-unsupported-types.txt",
+  "note": "Fill in multiple blanks, ordering and jumbled sentence are documented by D2L and Blackboard and are not read yet. Each is refused by name: kept as an essay so no text is lost, and failed so it cannot be used as one. They used to be misread (ORD and JUM as a multiple choice with no key, FMB as an essay marked only for review) with the Type line reported as stray text. The fourth question is an ordinary one after them, to show the file carries on.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "essay",
+      "stem": "The [sun] rises in the [east].",
+      "verdict": "failed"
+    },
+    {
+      "type": "essay",
+      "stem": "Put these steps of the water cycle in order.",
+      "verdict": "failed"
+    },
+    {
+      "type": "essay",
+      "stem": "The [quick] brown [fox] jumps.",
+      "verdict": "failed"
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "Which of these is a primary colour?",
+      "options": ["Green", "Blue", "Pink"],
+      "correct": [1]
+    }
+  ]
+}

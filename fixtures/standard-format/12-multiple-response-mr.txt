@@ -1,0 +1,31 @@
+Type: MR
+1) Which of these numbers are prime? (choose two)
+a. 4
+*b. 5
+c. 9
+*d. 11
+
+Type: MR
+2) Which of these animals are mammals?
+a. Dolphin
+b. Trout
+c. Bat
+d. Gecko
+
+Type: MA
+3) Which of these are noble gases?
+*a. Neon
+*b. Argon
+c. Oxygen
+d. Chlorine
+
+Type: MR
+4) Which of these are primary colours of light?
+a. Red
+b. Yellow
+c. Green
+d. Blue
+
+Answers:
+2. a, c
+4. a c d
