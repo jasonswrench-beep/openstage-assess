@@ -1,0 +1,26 @@
+{
+  "file": "96-general-feedback-styles.txt",
+  "note": "A line starting with @ straight after the question means feedback for an incorrect answer in the generic, Canvas and Blackboard guides (beside a ~ line), and general feedback in the D2L and Moodle guides (alone). The file does not say which, so question 2 is stored the first way and flagged for review. It used to come out as parsed with nothing to say. Questions 1 and 3 are unambiguous and stay clean.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "stem": "Which planet is known as the Red Planet?",
+      "options": ["Venus", "Mars", "Jupiter"],
+      "correct": [1]
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "Which gas do plants take in for photosynthesis?",
+      "options": ["Oxygen", "Carbon dioxide", "Nitrogen"],
+      "correct": [1],
+      "verdict": "needsReview"
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "Which ocean is the largest?",
+      "options": ["Atlantic", "Pacific", "Indian"],
+      "correct": [1]
+    }
+  ]
+}

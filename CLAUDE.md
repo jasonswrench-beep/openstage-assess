@@ -2,11 +2,13 @@
 
 OpenAssess is a free desktop tool for writing, importing, organising and
 exporting assessment questions, so an instructor can turn a Word test bank into
-an LMS-ready quiz without retyping anything. It is part of the OpenStage suite
-and is licensed Apache 2.0.
+an LMS-ready quiz without retyping anything. It is one of the OpenStage suite of
+tools, stands on its own, and is licensed Apache 2.0. The other tools do not
+depend on it and it does not depend on them.
 
 The build plan runs nine phases across four releases. Phase 1 is done. Phase 2
-is the Word import engine. `docs/review-findings.md` is the current agenda:
+is the Word import engine. `docs/design-plan.md` records what is intended and
+why: read it first. `docs/review-findings.md` is the list of known defects:
 read it before starting work, because it records what is already known to be
 broken and why two delivery fallbacks were deleted rather than repaired.
 
@@ -39,7 +41,7 @@ to the item. `schema.ts` rejects them by name with an explanation.
 ## Commands
 
 ```
-npm test                       # 188 tests, Node's own runner
+npm test                       # 207 tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
@@ -61,19 +63,19 @@ verdict all match. Orphan mismatches and invented questions are in the
 denominator. Do not loosen this: scoring on text agreement alone is how the
 gate once reported 100 percent on questions nobody could use.
 
-The corpus is only 42 questions across 16 files and should grow alongside the
+The corpus is only 57 questions across 20 files and should grow alongside the
 parser. Real publisher chapters go in `fixtures/publisher/`, which is
 gitignored and read when present.
 
-## The read contract
+## The read API
 
-`src/read/` is consumed by OpenStage Author and OpenStage Scroll. It is frozen
-at 1.0.0: six operations, and the shapes they return are a promise to two other
-programs. Adding is fine, changing is not, without a version bump.
-
-An open design question before it is treated as settled: the delivery payload
-currently includes the full answer key, which for Scroll means the key is in a
-web page. See `docs/review-findings.md`.
+`src/read/` was built so OpenStage Author and OpenStage Scroll could read banks
+through six operations. They do not: each OpenStage tool stands alone, and the
+only link between them is a file that a person carries across (for Author and
+Scroll, the question spreadsheet OpenAssess will export). Nothing depends on
+this code, so its shapes are not a promise to anyone. It is kept and tested for
+now and may be removed once the desktop app exists. Do not build on it. See
+`docs/design-plan.md`.
 
 ## Style
 

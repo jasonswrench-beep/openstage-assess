@@ -192,15 +192,21 @@ export function hasUsableKey(question: Question): boolean {
  * file gave was never fully applied. A multiple-response question like that
  * would be exported missing one of its right answers.
  *
- * The last three are placeholders: the importer had to put text such as
- * "(missing)" into an option so the question would be storable, and a question
- * carrying one must not be treated as usable. The check cannot see this from the
- * body, because the placeholder looks like any other option.
+ * UnsupportedType is another: the question was kept as an essay so that its text
+ * survives, and an essay is graded by a person, so the body alone would pass it
+ * as ready to use.
+ *
+ * NoOptions, TooFewOptions and EmptyOption are placeholders: the importer had
+ * to put text such as "(missing)" into an option so the question would be
+ * storable, and a question carrying one must not be treated as usable. The check
+ * cannot see this from the body, because the placeholder looks like any other
+ * option.
  */
 const STORED_KEY_PROBLEMS: ReadonlySet<string> = new Set<string>([
   FindingCode.NoAnswerKey,
   FindingCode.MultipleKeysOnSingleAnswer,
   FindingCode.KeyLetterMissing,
+  FindingCode.UnsupportedType,
   FindingCode.NoOptions,
   FindingCode.TooFewOptions,
   FindingCode.EmptyOption,

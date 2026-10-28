@@ -1,0 +1,31 @@
+{
+  "file": "12-multiple-response-mr.txt",
+  "note": "Moodle and D2L write multiple response as Type: MR; the generic and Canvas guides write Type: MA. They mean the same thing. MR used to be flagged as an unknown type, and with an Answers list it was read as single choice and failed. Written to the formats in the test-bank vendor's guides, with original questions.",
+  "orphans": 0,
+  "questions": [
+    {
+      "type": "multipleResponse",
+      "stem": "Which of these numbers are prime? (choose two)",
+      "options": ["4", "5", "9", "11"],
+      "correct": [1, 3]
+    },
+    {
+      "type": "multipleResponse",
+      "stem": "Which of these animals are mammals?",
+      "options": ["Dolphin", "Trout", "Bat", "Gecko"],
+      "correct": [0, 2]
+    },
+    {
+      "type": "multipleResponse",
+      "stem": "Which of these are noble gases?",
+      "options": ["Neon", "Argon", "Oxygen", "Chlorine"],
+      "correct": [0, 1]
+    },
+    {
+      "type": "multipleResponse",
+      "stem": "Which of these are primary colours of light?",
+      "options": ["Red", "Yellow", "Green", "Blue"],
+      "correct": [0, 2, 3]
+    }
+  ]
+}

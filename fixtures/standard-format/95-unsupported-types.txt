@@ -1,0 +1,19 @@
+Type: FMB
+1) The [sun] rises in the [east].
+
+Type: ORD
+2) Put these steps of the water cycle in order.
+a. Evaporation
+b. Condensation
+c. Precipitation
+
+Type: JUM
+3) The [quick] brown [fox] jumps.
+a. slow
+b. red
+
+Type: MC
+4) Which of these is a primary colour?
+a. Green
+*b. Blue
+c. Pink

@@ -10,7 +10,9 @@
  * What this reads:
  *
  *   Title: ...            a title, otherwise taken from the stem
- *   Type: E | F | MT | MA essay, fill in blank, matching, multiple answer
+ *   Type: E | F | S | MT | MA | MR   essay, fill in blank, short answer,
+ *                         matching, multiple answer (MA and MR are the same)
+ *   Type: FMB | ORD | JUM  documented by D2L and Blackboard, refused by name
  *   Points: 2.5           applies to this question and every one after it
  *   3) stem               a question number, a period or a parenthesis
  *   *b) option            an asterisk marks the correct option
@@ -319,13 +321,34 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
   return { metadata, findings };
 }
 
+/**
+ * The Standard Format is four dialects, not one. The generic (IMS QTI) and
+ * Canvas guides give E, F, MT, MA and MC; Moodle and D2L write multiple
+ * response as MR and add S for short answer; D2L and Blackboard add FMB, ORD
+ * and, in Blackboard, JUM. MR and MA mean the same thing wherever either is
+ * documented, so both are read. See docs/review-findings.md.
+ */
 const TYPE_HINTS: Record<string, QuestionType> = {
   E: "essay",
   F: "fillInBlank",
+  S: "shortAnswer",
   MT: "matching",
   MA: "multipleResponse",
+  MR: "multipleResponse",
   MC: "multipleChoice",
   TF: "trueFalse",
+};
+
+/**
+ * Types the dialects document that this profile does not read yet. They are
+ * recognised so that the question can be refused by name. Without this they
+ * were read as something else: ORD and JUM came out as a multiple choice with
+ * no key, and FMB as an essay, each with its Type line reported as stray text.
+ */
+const UNSUPPORTED_HINTS: Record<string, string> = {
+  FMB: "fill in multiple blanks",
+  ORD: "ordering",
+  JUM: "jumbled sentence",
 };
 
 interface TypeReading {
@@ -333,10 +356,18 @@ interface TypeReading {
   inferred: boolean;
   /** A Type line was present but is not one this profile knows. */
   unknownHint?: string;
+  /** A Type line the dialects document and this profile does not read yet. */
+  unsupported?: { hint: string; label: string };
 }
 
 function inferType(raw: RawQuestion): TypeReading {
   const hint = raw.typeHint;
+  const unsupportedLabel = hint ? UNSUPPORTED_HINTS[hint] : undefined;
+  // Kept as an essay so that the text has somewhere to live; the error beside it
+  // is what keeps the question from being used as one. See hasUsableKey.
+  if (hint && unsupportedLabel) {
+    return { type: "essay", inferred: false, unsupported: { hint, label: unsupportedLabel } };
+  }
   const stated = hint ? TYPE_HINTS[hint] : undefined;
   if (stated) return { type: stated, inferred: false };
 
@@ -573,24 +604,43 @@ function buildBody(
       return { body, media, findings };
     }
 
-    case "fillInBlank": {
+    case "fillInBlank":
+    case "shortAnswer": {
+      // The two types are written the same way: every option, and every form in
+      // the Answers list, is an accepted answer. They differ in where the model
+      // keeps the list.
       const accepted = [
         ...raw.options.map((o) => richTextToPlain(plainToRich(o.lines.join(" ")))),
         ...raw.keyValues,
       ]
         .map((a) => a.trim())
         .filter((a) => a.length > 0);
+      const blank = type === "fillInBlank";
+      const field = blank ? "body.blanks" : "body.accepted";
 
       if (accepted.length === 0) {
         findings.push(
-          finding(FindingCode.NoAnswerKey, "error", "No accepted answer was given for this fill in the blank question.", { source, field: "body.blanks" }),
+          finding(
+            FindingCode.NoAnswerKey,
+            "error",
+            `No accepted answer was given for this ${blank ? "fill in the blank" : "short answer"} question.`,
+            { source, field },
+          ),
         );
         // Empty on purpose. The schema stores an unkeyed blank as an empty
         // answer, and the answer-key check re-derives the error from it. Text
         // such as "(missing)" would read as a real answer and clear the error.
-        return { body: { caseSensitive: false, blanks: [{ id: "b1", accepted: [""] }] }, media, findings };
+        return {
+          body: blank ? { caseSensitive: false, blanks: [{ id: "b1", accepted: [""] }] } : { caseSensitive: false, accepted: [""] },
+          media,
+          findings,
+        };
       }
-      return { body: { caseSensitive: false, blanks: [{ id: "b1", accepted }] }, media, findings };
+      return {
+        body: blank ? { caseSensitive: false, blanks: [{ id: "b1", accepted }] } : { caseSensitive: false, accepted },
+        media,
+        findings,
+      };
     }
 
     case "matching": {
@@ -755,7 +805,7 @@ function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef)
   // left over used to vanish, including the case where a question had been
   // mistaken for a key entry and its words were all that was in it.
   const unusedKey =
-    type === "essay" || type === "fillInBlank"
+    type === "essay" || type === "fillInBlank" || type === "shortAnswer"
       ? []
       : type === "matching"
         ? raw.keyValues
@@ -798,6 +848,23 @@ function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef)
         "warn",
         `Feedback written under an option was not kept, because a ${type} question has no feedback for each option: "${unkept.join(" / ")}".`,
         { source, field: "body.options" },
+      ),
+    );
+  }
+
+  // The same line means two things. The generic format, Canvas and Blackboard
+  // write feedback for a correct answer with ~ and for an incorrect one with @,
+  // both before the options. D2L and Moodle write general feedback, shown
+  // whatever the answer, with a single @ and no ~. A lone @ is read here the
+  // first way, which is the only way this profile can store it without a
+  // general field, so the reading is a guess and it is said to be one.
+  if (raw.incorrectFeedbackBeforeOptions && raw.correctFeedback.length === 0) {
+    found.push(
+      finding(
+        FindingCode.AmbiguousFeedback,
+        "warn",
+        "A line starting with @ comes straight after the question, with no ~ line beside it. Most files mean feedback for an incorrect answer, but D2L and Moodle files use it for general feedback shown whatever the answer. It was kept as feedback for an incorrect answer. Check which was meant.",
+        { source, field: "feedback.incorrect" },
       ),
     );
   }
@@ -849,7 +916,17 @@ function buildQuestion(
     );
   }
 
-  const { type, inferred, unknownHint } = inferType(raw);
+  const { type, inferred, unknownHint, unsupported } = inferType(raw);
+  if (unsupported) {
+    findings.push(
+      finding(
+        FindingCode.UnsupportedType,
+        "error",
+        `This question is marked Type: ${unsupported.hint} (${unsupported.label}), a type this profile cannot read yet. It was kept as an essay, with the options as its model answer, so that none of its text is lost, and it fails so that it is not used as one. Its original wording is in the source file.`,
+        { source, field: "type" },
+      ),
+    );
+  }
   if (inferred) {
     findings.push(
       finding(
