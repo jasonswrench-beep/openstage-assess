@@ -185,15 +185,22 @@ export function hasUsableKey(question: Question): boolean {
 }
 
 /**
- * Problems an importer records that the body no longer shows. The last three
- * are placeholders: the importer had to put text such as "(missing)" into an
- * option so the question would be storable, and a question carrying one must
- * not be treated as usable. The check cannot see this from the body, because
- * the placeholder looks like any other option.
+ * Problems an importer records that the body no longer shows.
+ *
+ * KeyLetterMissing is one of them: a key that names option E on a question with
+ * three options still marks A correct, so the body looks keyed while the key the
+ * file gave was never fully applied. A multiple-response question like that
+ * would be exported missing one of its right answers.
+ *
+ * The last three are placeholders: the importer had to put text such as
+ * "(missing)" into an option so the question would be storable, and a question
+ * carrying one must not be treated as usable. The check cannot see this from the
+ * body, because the placeholder looks like any other option.
  */
 const STORED_KEY_PROBLEMS: ReadonlySet<string> = new Set<string>([
   FindingCode.NoAnswerKey,
   FindingCode.MultipleKeysOnSingleAnswer,
+  FindingCode.KeyLetterMissing,
   FindingCode.NoOptions,
   FindingCode.TooFewOptions,
   FindingCode.EmptyOption,

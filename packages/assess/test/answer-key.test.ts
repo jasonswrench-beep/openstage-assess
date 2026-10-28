@@ -167,4 +167,34 @@ describe("the exporter gate respects what the importer recorded", () => {
     assert.deepEqual(checkAnswerKey(flagged), [], "the body itself is fine");
     assert.equal(hasUsableKey(flagged), false, "but the recorded problem still counts");
   });
+
+  it("refuses a multiple answer question whose key names an option that is not there", () => {
+    // A marks one option correct, so the body looks keyed. E does not exist, so
+    // the file's key was never fully applied and a right answer is missing.
+    const q = importOne("Type: MA\n1) Pick all that apply.\na. x\nb. y\nc. z\n\nAnswers:\n1. A, E\n");
+    assert.equal(q.type, "multipleResponse");
+    assert.equal(verdictOf(q), "failed");
+    assert.deepEqual(checkAnswerKey(q), [], "the body alone shows one correct option and nothing wrong");
+    assert.ok(q.findings.some((f) => f.code === FindingCode.KeyLetterMissing && f.severity === "error"));
+    assert.equal(hasUsableKey(q), false, "a failed question must not pass the exporter gate");
+  });
+
+  it("refuses a single answer question whose key names an option that is not there", () => {
+    const q = importOne("1) Pick one.\na. x\nb. y\n\nAnswers:\n1. A, E\n");
+    assert.equal(q.type, "multipleChoice");
+    assert.deepEqual(checkAnswerKey(q), [], "A is marked, so the body alone looks keyed");
+    assert.ok(q.findings.some((f) => f.code === FindingCode.KeyLetterMissing));
+    assert.equal(hasUsableKey(q), false);
+  });
+
+  it("lets the question through once an author has dismissed the recorded problem", () => {
+    const q = importOne("Type: MA\n1) Pick all that apply.\na. x\nb. y\nc. z\n\nAnswers:\n1. A, E\n");
+    const dismissed = {
+      ...q,
+      findings: q.findings.map((f) =>
+        f.code === FindingCode.KeyLetterMissing ? { ...f, dismissed: true, dismissedBy: "jason" } : f,
+      ),
+    };
+    assert.equal(hasUsableKey(dismissed), true, "a dismissal is the author's decision about the item");
+  });
 });

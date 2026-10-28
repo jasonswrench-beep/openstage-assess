@@ -202,6 +202,17 @@ places text vanished, fixed the same way (the words are quoted in the finding):
 a title cut at 64 characters, the other half of a matching entry missing one
 side, and option text on a `Type: TF` question that is not True or False.
 
+### `hasUsableKey` accepted a key that named a missing option
+
+`Type: MA` with options a to c and the entry `1. A, E` is `failed`, because E
+does not exist and a `KeyLetterMissing` error says so. But A is marked, so the
+body looks keyed, and `hasUsableKey` read only the body plus a short list of
+stored problems that did not include that code. It returned true, and an
+exporter relying on it would have emitted a multiple-response question missing
+one of its right answers. `KeyLetterMissing` is now in `STORED_KEY_PROBLEMS`, a
+dismissal still lifts it, and `test/answer-key.test.ts` covers the multiple
+answer case, the single answer case and the dismissal.
+
 ---
 
 ## Open, and roughly in the order I would take them
@@ -297,12 +308,6 @@ Media is never garbage collected either.
   that are not True and False (Yes and No, say) is flagged for having no key.
   The option words are now quoted in an `OptionNotKept` warning rather than
   vanishing, but they are still not stored.
-- **`hasUsableKey` accepts a question whose key names a missing option.** `Type:
-  MA` with options a to c and the entry `1. A, E` is `failed` (a
-  `KeyLetterMissing` error) and still returns true, because that code is not
-  among the stored problems it reads. An exporter relying on it would emit a
-  multiple-response question missing one of its answers. The fix is one entry in
-  `STORED_KEY_PROBLEMS`.
 - **A matching question padded with `(missing)` pairs loses its error on the next
   edit.** The padding satisfies the schema, but its error is `NoAnswerKey`, which
   `withRecomputedFindings` re-derives from the body, and `checkAnswerKey` sees
