@@ -12,6 +12,58 @@ Only a question that comes out `parsed` counts toward the 95 percent, so a
 question that needs review is a miss, and a question that is wrong without saying
 so is worse than a miss.
 
+## Where it stands
+
+The first slice (stages 0 and 1) was built on 28 October 2026. A `.docx` goes in,
+questions come out, and the real harness scores them. `openassess import
+file.docx` works, and so does exporting what it imports to the Author spreadsheet.
+
+**Built:** the XML reader (`import/docx/xml.ts`), zip entry names that are checked
+on read and write, the package reader (`package.ts`), the paragraph and table walker
+(`document.ts`), the importer (`word.ts`, profile `word-docx`), an importer registry
+shared by the harness and the command line, the scanner reading list labels, and
+the test-side Word writer (`test/support/docx-writer.ts`).
+
+**Measured:**
+
+- All 20 text fixtures, written out as `.docx` in two styles (typed labels, and
+  noise) with four seeds each, come back identical to the text version: the same
+  questions, findings, orphans and source positions, and a score of 100 percent.
+- 300 generated files of lines in no sensible order read the same as text and as
+  Word, every marker survives, and the header, footer and deleted text are never
+  read as content.
+- The same fixtures score 100 percent through the real harness from a folder of
+  `.docx` files.
+- 500 questions in a noisy `.docx` import in about 0.1 seconds, against the
+  proposed 3 second budget.
+- Seven kinds of hostile or wrong file end in a readable message: a name that
+  climbs out of its folder, a document type declaration, nesting a million deep,
+  an entry that inflates far past its declared size, parts that differ only in
+  case, an older `.doc` (or a password-protected file), and a PDF or RTF.
+  Eight deliberate breaks of the new code were each caught by a test.
+
+**Decided while building:**
+
+- A soft line break starts a new block, because a block is one visual line and the
+  scanner is line-based. A page or column break does not, and a break at the end
+  of a paragraph is not a blank line.
+- Tracked changes, hyperlinks, fields and content controls are read now, not at
+  stage 5, because the walker had to decide what to do with them to read a
+  paragraph at all. Text boxes, alternate content and hidden text are still stage 5.
+- A picture or shape leaves `[picture]` in the text and an equation leaves
+  `[equation]`, and the file reports a count. Until stages 6 and 7 a question that
+  holds a marker can still come out `parsed`, because the report is for the file
+  and not for the question. That gap is recorded in the findings.
+- Part names are matched without regard to case, as the format says, and a
+  package with two parts that differ only in case is refused.
+- An XML part that declares a document type is refused outright.
+
+**Not built yet:** Word's own list numbering (stage 2), answer marks made with
+bold or highlight and `Answer:` lines (stage 3), table layouts as questions (stage
+4), text boxes and alternate content (rest of stage 5), pictures with their bytes
+and alt text (stage 6), equations (stage 7), and everything that needs real Word
+files (stage 8). The dialect pack is still wanted before stage 3.
+
 ## The shape
 
 The engine is two parts, and only one of them is new.

@@ -206,8 +206,9 @@ plan.
 **Done.** The question model, the bank file, the answer-key check, the read API,
 the accuracy harness and the plain-text importer, which reads the generic
 dialect plus Moodle, D2L and Blackboard additions (57 questions across 20
-fixtures, 100 percent), and the first exporter, the question spreadsheet for
-Author and Scroll, with the destination check.
+fixtures, 100 percent), the first exporter, the question spreadsheet for Author
+and Scroll, with the destination check, and the first slice of the Word importer
+(a `.docx` with typed labels, read through the same scanner and gate).
 
 **Next, in this order.**
 

@@ -894,7 +894,7 @@ function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef)
 function buildQuestion(
   raw: RawQuestion,
   file: string,
-  options: Required<Pick<ImportOptions, "author" | "at" | "defaultPoints">>,
+  options: Required<Pick<ImportOptions, "author" | "at" | "defaultPoints" | "profile">>,
 ): Question {
   const source: SourceRef = { file, firstBlock: raw.firstBlock, lastBlock: raw.lastBlock };
   const findings: Finding[] = [];
@@ -979,7 +979,7 @@ function buildQuestion(
     metadata: meta.metadata,
     media,
     findings,
-    origin: { kind: "import", source, profile: PROFILE_ID, at: options.at },
+    origin: { kind: "import", source, profile: options.profile, at: options.at },
     by: options.author,
     at: options.at,
   });
@@ -997,6 +997,10 @@ function buildQuestion(
 // The importer
 // ---------------------------------------------------------------------------
 
+function withListLabel(block: SourceBlock): SourceBlock {
+  return block.listLabel ? { ...block, text: `${block.listLabel} ${block.text}` } : block;
+}
+
 export const standardTextImporter: Importer = {
   id: PROFILE_ID,
   label: "standard test-bank text format (plain text)",
@@ -1004,16 +1008,20 @@ export const standardTextImporter: Importer = {
 
   parse(input: string | SourceBlock[], options: ImportOptions = {}): ImportResult {
     const file = options.file ?? "input.txt";
-    const blocks = typeof input === "string" ? linesToBlocks(input) : input;
+    // A block from a Word file keeps its list label apart from its text. The scanner
+    // reads what the page shows, which is the label then the text, so a question
+    // numbered by Word is read like one numbered by hand.
+    const blocks = (typeof input === "string" ? linesToBlocks(input) : input).map(withListLabel);
     const at = options.at ?? new Date().toISOString();
     const author = options.author ?? "import";
+    const profile = options.profile ?? PROFILE_ID;
 
     const defaultPoints = options.defaultPoints ?? DEFAULT_POINTS;
     const scanned = scanStandardText(blocks, file, defaultPoints);
-    const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints }));
+    const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints, profile }));
 
     return {
-      profile: PROFILE_ID,
+      profile,
       file,
       questions,
       orphans: scanned.orphans,

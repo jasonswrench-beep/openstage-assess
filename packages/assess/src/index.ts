@@ -35,6 +35,9 @@ export * from "./quality/answer-key.ts";
 // Import
 export * from "./import/types.ts";
 export { standardTextImporter, PROFILE_ID as STANDARD_TEXT_PROFILE } from "./import/standard-text.ts";
+export { wordImporter, docxToBlocks, WORD_PROFILE_ID } from "./import/word.ts";
+export { DocxError, openDocx } from "./import/docx/package.ts";
+export { IMPORTERS, importerFor, runImporter } from "./import/registry.ts";
 
 // Export
 export * from "./export/types.ts";
@@ -48,5 +51,5 @@ export type { SpreadsheetOptions } from "./export/openstage-spreadsheet.ts";
 
 // Harness
 export * from "./harness/score.ts";
-export { runHarness, IMPORTERS, TARGET_SCORE } from "./harness/run.ts";
+export { runHarness, TARGET_SCORE } from "./harness/run.ts";
 export type { HarnessRun } from "./harness/run.ts";

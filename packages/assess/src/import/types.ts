@@ -27,12 +27,22 @@ import type { Question } from "../model/question.ts";
  */
 export interface SourceBlock {
   index: number;
+  /**
+   * The text of the block, without its list label. A block is one visual line,
+   * so a soft line break in a Word paragraph starts a new block.
+   */
   text: string;
   kind?: "paragraph" | "listItem" | "tableRow" | "heading";
   /** Set by the Word parser in phase 2. */
   runs?: SourceRun[];
-  /** The literal list label Word would render, resolved from numbering.xml. */
+  /**
+   * The literal list label Word would render, resolved from numbering.xml. The
+   * scanner reads the block as `${listLabel} ${text}`, which is what the page
+   * shows, so a question numbered by Word is read like one numbered by hand.
+   */
   listLabel?: string;
+  /** Where a block inside a table sits, counting from zero, so a preview can find it. */
+  table?: { table: number; row: number; cell: number };
 }
 
 export interface SourceRun {
@@ -74,6 +84,8 @@ export interface ImportOptions {
   defaultPoints?: number;
   author?: string;
   at?: string;
+  /** The profile to record in each question's provenance. Defaults to the importer's own. */
+  profile?: string;
 }
 
 export interface Importer {
@@ -82,6 +94,11 @@ export interface Importer {
   /** File extensions this importer reads, including the dot. */
   extensions: string[];
   parse(input: string | SourceBlock[], options?: ImportOptions): ImportResult;
+  /**
+   * For a format that is not text, such as .docx. When it is present the file is
+   * read as bytes and handed here, and `parse` is not used for files.
+   */
+  parseBytes?(bytes: Uint8Array, options?: ImportOptions): ImportResult;
 }
 
 export function verdictOf(question: Question): Verdict {
