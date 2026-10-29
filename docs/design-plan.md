@@ -213,7 +213,8 @@ Author and Scroll, with the destination check.
 
 1. **The question spreadsheet exporter** and the destination-check mechanism.
    The first complete loop from file in to file out. Done on 27 October 2026.
-2. **The Word import engine** (phase 2). This is the feature that earns users,
+2. **The Word import engine** (phase 2; the plan is `docs/word-import-plan.md`).
+   This is the feature that earns users,
    so it gets the most engineering. the test-bank vendor asks authors to strip headers,
    lists, tabs, indents and all bold and italic, because it cannot read Word's
    structure. Word's automatic numbering is not in the text at all, so the
