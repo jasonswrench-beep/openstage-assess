@@ -73,6 +73,46 @@ function dosDateTime(date: Date): { time: number; date: number } {
 }
 
 // ---------------------------------------------------------------------------
+// Names
+// ---------------------------------------------------------------------------
+
+/**
+ * The name of a file inside a zip, made safe to use as a path.
+ *
+ * Names used to come back exactly as the file had them, so `../../x.json` was
+ * returned as a name and, once media is extracted to disk, written wherever it
+ * pointed. A Word file is untrusted input, so the name is checked here, once, for
+ * every reader and writer.
+ *
+ * Backslashes are treated as slashes, because some generators write them in
+ * Word files, and a doubled or leading `./` is tidied. A name that climbs out
+ * with `..`, starts at a root or a drive, is empty, or holds a control character
+ * is refused with a message that says so. Two names that become the same after
+ * tidying are still caught as duplicates by the reader.
+ */
+export function safeEntryName(name: string): string {
+  if (name.length === 0) {
+    throw new Error("A file inside this zip has no name, so it was not read.");
+  }
+  if (/[\u0000-\u001f\u007f]/.test(name)) {
+    throw new Error(`A file inside this zip has a name with control characters in it (${JSON.stringify(name)}), so it was not read.`);
+  }
+  const slashed = name.replace(/\\/g, "/");
+  if (slashed.startsWith("/") || /^[A-Za-z]:/.test(slashed)) {
+    throw new Error(`"${name}" inside this zip starts at a root or a drive, which is not read.`);
+  }
+  const parts = slashed.split("/");
+  if (parts.includes("..")) {
+    throw new Error(`"${name}" inside this zip climbs out of its folder with "..", which is not read.`);
+  }
+  const clean = parts.filter((part) => part !== "" && part !== ".");
+  if (clean.length === 0) {
+    throw new Error(`"${name}" inside this zip is not a file name, so it was not read.`);
+  }
+  return clean.join("/");
+}
+
+// ---------------------------------------------------------------------------
 // Write
 // ---------------------------------------------------------------------------
 
@@ -82,6 +122,13 @@ export function zipSync(entries: readonly ZipEntry[]): Uint8Array {
       `A zip here may hold at most ${MAX_ENTRIES} files and this one has ${entries.length}. ` +
         `If a bank ever needs more, the container needs zip64 support.`,
     );
+  }
+  // Never write a name this reader would refuse or change, so that what is saved
+  // is what comes back.
+  for (const entry of entries) {
+    if (safeEntryName(entry.name) !== entry.name) {
+      throw new Error(`"${entry.name}" is not a plain relative file name, so it was not written into the zip.`);
+    }
   }
 
   const localParts: Buffer[] = [];
@@ -204,11 +251,12 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
     const extraLength = buf.readUInt16LE(p + 30);
     const commentLength = buf.readUInt16LE(p + 32);
     const localOffset = buf.readUInt32LE(p + 42);
-    const name = buf.toString("utf8", p + 46, p + 46 + nameLength);
+    const storedName = buf.toString("utf8", p + 46, p + 46 + nameLength);
     p += 46 + nameLength + extraLength + commentLength;
 
-    if (flags & 0x0001) throw new Error(`"${name}" is encrypted, which this container does not read.`);
-    if (name.endsWith("/")) continue; // directory entry
+    if (flags & 0x0001) throw new Error(`"${storedName}" is encrypted, which this container does not read.`);
+    if (storedName.endsWith("/") || storedName.endsWith("\\")) continue; // directory entry
+    const name = safeEntryName(storedName);
 
     // The offset comes out of the file, so it is checked before it is used as
     // one. Unguarded it produced a raw Buffer RangeError instead of any of the

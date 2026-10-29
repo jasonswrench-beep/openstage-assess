@@ -13,18 +13,10 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import { standardTextImporter } from "../import/standard-text.ts";
-import type { Importer } from "../import/types.ts";
+import { importerFor, IMPORTERS, runImporter } from "../import/registry.ts";
 import { scoreFile, summarise, type ExpectedFile, type FileScore, type HarnessSummary } from "./score.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter];
-
-function importerFor(file: string): Importer | undefined {
-  const dot = file.lastIndexOf(".");
-  if (dot === -1) return undefined;
-  const extension = file.slice(dot).toLowerCase();
-  return IMPORTERS.find((i) => i.extensions.includes(extension));
-}
+export { IMPORTERS };
 
 export interface HarnessRun extends HarnessSummary {
   /** Source files with no expected file beside them. */
@@ -75,9 +67,10 @@ export async function runHarness(directory: string): Promise<HarnessRun> {
       continue;
     }
 
-    const text = await readFile(fullPath, "utf8");
+    // Bytes, not text: a .docx is not text, and the importer decides how to read its file.
+    const bytes = await readFile(fullPath);
     const expected = JSON.parse(await readFile(join(directory, expectedName), "utf8")) as ExpectedFile;
-    const result = importer.parse(text, { file: sourceName, at: "2026-01-01T00:00:00.000Z", author: "harness" });
+    const result = runImporter(importer, bytes, { file: sourceName, at: "2026-01-01T00:00:00.000Z", author: "harness" });
     scores.push(scoreFile({ ...expected, file: sourceName }, result));
   }
 

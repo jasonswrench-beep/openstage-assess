@@ -21,6 +21,11 @@ interface.
   be removed; see `docs/design-plan.md`.
 - Profile one of the importer: the standard test-bank text format, read from plain
   text.
+- The first slice of the Word importer: a `.docx` is read into the same blocks the
+  text importer uses, so a question in a Word file goes through the same scanner,
+  builder and accuracy gate. Typed labels only so far; Word's own list numbering
+  and answer marks made with formatting are the next stages
+  (`docs/word-import-plan.md`).
 - The first exporter: the question spreadsheet (CSV) that OpenStage Author and
   OpenStage Scroll read, with a destination check that lists what will arrive,
   what will be lost and what cannot go.
@@ -49,7 +54,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `info <bank>` | Manifest, counts by type and status, finding totals |
 | `validate <bank>` | Check every question against the model |
 | `new <bank> --title "..."` | Create an empty bank |
-| `import <file.txt> [--out <bank>] [--details]` | Read a file and report the verdicts |
+| `import <file> [--out <bank>] [--details]` | Read a `.txt` or `.docx` file and report the verdicts |
 | `export <bank> [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet, and with `--out` write it |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
@@ -65,12 +70,12 @@ packages/assess/        the engine, published as @openstage/assess
   src/container/        the zip reader and writer, and the bank file layout
   src/bank/             opening, saving, changing and searching a bank
   src/quality/          item quality checks
-  src/import/           importers; profile one is the Standard Format
+  src/import/           importers: the Standard Format, and Word (docx/ is its XML and package reader)
   src/export/           exporters and the destination check
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 257 tests, run by Node's own test runner
+  test/                 365 tests, run by Node's own test runner
 fixtures/standard-format/   source files with expected output beside them
 fixtures/publisher/         publisher chapters, never committed
 brand/                  the icon, and every size generated from it

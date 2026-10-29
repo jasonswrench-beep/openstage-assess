@@ -54,6 +54,7 @@ export const FindingCode = {
   // Import: the parser had to guess, and a human should look.
   TypeInferred: "import.type-inferred",
   UnsupportedType: "import.unsupported-type",
+  UnreadContent: "import.unread-content",
   AmbiguousFeedback: "import.ambiguous-feedback",
   UnknownMetadataLabel: "import.unknown-metadata-label",
   OptionWithoutLetter: "import.option-without-letter",

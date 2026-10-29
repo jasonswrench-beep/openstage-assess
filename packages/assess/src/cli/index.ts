@@ -9,12 +9,13 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BANK_EXTENSION, PRODUCT_NAME, ENGINE_VERSION } from "../naming.ts";
 import { Bank } from "../bank/store.ts";
 import { standardTextImporter } from "../import/standard-text.ts";
+import { importerFor, runImporter } from "../import/registry.ts";
 import { verdictOf } from "../import/types.ts";
 import { formatSummary, summarise } from "../harness/score.ts";
 import { runHarness, TARGET_SCORE } from "../harness/run.ts";
@@ -38,9 +39,9 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess new <bank${BANK_EXTENSION}> --title "Course bank"
       Create an empty bank.
 
-  openassess import <file.txt> [--out <bank${BANK_EXTENSION}>] [--details]
-      Read a file with the standard test-bank text format profile and report the
-      verdicts. With --out, write the questions into a new bank.
+  openassess import <file.txt|file.docx> [--out <bank${BANK_EXTENSION}>] [--details]
+      Read a file (the standard test-bank text format as text, or a Word .docx) and
+      report the verdicts. With --out, write the questions into a new bank.
 
   openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}] [--out <folder>]
       Run the destination check for the question spreadsheet that OpenStage
@@ -166,8 +167,12 @@ async function cmdImport(args: string[]): Promise<number> {
   const path = positional(args)[0];
   if (!path) return fail("Name a file to import.");
   const full = resolve(path);
-  const text = await readFile(full, "utf8");
-  const result = standardTextImporter.parse(text, { file: basename(full) });
+  if (extname(full).toLowerCase() === ".doc") {
+    return fail("This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).");
+  }
+  // A file with an extension no importer claims is read as the plain-text format, as it always was.
+  const importer = importerFor(full) ?? standardTextImporter;
+  const result = runImporter(importer, await readFile(full), { file: basename(full) });
 
   console.log(`${result.file}  profile ${result.profile}`);
   console.log(`  parsed        ${result.counts.parsed}`);

@@ -213,6 +213,17 @@ one of its right answers. `KeyLetterMissing` is now in `STORED_KEY_PROBLEMS`, a
 dismissal still lifts it, and `test/answer-key.test.ts` covers the multiple
 answer case, the single answer case and the dismissal.
 
+### Zip entry names were trusted
+
+Names came back from `unzipSync` exactly as the file had them, so `../../etc/evil.json`
+round-tripped. That was harmless while everything stayed in a Map and becomes a
+"zip slip" the moment media is extracted from a `.docx`, which is untrusted input.
+`safeEntryName` now checks every name on read and on write: it refuses `..`, a root
+or a drive, control characters and an empty name, and it reads a backslash as a
+slash because some generators write them in Word files. Two names that become the
+same are still caught as duplicates. The writer refuses a name the reader would
+change, so what is saved is what comes back.
+
 ### The Standard Format is four dialects, and the importer read one
 
 The test-bank vendor's guides for the generic (IMS QTI), Canvas, Moodle, D2L and
@@ -331,8 +342,6 @@ Media is never garbage collected either.
 - `Bank.add` leaves the bank partially mutated when the folder id is wrong.
 - A zip whose archive comment contains the EOCD signature is rejected with the
   wrong diagnosis; a truncated file reports "not a zip".
-- Entry names are returned unsanitized, so `../../etc/evil.json` round-trips.
-  Harmless while everything stays in a Map, but media extraction is coming.
 - `isEmptyRichText` ignores math refs, so a stem that is only an equation
   reports empty.
 - A link whose stored version is **ahead** of the bank is reported as behind it,
@@ -374,6 +383,16 @@ Media is never garbage collected either.
   `--` in Author, in an LMS and on a printed test. Decide whether the exporters
   should put the typography back on the way out, or whether the model should
   keep it and normalise only where a destination needs it.
+- **A picture or equation marker is reported for the file, not for the question.**
+  The Word importer writes `[picture]` or `[equation]` where one stood and counts
+  them in a file-level finding, but nothing flags the question that holds the
+  marker, so it can come out `parsed` with the figure it depends on missing. Fine
+  for a first slice, wrong for the 95 percent target. Stages 6 and 7 read the
+  content, and until then the question should carry a finding of its own.
+- **The text importer claims `.rtf`.** Its extensions are `.txt`, `.rtf` and `.md`,
+  so an RTF file is read as plain text and its control words come in as stray
+  text. RTF is out of scope; the extension should go, and the Word importer's
+  message for an RTF file ("save it as .docx") is the better answer.
 - **the test-bank vendor ignores everything after the answer list; this importer does not.**
   Deliberate, since a question after a mid-file key is more likely real than
   meant to be dropped. Recorded so nobody restores the stricter behaviour.
