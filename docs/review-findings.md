@@ -366,6 +366,14 @@ Media is never garbage collected either.
   feedback; the guide appendix uses `@` there, even on the correct answer. Both
   styles exist, and the second is handled. No text is lost, but the meaning
   moves.
+- **Typography is flattened on the way in, and exports show it.** Curly quotes
+  become straight, an en dash becomes `-`, an em dash becomes `--` and an
+  ellipsis becomes `...` (`normalizeCharacters`, applied by the sanitizer to
+  every piece of rich text). The reason is sound: that noise from Word breaks
+  exact-match grading, search and QTI. But an instructor's em dash will read
+  `--` in Author, in an LMS and on a printed test. Decide whether the exporters
+  should put the typography back on the way out, or whether the model should
+  keep it and normalise only where a destination needs it.
 - **the test-bank vendor ignores everything after the answer list; this importer does not.**
   Deliberate, since a question after a mid-file key is more likely real than
   meant to be dropped. Recorded so nobody restores the stricter behaviour.

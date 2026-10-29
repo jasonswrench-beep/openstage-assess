@@ -4,10 +4,10 @@
  * The OpenAssess engine. Nothing in here touches the filesystem except the
  * bank's own open and save, nothing touches a window, and nothing depends on
  * Tauri, so the same code runs in the desktop application, in the command-line
- * tool, in a test, and inside OpenStage Author and OpenStage Scroll.
+ * tool and in a test.
  *
- * Consumers that only need to read a bank should import "@openstage/assess/read"
- * instead. That entry point is frozen; this one is not.
+ * "@openstage/assess/read" is a smaller entry point built for other OpenStage
+ * tools. Nothing uses it, and it may be removed (see docs/design-plan.md).
  */
 
 export * from "./naming.ts";
@@ -35,6 +35,16 @@ export * from "./quality/answer-key.ts";
 // Import
 export * from "./import/types.ts";
 export { standardTextImporter, PROFILE_ID as STANDARD_TEXT_PROFILE } from "./import/standard-text.ts";
+
+// Export
+export * from "./export/types.ts";
+export {
+  exportOpenStageSpreadsheet,
+  checkOpenStageSpreadsheet,
+  DESTINATION_ID as OPENSTAGE_SPREADSHEET,
+  MAX_QUESTIONS_PER_FILE as OPENSTAGE_SPREADSHEET_MAX_QUESTIONS,
+} from "./export/openstage-spreadsheet.ts";
+export type { SpreadsheetOptions } from "./export/openstage-spreadsheet.ts";
 
 // Harness
 export * from "./harness/score.ts";

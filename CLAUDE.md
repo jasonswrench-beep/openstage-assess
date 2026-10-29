@@ -41,10 +41,11 @@ to the item. `schema.ts` rejects them by name with an explanation.
 ## Commands
 
 ```
-npm test                       # 207 tests, Node's own runner
+npm test                       # 257 tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
+npm run assess -- export <bank>  # the destination check, and the Author/Scroll CSV with --out
 npm run assess -- contract     # the read contract and consumer capabilities
 ```
 
