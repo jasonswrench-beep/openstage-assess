@@ -21,6 +21,9 @@ interface.
   be removed; see `docs/design-plan.md`.
 - Profile one of the importer: the standard test-bank text format, read from plain
   text.
+- The first exporter: the question spreadsheet (CSV) that OpenStage Author and
+  OpenStage Scroll read, with a destination check that lists what will arrive,
+  what will be lost and what cannot go.
 - The accuracy harness and its fixture corpus.
 - A command-line tool that drives all of it.
 
@@ -47,6 +50,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `validate <bank>` | Check every question against the model |
 | `new <bank> --title "..."` | Create an empty bank |
 | `import <file.txt> [--out <bank>] [--details]` | Read a file and report the verdicts |
+| `export <bank> [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet, and with `--out` write it |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
 | `perf [--count 500]` | Time open, search and save |
@@ -62,10 +66,11 @@ packages/assess/        the engine, published as @openstage/assess
   src/bank/             opening, saving, changing and searching a bank
   src/quality/          item quality checks
   src/import/           importers; profile one is the Standard Format
-  src/read/             the frozen contract for Author and Scroll
+  src/export/           exporters and the destination check
+  src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 136 tests, run by Node's own test runner
+  test/                 257 tests, run by Node's own test runner
 fixtures/standard-format/   source files with expected output beside them
 fixtures/publisher/         publisher chapters, never committed
 brand/                  the icon, and every size generated from it

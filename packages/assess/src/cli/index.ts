@@ -8,8 +8,8 @@
  * the harness runs in continuous integration.
  */
 
-import { readFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BANK_EXTENSION, PRODUCT_NAME, ENGINE_VERSION } from "../naming.ts";
@@ -24,6 +24,8 @@ import { allCapabilities, READ_CONTRACT_VERSION, typeVerdicts } from "../read/in
 import { QUESTION_TYPES } from "../model/question.ts";
 import { createQuestion } from "../model/create.ts";
 import { localId } from "../model/ids.ts";
+import { formatReport } from "../export/types.ts";
+import { DESTINATION_ID, exportOpenStageSpreadsheet } from "../export/openstage-spreadsheet.ts";
 
 const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
 
@@ -39,6 +41,11 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess import <file.txt> [--out <bank${BANK_EXTENSION}>] [--details]
       Read a file with the standard test-bank text format profile and report the
       verdicts. With --out, write the questions into a new bank.
+
+  openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}] [--out <folder>]
+      Run the destination check for the question spreadsheet that OpenStage
+      Author and Scroll read: what will arrive, what will be lost, what cannot
+      go. With --out, write the file or files into that folder.
 
   openassess search <bank${BANK_EXTENSION}> <words...>
       Search a bank.
@@ -68,7 +75,7 @@ function positional(args: string[]): string[] {
     const value = args[i] as string;
     if (value.startsWith("--")) {
       // Flags that take a value consume the next item.
-      if (["out", "title", "count", "profile"].includes(value.slice(2))) i++;
+      if (["out", "title", "count", "profile", "to"].includes(value.slice(2))) i++;
       continue;
     }
     out.push(value);
@@ -195,6 +202,35 @@ async function cmdImport(args: string[]): Promise<number> {
     console.log(`\nWrote ${result.questions.length} question(s) to ${written}`);
   }
   return result.counts.failed > 0 ? 1 : 0;
+}
+
+async function cmdExport(args: string[]): Promise<number> {
+  const path = positional(args)[0];
+  if (!path) return fail("Name a bank file.");
+  const to = arg(args, "to") ?? DESTINATION_ID;
+  if (to !== DESTINATION_ID) return fail(`Unknown destination "${to}". The only one so far is ${DESTINATION_ID}.`);
+
+  const { bank } = await Bank.open(resolve(path));
+  const result = exportOpenStageSpreadsheet(bank.list(), { name: bank.manifest.title });
+  for (const line of formatReport(result.report)) console.log(line);
+
+  const out = arg(args, "out");
+  if (!out) {
+    console.log("\nNothing was written. Add --out <folder> to write the file.");
+    return 0;
+  }
+  if (result.files.length === 0) {
+    console.log("\nNo question could be exported, so no file was written.");
+    return 1;
+  }
+  const folder = resolve(out);
+  await mkdir(folder, { recursive: true });
+  for (const file of result.files) {
+    const target = join(folder, file.name);
+    await writeFile(target, file.content, "utf8");
+    console.log(`\nWrote ${file.questions} question(s) to ${target}`);
+  }
+  return 0;
 }
 
 async function cmdSearch(args: string[]): Promise<number> {
@@ -362,6 +398,8 @@ async function main(): Promise<number> {
       return cmdNew(args);
     case "import":
       return cmdImport(args);
+    case "export":
+      return cmdExport(args);
     case "search":
       return cmdSearch(args);
     case "score":

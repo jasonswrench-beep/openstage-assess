@@ -106,15 +106,30 @@ lost by writing CSV.
   written in a table, so the destination check lists them as left out.
 - **Lost on the way:** feedback under each option, bold, pictures and links. It
   is plain text.
-- **Limits:** 200 questions per file (a larger bank is split into several files)
-  and eight answers per question.
-- **Attempts** is a delivery setting and not part of a question, so it is left
-  blank and Author applies its own default.
+- **Limits:** 200 questions per file (a larger bank is split into several files;
+  Author refuses a longer file whole) and eight answers per question.
+- **Line breaks:** Author reads the Question cell as one line, so paragraph
+  breaks in the wording become spaces. Feedback keeps its breaks.
+- **Short answers:** Author takes at most ten accepted answers. Up to eight go in
+  the answer columns; nine or ten go in the Correct column, separated by bars.
+- **Multiple response:** Author always scores a share of the points (the right
+  answers ticked, less the wrong ones), so a question with partial credit
+  arrives as meant. One marked all or nothing is reported as a difference.
+- **Attempts** is a delivery setting and not part of a question, so there is no
+  Attempts column and Author applies its own default.
+- **A picture or an equation** cannot be carried. It is written into the text as
+  `[Picture: its alternative text]` or `[Equation: LaTeX]`, so the question still
+  makes sense and the author can see where to put it back, and it is counted in
+  the report.
 
-This is the first exporter to build. It is small, it needs no library, it can be
-checked by loading the output into Author's own dialog (which reports problems
-row by row), and it proves the destination-check mechanism that every later
-exporter uses.
+This is the first exporter, and it is built (`src/export/`, command `export`). It
+needs no library. It was checked against Author's own reader, which accepted
+every row it wrote, and the tests apply Author's documented rules so that they do
+not depend on that project being on the same machine. It also proves the
+destination-check mechanism that every later exporter uses: a report with one
+entry per question, saying it arrived as written, arrived with something lost, or
+was left out and why. A question with no usable key is left out, never exported
+and never given a guessed one.
 
 ## Ideas taken from the wider discussion
 
@@ -191,12 +206,13 @@ plan.
 **Done.** The question model, the bank file, the answer-key check, the read API,
 the accuracy harness and the plain-text importer, which reads the generic
 dialect plus Moodle, D2L and Blackboard additions (57 questions across 20
-fixtures, 100 percent).
+fixtures, 100 percent), and the first exporter, the question spreadsheet for
+Author and Scroll, with the destination check.
 
 **Next, in this order.**
 
 1. **The question spreadsheet exporter** and the destination-check mechanism.
-   The first complete loop from file in to file out.
+   The first complete loop from file in to file out. Done on 27 October 2026.
 2. **The Word import engine** (phase 2). This is the feature that earns users,
    so it gets the most engineering. the test-bank vendor asks authors to strip headers,
    lists, tabs, indents and all bold and italic, because it cannot read Word's
