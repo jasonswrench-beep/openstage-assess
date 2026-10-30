@@ -76,6 +76,8 @@ export const FindingCode = {
   FormattingKeyUsed: "import.formatting-key-used",
   FormattingKeyUnclear: "import.formatting-key-unclear",
   FormattingKeyBroken: "import.formatting-key-broken",
+  StarAfterLetterKeyUsed: "import.star-after-letter-key-used",
+  StarAfterLetterKeyUnclear: "import.star-after-letter-key-unclear",
   AnswerKeyPart: "import.answer-key-part",
   AnswerFromUnlabelledLine: "import.answer-from-unlabelled-line",
   RepeatedQuestionsFolded: "import.repeated-questions-folded",

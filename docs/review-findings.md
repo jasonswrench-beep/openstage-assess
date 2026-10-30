@@ -463,13 +463,47 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found while reading a second real file, typed by hand (stage 4c), not yet fixed
+
+An instructor's manual chapter, 28 questions, went from 3 of 28 to 28 of 28. What that does
+not show:
+
+- **It is the author's own bank, typed in one habit.** A star after the letter, "1)" numbers,
+  options after three spaces. Another instructor will mark the key another way: a star after
+  the words, "(Correct)" at the end, the answer on a line under the question, bold. Some of
+  those are read and some are not, and none has been seen in a real file but this one's.
+- **Only the ODT reached the importer, by way of Word.** The same chapter came as ODT, EPUB, Markdown
+  and a Google Docs link. A separate hidden Word opened the ODT and saved a .docx, which is
+  the file measured. A .docx that Google Docs writes itself, with its own XML, has not
+  been read, and is the file this author would really have.
+- **The Markdown copy reads 0 of 28.** `.md` is accepted as plain text, but a Markdown export
+  escapes the bank's own characters ("1\)", "\*"), writes headings as "###" and bold as
+  "**", and none of that is undone, so no line looks like a question and all 112 are reported as
+  stray text. Nothing is lost and nothing is guessed, but nothing is read. EPUB and ODT are not read
+  at all, and nobody has asked for them.
+- **"Question numbers repeat" is said about a file that is fine.** Each section starts again at
+  1, there is no Answers list, and every question carries its own mark, so a repeat cannot
+  take a wrong key. It is kept on purpose (a test says so) and worth narrowing to a
+  file that has an Answers list, or to repeats inside one section.
+- **A typed star is not a key in a file that does it in fewer than three questions or fewer
+  than 80 percent of its choice questions.** Flagged, with a file message that says why. A short
+  quiz of two questions marked this way fails for lack of a key, as it did before.
+- **An asterisk before every option of a question says nothing**, as a bold letter on every
+  option says nothing, so that question is left as typed and fails for lack of a key.
+- **Essays have no model answer in this bank**, and none was expected. The title line "TEST BANK"
+  is reported as stray text, as the two title lines of the first chapter are.
+- **The harness does not check the shape of an expected file.** A question whose expected
+  `correct` was written as the number 0 and not the list `[0]` was not checked at all, which
+  is how three questions passed unchecked until the file was fixed. A wrong number other
+  than 0 is reported, but the shape is never refused.
+
 ### Found while reading the first real publisher file (stage 4b), not yet fixed
 
 The first real chapter went from 0 of 60 to 60 of 60, and the following are what that does
 not show or what was decided on one file's evidence.
 
-- **One chapter is not three.** The 95 percent target is on three real chapters. One has been
-  measured, from one publisher, laid out one way. The rules above were each written for a piece of
+- **One chapter is not three.** The 95 percent target is on three real chapters. Two have been
+  measured (a second, typed by hand, is above), and this one is from one publisher, laid out one way. The rules above were each written for a piece of
   that file, and the next publisher's file will use another. The chapter is kept only on the
   machine, so the measurement cannot be rerun from a clone.
 - **The copy with the answers is found by a heading that ends in "Answer Key".** A bank whose
@@ -591,10 +625,11 @@ not show or what was decided on one file's evidence.
   wrote.** 2,363 paragraphs agree (`npm run check:word`), but nothing a different
   program wrote has been tried: Google Docs, LibreOffice, a script, a bank that has
   been through years of editing. The dialect pack and the real chapters are for that.
-- **A star after a letter is a key mark only when Word made the letter, and "(a)"
-  is an option label only then too.** Deliberate, so that nothing read before is read
-  differently. If instructors also type "b. *Mars" or "(a) Mars" by hand, the
-  scanner should accept them in a text file too.
+- **A typed "(a) Mars" is an option label only when Word made the letter.**
+  Deliberate, so that nothing read before is read differently. A typed star after the
+  letter ("b. *Mars") is now read as a key when the whole file does it (stage 4c), because
+  an instructor's own bank was found to do so. If instructors also type "(a) Mars" by
+  hand, the scanner should accept it in a text file too.
 
 ---
 

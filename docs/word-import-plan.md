@@ -161,6 +161,26 @@ would have fixed, so this came first. Six things changed, each described below:
   with an empty question cell, a long line ending in "answer key" taken as the heading, one
   twin answering for several copies, and the options not compared when copies are folded),
   and each got a test of its own.
+- Stage 4c, against a second real file: an instructor's manual chapter, 28 questions (15
+  multiple choice, 10 true or false, 3 essays) typed by hand, with "1)" numbers, "a." options
+  and the right option marked with an asterisk after its letter ("c. *text"). It read 3 of 28
+  before (every choice question failed honestly, for having no key) and 28 of 28 after,
+  through the real harness. The expected file was written from the author's ODT export by
+  a separate script. The chapter came as ODT, EPUB, Markdown and a Google Docs link; the
+  importer reads none of those, so it was read as a .docx that a separate hidden Word made
+  from the ODT, and a .docx that Google Docs itself writes was not tried. It stays in
+  `fixtures/publisher/`, ignored by git. Two chapters are not three.
+- Stage 4c, the rule: a typed asterisk after the letter is the key only as a habit of the
+  whole file, on the terms a mark made with formatting has (some options of a question
+  start with one and others do not, in at least three choice questions and 80 percent of
+  them). The format's own asterisk before the letter is read as ever. The asterisk is taken
+  out of the option's words, the file says once that it was read as the key, and a file
+  that does it too seldom keeps the asterisks as text and says why. 23 tests in
+  `test/star-after-letter.test.ts`, including the same bank typed and as a Word file.
+- Twenty-one deliberate breaks of the stage 4c code: all caught by a test in the end.
+  Three got through the first tests (questions with no options counted as choice
+  questions, the lettered parts of an essay counted as one, and the severity of the message for
+  a habit that was not met), and each got a test of its own.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -196,7 +216,8 @@ would have fixed, so this came first. Six things changed, each described below:
 - Word lets an author who letters the options automatically put the key's asterisk
   only after the letter ("b. *Mars"). An asterisk at the start of an item whose
   label is an option letter is read as the mark and moved where the format has it.
-  A typed "b. *Mars" is still not a mark, so nothing read before is read differently.
+  A typed "b. *Mars" is a mark only as a habit of the whole file (stage 4c, below): a
+  lone one is still text, so nothing read before is read differently.
 - Word writes a label as "(a)" as readily as "a)". The opening bracket is dropped,
   because the Standard Format knows only the second.
 

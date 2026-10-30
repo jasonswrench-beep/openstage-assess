@@ -35,6 +35,7 @@
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import type { Metadata } from "../model/question.ts";
+import { AT_LEAST, CHOICE_HINTS, SHARE } from "./standard-text-format.ts";
 import type { Orphan, SourceBlock } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -731,6 +732,9 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
 
   if (section && !section.used) orphan(section.block, "a section heading with no question after it");
 
+  // Before the fold, which asks whether a copy gives an answer of its own.
+  readStarsAfterLetters(questions, fileFindings);
+
   // A file with an Answers list is keyed in a way this does not touch.
   if (keyBlocks.length === 0) foldCopiesWithoutAnswers(questions, file, fileFindings);
 
@@ -905,6 +909,65 @@ function foldCopiesWithoutAnswers(questions: RawQuestion[], file: string, fileFi
         `Each was imported once, from the copy with the answers, and the copy without them was not imported. ` +
         (kept > 0 ? `${kept} ${kept === 1 ? "question before the heading says" : "questions before the heading say"} something different from every question after ${kept === 1 ? "it" : "them"}, and ${kept === 1 ? "was" : "were"} kept as written.` : "Nothing before the heading was left over."),
       { source: { file, firstBlock: first, lastBlock: last } },
+    ),
+  );
+}
+
+/**
+ * An asterisk typed after an option's letter ("c. *Mars"), which is how many
+ * instructors mark the right option in a bank they type by hand. The Standard Format
+ * has it before the letter ("*c. Mars"), and that is read wherever it is. After the
+ * letter an asterisk can also be the first character of the option's own words
+ * ("*args"), so it is taken as the key only as a habit of the whole file, on the same
+ * terms as a mark made with formatting: it sets some options of a question apart
+ * from the others in at least three choice questions and 80 percent of them. Then it
+ * is moved where the format has it. A file that has one now and then keeps its
+ * asterisks as text, and the questions are flagged for having no key, as they always
+ * were: a lone "*Mars" is not enough to know what it means.
+ *
+ * A question that has an asterisk in front of every option says nothing, as a bold
+ * letter on every option says nothing, and one that already has the format's own
+ * asterisk is left as it is. Two asterisks in a row are not a mark ("**kwargs").
+ */
+const STAR_AFTER_LETTER = /^\*\s*(?=[^*\s])/;
+
+function readStarsAfterLetters(questions: RawQuestion[], fileFindings: Finding[]): void {
+  const eligible = questions.filter((q) => q.options.length >= 2 && (q.typeHint === undefined || CHOICE_HINTS.has(q.typeHint)));
+  const starred = (o: RawOption): boolean => STAR_AFTER_LETTER.test(o.lines[0] ?? "");
+  const showing = eligible.filter((q) => {
+    if (q.options.some((o) => o.starred)) return false;
+    const n = q.options.filter(starred).length;
+    return n > 0 && n < q.options.length;
+  });
+  if (showing.length === 0) return;
+
+  const of = `${showing.length} of ${eligible.length} choice questions`;
+  if (showing.length < AT_LEAST || showing.length < SHARE * eligible.length) {
+    fileFindings.push(
+      finding(
+        FindingCode.StarAfterLetterKeyUnclear,
+        "warn",
+        `An asterisk after the option letter sets one option apart from the others in ${of}, which is not often enough to read as marking the correct answer (it takes at least ${AT_LEAST} questions and ${Math.round(SHARE * 100)} percent of them), so no answer was taken from it and the asterisks were left in the text of the options. Nothing was guessed.`,
+      ),
+    );
+    return;
+  }
+
+  for (const q of showing) {
+    for (const option of q.options) {
+      const match = STAR_AFTER_LETTER.exec(option.lines[0] ?? "");
+      if (!match) continue;
+      option.lines[0] = (option.lines[0] ?? "").slice(match[0].length);
+      // The formatting reader looks at the option's own words from here, so it must not count the asterisk.
+      option.textOffset += match[0].length;
+      option.starred = true;
+    }
+  }
+  fileFindings.push(
+    finding(
+      FindingCode.StarAfterLetterKeyUsed,
+      "warn",
+      `An asterisk after the option letter sets the correct answer apart in ${of}, so it was read as the answer key and taken out of the text of the options. Check that the asterisk does mean the correct answer in this file.`,
     ),
   );
 }
