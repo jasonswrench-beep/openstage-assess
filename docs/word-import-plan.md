@@ -14,8 +14,9 @@ so is worse than a miss.
 
 ## Where it stands
 
-The first slice (stages 0 and 1) was built on 28 October 2026, and stage 2 (Word's
-own list numbering) on 29 October. A `.docx` goes in, questions come out, and the
+The first slice (stages 0 and 1) was built on 28 October 2026, stage 2 (Word's own
+list numbering) and stage 3 (answer keys from formatting and `Answer:` lines) on 29
+October. A `.docx` goes in, questions come out, and the
 real harness scores them. `openassess import file.docx` works, and so does
 exporting what it imports to the Author spreadsheet.
 
@@ -30,6 +31,15 @@ put in front of a paragraph, from `numbering.xml`, the paragraph's own list
 properties and its style. A question numbered "1." and an option lettered "a)" by
 Word's list buttons now reach the scanner as `listLabel`, exactly as if typed.
 `test/tools/word-numbering-check.ts` asks Word itself what it shows (see below).
+
+**Stage 3 built:** two ways to find a key that the file does not give with an
+asterisk or an Answers list. An `Answer: C` line beside the question
+(`standard-text-scan.ts`) is the question's own key, and is read in text files too.
+A Word file that marks the right option by formatting it (bold, italic, underline, a
+highlight, a colour) is read by `standard-text-format.ts`, which decides what the
+formatting means once for the whole file. The formatting of each run comes from
+`import/docx/formatting.ts`, and reaches the scanner as `runs` on each block.
+`test/tools/word-formatting-check.ts` asks Word what it shows.
 
 **Measured:**
 
@@ -61,6 +71,23 @@ Word's list buttons now reach the scanner as `listLabel`, exactly as if typed.
   This is the strongest evidence in this plan so far, because Word is the judge and
   not our own writer. It found five places where the first reading of the
   specification was wrong (below), each now a test.
+- Stage 3: the 20 fixtures with the key marked by formatting in place of the asterisk
+  (bold, italic, underline, highlight, colour, and bold by the Strong style; each on
+  the whole line and on the text alone; typed and numbered by lists; with and
+  without noise) come back identical to the text version and score 100 percent,
+  560 comparisons in all. The same fixtures with an `Answer:` line in place of the
+  asterisk score 100 percent as text and as Word files. Because most fixtures are too
+  short to show a habit, the habit itself is tested by putting thirty marked
+  questions in front of each fixture and letting the file decide: 60 comparisons.
+- Stage 3, against Word itself: 146 documents and 2,680 paragraphs, each asked what
+  it looks like (`test/tools/word-formatting-check.ts`), with no disagreement. That
+  covers every route a look can take: direct formatting, a character style, a
+  paragraph style, styles based on styles, the document's defaults, and bold meeting
+  bold between style levels.
+- Thirty-one deliberate breaks of the stage 3 code: all caught by a test in the end.
+  One escaped at first because a test was too weak (turning formatting off was not
+  checked question by question), and it was strengthened. Another escaped because the
+  break itself was badly made, and was redone.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -100,7 +127,40 @@ Word's list buttons now reach the scanner as `listLabel`, exactly as if typed.
 - Word writes a label as "(a)" as readily as "a)". The opening bracket is dropped,
   because the Standard Format knows only the second.
 
+**How a key is found from formatting, stage 3.** Formatting is the nearest the
+importer comes to guessing a key, so the rules are strict, and each has a test.
+
+- It is a convention of the file, decided once. A property (bold, italic, underline,
+  a highlight, a colour) is a candidate when some options of a question carry it
+  and others do not. An option carries it only if all of its own text does, so a
+  bold word inside an option, a bold label, bold feedback and a bold stem are not
+  marks.
+- It becomes the convention only when at least 3 choice questions, and at least 80
+  percent of them, show it. A short file is refused with a message that says why
+  (and the author can name the mark with `--key-mark` or `keyMark`).
+- Two properties that always pick the same option are one convention (a bold,
+  underlined answer). Two that pick different options are no convention and no key
+  is taken.
+- A key in words comes first: an asterisk, then an `Answer:` line, then an Answers
+  list, then formatting. Formatting only supplies a key where there is none. Where
+  it names different options from the key in words, the question carries a warning
+  that says both (`KeysDisagree`). The same warning now covers an asterisk against
+  an Answers list, which used to pass without a word.
+- A question that breaks the habit (no option marked, or every option marked) gets
+  no key from formatting and a warning that says why. Two marked options make it a
+  multiple response question, flagged as inferred, as two asterisks do.
+- The convention is reported once for the file, as a warning, with the counts, for
+  the author to confirm. A question keyed by it has no finding of its own, so it
+  counts toward the 95 percent. That is the plan's trade: flag only the outliers.
+- A mark that is only in the file's text is never a mark: a plain text file has no
+  formatting, so nothing changes for it whatever is asked.
+
 **What asking Word taught us, which the specification did not say:**
+
+- Bold and italic toggle between style levels: bold in the paragraph style and bold
+  in a character style on top of it is not bold. (Confirmed.)
+- A highlight in a character style does nothing in Word, even one that says none.
+  A highlight in a paragraph style, or in the run itself, does.
 
 - A style that names a list holds a level, and Word lets only one style hold each.
   The holder is the style the level is tied to, and failing that the first style in
@@ -119,17 +179,20 @@ Word's list buttons now reach the scanner as `listLabel`, exactly as if typed.
   override applies the first time that instance reaches that level, not the first
   time the instance is used.
 
-**Not built yet:** answer marks made with bold or highlight and `Answer:` lines
-(stage 3), table layouts as questions (stage 4), text boxes and alternate content
-(rest of stage 5), pictures with their bytes and alt text (stage 6), equations
-(stage 7), and everything that needs real Word files (stage 8). The dialect pack is
-still wanted before stage 3. Word's spelled-out number formats ("One", "First") and
-the many non-Latin ones are not read yet; a list in one is reported, not guessed.
+**Not built yet:** table layouts as questions, and a key in a table column (stage
+4), text boxes and alternate content (rest of stage 5), pictures with their bytes and
+alt text (stage 6), equations (stage 7), and everything that needs real Word files
+(stage 8). The dialect pack is still the thing most wanted: stage 3 was built on
+files our own writer made, and a publisher's real marking will be messier. Word's
+spelled-out number formats ("One", "First") and the many non-Latin ones are not read
+yet; a list in one is reported, not guessed.
 
 **Asking Word itself.** `npm run check:word --workspace packages/assess` builds the
 documents, starts a separate hidden Word, reads the label Word shows on every
 paragraph and compares. It needs Windows with Word, it only ever closes the Word it
 started, and it is not part of `npm test`. Run it after any change to `numbering.ts`.
+`npm run check:word-formatting --workspace packages/assess` does the same for how
+text looks, and is the one to run after any change to `formatting.ts`.
 It is the model for the later stages: where Word can be asked, ask it, and keep the
 questions.
 

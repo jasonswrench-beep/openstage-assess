@@ -29,7 +29,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts",
-    "check:word": "node --experimental-strip-types --no-warnings test/tools/word-numbering-check.ts"
+    "check:word": "node --experimental-strip-types --no-warnings test/tools/word-numbering-check.ts",
+    "check:word-formatting": "node --experimental-strip-types --no-warnings test/tools/word-formatting-check.ts"
   },
   "dependencies": {},
   "devDependencies": {

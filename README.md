@@ -25,8 +25,11 @@ interface.
   importer uses, so a question in a Word file goes through the same scanner,
   builder and accuracy gate. Question numbers and option letters can be typed or
   made by Word's own lists, including multilevel lists and lists set by a paragraph
-  style; the lists are checked against Word itself. Answer marks made with
-  formatting, and tables, are the next stages (`docs/word-import-plan.md`).
+  style. The correct option may be marked with an asterisk, an `Answer:` line, an
+  Answers list, or by formatting it (bold, underline, a highlight, a colour), which
+  is read as a habit of the whole file and reported for the author to confirm. Lists
+  and formatting are checked against Word itself. Tables are the next stage
+  (`docs/word-import-plan.md`).
 - The first exporter: the question spreadsheet (CSV) that OpenStage Author and
   OpenStage Scroll read, with a destination check that lists what will arrive,
   what will be lost and what cannot go.
@@ -55,7 +58,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `info <bank>` | Manifest, counts by type and status, finding totals |
 | `validate <bank>` | Check every question against the model |
 | `new <bank> --title "..."` | Create an empty bank |
-| `import <file> [--out <bank>] [--details]` | Read a `.txt` or `.docx` file and report the verdicts |
+| `import <file> [--out <bank>] [--details] [--key-mark <mark>]` | Read a `.txt` or `.docx` file and report the verdicts. `--key-mark` says what formatting means in a Word file: `off`, `bold`, `underline`, `highlight`, `color` and so on |
 | `export <bank> [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet, and with `--out` write it |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
@@ -76,7 +79,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 438 tests, run by Node's own test runner
+  test/                 512 tests, run by Node's own test runner
   test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
 fixtures/publisher/         publisher chapters, never committed

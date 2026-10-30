@@ -17,6 +17,7 @@
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import { documentToBlocks, type DocumentStats } from "./docx/document.ts";
+import { readFormatting } from "./docx/formatting.ts";
 import { readNumbering } from "./docx/numbering.ts";
 import { DocxError, openDocx, type DocxLimits, type DocxPackage } from "./docx/package.ts";
 import { hasText, type XmlElement } from "./docx/xml.ts";
@@ -152,7 +153,7 @@ export function docxToBlocks(bytes: Uint8Array, limits?: DocxLimits): { blocks: 
   const numberingPart = optionalPart(pkg, "numbering", "word/numbering.xml");
   const stylesPart = optionalPart(pkg, "styles", "word/styles.xml");
   const numbering = readNumbering({ numbering: numberingPart.root, styles: stylesPart.root, numberingDamaged: numberingPart.damaged });
-  const { blocks, stats } = documentToBlocks(root, numbering);
+  const { blocks, stats } = documentToBlocks(root, numbering, readFormatting(stylesPart.root));
   return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged) };
 }
 

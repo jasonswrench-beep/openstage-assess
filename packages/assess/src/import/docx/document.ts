@@ -20,7 +20,8 @@
  * caller turns those counts into findings.
  */
 
-import type { SourceBlock } from "../types.ts";
+import type { SourceBlock, SourceRun } from "../types.ts";
+import type { Formatting, RunFormat } from "./formatting.ts";
 import type { Numbering } from "./numbering.ts";
 import { DocxError } from "./package.ts";
 import { allText, elements, first, hasText, type XmlElement } from "./xml.ts";
@@ -112,11 +113,18 @@ function markDeleted(properties: XmlElement | undefined): boolean {
   return mark !== undefined && (first(mark, "w:del") !== undefined || first(mark, "w:moveFrom") !== undefined);
 }
 
+const NO_FORMAT: RunFormat = {};
+
+const sameFormat = (a: RunFormat, b: RunFormat): boolean =>
+  a.bold === b.bold && a.italic === b.italic && a.underline === b.underline && a.highlight === b.highlight && a.color === b.color;
+
 /**
  * The body as blocks. `numbering` supplies the labels of Word's own lists; without
- * it a numbered paragraph is read as the plain text it holds.
+ * it a numbered paragraph is read as the plain text it holds. `formatting` supplies
+ * how each run looks, which is kept on the block as `runs`; without it blocks have
+ * no runs.
  */
-export function documentToBlocks(root: XmlElement, numbering?: Numbering): DocumentBlocks {
+export function documentToBlocks(root: XmlElement, numbering?: Numbering, formatting?: Formatting): DocumentBlocks {
   if (root.name !== "w:document") {
     throw new DocxError(`The main document part starts with <${root.name}>, not <w:document>, so it is not a Word document.`);
   }
@@ -143,27 +151,42 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering): Docum
     stats.unreadWithText[name] = (stats.unreadWithText[name] ?? 0) + 1;
   };
 
-  /** The lines of the paragraph being read. A soft break starts a new one. */
-  interface Lines {
-    lines: string[];
+  /**
+   * The lines of the paragraph being read. A soft break starts a new one. Each line
+   * keeps its text as runs of one format, which always add up to the text.
+   */
+  interface Line {
+    text: string;
+    runs: SourceRun[];
   }
-  const add = (b: Lines, text: string): void => {
-    b.lines[b.lines.length - 1] += text;
+  interface Lines {
+    lines: Line[];
+    /** The id of the paragraph's style, which a run's format can depend on. */
+    style: string | undefined;
+  }
+  const add = (b: Lines, text: string, format: RunFormat = NO_FORMAT): void => {
+    if (text === "") return;
+    const line = b.lines[b.lines.length - 1] as Line;
+    line.text += text;
+    const last = line.runs[line.runs.length - 1];
+    if (last && sameFormat(last, format)) last.text += text;
+    else line.runs.push({ text, ...format });
   };
   const newLine = (b: Lines): void => {
-    b.lines.push("");
+    b.lines.push({ text: "", runs: [] });
   };
 
   function run(r: XmlElement, b: Lines): void {
+    const format = formatting ? formatting.run(first(r, "w:rPr"), b.style) : NO_FORMAT;
     for (const child of r.children) {
       if (typeof child === "string") continue;
       switch (child.name) {
         case "w:t":
-          add(b, allText(child));
+          add(b, allText(child), format);
           break;
         case "w:tab":
         case "w:ptab":
-          add(b, "\t");
+          add(b, "\t", format);
           break;
         case "w:br": {
           // A page or column break moves the text on the page but is not a line
@@ -176,7 +199,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering): Docum
           newLine(b);
           break;
         case "w:noBreakHyphen":
-          add(b, "-");
+          add(b, "-", format);
           break;
         case "w:softHyphen":
           break;
@@ -193,7 +216,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering): Docum
         default:
           if (OBJECTS.has(child.name)) {
             stats.pictures++;
-            add(b, "[picture]");
+            add(b, "[picture]", format);
             if (hasText(child)) unread("text inside a picture, shape or text box");
           } else if (!SILENT.has(child.name) && hasText(child)) {
             unread(child.name);
@@ -229,15 +252,15 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering): Docum
   function paragraph(p: XmlElement, where: Location | undefined): void {
     stats.paragraphs++;
     const properties = first(p, "w:pPr");
-    const b: Lines = { lines: [""] };
+    const b: Lines = { lines: [{ text: "", runs: [] }], style: properties ? first(properties, "w:pStyle")?.attrs["w:val"] : undefined };
     inline(p, b);
     // A line break at the very end of a paragraph is not a blank line after it.
-    while (b.lines.length > 1 && b.lines[b.lines.length - 1] === "") b.lines.pop();
+    while (b.lines.length > 1 && (b.lines[b.lines.length - 1] as Line).text === "") b.lines.pop();
 
     // A paragraph whose mark was deleted and whose text was deleted with it is gone
     // once the changes are accepted, and so is its number. Leaving it would count it
     // in its list and put every number after it out by one.
-    if (markDeleted(properties) && b.lines.every((line) => line === "")) return;
+    if (markDeleted(properties) && b.lines.every((line) => line.text === "")) return;
 
     // The label belongs on the first line only: a soft break inside a numbered
     // paragraph does not start another item.
@@ -246,10 +269,11 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering): Docum
     const label = listed?.label;
     if (label !== undefined) stats.listItems++;
 
-    b.lines.forEach((text, k) => {
+    b.lines.forEach((line, k) => {
       blocks.push({
         index: blocks.length,
-        text,
+        text: line.text,
+        ...(formatting ? { runs: line.runs } : {}),
         ...(k === 0 && label !== undefined ? { kind: "listItem" as const, listLabel: label } : {}),
         ...(where ? { table: where } : {}),
       });

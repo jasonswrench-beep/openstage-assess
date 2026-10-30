@@ -46,6 +46,7 @@ import {
 } from "../model/richtext.ts";
 import { addFindings, createQuestion, DEFAULT_POINTS, emptyMetadata } from "../model/create.ts";
 import { checkAnswerKey } from "../quality/answer-key.ts";
+import { applyFormattingKey } from "./standard-text-format.ts";
 import {
   MAX_POINTS,
   MAX_TITLE_LENGTH,
@@ -74,6 +75,7 @@ import {
   type ImportOptions,
   type ImportResult,
   type SourceBlock,
+  type SourceRun,
 } from "./types.ts";
 
 export const PROFILE_ID = "standard-text";
@@ -401,7 +403,7 @@ function guessType(raw: RawQuestion): TypeReading {
   // and the question looked as though it had been read. An asterisk or a key
   // list entry means an answer is being marked, and pairs whose left sides
   // repeat are not a matching exercise.
-  const marked = raw.options.some((o) => o.starred) || raw.keyValues.length > 0 || raw.keyAmbiguous;
+  const marked = raw.options.some((o) => o.starred || o.keyedByFormat) || keyTexts(raw).length > 0 || raw.keyAmbiguous;
   if (!marked && raw.options.every((o) => o.lines.join(" ").includes("="))) {
     const lefts = raw.options.map((o) => {
       const text = o.lines.join(" ");
@@ -412,10 +414,28 @@ function guessType(raw: RawQuestion): TypeReading {
     }
   }
 
-  const starred = raw.options.filter((o) => o.starred).length;
+  const starred = raw.options.filter((o) => o.starred || o.keyedByFormat).length;
   if (starred > 1) return { type: "multipleResponse", inferred: true };
 
   return { type: "multipleChoice", inferred: false };
+}
+
+/**
+ * Everything the file says in words about the answer: the "Answer:" lines beside
+ * the question, and what an Answers list gave for it, without repeats. For the
+ * types whose answer is text this is the answer; for the choice types it is
+ * letters, and resolveKey reads them one source at a time.
+ */
+function keyTexts(raw: RawQuestion): string[] {
+  const seen = new Set<string>();
+  const texts: string[] = [];
+  for (const value of [...raw.answerLines, ...raw.keyValues]) {
+    const key = value.trim().toLowerCase();
+    if (key.length === 0 || seen.has(key)) continue;
+    seen.add(key);
+    texts.push(value);
+  }
+  return texts;
 }
 
 interface ResolvedKey {
@@ -427,6 +447,10 @@ interface ResolvedKey {
   unresolved: string[];
   /** Names the key uses that more than one option carries, so none can be chosen. */
   shared: string[];
+  /** Where the key was read from. */
+  source?: "asterisk" | "answer line" | "answers list" | "formatting";
+  /** Another source named different options from the one that was used. */
+  conflicts: string[];
 }
 
 /**
@@ -445,41 +469,83 @@ interface ResolvedKey {
  * option A, which is the False option.
  */
 function resolveKey(raw: RawQuestion): ResolvedKey {
-  const correct = new Set<number>();
-  const tokens: string[] = [];
-  const unresolved: string[] = [];
-  const shared: string[] = [];
+  const pointed = (indexes: readonly number[]): ResolvedKey => ({
+    correct: new Set(indexes),
+    tokens: indexes.map((i) => (raw.options[i] as RawOption).letter),
+    unresolved: [],
+    shared: [],
+    conflicts: [],
+  });
 
-  const starred = raw.options.flatMap((o, i) => (o.starred ? [i] : []));
-  if (starred.length > 0) {
-    for (const i of starred) {
-      correct.add(i);
-      tokens.push((raw.options[i] as RawOption).letter);
-    }
-    return { correct, tokens, unresolved, shared };
-  }
-
-  const where = (matches: (o: RawOption) => boolean): number[] =>
-    raw.options.flatMap((o, i) => (matches(o) ? [i] : []));
-  const settle = (hits: number[], name: string): void => {
-    if (hits.length === 0) unresolved.push(name);
-    else if (hits.length === 1) correct.add(hits[0] as number);
-    else shared.push(name);
-  };
-
-  for (const entry of raw.keyValues) {
-    for (const piece of entry.split(KEY_SPLIT)) {
-      const value = piece.trim().toLowerCase();
-      if (value.length === 0) continue;
-      tokens.push(value);
-      if (/^[a-t]$/.test(value)) {
-        settle(where((o) => o.letter === value), value);
-      } else if (value === "true" || value === "false") {
-        settle(where((o) => o.lines.join(" ").trim().toLowerCase().replace(/\.$/, "") === value), value);
+  /** The options that a list of key values, such as "B, D" or "True", point at. */
+  const fromValues = (values: readonly string[]): ResolvedKey => {
+    const correct = new Set<number>();
+    const tokens: string[] = [];
+    const unresolved: string[] = [];
+    const shared: string[] = [];
+    const where = (matches: (o: RawOption) => boolean): number[] =>
+      raw.options.flatMap((o, i) => (matches(o) ? [i] : []));
+    const settle = (hits: number[], name: string): void => {
+      if (hits.length === 0) unresolved.push(name);
+      else if (hits.length === 1) correct.add(hits[0] as number);
+      else shared.push(name);
+    };
+    for (const entry of values) {
+      for (const piece of entry.split(KEY_SPLIT)) {
+        const value = piece.trim().toLowerCase();
+        if (value.length === 0) continue;
+        tokens.push(value);
+        if (/^[a-t]$/.test(value)) {
+          settle(where((o) => o.letter === value), value);
+        } else if (value === "true" || value === "false") {
+          settle(where((o) => o.lines.join(" ").trim().toLowerCase().replace(/\.$/, "") === value), value);
+        }
       }
     }
+    return { correct, tokens, unresolved, shared, conflicts: [] };
+  };
+
+  // The ways a file can say which option is right, in the order they are trusted:
+  // an asterisk on the option itself; an "Answer:" line beside the question; an
+  // Answers list; and last, how the options are formatted, which is a convention
+  // of the whole file and not a statement about this question. The first one that
+  // is there is used. The others are not discarded: where they name different
+  // options, that is said, because a key that two parts of the file disagree about
+  // is one the author needs to look at.
+  const starred = raw.options.flatMap((o, i) => (o.starred ? [i] : []));
+  const formatted = raw.options.flatMap((o, i) => (o.keyedByFormat ? [i] : []));
+  const sources: Array<{ name: NonNullable<ResolvedKey["source"]>; key: ResolvedKey }> = [];
+  if (starred.length > 0) sources.push({ name: "asterisk", key: pointed(starred) });
+  if (raw.answerLines.length > 0) sources.push({ name: "answer line", key: fromValues(raw.answerLines) });
+  if (raw.keyValues.length > 0) sources.push({ name: "answers list", key: fromValues(raw.keyValues) });
+  // Formatting is the last resort for a key, but it is still compared with the others.
+  const byFormat = formatted.length > 0 ? formatted : (raw.formatMarked ?? []);
+  if (byFormat.length > 0) sources.push({ name: "formatting", key: pointed(byFormat) });
+
+  const used = sources[0];
+  if (!used) return { correct: new Set(), tokens: [], unresolved: [], shared: [], conflicts: [] };
+
+  const letters = (key: ResolvedKey): string =>
+    [...key.correct].sort((a, b) => a - b).map((i) => (raw.options[i] as RawOption).letter.toUpperCase()).join(", ");
+  const label = (name: string): string =>
+    name === "formatting"
+      ? `the file's formatting (${raw.formatConvention ?? "formatting"})`
+      : name === "answer line"
+        ? "the Answer line"
+        : name === "answers list"
+          ? "the Answers list"
+          : `the ${name}`;
+  const upper = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+  const conflicts: string[] = [];
+  for (const other of sources.slice(1)) {
+    const same = other.key.correct.size === used.key.correct.size && [...other.key.correct].every((i) => used.key.correct.has(i));
+    // A source that named nothing usable has not disagreed with anything; it is
+    // reported in its own way (an unresolved letter, a key that cannot be used).
+    if (!same && other.key.correct.size > 0 && used.key.correct.size > 0) {
+      conflicts.push(`${upper(label(other.name))} marks ${letters(other.key)}, but ${label(used.name)} gives ${letters(used.key)}. ${upper(label(used.name))} was used.`);
+    }
   }
-  return { correct, tokens, unresolved, shared };
+  return { ...used.key, source: used.name, conflicts };
 }
 
 function placeholderOption(index: number): Option {
@@ -599,7 +665,7 @@ function buildBody(
 
     case "essay": {
       const inline = raw.options.map((o) => o.lines.join("\n"));
-      const answerText = [...inline, ...raw.keyValues].filter((a) => a.trim().length > 0).join("\n\n");
+      const answerText = [...inline, ...keyTexts(raw)].filter((a) => a.trim().length > 0).join("\n\n");
       const body: QuestionBody = answerText.length > 0 ? { modelAnswer: plainToRich(answerText) } : {};
       return { body, media, findings };
     }
@@ -611,7 +677,7 @@ function buildBody(
       // keeps the list.
       const accepted = [
         ...raw.options.map((o) => richTextToPlain(plainToRich(o.lines.join(" ")))),
-        ...raw.keyValues,
+        ...keyTexts(raw),
       ]
         .map((a) => a.trim())
         .filter((a) => a.length > 0);
@@ -804,18 +870,19 @@ function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef)
   // take the whole entry as an answer; nothing else reads a key at all. What is
   // left over used to vanish, including the case where a question had been
   // mistaken for a key entry and its words were all that was in it.
+  const writtenKey = keyTexts(raw);
   const unusedKey =
     type === "essay" || type === "fillInBlank" || type === "shortAnswer"
       ? []
       : type === "matching"
-        ? raw.keyValues
-        : raw.keyValues.filter((value) => !KEY_VALUE.test(value));
+        ? writtenKey
+        : writtenKey.filter((value) => !KEY_VALUE.test(value));
   if (unusedKey.length > 0) {
     found.push(
       finding(
         FindingCode.KeyTextNotUsed,
         "warn",
-        `The Answers list gave "${unusedKey.join(" / ")}" for this question, which a ${type} question cannot use as a key, so it was not applied.`,
+        `The ${raw.answerLines.length > 0 ? "Answer line" : "Answers list"} gave "${unusedKey.join(" / ")}" for this question, which a ${type} question cannot use as a key, so it was not applied.`,
         { source, field: "origin" },
       ),
     );
@@ -946,6 +1013,10 @@ function buildQuestion(
   const meta = applyMetadata(raw, file);
 
   findings.push(...stem.findings, ...body.findings, ...meta.findings, ...layoutFindings(raw, type, source));
+  for (const disagreement of key.conflicts) {
+    findings.push(finding(FindingCode.KeysDisagree, "warn", disagreement, { source, field: "body.options" }));
+  }
+  for (const note of raw.notes) findings.push({ ...note, source });
 
   if (richTextToPlain(stem.rich).length === 0) {
     findings.push(finding(FindingCode.EmptyStem, "error", "This question has no stem text.", { source, field: "stem" }));
@@ -1009,14 +1080,29 @@ function buildQuestion(
  * only for a label that looks like an option letter, and only when Word made the
  * label: a typed "b. *Mars" is read as it always was.
  */
-function withListLabel(block: SourceBlock): SourceBlock {
+export function withListLabel(block: SourceBlock): SourceBlock {
   if (!block.listLabel) return block;
   const label = block.listLabel.replace(/^\((.+)\)$/, "$1)");
   const mark = /^\s*\*\s*/.exec(block.text);
-  if (mark && /^[a-tA-T][.)]$/.test(label)) {
-    return { ...block, text: `*${label} ${block.text.slice(mark[0].length)}` };
+  const moved = mark !== null && /^[a-tA-T][.)]$/.test(label);
+  const prefix = moved ? `*${label} ` : `${label} `;
+  const dropped = moved ? mark[0].length : 0;
+  const text = prefix + block.text.slice(dropped);
+  if (!block.runs) return { ...block, text };
+
+  // The runs have to keep adding up to the text, so the label is a run of its own
+  // and whatever was cut from the front comes off the first runs.
+  const runs: SourceRun[] = [{ text: prefix }];
+  let toDrop = dropped;
+  for (const run of block.runs) {
+    if (toDrop >= run.text.length) {
+      toDrop -= run.text.length;
+      continue;
+    }
+    runs.push(toDrop > 0 ? { ...run, text: run.text.slice(toDrop) } : run);
+    toDrop = 0;
   }
-  return { ...block, text: `${label} ${block.text}` };
+  return { ...block, text, runs };
 }
 
 export const standardTextImporter: Importer = {
@@ -1036,6 +1122,9 @@ export const standardTextImporter: Importer = {
 
     const defaultPoints = options.defaultPoints ?? DEFAULT_POINTS;
     const scanned = scanStandardText(blocks, file, defaultPoints);
+    // Formatting can supply a key where the file gave none in words. It is decided
+    // once for the whole file, after every question is known and before any is built.
+    const formatting = applyFormattingKey(blocks, scanned.questions, options.keyMark ?? "auto");
     const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints, profile }));
 
     return {
@@ -1044,7 +1133,7 @@ export const standardTextImporter: Importer = {
       questions,
       orphans: scanned.orphans,
       counts: countVerdicts(questions, scanned.orphans.length),
-      fileFindings: scanned.fileFindings,
+      fileFindings: [...scanned.fileFindings, ...formatting.fileFindings],
     };
   },
 };

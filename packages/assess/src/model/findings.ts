@@ -70,6 +70,10 @@ export const FindingCode = {
   OptionFeedbackNotKept: "import.option-feedback-not-kept",
   OptionNotKept: "import.option-not-kept",
   KeyTextNotUsed: "import.key-text-not-used",
+  KeysDisagree: "import.keys-disagree",
+  FormattingKeyUsed: "import.formatting-key-used",
+  FormattingKeyUnclear: "import.formatting-key-unclear",
+  FormattingKeyBroken: "import.formatting-key-broken",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",

@@ -21,13 +21,12 @@
  * Word, opens each document read-only, and closes only the Word it started.
  */
 
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { docxToBlocks } from "../../src/import/word.ts";
+import { askWord, wordIsAvailable } from "./ask-word.ts";
 import {
   abstractNum,
   docx,
@@ -205,70 +204,44 @@ styled("style-says-no-list", [P("1", { style: "C" }), P("2", { style: "C", numId
 // ---------------------------------------------------------------------------
 
 function main(): void {
-  if (process.platform !== "win32") {
+  if (!wordIsAvailable()) {
     console.log("This check needs Windows with Microsoft Word installed. Nothing was run.");
     return;
   }
-  const dir = mkdtempSync(join(tmpdir(), "openassess-word-check-"));
-  try {
-    const documents = join(dir, "documents");
-    mkdirSync(documents);
-    for (const c of cases) writeFileSync(join(documents, `${c.name}.docx`), c.bytes);
+  const word = askWord(new Map(cases.map((c) => [c.name, c.bytes])), "labels");
 
-    const out = join(dir, "word.json");
-    // The script goes in on standard input, not as a file, because script files are switched
-    // off on many machines. Nothing about the machine's settings is changed.
-    const quoted = (path: string): string => `'${path.replace(/'/g, "''")}'`;
-    const script = `$Dir = ${quoted(documents)}\n$Out = ${quoted(out)}\n${readFileSync(join(here, "word-labels.ps1"), "utf8")}`;
-    try {
-      // Read whole and run as one block: fed line by line, PowerShell stops at a blank line inside a block.
-      const wholeBlock = "& ([scriptblock]::Create([Console]::In.ReadToEnd()))";
-      const said = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", wholeBlock], { input: script, encoding: "utf8", timeout: 600_000 });
-      console.log(said.trim());
-    } catch (error) {
-      console.error("Word could not be asked.");
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-      return;
+  let paragraphs = 0;
+  let disagreements = 0;
+  const abstained: string[] = [];
+  for (const c of cases) {
+    const theirs = word[c.name] ?? [];
+    if (theirs[0]?.startsWith("ERROR")) {
+      console.log(`${c.name}: Word could not open it. ${theirs[0]}`);
+      disagreements++;
+      continue;
     }
-
-    const word = JSON.parse(readFileSync(out, "utf8").replace(/^﻿/, "")) as Record<string, string[] | string>;
-    let paragraphs = 0;
-    let disagreements = 0;
-    const abstained: string[] = [];
-    for (const c of cases) {
-      const shown = word[c.name];
-      const theirs = Array.isArray(shown) ? shown : shown === undefined ? [] : [shown];
-      if (theirs[0]?.startsWith("ERROR")) {
-        console.log(`${c.name}: Word could not open it. ${theirs[0]}`);
+    const ours = docxToBlocks(c.bytes).blocks.map((b) => b.listLabel ?? "");
+    if (ours.length !== theirs.length) {
+      console.log(`${c.name}: Word reads ${theirs.length} paragraphs, the reader ${ours.length}`);
+      disagreements++;
+      continue;
+    }
+    for (let i = 0; i < ours.length; i++) {
+      paragraphs++;
+      if (c.mayAbstain && ours[i] === "" && theirs[i] !== "") {
+        abstained.push(`${c.name}[${i}] Word shows "${theirs[i]}"`);
+      } else if (ours[i] !== theirs[i]) {
+        console.log(`${c.name}[${i}]: the reader says "${ours[i]}", Word says "${theirs[i]}"`);
         disagreements++;
-        continue;
-      }
-      const ours = docxToBlocks(c.bytes).blocks.map((b) => b.listLabel ?? "");
-      if (ours.length !== theirs.length) {
-        console.log(`${c.name}: Word reads ${theirs.length} paragraphs, the reader ${ours.length}`);
+      } else if (c.meant && c.meant[i] && c.meant[i] !== theirs[i]) {
+        console.log(`${c.name}[${i}]: Word says "${theirs[i]}", the writer meant "${c.meant[i]}"`);
         disagreements++;
-        continue;
-      }
-      for (let i = 0; i < ours.length; i++) {
-        paragraphs++;
-        if (c.mayAbstain && ours[i] === "" && theirs[i] !== "") {
-          abstained.push(`${c.name}[${i}] Word shows "${theirs[i]}"`);
-        } else if (ours[i] !== theirs[i]) {
-          console.log(`${c.name}[${i}]: the reader says "${ours[i]}", Word says "${theirs[i]}"`);
-          disagreements++;
-        } else if (c.meant && c.meant[i] && c.meant[i] !== theirs[i]) {
-          console.log(`${c.name}[${i}]: Word says "${theirs[i]}", the writer meant "${c.meant[i]}"`);
-          disagreements++;
-        }
       }
     }
-    console.log(`${cases.length} documents, ${paragraphs} paragraphs, ${disagreements} disagreements with Word.`);
-    if (abstained.length > 0) console.log(`Left unnumbered on purpose, where Word shows a number: ${abstained.length} (${abstained.slice(0, 3).join("; ")}...)`);
-    if (disagreements > 0) process.exitCode = 1;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
   }
+  console.log(`${cases.length} documents, ${paragraphs} paragraphs, ${disagreements} disagreements with Word.`);
+  if (abstained.length > 0) console.log(`Left unnumbered on purpose, where Word shows a number: ${abstained.length} (${abstained.slice(0, 3).join("; ")}...)`);
+  if (disagreements > 0) process.exitCode = 1;
 }
 
 main();
