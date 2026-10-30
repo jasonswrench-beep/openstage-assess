@@ -8,26 +8,15 @@
 #
 # Read-only: documents are opened read-only and closed without saving.
 #
-# Safety: it only goes on if automation started a NEW Word process, and it only ever
-# closes that process. If COM hands back a Word that was already running (the person's
-# own session), it stops without touching anything.
+# Safety: see word-guard.ps1, which is put in front of this text. It only ever closes the
+# one Word that automation started, and never one the person opened.
 if (-not $Dir -or -not $Out) { "Dir and Out must be set first."; exit 1 }
 
-$before = @(Get-Process WINWORD -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-$word = New-Object -ComObject Word.Application
-Start-Sleep -Seconds 2
-$after = @(Get-Process WINWORD -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-$mine = @($after | Where-Object { $before -notcontains $_ })
-if ($mine.Count -eq 0) {
-  "COM returned an existing Word; stopping without touching it."
-  exit 2
-}
-"Started a separate Word process: $($mine -join ', ')"
 
 $result = [ordered]@{}
 try {
-  $word.Visible = $false
-  $word.DisplayAlerts = 0
+  Retry { $word.Visible = $false }
+  Retry { $word.DisplayAlerts = 0 }
   foreach ($f in (Get-ChildItem -Path $Dir -Filter *.docx | Sort-Object Name)) {
     try {
       # FileName, ConfirmConversions, ReadOnly, AddToRecentFiles
@@ -51,9 +40,7 @@ try {
     }
   }
 } finally {
-  try { $word.Quit($false) } catch { }
-  Start-Sleep -Seconds 1
-  foreach ($id in $mine) { Stop-Process -Id $id -ErrorAction SilentlyContinue }
+  Close-Word
 }
 $result | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 $Out
 "Wrote $($result.Count) documents to $Out"

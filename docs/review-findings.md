@@ -463,6 +463,31 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found while building table layouts (stage 4), not yet fixed
+
+- **The layouts were chosen from the plan, not from banks.** A grid headed Question and
+  A, B, C, rows that begin with a label, and an answer key are the shapes the plan named.
+  Nobody has shown the project a table-based test bank, so the header names, the
+  check-mark set and the conditions are a reasoned guess. Seven documents written by Word
+  from a script read right; a publisher's own layout is the real test.
+- **A key marked by shading is not read.** Shading a cell or a row green is a common way
+  to mark an answer in a table, and `w:shd` is not looked at (the same gap is recorded for
+  formatting).
+- **Matching questions as a two-column table are not read**, and neither is a question that
+  spreads over several rows of a grid or whose options are the rows below it with a
+  stem cell merged down. Those tables are read cell by cell, and the file says so.
+- **An unknown grid column makes stray text for every question.** `Column: Source file:
+  chapter3.docx` is reported once for each row, which is honest and noisy. A bank with a
+  `Chapter` or `Source` column should have it mapped to a metadata label, and the right
+  list is something real banks will say.
+- **A type column accepts only the one to three letter codes** (`MC`, `MA`, `TF`). A
+  column that says "Multiple choice" is kept as stray text and the type is guessed.
+- **Option columns stop at T**, like option letters everywhere, and a header such as
+  "Answer A" is an option while "Answer" alone is the key, which a bank could mean the
+  other way.
+- **A heading-less table of a number and a letter is an answer key even when it is a
+  question** whose stem is a single letter. Deliberate (see the plan), but it is a choice.
+
 ### Found while building answer keys from formatting (stage 3), not yet fixed
 
 - **The convention is a statistical reading, and has only met files our own writer

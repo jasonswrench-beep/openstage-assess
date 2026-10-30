@@ -25,10 +25,12 @@ interface.
   importer uses, so a question in a Word file goes through the same scanner,
   builder and accuracy gate. Question numbers and option letters can be typed or
   made by Word's own lists, including multilevel lists and lists set by a paragraph
-  style. The correct option may be marked with an asterisk, an `Answer:` line, an
-  Answers list, or by formatting it (bold, underline, a highlight, a colour), which
-  is read as a habit of the whole file and reported for the author to confirm. Lists
-  and formatting are checked against Word itself. Tables are the next stage
+  style. Questions can be laid out in tables: a grid with a header row, rows that
+  begin with a label, or an answer key. The correct option may be marked with an
+  asterisk, an `Answer:` line, an Answers list, a column, or by formatting it (bold,
+  underline, a highlight, a colour), which is read as a habit of the whole file and
+  reported for the author to confirm. Lists and formatting are checked against Word
+  itself, and `fixtures/word-authored` holds documents that Word wrote
   (`docs/word-import-plan.md`).
 - The first exporter: the question spreadsheet (CSV) that OpenStage Author and
   OpenStage Scroll read, with a destination check that lists what will arrive,
@@ -79,9 +81,10 @@ packages/assess/        the engine, published as @openstage/assess
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 535 tests, run by Node's own test runner
+  test/                 599 tests, run by Node's own test runner
   test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
+fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word
 fixtures/publisher/         publisher chapters, never committed
 brand/                  the icon, and every size generated from it
 ```

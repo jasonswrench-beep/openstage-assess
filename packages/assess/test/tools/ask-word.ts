@@ -37,7 +37,8 @@ export function askWord(documents: ReadonlyMap<string, Uint8Array>, question: Qu
     // The script goes in on standard input, not as a file, because script files are switched
     // off on many machines. Nothing about the machine's settings is changed.
     const quoted = (path: string): string => `'${path.replace(/'/g, "''")}'`;
-    const script = `$Dir = ${quoted(folder)}\n$Out = ${quoted(out)}\n$What = '${question}'\n${readFileSync(join(here, "word-labels.ps1"), "utf8")}`;
+    const script = `$Dir = ${quoted(folder)}\n$Out = ${quoted(out)}\n$What = '${question}'\n${readFileSync(join(here, "word-guard.ps1"), "utf8")}
+${readFileSync(join(here, "word-labels.ps1"), "utf8")}`;
     // Read whole and run as one block: fed line by line, PowerShell stops at a blank line inside a block.
     const wholeBlock = "& ([scriptblock]::Create([Console]::In.ReadToEnd()))";
     const said = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", wholeBlock], {

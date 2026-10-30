@@ -1,0 +1,336 @@
+/**
+ * Questions laid out in a Word table.
+ *
+ * Test banks put questions in tables in a few recognisable ways, and read cell by
+ * cell, in order, none of them makes sense: a row that holds a question number, the
+ * question and four options becomes six unrelated lines. This turns a table that
+ * has one of these layouts into the lines the Standard Format scanner reads, so the
+ * same scanner, builder and accuracy gate do the rest. A table that has none of
+ * them is not touched and is read cell by cell as before, and the file says how
+ * many were.
+ *
+ * The layouts, each with conditions strict enough that an ordinary table of data is
+ * not mistaken for one:
+ *
+ *   Grid.        A header row names the columns and each later row is a question:
+ *                a number, the question, an option in each of several columns
+ *                headed A, B, C and so on, and optionally the answer, a type, the
+ *                points, feedback and the labels publishers use. A column the
+ *                profile does not know is not dropped: its words follow the
+ *                question as a line the scanner reports as stray text.
+ *   Labelled rows. Each row is a line of a question: a label ("1." or "b.") in the
+ *                first cell and the text in the next. A question per table, or
+ *                several questions in one. A last cell holding a check mark marks
+ *                the option correct.
+ *   Answer key.  Two columns, a question number and its answer, with or without a
+ *                header. It becomes an Answers list.
+ *
+ * A table with another table inside it, or cells merged down, is never read as a
+ * layout, and a grid or an answer key with a cell merged across is not either: what
+ * a merged cell means is not knowable here. Labelled rows allow a cell spread across
+ * a whole row, which is how Word writes a line of text in a table of two columns.
+ */
+
+import { KEY_VALUE, METADATA_LABELS, NOTE_LABELS, GENERAL_FEEDBACK_LABELS } from "../standard-text-scan.ts";
+import type { SourceBlock } from "../types.ts";
+
+/** A line of a cell, before it has a place in the document. */
+export type Line = Omit<SourceBlock, "index">;
+
+export interface Cell {
+  lines: Line[];
+  /** The cell spans more than one column. */
+  merged?: boolean;
+}
+
+export type Layout = "grid" | "labelled rows" | "answer key";
+
+export interface TableReading {
+  layout?: Layout;
+  /** The lines the table stands for, in order. Empty when the layout is not recognised. */
+  lines: Line[];
+}
+
+interface Context {
+  /** Whether blocks carry formatting runs, which a line made from several cells has to keep. */
+  runs: boolean;
+  /** The text of the block before the table, to tell whether an Answers heading is already there. */
+  previous: string;
+}
+
+const textOf = (line: Line): string => (line.listLabel ? `${line.listLabel} ${line.text}` : line.text);
+const cellText = (cell: Cell | undefined): string => (cell ? cell.lines.map(textOf).join(" ").replace(/\s+/g, " ").trim() : "");
+const isEmpty = (cell: Cell | undefined): boolean => cellText(cell) === "";
+
+/** Where a made-up line came from, so a preview can find it. */
+const placeOf = (cell: Cell | undefined): Pick<Line, "table"> => {
+  const table = cell?.lines.find((l) => l.table)?.table;
+  return table ? { table } : {};
+};
+
+/** A line of words that were not in any cell, such as "Type: MC". */
+function made(context: Context, text: string, from: Cell | undefined): Line {
+  return { text, ...(context.runs ? { runs: text === "" ? [] : [{ text }] } : {}), ...placeOf(from) };
+}
+
+/** A part of a line with its list label written into the text, as a label that is not first has to be. */
+function baked(line: Line): { text: string; runs?: NonNullable<Line["runs"]> } {
+  if (!line.listLabel) return { text: line.text, ...(line.runs ? { runs: line.runs } : {}) };
+  return {
+    text: `${line.listLabel} ${line.text}`,
+    ...(line.runs ? { runs: [{ text: `${line.listLabel} ` }, ...line.runs] } : {}),
+  };
+}
+
+/** Several parts as one line, with a space between them. The first keeps its list label. */
+function join(parts: Line[], from: Cell | undefined): Line {
+  const first = parts[0] as Line;
+  let text = first.text;
+  let runs = first.runs ? [...first.runs] : undefined;
+  for (const next of parts.slice(1)) {
+    const part = baked(next);
+    text += ` ${part.text}`;
+    if (runs && part.runs) runs.push({ text: " " }, ...part.runs);
+    else runs = undefined;
+  }
+  return {
+    text,
+    ...(runs ? { runs } : {}),
+    ...(first.listLabel ? { kind: "listItem" as const, listLabel: first.listLabel } : {}),
+    ...placeOf(from),
+  };
+}
+
+/** The cell's first line, then the lines that carry on from it. */
+const first = (cell: Cell | undefined): Line | undefined => cell?.lines.find((l) => textOf(l).trim() !== "");
+const rest = (cell: Cell | undefined): Line[] => {
+  const lines = (cell?.lines ?? []).filter((l) => textOf(l).trim() !== "");
+  return lines.slice(1);
+};
+
+const normalise = (text: string): string =>
+  text.toLowerCase().replace(/['’`]/g, "").replace(/[^a-z0-9# ]+/g, " ").replace(/\s+/g, " ").trim();
+
+// ---------------------------------------------------------------------------
+// Grid
+// ---------------------------------------------------------------------------
+
+type Role =
+  | { role: "number" | "question" | "key" | "type" | "points" | "title" | "correctFeedback" | "incorrectFeedback" }
+  | { role: "option"; letter: string }
+  | { role: "labelled"; label: string }
+  | { role: "other" };
+
+const NUMBER = /^(no|number|num|q|q no|q#|#|item|item no|question no|question number|question #)$/;
+const QUESTION = /^(question|questions|stem|question text|item text|prompt)$/;
+const OPTION = /^(?:(?:option|choice|alternative|response|answer)\s+)?([a-t])$/;
+const KEY = /^(answer|answers|correct|correct answer|correct option|correct choice|key|answer key|ans|right answer)$/;
+const TYPE = /^(type|question type)$/;
+const POINTS = /^(points|point|pts|marks|score)$/;
+const TITLE = /^(title|question title)$/;
+const CORRECT_FEEDBACK = /^(correct feedback|feedback correct|right feedback|feedback for correct)$/;
+const INCORRECT_FEEDBACK = /^(incorrect feedback|feedback incorrect|wrong feedback|feedback for incorrect)$/;
+
+function classify(header: string): Role {
+  const name = normalise(header);
+  if (NUMBER.test(name)) return { role: "number" };
+  if (QUESTION.test(name)) return { role: "question" };
+  if (KEY.test(name)) return { role: "key" };
+  const option = OPTION.exec(name);
+  if (option) return { role: "option", letter: option[1] as string };
+  if (TYPE.test(name)) return { role: "type" };
+  if (POINTS.test(name)) return { role: "points" };
+  if (TITLE.test(name)) return { role: "title" };
+  if (CORRECT_FEEDBACK.test(name)) return { role: "correctFeedback" };
+  if (INCORRECT_FEEDBACK.test(name)) return { role: "incorrectFeedback" };
+  if (METADATA_LABELS[name] || GENERAL_FEEDBACK_LABELS.has(name) || NOTE_LABELS.has(name)) return { role: "labelled", label: header.trim() };
+  return { role: "other" };
+}
+
+function readGrid(rows: Cell[][], context: Context): Line[] | undefined {
+  const head = rows[0];
+  if (!head || rows.length < 2) return undefined;
+  const headers = head.map(cellText);
+  const roles = headers.map(classify);
+
+  const count = (role: Role["role"]) => roles.filter((r) => r.role === role).length;
+  const optionLetters = roles.flatMap((r) => (r.role === "option" ? [r.letter] : []));
+  if (count("question") !== 1 || optionLetters.length < 2 || new Set(optionLetters).size !== optionLetters.length) return undefined;
+  for (const single of ["number", "key", "type", "points", "title"] as const) if (count(single) > 1) return undefined;
+  // Every row has to line up with the header, or a cell could be read under the wrong column.
+  if (rows.some((row) => row.length !== head.length || row.some((c) => c.merged))) return undefined;
+
+  const headerKey = headers.map(normalise).join("|");
+  const lines: Line[] = [];
+  let question = 0;
+  for (const row of rows.slice(1)) {
+    if (row.every(isEmpty)) continue;
+    // A header repeated at the top of a new page is not a question.
+    if (row.map(cellText).map(normalise).join("|") === headerKey) continue;
+    question++;
+
+    const at = (role: Role["role"]): Cell | undefined => row[roles.findIndex((r) => r.role === role)];
+    const where = row[0];
+
+    const title = cellText(at("title"));
+    if (title) lines.push(made(context, `Title: ${title}`, at("title")));
+
+    const strays: Line[] = [];
+    const stray = (header: string, cell: Cell | undefined): void => {
+      strays.push(made(context, `Column: ${header}: ${cellText(cell)}`, cell));
+    };
+
+    // Directives are only directives when they read as one. Anything else is kept
+    // as words after the question, where the scanner reports it.
+    const type = cellText(at("type"));
+    if (type) {
+      if (/^[A-Za-z]{1,3}$/.test(type)) lines.push(made(context, `Type: ${type.toUpperCase()}`, at("type")));
+      else stray(headers[roles.findIndex((r) => r.role === "type")] as string, at("type"));
+    }
+    const points = cellText(at("points"));
+    if (points) {
+      if (/^\d+(?:\.\d+)?$/.test(points)) lines.push(made(context, `Points: ${points}`, at("points")));
+      else stray(headers[roles.findIndex((r) => r.role === "points")] as string, at("points"));
+    }
+
+    // The question, numbered from its own cell if that holds a number, and otherwise by its place.
+    const numberCell = cellText(at("number"));
+    const given = /^[A-Za-z#.\s]*(\d{1,4})[.)\s]*$/.exec(numberCell);
+    const number = given ? given[1] : String(question);
+    const stem = at("question");
+    const stemLine = first(stem);
+    const label: Line = made(context, `${number}.`, at("number") ?? stem);
+    lines.push(stemLine ? join([label, stemLine], stem) : made(context, `${number}. `, stem));
+    lines.push(...rest(stem));
+
+    roles.forEach((role, i) => {
+      if (role.role !== "option") return;
+      const cell = row[i];
+      const line = first(cell);
+      if (!line) return;
+      lines.push(join([made(context, `${role.letter}.`, cell), line], cell), ...rest(cell));
+    });
+
+    roles.forEach((role, i) => {
+      const cell = row[i];
+      if (isEmpty(cell)) return;
+      const header = (headers[i] as string).trim();
+      if (role.role === "labelled") lines.push(...labelledLines(context, role.label, cell));
+      else if (role.role === "correctFeedback") lines.push(made(context, `~ ${cellText(cell)}`, cell));
+      else if (role.role === "incorrectFeedback") lines.push(made(context, `@ ${cellText(cell)}`, cell));
+      else if (role.role === "other") stray(header, cell);
+    });
+    lines.push(...strays);
+
+    const key = at("key");
+    if (!isEmpty(key)) lines.push(made(context, `Answer: ${cellText(key)}`, key));
+    lines.push(made(context, "", where));
+  }
+  return lines.length > 0 ? lines : undefined;
+}
+
+/** A column that holds a labelled line ("Difficulty: Easy"), one line for each paragraph of the cell. */
+function labelledLines(context: Context, label: string, cell: Cell | undefined): Line[] {
+  return [made(context, `${label}: ${cellText(cell)}`, cell)];
+}
+
+// ---------------------------------------------------------------------------
+// Labelled rows
+// ---------------------------------------------------------------------------
+
+const LABEL = /^\*?\s*(?:\d{1,4}|[a-tA-T])\s*[.)]$/;
+/** A check mark in the last cell of an option's row. Only marks that cannot be an option's own words. */
+const MARK = /^(?:✓|✔|☑|✅|\*|correct|right)$/i;
+
+function readLabelled(rows: Cell[][], context: Context): Line[] | undefined {
+  const lines: Line[] = [];
+  let labelled = 0;
+  for (const row of rows) {
+    const filled = row.filter((c) => !isEmpty(c));
+    if (row.length > 1 && row.some((c) => c.merged)) return undefined;
+    if (filled.length === 0) {
+      lines.push(made(context, "", row[0]));
+      continue;
+    }
+    if (filled.length === 1) {
+      const only = filled[0] as Cell;
+      const shown = only.lines.filter((l) => textOf(l).trim() !== "");
+      // A label with nothing beside it is an option with no text, which is written "b. ".
+      const alone = shown.length === 1 && row.length > 1 && !shown[0]?.listLabel && LABEL.test((shown[0] as Line).text.trim());
+      if (alone) {
+        lines.push({ ...(shown[0] as Line), text: `${(shown[0] as Line).text.trim()} `, ...(shown[0]?.runs ? { runs: [...shown[0].runs, { text: " " }] } : {}) });
+        labelled++;
+      } else lines.push(...shown);
+      continue;
+    }
+    const labelCell = filled[0] as Cell;
+    const label = first(labelCell);
+    if (!label || label.listLabel || !LABEL.test(label.text.trim()) || rest(labelCell).length > 0) return undefined;
+    labelled++;
+
+    let cells = filled;
+    const last = cells[cells.length - 1] as Cell;
+    let mark = false;
+    if (cells.length >= 3 && MARK.test(cellText(last)) && /^[a-tA-T]\s*[.)]$/.test(label.text.trim().replace(/^\*/, ""))) {
+      mark = true;
+      cells = cells.slice(0, -1);
+    }
+
+    const parts = cells.map((c) => first(c) as Line);
+    if (mark && !parts[0]?.text.trim().startsWith("*")) {
+      const marked = parts[0] as Line;
+      parts[0] = { ...marked, text: `*${marked.text.trim()}`, ...(marked.runs ? { runs: [{ text: "*" }, ...marked.runs] } : {}) };
+    }
+    lines.push(join(parts, labelCell));
+    for (const c of cells) lines.push(...rest(c));
+  }
+  return labelled > 0 ? lines : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Answer key
+// ---------------------------------------------------------------------------
+
+const KEY_NUMBER = /^[A-Za-z#]*\s*(\d{1,4})\s*[.)]?$/;
+const KEY_HEAD_NUMBER = /^(q|no|number|question|question no|question number|#|item)$/;
+const KEY_HEAD_ANSWER = /^(answer|answers|key|ans|correct|correct answer|answer key)$/;
+
+function readKey(rows: Cell[][], context: Context): Line[] | undefined {
+  if (rows.some((r) => r.length !== 2 || r.some((c) => c.merged))) return undefined;
+  const headed = rows.length >= 2 && KEY_HEAD_NUMBER.test(normalise(cellText(rows[0]?.[0]))) && KEY_HEAD_ANSWER.test(normalise(cellText(rows[0]?.[1])));
+  const body = headed ? rows.slice(1) : rows;
+  if (body.length < 1) return undefined;
+
+  const entries: Line[] = [];
+  for (const row of body) {
+    const number = KEY_NUMBER.exec(cellText(row[0]));
+    const value = cellText(row[1]);
+    if (!number) return undefined;
+    // Without a header, a second column of anything but letters or True and False is not clearly a key.
+    if (!headed && !(value !== "" && KEY_VALUE.test(value))) return undefined;
+    entries.push(made(context, `${number[1]}. ${value}`, row[0]));
+  }
+
+  const lines: Line[] = [];
+  if (!/^answers\s*:\s*$/i.test(context.previous.trim())) {
+    lines.push(made(context, "Answers:", rows[0]?.[0]));
+  }
+  lines.push(...entries);
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
+
+/** Read a table as one of the layouts, or say that it is none of them. */
+export function readTable(rows: Cell[][], context: Context): TableReading {
+  const attempts: Array<[Layout, (rows: Cell[][], context: Context) => Line[] | undefined]> = [
+    ["grid", readGrid],
+    ["answer key", readKey],
+    ["labelled rows", readLabelled],
+  ];
+  for (const [layout, read] of attempts) {
+    const lines = read(rows, context);
+    if (lines) return { layout, lines };
+  }
+  return { lines: [] };
+}
