@@ -209,8 +209,9 @@ dialect plus Moodle, D2L and Blackboard additions (61 questions across 21
 fixtures, 100 percent), the first exporter, the question spreadsheet for Author
 and Scroll, with the destination check, and the Word importer through its third
 stage (a `.docx` whose question numbers and option letters are typed or made by
-Word's own lists, and whose right answers are marked by an asterisk, an `Answer:`
-line, an Answers list or formatting, all read through the same scanner and gate).
+Word's own lists, whose questions may be laid out in tables, and whose right answers are
+marked by an asterisk, an `Answer:` line, an Answers list or formatting, all read through
+the same scanner and gate).
 
 **Next, in this order.**
 

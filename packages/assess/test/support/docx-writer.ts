@@ -50,12 +50,26 @@ export function paragraph(inner = "", properties = "", attributes = ""): string 
   return `<w:p${attributes ? ` ${attributes}` : ""}>${properties ? `<w:pPr>${properties}</w:pPr>` : ""}${inner}</w:p>`;
 }
 
-/** A table whose cells are given as the XML of the paragraphs in them. */
-export function table(rows: string[][]): string {
+/**
+ * A table whose cells are given as the XML of the paragraphs in them. A row with
+ * fewer cells than the widest has its last cell spread across the rest of the width,
+ * as Word writes it, unless `spread` is false.
+ */
+export function table(rows: string[][], spread = true): string {
+  const columns = Math.max(1, ...rows.map((cells) => cells.length));
   const body = rows
-    .map((cells) => `<w:tr>${cells.map((cell) => `<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>${cell}</w:tc>`).join("")}</w:tr>`)
+    .map(
+      (cells) =>
+        `<w:tr>${cells
+          .map((cell, i) => {
+            const span = spread && i === cells.length - 1 && cells.length < columns ? columns - cells.length + 1 : 1;
+            return `<w:tc><w:tcPr><w:tcW w:w="${2400 * span}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ""}</w:tcPr>${cell}</w:tc>`;
+          })
+          .join("")}</w:tr>`,
+    )
     .join("");
-  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid/>${body}</w:tbl>`;
+  const grid = `<w:tblGrid>${'<w:gridCol w:w="2400"/>'.repeat(columns)}</w:tblGrid>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>${grid}${body}</w:tbl>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +288,74 @@ export interface LinesOptions {
    * option line that starts with * loses the star and is formatted as asked.
    */
   marks?: MarkOptions;
+  /** Put the lines in tables. Not together with numbering. */
+  tables?: TableOptions;
+}
+
+export interface TableOptions {
+  /**
+   * `rows`: each run of lines is a table with a row for each line, and a label
+   * ("1." or "b.") in the first cell. `marked`: the same, but a correct option's star
+   * becomes a check mark in a last cell.
+   */
+  mode: "rows" | "marked";
+  /**
+   * The Answers list as a table of its own. `headed` replaces the heading with a header
+   * row, Question and Answer. `headless` keeps the heading as a paragraph and tables the
+   * entries under it.
+   */
+  key?: "headed" | "headless";
+}
+
+const ROW_LABEL = /^(\*?)\s*(\d{1,4}|[a-tA-T])\s*([.)])\s+(.*)$/;
+const ANSWERS_HEADING = /^\s*Answers\s*:\s*$/i;
+const KEY_ENTRY = /^\s*(\d{1,4})\s*([.)])\s*(.*)$/;
+
+/** The lines as paragraphs and tables. `paragraphOf` writes one line, so that noise can be added to the text in a cell. */
+function tabulate(planned: Planned[], options: TableOptions, paragraphOf: (p: Planned) => string): string {
+  const out: string[] = [];
+  const cell = (text: string): string => paragraphOf({ text });
+  let i = 0;
+  while (i < planned.length) {
+    const p = planned[i] as Planned;
+    if (p.text === "") {
+      out.push(paragraphOf(p));
+      i++;
+      continue;
+    }
+
+    if (options.key && ANSWERS_HEADING.test(p.text)) {
+      let j = i + 1;
+      const entries: string[][] = [];
+      while (j < planned.length && KEY_ENTRY.test((planned[j] as Planned).text)) {
+        const m = KEY_ENTRY.exec((planned[j] as Planned).text) as RegExpExecArray;
+        entries.push([cell(`${m[1]}${m[2]}`), cell((m[3] ?? "").trim())]);
+        j++;
+      }
+      if (entries.length > 0) {
+        if (options.key === "headed") out.push(table([[cell("Question"), cell("Answer")], ...entries]));
+        else out.push(paragraphOf(p), table(entries));
+        i = j;
+        continue;
+      }
+    }
+
+    const rows: string[][] = [];
+    while (i < planned.length && (planned[i] as Planned).text !== "") {
+      const line = planned[i] as Planned;
+      if (options.key && rows.length > 0 && ANSWERS_HEADING.test(line.text)) break;
+      const m = ROW_LABEL.exec(line.text);
+      if (!m) rows.push([paragraphOf(line)]);
+      else if (options.mode === "marked") {
+        // Three columns all the way down, the last empty except beside the right answer, as a person would make it.
+        const right = m[1] === "*" && /^[a-tA-T]$/.test(m[2] as string);
+        rows.push([cell(right ? `${m[2]}${m[3]}` : `${m[1]}${m[2]}${m[3]}`), cell(m[4] ?? ""), cell(right ? "✓" : "")]);
+      } else rows.push([cell(`${m[1]}${m[2]}${m[3]}`), cell(m[4] ?? "")]);
+      i++;
+    }
+    out.push(table(rows));
+  }
+  return out.join("");
 }
 
 export interface MarkOptions {
@@ -511,7 +593,8 @@ export function docxFromLines(lines: readonly string[], options: LinesOptions = 
       if (p.format === undefined) return run(p.text);
       return from > 0 ? run(p.text.slice(0, from)) + run(p.text.slice(from), p.format) : run(p.text, p.format);
     };
-    return docx({ body: planned.map((p) => paragraph(plain(p), listProps(p))).join(""), ...lists });
+    const plainLine = (p: Planned): string => paragraph(plain(p), listProps(p));
+    return docx({ body: options.tables ? tabulate(planned, options.tables, plainLine) : planned.map(plainLine).join(""), ...lists });
   }
 
   const rng = random(options.seed ?? 1);
@@ -567,5 +650,6 @@ export function docxFromLines(lines: readonly string[], options: LinesOptions = 
     return paragraph(inner, properties, attributes);
   };
 
-  return docx({ body: planned.map(noisyLine).join(""), headers: [HEADER_TEXT], footers: [FOOTER_TEXT], ...lists });
+  const body = options.tables ? tabulate(planned, options.tables, noisyLine) : planned.map(noisyLine).join("");
+  return docx({ body, headers: [HEADER_TEXT], footers: [FOOTER_TEXT], ...lists });
 }

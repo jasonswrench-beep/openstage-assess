@@ -30,7 +30,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts",
     "check:word": "node --experimental-strip-types --no-warnings test/tools/word-numbering-check.ts",
-    "check:word-formatting": "node --experimental-strip-types --no-warnings test/tools/word-formatting-check.ts"
+    "check:word-formatting": "node --experimental-strip-types --no-warnings test/tools/word-formatting-check.ts",
+    "check:word-authored": "node --experimental-strip-types --no-warnings test/tools/word-authored-check.ts",
+    "update:word-authored": "node --experimental-strip-types --no-warnings test/tools/word-authored-check.ts --update-fixtures"
   },
   "dependencies": {},
   "devDependencies": {

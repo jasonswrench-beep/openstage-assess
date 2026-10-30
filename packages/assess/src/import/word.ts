@@ -93,6 +93,26 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
       ),
     );
   }
+  const layouts = Object.entries(stats.tableLayouts);
+  if (layouts.length > 0) {
+    const total = layouts.reduce((sum, [, n]) => sum + n, 0);
+    found.push(
+      finding(
+        FindingCode.TableLayout,
+        "info",
+        `${plural(total, "table was", "tables were")} read as questions: ${layouts.map(([layout, n]) => `${n} as ${layout === "grid" ? "a grid with a header row" : layout === "answer key" ? "an answer key" : "labelled rows"}`).join(", ")}.`,
+      ),
+    );
+  }
+  if (stats.tablesPlain > 0) {
+    found.push(
+      finding(
+        FindingCode.TableLayout,
+        "info",
+        `${plural(stats.tablesPlain, "table was", "tables were")} read cell by cell, in order, as plain text. A table is read as questions when it is a grid headed Question and A, B, C, a table of rows that begin with a label such as 1. or b., or an answer key, and has no merged cells and no table inside it.`,
+      ),
+    );
+  }
   if (stats.pictures > 0) {
     found.push(
       finding(

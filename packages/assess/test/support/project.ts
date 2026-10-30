@@ -11,6 +11,7 @@ import type { ImportResult } from "../../src/import/types.ts";
 export const FRONT_END = new Set<string>([
   FindingCode.TrackedChangesPresent,
   FindingCode.UnreadContent,
+  FindingCode.TableLayout,
   FindingCode.FormattingKeyUsed,
   FindingCode.FormattingKeyUnclear,
   // Only said of a question that has no key in words, and such a question fails for that anyway.

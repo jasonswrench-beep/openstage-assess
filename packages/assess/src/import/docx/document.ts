@@ -23,6 +23,7 @@
 import type { SourceBlock, SourceRun } from "../types.ts";
 import type { Formatting, RunFormat } from "./formatting.ts";
 import type { Numbering } from "./numbering.ts";
+import { readTable, type Cell, type Line as TableLine } from "./tables.ts";
 import { DocxError } from "./package.ts";
 import { allText, elements, first, hasText, type XmlElement } from "./xml.ts";
 
@@ -47,6 +48,10 @@ export interface DocumentStats {
   listItems: number;
   /** Paragraphs in a list whose number could not be worked out, by the reason. They are left unnumbered. */
   unreadLists: Record<string, number>;
+  /** Tables read as a layout of questions, by the layout. */
+  tableLayouts: Record<string, number>;
+  /** Tables read cell by cell as plain text: no layout was recognised, or the table is too involved to trust one. */
+  tablesPlain: number;
 }
 
 export interface DocumentBlocks {
@@ -113,6 +118,27 @@ function markDeleted(properties: XmlElement | undefined): boolean {
   return mark !== undefined && (first(mark, "w:del") !== undefined || first(mark, "w:moveFrom") !== undefined);
 }
 
+/**
+ * Whether a table can be read as a layout at all: no table inside a cell, no cell
+ * merged down, and no row that starts late or ends early. A cell read under the wrong
+ * column is a wrong answer. A cell merged across is allowed through and marked, since
+ * a line of text spread over the width of a table is ordinary, and each layout says
+ * whether it can live with one.
+ */
+function isSimple(rows: XmlElement[]): boolean {
+  const merged = (cell: XmlElement): boolean => {
+    const properties = first(cell, "w:tcPr");
+    return properties !== undefined && first(properties, "w:vMerge") !== undefined;
+  };
+  const holdsTable = (element: XmlElement): boolean =>
+    element.children.some((child) => typeof child !== "string" && (child.name === "w:tbl" || holdsTable(child)));
+  return rows.every((tr) => {
+    const properties = first(tr, "w:trPr");
+    if (properties && (first(properties, "w:gridBefore") || first(properties, "w:gridAfter"))) return false;
+    return elements(tr, "w:tc").every((tc) => !merged(tc) && !holdsTable(tc));
+  });
+}
+
 const NO_FORMAT: RunFormat = {};
 
 const sameFormat = (a: RunFormat, b: RunFormat): boolean =>
@@ -145,10 +171,19 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     unreadWithText: {},
     listItems: 0,
     unreadLists: {},
+    tableLayouts: {},
+    tablesPlain: 0,
   };
 
   const unread = (name: string): void => {
     stats.unreadWithText[name] = (stats.unreadWithText[name] ?? 0) + 1;
+  };
+
+  /** While a table's cells are being read, their lines are gathered here and not yet blocks. */
+  let collecting: TableLine[] | undefined;
+  const emit = (line: TableLine): void => {
+    if (collecting) collecting.push(line);
+    else blocks.push({ index: blocks.length, ...line });
   };
 
   /**
@@ -270,8 +305,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     if (label !== undefined) stats.listItems++;
 
     b.lines.forEach((line, k) => {
-      blocks.push({
-        index: blocks.length,
+      emit({
         text: line.text,
         ...(formatting ? { runs: line.runs } : {}),
         ...(k === 0 && label !== undefined ? { kind: "listItem" as const, listLabel: label } : {}),
@@ -280,11 +314,47 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     });
   }
 
+  /**
+   * A table is first read into its cells, because what a row means depends on the
+   * cells beside it. Counting, numbering and formatting all happen as the cells are
+   * read, in document order, exactly as they did when each cell became blocks at
+   * once. Then the table is either one of the layouts, and stands for the lines of
+   * questions it holds, or it is not, and its cells become blocks cell by cell as
+   * they always did.
+   */
   function table(tbl: XmlElement): void {
     const number = stats.tables++;
-    elements(tbl, "w:tr").forEach((tr, row) => {
-      elements(tr, "w:tc").forEach((tc, cell) => container(tc, { table: number, row, cell }));
-    });
+    const rows = elements(tbl, "w:tr");
+
+    if (!isSimple(rows)) {
+      stats.tablesPlain++;
+      rows.forEach((tr, row) => {
+        elements(tr, "w:tc").forEach((tc, cell) => container(tc, { table: number, row, cell }));
+      });
+      return;
+    }
+
+    const cells: Cell[][] = rows.map((tr, row) =>
+      elements(tr, "w:tc").map((tc, cell) => {
+        const lines: TableLine[] = [];
+        collecting = lines;
+        container(tc, { table: number, row, cell });
+        collecting = undefined;
+        const properties = first(tc, "w:tcPr");
+        const span = properties ? first(properties, "w:gridSpan")?.attrs["w:val"] : undefined;
+        const across = (span !== undefined && Number(span) > 1) || (properties !== undefined && first(properties, "w:hMerge") !== undefined);
+        return { lines, ...(across ? { merged: true } : {}) };
+      }),
+    );
+
+    const reading = readTable(cells, { runs: formatting !== undefined, previous: blocks[blocks.length - 1]?.text ?? "" });
+    if (reading.layout) {
+      stats.tableLayouts[reading.layout] = (stats.tableLayouts[reading.layout] ?? 0) + 1;
+      for (const line of reading.lines) emit(line);
+    } else {
+      stats.tablesPlain++;
+      for (const row of cells) for (const cell of row) for (const line of cell.lines) emit(line);
+    }
   }
 
   function container(parent: XmlElement, where: Location | undefined): void {

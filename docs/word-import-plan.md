@@ -15,8 +15,8 @@ so is worse than a miss.
 ## Where it stands
 
 The first slice (stages 0 and 1) was built on 28 October 2026, stage 2 (Word's own
-list numbering) and stage 3 (answer keys from formatting and `Answer:` lines) on 29
-October. A `.docx` goes in, questions come out, and the
+list numbering), stage 3 (answer keys from formatting and `Answer:` lines) and stage 4
+(questions in tables) on 29 and 30 October. A `.docx` goes in, questions come out, and the
 real harness scores them. `openassess import file.docx` works, and so does
 exporting what it imports to the Author spreadsheet.
 
@@ -40,6 +40,17 @@ highlight, a colour) is read by `standard-text-format.ts`, which decides what th
 formatting means once for the whole file. The formatting of each run comes from
 `import/docx/formatting.ts`, and reaches the scanner as `runs` on each block.
 `test/tools/word-formatting-check.ts` asks Word what it shows.
+
+**Stage 4 built:** `import/docx/tables.ts`. A table is first read into its cells, then
+recognised as one of three layouts or left as it was. A *grid* has a header row naming
+the columns (a number, Question, options headed A, B, C, an Answer column, and a type,
+points, a title, feedback and the labels publishers use) and a question to each row.
+*Labelled rows* are rows that begin with a label such as `1.` or `b.`, which is a question
+to a table or several in one; a check mark in a last cell marks the option correct. An
+*answer key* is a table of a question number and its answer. Each becomes the lines the
+Standard Format scanner already reads, so the same scanner, builder and gate do the rest.
+`test/tools/word-authored-check.ts` has Word itself write sample documents, and
+`fixtures/word-authored/` keeps them.
 
 **Measured:**
 
@@ -88,6 +99,23 @@ formatting means once for the whole file. The formatting of each run comes from
   One escaped at first because a test was too weak (turning formatting off was not
   checked question by question), and it was strengthened. Another escaped because the
   break itself was badly made, and was redone.
+- Stage 4: the 21 text fixtures put in tables, five ways (a row for each line; the same
+  with the key as a check mark; with the answer key headed; with it under its heading;
+  check marks and a headed key), each with and without noise, come back identical to
+  the text version and score 100 percent, 210 comparisons. Their simple questions
+  (a stem, lettered options, a key, at most a Type line) are also put in grids, and
+  read the same, positions apart. 120 files of lines in no sensible order, in tables,
+  lose nothing. 500 questions in a grid, and in rows, import in about 100 ms each.
+- Stage 4, against Word's own files: seven documents written by Word through its object
+  model (a question to a table with a check mark, a grid, an answer key table, an
+  outline list with the key in bold, a table with a merged title row, typed lines with an
+  Answer line, numbered and lettered lists) all read as intended, and the list labels
+  the reader works out from the XML Word wrote agree with what Word shows. This is the
+  first time the importer has read XML that Word, and not our writer, produced.
+- Twenty-nine deliberate breaks of the table code: all caught by a test in the end. Four
+  got through the first tests (a merged cell in a grid, a check mark on a question
+  number, a row that starts late, and a table with no labels counted as a layout), and
+  each got a test of its own.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -184,11 +212,36 @@ importer comes to guessing a key, so the rules are strict, and each has a test.
   override applies the first time that instance reaches that level, not the first
   time the instance is used.
 
-**Not built yet:** table layouts as questions, and a key in a table column (stage
-4), text boxes and alternate content (rest of stage 5), pictures with their bytes and
-alt text (stage 6), equations (stage 7), and everything that needs real Word files
-(stage 8). The dialect pack is still the thing most wanted: stage 3 was built on
-files our own writer made, and a publisher's real marking will be messier. Word's
+**How a table is read, stage 4.** The conditions are strict, because a table that only
+looks like a layout is how a wrong answer gets in.
+
+- A table with another table in a cell, cells merged down, or a row that starts late or
+  ends early is never read as a layout, and a grid or an answer key with a cell merged
+  across is not either. Labelled rows allow one cell spread across a whole row, which is
+  how Word writes a line of text in a table of two columns.
+- A grid needs exactly one Question column, at least two option columns with different
+  letters, and every row the same width as the header. Its headers are matched by name
+  (a list in `tables.ts`), and a header repeated at the top of a page is not a question.
+- A grid's Answer column becomes an `Answer:` line, so it is compared with the key in
+  formatting like any other. A column the profile does not know is not dropped: its
+  words follow the question as `Column: <header>: <value>`, which the scanner reports
+  as stray text, with its place. A type or points that do not read as one are kept the
+  same way and are never made a directive.
+- Labelled rows need every row with two or more filled cells to begin with a label, and
+  at least one. A check mark in a last cell marks an option only for a mark that cannot be
+  an option's own words (a tick, a star, "correct", "right"), never "x" or "yes".
+- A two-column table of a number and a letter, with no heading above it, is an answer key
+  and gets the heading it lacks. The same two cells are also a question whose stem is a
+  letter, and a key is far the commoner. A key whose answers are words needs a header row.
+- A table that is none of these is read cell by cell as before, and the file says how
+  many were, and how many were read as questions. Both are information.
+
+**Not built yet:** a key in a table by shading, matching questions as a two-column table, a
+question that spreads over several rows of a grid, text boxes and alternate content (rest
+of stage 5), pictures with their bytes and alt text (stage 6), equations (stage 7), and
+everything that needs real Word files (stage 8). The dialect pack is still the thing most
+wanted: stages 3 and 4 were built on files our own writer made and on a few that Word
+wrote from a script, and a publisher's real layout will be messier. Word's
 spelled-out number formats ("One", "First") and the many non-Latin ones are not read
 yet; a list in one is reported, not guessed.
 
@@ -198,6 +251,13 @@ paragraph and compares. It needs Windows with Word, it only ever closes the Word
 started, and it is not part of `npm test`. Run it after any change to `numbering.ts`.
 `npm run check:word-formatting --workspace packages/assess` does the same for how
 text looks, and is the one to run after any change to `formatting.ts`.
+`npm run check:word-authored --workspace packages/assess` has Word write sample
+documents (tables, lists, bold) and checks that they read as intended, and
+`npm run update:word-authored --workspace packages/assess` keeps them in
+`fixtures/word-authored`, with the author's name taken out of their properties. Those
+fixtures are read by `npm test` on any machine. All three start a separate hidden Word and
+only ever close the Word that automation started, which they tell from one a person
+opened by its `-Embedding` command line (`test/tools/word-guard.ps1`).
 It is the model for the later stages: where Word can be asked, ask it, and keep the
 questions.
 
