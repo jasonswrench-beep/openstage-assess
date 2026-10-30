@@ -52,10 +52,11 @@ const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
 /**
  * The key written beside the question it belongs to, as publisher banks do:
  * "Answer: C", "ANS: B, D", "Correct Answer: True". A colon is required, so that
- * a sentence that begins with the word is not a key. "Answers:" alone is the
- * heading of a list, and is read as that first.
+ * a sentence that begins with the word is not a key ("Ans." is the one
+ * abbreviation that also takes a full stop). "Answers:" alone is the heading of a
+ * list, and is read as that first.
  */
-const ANSWER_LINE = /^\s*(?:correct\s+)?(?:answers?|ans)\s*:\s*(.*)$/i;
+const ANSWER_LINE = /^\s*(?:correct\s+)?(?:answers?\s*:|ans\s*[:.])\s*(.*)$/i;
 const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
 const INCORRECT_FEEDBACK = /^\s*@\s*(.*)$/;
 const ANSWER_ENTRY = /^\s*(\d{1,4})\s*[.)]\s*(.*)$/;
@@ -108,6 +109,31 @@ export const METADATA_LABELS: Record<string, keyof Metadata | "bloom" | "difficu
 const UNKNOWN_LABEL = /^\s*([A-Za-z][A-Za-z'\- ]{0,28})\s*:\s*(.+)$/;
 const CODE_LABEL = /^[A-Z]{2,6}$/;
 
+/**
+ * Words a publisher puts before what it has to say about a question's answer.
+ * "Feedback" is what the student is told, and a question has a place for that.
+ * The others are explanations, and a question has no place for them, so they are
+ * kept as notes. Both are recognised wherever they appear, which is the point: with
+ * no rule for them they were added to whatever came just above, and a rationale
+ * under the correct option became part of the option.
+ */
+export const GENERAL_FEEDBACK_LABELS = new Set(["feedback", "general feedback"]);
+export const NOTE_LABELS = new Set(["rationale", "explanation", "solution"]);
+const KNOWN_EMPTY_LABEL = /^\s*(feedback|general feedback|rationale|explanation|solution)\s*:\s*$/i;
+
+/**
+ * A line that has the shape of a label, a few words and a colon and something
+ * after it, in a place where only a continuation of the text above would otherwise
+ * be read. It is not added to that text. The writer of the file put a label there,
+ * not more of the answer, and a label this profile does not know is reported as
+ * stray text, where it can be seen, and not joined to an answer where it cannot.
+ */
+const LABEL_SHAPE = /^\s*[A-Za-z][A-Za-z'\-]*(?: [A-Za-z'\-]+){0,2}\s*:\s*\S/;
+
+function labelReason(number: number, after: string): string {
+  return `has the shape of a label that this profile does not know, and follows ${after} of question ${number}, so it was not added to it`;
+}
+
 /** The orphan reason for a line the state machine did not own. Should never appear. */
 export const UNATTRIBUTED_REASON =
   "the scanner did not attribute this line to anything, which is a defect in the scanner; it is reported here so that it is not lost";
@@ -151,6 +177,8 @@ export interface RawQuestion {
   segment: number;
   /** The Answers values for this question, once the lists have been matched up. */
   keyValues: string[];
+  /** What "Feedback:" lines said: feedback shown whatever the answer. */
+  generalFeedback: string[];
   /** What "Answer:" lines beside the question said. They are the question's own key, so they come before a list. */
   answerLines: string[];
   /**
@@ -416,6 +444,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         segment: keyBlocks.length,
         keyValues: [],
         answerLines: [],
+        generalFeedback: [],
         notes: [],
         keyAmbiguous: false,
         ambiguousKeyValues: [],
@@ -500,11 +529,25 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     // after the options as often as before them. The label has to be one this
     // profile knows, or an all-capital short code, so that an ordinary colon
     // inside a stem or an option is not mistaken for one.
+    // A known label with nothing after it, such as a blank "Feedback:" left in a
+    // template, is still a label. It would otherwise be added to the text above.
+    if (KNOWN_EMPTY_LABEL.test(line)) {
+      claim(block, question);
+      mode = { kind: "tail", question };
+      continue;
+    }
     const labelMatch = UNKNOWN_LABEL.exec(line);
     if (labelMatch) {
       const label = (labelMatch[1] ?? "").trim();
       const value = (labelMatch[2] ?? "").trim();
-      if (METADATA_LABELS[label.toLowerCase()] || CODE_LABEL.test(label)) {
+      const known = label.toLowerCase();
+      if (GENERAL_FEEDBACK_LABELS.has(known)) {
+        question.generalFeedback.push(value);
+        claim(block, question);
+        mode = { kind: "tail", question };
+        continue;
+      }
+      if (METADATA_LABELS[known] || NOTE_LABELS.has(known) || CODE_LABEL.test(label)) {
         question.metadata.push({ label, value, block: block.index });
         claim(block, question);
         mode = { kind: "tail", question };
@@ -520,17 +563,32 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         claim(block, question);
         break;
       case "option":
+        if (LABEL_SHAPE.test(line)) {
+          orphan(block, labelReason(question.number, "an option"));
+          mode = { kind: "tail", question };
+          break;
+        }
         mode.option.lines.push(trimmed);
         mode.option.textBlocks.push(block.index);
         mode.option.lastBlock = block.index;
         claim(block, question);
         break;
       case "optionFeedback":
+        if (LABEL_SHAPE.test(line)) {
+          orphan(block, labelReason(question.number, "an option's feedback"));
+          mode = { kind: "tail", question };
+          break;
+        }
         mode.option.feedback.push(trimmed);
         mode.option.lastBlock = block.index;
         claim(block, question);
         break;
       case "questionFeedback":
+        if (LABEL_SHAPE.test(line)) {
+          orphan(block, labelReason(question.number, "the feedback"));
+          mode = { kind: "tail", question };
+          break;
+        }
         (mode.which === "correct" ? question.correctFeedback : question.incorrectFeedback).push(trimmed);
         claim(block, question);
         break;

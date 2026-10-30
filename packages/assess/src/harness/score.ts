@@ -27,6 +27,8 @@ export interface ExpectedQuestion {
   title?: string;
   points?: number;
   metadata?: Record<string, string>;
+  /** Feedback the question should carry. Recorded when it differs, but not counted against the score. */
+  feedback?: { general?: string; correct?: string; incorrect?: string };
   /** For true or false. */
   correctBoolean?: boolean;
   /** For fill in the blank and short answer. */
@@ -218,6 +220,15 @@ function compareQuestion(
   }
   if (expected.points !== undefined && actual.points !== expected.points) {
     add("points", String(expected.points), String(actual.points));
+  }
+  if (expected.feedback) {
+    for (const kind of ["general", "correct", "incorrect"] as const) {
+      const want = expected.feedback[kind];
+      if (want === undefined) continue;
+      const got = actual.feedback[kind];
+      const text = got === undefined ? undefined : richTextToPlain(got);
+      if (text === undefined || !same(text, want)) add(`feedback.${kind}`, want, text ?? "(missing)");
+    }
   }
   if (expected.metadata) {
     for (const [key, want] of Object.entries(expected.metadata)) {

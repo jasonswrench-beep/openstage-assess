@@ -64,6 +64,7 @@ import {
   KEY_SPLIT,
   KEY_VALUE,
   METADATA_LABELS,
+  NOTE_LABELS,
   scanStandardText,
   type RawOption,
   type RawQuestion,
@@ -308,11 +309,18 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
         );
       }
     } else if (addCustom(entry.label, value, source) === "new") {
+      // An explanation is a label this profile knows. A question has nowhere to put
+      // it, and it is not feedback, which a student is shown, so it is kept as a
+      // note. That is said, but it is information and not a warning, because a
+      // whole bank of these should not need review for it.
+      const note = NOTE_LABELS.has(entry.label.toLowerCase());
       findings.push(
         finding(
-          FindingCode.UnknownMetadataLabel,
-          "warn",
-          `"${entry.label}" is not a metadata label this profile knows, so it was kept under metadata.custom rather than dropped.`,
+          note ? FindingCode.MetadataKeptAsNote : FindingCode.UnknownMetadataLabel,
+          note ? "info" : "warn",
+          note
+            ? `"${entry.label}" is kept as a note under metadata.custom.${entry.label}. A question has no field for an explanation, and it was not made feedback, which a student is shown.`
+            : `"${entry.label}" is not a metadata label this profile knows, so it was kept under metadata.custom rather than dropped.`,
           { source, field: `metadata.custom.${entry.label}` },
         ),
       );
@@ -1044,6 +1052,7 @@ function buildQuestion(
     ...(title ? { title } : { title: titleFromStem(richTextToPlain(stem.rich)) }),
     points,
     feedback: {
+      ...(raw.generalFeedback.length > 0 ? { general: plainToRich(raw.generalFeedback.join("\n")) } : {}),
       ...(raw.correctFeedback.length > 0 ? { correct: plainToRich(raw.correctFeedback.join("\n")) } : {}),
       ...(raw.incorrectFeedback.length > 0 ? { incorrect: plainToRich(raw.incorrectFeedback.join("\n")) } : {}),
     },

@@ -154,6 +154,11 @@ importer comes to guessing a key, so the rules are strict, and each has a test.
   counts toward the 95 percent. That is the plan's trade: flag only the outliers.
 - A mark that is only in the file's text is never a mark: a plain text file has no
   formatting, so nothing changes for it whatever is asked.
+- Publisher banks put `Feedback:`, `Rationale:` and the like straight under the last
+  option, and the scanner used to add them to that option's text. They are labels now
+  (see `docs/review-findings.md`, "Explanations under the correct option became part
+  of the option"). This is not about Word, but it is the layout of the dialect pack's
+  publisher-style document, and it was found by checking a claim made for stage 3.
 
 **What asking Word taught us, which the specification did not say:**
 

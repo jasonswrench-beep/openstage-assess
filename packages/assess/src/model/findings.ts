@@ -57,6 +57,7 @@ export const FindingCode = {
   UnreadContent: "import.unread-content",
   AmbiguousFeedback: "import.ambiguous-feedback",
   UnknownMetadataLabel: "import.unknown-metadata-label",
+  MetadataKeptAsNote: "import.metadata-kept-as-note",
   OptionWithoutLetter: "import.option-without-letter",
   TitleTruncated: "import.title-truncated",
   PointsAssumed: "import.points-assumed",
