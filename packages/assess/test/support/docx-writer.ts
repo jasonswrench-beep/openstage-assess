@@ -269,6 +269,45 @@ export interface LinesOptions {
    * so the document must read back as the fixture does.
    */
   numbering?: NumberingOptions;
+  /**
+   * Mark the correct option by formatting it instead of with an asterisk: each
+   * option line that starts with * loses the star and is formatted as asked.
+   */
+  marks?: MarkOptions;
+}
+
+export interface MarkOptions {
+  /** What makes the correct option stand out. "style" is the character style Strong, which is bold by way of a style. */
+  property: "bold" | "italic" | "underline" | "highlight" | "color" | "style";
+  /** For a typed label, leave the label as it is and format only the text. */
+  textOnly?: boolean;
+}
+
+const MARK: Record<MarkOptions["property"], string> = {
+  bold: "<w:b/>",
+  italic: "<w:i/>",
+  underline: '<w:u w:val="single"/>',
+  highlight: '<w:highlight w:val="yellow"/>',
+  color: '<w:color w:val="C00000"/>',
+  style: '<w:rStyle w:val="Strong"/>',
+};
+
+/** The character style Strong, which is bold. Only written when a document asks for it. */
+const STRONG_STYLE = '<w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/><w:basedOn w:val="DefaultParagraphFont"/><w:qFormat/><w:rPr><w:b/><w:bCs/></w:rPr></w:style>';
+
+function applyMarks(planned: Planned[], marks: MarkOptions): Planned[] {
+  const format = MARK[marks.property];
+  return planned.map((p) => {
+    // A typed option: the star comes off, and the formatting goes on the line, or on its text alone.
+    const typed = p.numId === undefined ? /^(\s*)\*\s*(([a-tA-T])\s*[.)]\s+)(.*)$/.exec(p.text) : null;
+    if (typed) {
+      const label = `${typed[1]}${typed[2]}`;
+      return { ...p, text: label + (typed[4] ?? ""), format, ...(marks.textOnly ? { formatFrom: label.length } : {}) };
+    }
+    // A numbered option: Word makes the label, so the star was at the start of the text.
+    if (p.numId !== undefined && p.text.startsWith("*")) return { ...p, text: p.text.replace(/^\*\s*/, ""), format };
+    return p;
+  });
 }
 
 export interface NumberingOptions {
@@ -295,6 +334,9 @@ interface Planned {
   numId?: number;
   level?: number;
   style?: string;
+  /** The run properties of the text from `formatFrom` on: how the correct option is marked. */
+  format?: string;
+  formatFrom?: number;
 }
 
 export interface NumberedLines {
@@ -453,19 +495,30 @@ export const DELETED_TEXT = "DELETED WORDS MUST NOT BE READ";
  */
 export function docxFromLines(lines: readonly string[], options: LinesOptions = {}): Uint8Array {
   const numbered = options.numbering ? numberLines(lines, options.numbering) : undefined;
-  const planned: Planned[] = numbered?.lines ?? lines.map((text) => ({ text }));
-  const lists = numbered ? { numbering: numbered.numbering, ...(numbered.styles !== undefined ? { styles: numbered.styles } : {}) } : {};
+  const unmarked: Planned[] = numbered?.lines ?? lines.map((text) => ({ text }));
+  const planned = options.marks ? applyMarks(unmarked, options.marks) : unmarked;
+  const styles = (numbered?.styles ?? "") + (options.marks?.property === "style" ? (numbered?.styles === undefined ? style({ id: "Normal", isDefault: true }) : "") + STRONG_STYLE : "");
+  const lists = {
+    ...(numbered ? { numbering: numbered.numbering } : {}),
+    ...(styles !== "" ? { styles } : {}),
+  };
   const listProps = (p: Planned): string => listProperties({ ...(p.style ? { style: p.style } : {}), ...(p.numId !== undefined ? { numId: p.numId } : {}), ...(p.level !== undefined ? { level: p.level } : {}) });
 
   if (!options.noise) {
-    return docx({ body: planned.map((p) => paragraph(p.text === "" ? "" : run(p.text), listProps(p))).join(""), ...lists });
+    const plain = (p: Planned): string => {
+      if (p.text === "") return "";
+      const from = p.formatFrom ?? 0;
+      if (p.format === undefined) return run(p.text);
+      return from > 0 ? run(p.text.slice(0, from)) + run(p.text.slice(from), p.format) : run(p.text, p.format);
+    };
+    return docx({ body: planned.map((p) => paragraph(plain(p), listProps(p))).join(""), ...lists });
   }
 
   const rng = random(options.seed ?? 1);
   let mark = 0;
 
-  const wrap = (chunk: string): string => {
-    const text = run(chunk, rng.chance(0.3) ? '<w:lang w:val="en-US"/>' : rng.chance(0.2) ? "<w:noProof/>" : "");
+  const wrap = (chunk: string, format = ""): string => {
+    const text = run(chunk, format + (rng.chance(0.3) ? '<w:lang w:val="en-US"/>' : rng.chance(0.2) ? "<w:noProof/>" : ""));
     const roll = rng.below(14);
     switch (roll) {
       case 0:
@@ -498,7 +551,13 @@ export function docxFromLines(lines: readonly string[], options: LinesOptions = 
     const edges = [0, ...[...cuts].sort((a, b) => a - b), line.length];
     let inner = "";
     for (let k = 0; k + 1 < edges.length; k++) {
-      inner += wrap(line.slice(edges[k] as number, edges[k + 1] as number));
+      const start = edges[k] as number;
+      const chunk = line.slice(start, edges[k + 1] as number);
+      // The formatting starts at a character, and a cut can fall either side of it.
+      const from = planning.format === undefined ? Infinity : (planning.formatFrom ?? 0);
+      const cut = from - start;
+      if (cut > 0 && cut < chunk.length) inner += wrap(chunk.slice(0, cut)) + wrap(chunk.slice(cut), planning.format);
+      else inner += wrap(chunk, cut <= 0 ? planning.format : "");
       if (rng.chance(0.2)) inner += '<w:r><w:lastRenderedPageBreak/></w:r>';
       if (rng.chance(0.15)) inner += "<w:r/>";
       if (rng.chance(0.1)) {

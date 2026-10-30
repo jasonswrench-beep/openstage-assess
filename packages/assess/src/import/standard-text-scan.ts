@@ -49,6 +49,13 @@ const TITLE_LINE = /^\s*Title\s*:\s*(.*)$/i;
 const TYPE_LINE = /^\s*Type\s*:\s*([A-Za-z]{1,3})\s*$/i;
 const POINTS_LINE = /^\s*Points\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$/i;
 const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
+/**
+ * The key written beside the question it belongs to, as publisher banks do:
+ * "Answer: C", "ANS: B, D", "Correct Answer: True". A colon is required, so that
+ * a sentence that begins with the word is not a key. "Answers:" alone is the
+ * heading of a list, and is read as that first.
+ */
+const ANSWER_LINE = /^\s*(?:correct\s+)?(?:answers?|ans)\s*:\s*(.*)$/i;
 const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
 const INCORRECT_FEEDBACK = /^\s*@\s*(.*)$/;
 const ANSWER_ENTRY = /^\s*(\d{1,4})\s*[.)]\s*(.*)$/;
@@ -116,6 +123,12 @@ export interface RawOption {
   feedback: string[];
   firstBlock: number;
   lastBlock: number;
+  /** Where the option's own text starts in its first block, after the label. */
+  textOffset: number;
+  /** The blocks that hold the option's own text: the first, and any line that continues it. Not its feedback. */
+  textBlocks: number[];
+  /** The file's formatting convention marks this option as correct. Set after the scan; see standard-text-format.ts. */
+  keyedByFormat: boolean;
 }
 
 export interface RawQuestion {
@@ -138,6 +151,17 @@ export interface RawQuestion {
   segment: number;
   /** The Answers values for this question, once the lists have been matched up. */
   keyValues: string[];
+  /** What "Answer:" lines beside the question said. They are the question's own key, so they come before a list. */
+  answerLines: string[];
+  /**
+   * Things found about this question outside the builder, such as how it sits
+   * with the file's formatting convention. The builder gives them the question's source.
+   */
+  notes: Finding[];
+  /** The options the file's formatting convention marks, when one was found. Undefined when there is no convention. */
+  formatMarked?: number[];
+  /** What the convention is, in words such as "bold", for the messages that mention it. */
+  formatConvention?: string;
   /** An Answers entry named this number, but another question in the stretch has it too. */
   keyAmbiguous: boolean;
   /** What that entry said, kept so the words are not lost along with the key. */
@@ -391,6 +415,8 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         lastBlock: block.index,
         segment: keyBlocks.length,
         keyValues: [],
+        answerLines: [],
+        notes: [],
         keyAmbiguous: false,
         ambiguousKeyValues: [],
         stemAfterBlank: false,
@@ -419,6 +445,9 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         feedback: [],
         firstBlock: block.index,
         lastBlock: block.index,
+        textOffset: line.length - (optionMatch[3] ?? "").length,
+        textBlocks: [block.index],
+        keyedByFormat: false,
       };
       question.options.push(option);
       claim(block, question);
@@ -453,6 +482,19 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       continue;
     }
 
+    // --- the key, beside the question --------------------------------------------
+    // Publisher banks give each question's answer on a line of its own after the
+    // options. Without this the line was folded into the last option's text, or
+    // reported as stray text, or kept as a custom label, and the question had no key.
+    const answerMatch = ANSWER_LINE.exec(line);
+    if (answerMatch) {
+      const value = (answerMatch[1] ?? "").trim();
+      if (value.length > 0) question.answerLines.push(value);
+      claim(block, question);
+      mode = { kind: "tail", question };
+      continue;
+    }
+
     // --- a label -----------------------------------------------------------------
     // Recognised wherever it appears, because publisher banks put these lines
     // after the options as often as before them. The label has to be one this
@@ -479,6 +521,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         break;
       case "option":
         mode.option.lines.push(trimmed);
+        mode.option.textBlocks.push(block.index);
         mode.option.lastBlock = block.index;
         claim(block, question);
         break;

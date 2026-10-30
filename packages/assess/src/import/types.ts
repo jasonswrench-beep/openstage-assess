@@ -86,6 +86,16 @@ export interface ImportOptions {
   at?: string;
   /** The profile to record in each question's provenance. Defaults to the importer's own. */
   profile?: string;
+  /**
+   * What the file's formatting means, for files that mark the correct option by
+   * making it bold, underlined, highlighted or coloured. "auto", the default,
+   * decides from the file and reports what it decided. "off" reads no key from
+   * formatting. A property name ("bold", "italic", "underline", "highlight",
+   * "highlight:yellow", "color", "color:FF0000") says what the mark is, for a file
+   * whose author has said so. Formatting only supplies a key where the file gave
+   * none in words.
+   */
+  keyMark?: string;
 }
 
 export interface Importer {

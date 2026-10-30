@@ -24,11 +24,12 @@ import { runHarness } from "../src/harness/run.ts";
 import { scoreFile, type ExpectedFile } from "../src/harness/score.ts";
 import { importerFor, IMPORTERS, runImporter } from "../src/import/registry.ts";
 import { standardTextImporter } from "../src/import/standard-text.ts";
-import { linesToBlocks, type ImportResult, type SourceBlock } from "../src/import/types.ts";
+import { linesToBlocks, type SourceBlock } from "../src/import/types.ts";
 import { docxToBlocks, wordImporter, WORD_PROFILE_ID } from "../src/import/word.ts";
 import { FindingCode } from "../src/model/findings.ts";
 import { richTextToPlain } from "../src/model/richtext.ts";
 import { DELETED_TEXT, docx, docxFromLines, FOOTER_TEXT, HEADER_TEXT, numberLines, paragraph, run } from "./support/docx-writer.ts";
+import { project } from "./support/project.ts";
 import { soup } from "./support/soup.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,30 +37,6 @@ const FIXTURES = join(here, "..", "..", "..", "fixtures", "standard-format");
 const OPTIONS = { file: "t.docx", at: "2026-01-01T00:00:00.000Z", author: "test" };
 
 const linesOf = (text: string) => text.replace(/\r\n?/g, "\n").split("\n");
-
-/** Codes only a Word file can raise, so they are not expected on the text version. */
-const FRONT_END = new Set<string>([FindingCode.TrackedChangesPresent, FindingCode.UnreadContent]);
-
-/** Everything about a result that should not depend on how the text arrived. */
-function project(result: ImportResult) {
-  return {
-    questions: result.questions.map((q) => ({
-      type: q.type,
-      title: q.title,
-      points: q.points,
-      stem: q.stem,
-      body: q.body,
-      feedback: q.feedback,
-      metadata: q.metadata,
-      media: q.media,
-      findings: q.findings.map((f) => [f.code, f.severity, f.field ?? "", f.message]).sort(),
-      source: q.origin?.source ? [q.origin.source.firstBlock, q.origin.source.lastBlock] : null,
-    })),
-    orphans: result.orphans.map((o) => [o.text, o.reason, o.source.firstBlock, o.source.lastBlock]),
-    fileFindings: result.fileFindings.filter((f) => !FRONT_END.has(f.code)).map((f) => [f.code, f.severity, f.message]),
-    counts: result.counts,
-  };
-}
 
 describe("a question in a Word file is a question", () => {
   const lines = ["1) Which is a planet?", "a. Sirius", "*b. Mars", "c. The Sun", "", "2) The sky is blue.", "*a. True", "b. False"];

@@ -39,9 +39,13 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess new <bank${BANK_EXTENSION}> --title "Course bank"
       Create an empty bank.
 
-  openassess import <file.txt|file.docx> [--out <bank${BANK_EXTENSION}>] [--details]
+  openassess import <file.txt|file.docx> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
       Read a file (the standard test-bank text format as text, or a Word .docx) and
       report the verdicts. With --out, write the questions into a new bank.
+      A Word file may mark the correct option by formatting it. The file is
+      read to see whether it does, and the report says what was decided.
+      --key-mark overrides that: off, bold, italic, underline, highlight,
+      highlight:yellow, color, or color:FF0000.
 
   openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}] [--out <folder>]
       Run the destination check for the question spreadsheet that OpenStage
@@ -76,7 +80,7 @@ function positional(args: string[]): string[] {
     const value = args[i] as string;
     if (value.startsWith("--")) {
       // Flags that take a value consume the next item.
-      if (["out", "title", "count", "profile", "to"].includes(value.slice(2))) i++;
+      if (["out", "title", "count", "profile", "to", "key-mark"].includes(value.slice(2))) i++;
       continue;
     }
     out.push(value);
@@ -172,7 +176,8 @@ async function cmdImport(args: string[]): Promise<number> {
   }
   // A file with an extension no importer claims is read as the plain-text format, as it always was.
   const importer = importerFor(full) ?? standardTextImporter;
-  const result = runImporter(importer, await readFile(full), { file: basename(full) });
+  const keyMark = arg(args, "key-mark");
+  const result = runImporter(importer, await readFile(full), { file: basename(full), ...(keyMark ? { keyMark } : {}) });
 
   console.log(`${result.file}  profile ${result.profile}`);
   console.log(`  parsed        ${result.counts.parsed}`);

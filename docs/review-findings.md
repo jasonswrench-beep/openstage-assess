@@ -268,6 +268,24 @@ Fixtures 12, 13, 95 and 96 cover these, written as original questions in the
 formats the guides show. Run against the code before this change they scored 25,
 0, 20 and 66.7 percent, and the whole corpus 74.2 percent.
 
+### A key that two parts of the file disagreed about, and an Answer line folded into an option
+
+Found building stage 3 of the Word importer. Publisher banks give each question's
+key on a line after the options (`Answer: C`, `ANS: B, D`). The scanner had no
+rule for it: straight after the last option it was folded into that option's text,
+after a blank line it was reported as stray text, and in capitals it was kept as a
+custom label, so the question had no key and nothing said why. `Answer:` lines are
+now the question's own key (`ANSWER_LINE` in `standard-text-scan.ts`), read in text
+files as well as Word files.
+
+Separately, a key in words that two sources gave differently passed without a word:
+the asterisks won and an Answers entry that said otherwise was never read, so `*b`
+against `1. C` produced a clean question. Keys now come from the first source that is
+there, in the order asterisk, `Answer:` line, Answers list, formatting, and where a
+later source names different options the question carries a `KeysDisagree` warning
+that says both. Only the sources that resolve to options are compared, so a letter
+that names no option is still its own error.
+
 ---
 
 ## Open, and roughly in the order I would take them
@@ -403,10 +421,6 @@ Media is never garbage collected either.
   option letters from Word's list definitions, and keeping the formatting, is
   where this importer can do better than the tool it reads.
 
-- **A key list that disagrees with the asterisks is ignored silently.** When a
-  question has asterisks, its Answers entry is never read, so `*b` against
-  `1. C` produces a clean question. The asterisks win, which is a reasonable
-  rule, but the disagreement should be a finding.
 - **A true or false question keeps only its answer.** `Type: TF` with options
   that are not True and False (Yes and No, say) is flagged for having no key.
   The option words are now quoted in an `OptionNotKept` warning rather than
@@ -427,6 +441,43 @@ Media is never garbage collected either.
   heading, a line such as `10) Explain X.` is taken as an entry when 10 is a
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
+
+### Found while building answer keys from formatting (stage 3), not yet fixed
+
+- **The convention is a statistical reading, and has only met files our own writer
+  made.** It takes a mark as the key when at least 3 choice questions and 80 percent
+  of them show it. Those numbers are a judgement, not a measurement. Real banks will
+  say whether they are right: one that marks the key in only 70 percent of its
+  questions is refused, and one that bolds options for another reason in 80 percent
+  would be believed. The dialect pack and the real chapters are the test. Until then
+  the file-level report, which names the mark and the counts, is the safeguard, and
+  `keyMark` lets the author say what the mark is or turn it off.
+- **A question keyed by the convention has no finding of its own.** That is the
+  plan's choice (flag the outliers, report the habit once) and it is what lets such a
+  file reach the 95 percent. The cost is that a wrong convention gives wrong keys that
+  all look authored. The preview screen should show the file-level report first and
+  make it easy to switch the mark.
+- **Only the formatting of an option's own text is read.** Shading on a cell or a
+  paragraph (`w:shd`), a strike-through, and a mark on the option's label are not
+  marks. Highlighting by shading is common in tables, which stage 4 reads.
+- **A line straight after an option that is none of the known shapes is added to
+  that option's text, with nothing said.** This is how the scanner has always read a
+  wrapped option, and it is wrong for a bank that puts other lines there. In a check
+  made while building stage 3, `Feedback: because b` and `Rationale: ...` directly
+  under the correct option came out as `y<br>Feedback: because b` in the option's own
+  text, a clean `parsed` question whose right answer has been altered. After a blank
+  line the same lines are orphans, which is visible. `Ans. B` and `Answer B` (no
+  colon) behave the same way. The publisher-style document in the dialect pack has
+  exactly these lines, so this should be settled before real chapters are scored:
+  recognise `Feedback`, `Rationale`, `Explanation` and the like as labels of the
+  question (and decide what they become), and report any other line that is added
+  to an option after a label-like shape.
+- **An `Answer:` line needs its colon and ends at the end of its line.** An essay's
+  model answer that wraps onto a second paragraph is a stray line, reported.
+- **Two letters in an Answer line on a question with no Type are an error, not a
+  guess.** `Answer: B, D` with no `Type: MA` reads as single choice with two keys,
+  where two asterisks would have made it a multiple response question. Matching the
+  asterisk would be reasonable.
 
 ### Found while building Word list numbering (stage 2), not yet fixed
 
