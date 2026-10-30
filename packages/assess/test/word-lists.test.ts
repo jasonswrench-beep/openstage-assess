@@ -572,9 +572,9 @@ describe("a label is joined to its text the way the page shows it", () => {
     assert.ok(q?.findings.every((f) => f.code !== FindingCode.NoAnswerKey), "the mark was seen");
   });
 
-  test("an asterisk in a typed line is not moved, so nothing that was read before is read differently", () => {
+  test("a lone asterisk in a typed line is not moved: it takes a habit of the whole file (test/star-after-letter.test.ts)", () => {
     const typed = standardTextImporter.parse("1. Pick one.\na. Sirius\nb. *Mars\n", OPTIONS);
-    assert.ok(typed.questions[0]?.findings.some((f) => f.code === FindingCode.NoAnswerKey), "a star after a typed letter is not a key mark");
+    assert.ok(typed.questions[0]?.findings.some((f) => f.code === FindingCode.NoAnswerKey), "one star after a typed letter is not enough to be a key mark");
   });
 
   test("an asterisk at the start of a numbered item is part of the question, not a mark", () => {

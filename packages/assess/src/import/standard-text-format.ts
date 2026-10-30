@@ -35,13 +35,17 @@ import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import type { RawQuestion } from "./standard-text-scan.ts";
 import type { SourceBlock, SourceRun } from "./types.ts";
 
-/** The share of choice questions that must show a property before it is taken as the file's convention. */
-const SHARE = 0.8;
+/**
+ * The share of choice questions that must show a property before it is taken as the
+ * file's convention. Exported because an asterisk typed after the option letter is
+ * judged on the same terms (see readStarsAfterLetters in standard-text-scan.ts).
+ */
+export const SHARE = 0.8;
 /** The fewest questions that can establish a convention. */
-const AT_LEAST = 3;
+export const AT_LEAST = 3;
 
 /** Type lines that make a question a choice question, besides no type line at all. */
-const CHOICE_HINTS = new Set(["MC", "MA", "MR", "TF"]);
+export const CHOICE_HINTS = new Set(["MC", "MA", "MR", "TF"]);
 
 function propertiesOf(run: SourceRun): string[] {
   const found: string[] = [];

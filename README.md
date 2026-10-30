@@ -30,7 +30,8 @@ interface.
   it for each option, as publishers lay them out. Headings such as "True / False"
   give the questions under them their type, and a bank given twice, once to print and
   once with the answers after an "Answer Key" heading, is read as one bank. The
-  correct option may be marked with an asterisk, an `Answer:` line, an Answers list,
+  correct option may be marked with an asterisk (before the letter, or after it when
+  the whole file does so), an `Answer:` line, an Answers list,
   a column, or by formatting it (bold, underline, a highlight, a colour, on the words
   or on the option letter alone), which is read as a habit of the whole file and
   reported for the author to confirm. Lists and formatting are checked against Word
@@ -85,7 +86,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 656 tests, run by Node's own test runner
+  test/                 679 tests, run by Node's own test runner
   test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word
