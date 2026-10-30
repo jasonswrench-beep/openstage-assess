@@ -54,7 +54,7 @@ export interface Cell {
   nested?: boolean;
 }
 
-export type Layout = "grid" | "labelled rows" | "answer key" | "numbered cells";
+export type Layout = "grid" | "labelled rows" | "answer key" | "numbered cells" | "matching rows";
 
 export interface TableReading {
   layout?: Layout;
@@ -393,6 +393,60 @@ function readNumbered(rows: Cell[][], context: Context): Line[] | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// Matching rows
+// ---------------------------------------------------------------------------
+
+/** The page a cell of words ends with, in brackets: "... context. (Page 4)". */
+const PAGE_AT_END = /\s*\(\s*(?:pp?|pages?)\.?\s*(\d+(?:\s*[-–—,&]\s*\d+)*)\s*\)\s*$/i;
+
+/**
+ * A matching exercise: a number, a term and its definition in each row, the cells between
+ * them left empty for space. Read as numbered questions, each row was a question of its
+ * own with nothing to answer, which is ten failures for one exercise. It is one question,
+ * a pair to each row, written as the Standard Format writes a pair ("a. term = definition").
+ * The pairs are the whole of it: the table has no text of its own, and the scanner uses the
+ * heading above it, and says so.
+ *
+ * The conditions are strict because a table of three columns is common: every row starts
+ * with a number, the numbers count up from the first row's by one, there are exactly two
+ * cells with words after the number cell, and there are at least three rows and no more
+ * than the twenty letters an option can have. A page at the end of a definition is taken
+ * off it and kept as the question's Page.
+ */
+function readMatching(rows: Cell[][], context: Context): Line[] | undefined {
+  if (rows.length < 3 || rows.length > 20) return undefined;
+  const pairs: Array<{ term: string; definition: string; row: Cell[] }> = [];
+  const pages: string[] = [];
+  let previous: number | undefined;
+  for (const row of rows) {
+    // Exactly two cells of words after the number cell means three or more cells in all.
+    if (row.some((c) => c.merged || c.nested)) return undefined;
+    const [numberCell, ...others] = row as [Cell, ...Cell[]];
+    const number = NUMBER_CELL.test(cellText(numberCell)) ? Number(/\d+/.exec(cellText(numberCell))?.[0]) : undefined;
+    if (number === undefined || (previous !== undefined && number !== previous + 1)) return undefined;
+    previous = number;
+    const filled = others.filter((c) => !isEmpty(c));
+    if (filled.length !== 2) return undefined;
+
+    let definition = cellText(filled[1]);
+    const page = PAGE_AT_END.exec(definition);
+    if (page && page.index > 0) {
+      const value = (page[1] as string).replace(/\s+/g, " ");
+      if (!pages.includes(value)) pages.push(value);
+      definition = definition.slice(0, page.index).trimEnd();
+    }
+    pairs.push({ term: cellText(filled[0]), definition, row });
+  }
+
+  const first = rows[0]?.[0];
+  const lines: Line[] = [made(context, "1.", first)];
+  pairs.forEach((pair, i) => lines.push(made(context, `${"abcdefghijklmnopqrst"[i]}. ${pair.term} = ${pair.definition}`, pair.row[0])));
+  if (pages.length > 0) lines.push(made(context, `Page: ${pages.join("; ")}`, first));
+  lines.push(made(context, "", first));
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
 
 /** Read a table as one of the layouts, or say that it is none of them. */
 export function readTable(rows: Cell[][], context: Context): TableReading {
@@ -402,6 +456,7 @@ export function readTable(rows: Cell[][], context: Context): TableReading {
     : [
         ["grid", readGrid],
         ["answer key", readKey],
+        ["matching rows", readMatching],
         ["labelled rows", readLabelled],
         ["numbered cells", readNumbered],
       ];

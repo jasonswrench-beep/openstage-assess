@@ -199,6 +199,23 @@ try {
     New-NestedQuestion $doc "2." "(p. 13)" "Which of these is a star?" @("Venus", "Earth", "Sirius") 2
     Save $doc "H-nested-option-tables"
   } catch { $problems.Add("H: " + $_.Exception.Message) }
+
+  # I. a matching exercise as a table: the number, the term, a spacer cell left empty, and the
+  # definition with the page it comes from at the end, under a heading that says Matching
+  try {
+    Step "I begins"
+    $doc = $word.Documents.Add()
+    Step "I has a document"
+    $doc.Content.Text = "Matching"
+    $t = New-Table $doc 3 4
+    $pairs = @(
+      @("1)", "Star", "", "A sun that burns. (Page 4)"),
+      @("2)", "Planet", "", "A world that orbits a star. (Page 8)"),
+      @("3)", "Moon", "", "A world that orbits a planet. (Page 9)")
+    )
+    for ($r = 0; $r -lt 3; $r++) { for ($c = 0; $c -lt 4; $c++) { $t.Cell($r + 1, $c + 1).Range.Text = $pairs[$r][$c] } }
+    Save $doc "I-matching-rows"
+  } catch { $problems.Add("I: " + $_.Exception.Message) }
 } finally {
   Close-Word
 }

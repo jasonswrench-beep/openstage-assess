@@ -22,6 +22,8 @@ export interface Expectation {
   keyMark?: string;
   /** What the report about tables should say, if there are tables. */
   layout?: string;
+  /** For a matching question, its pairs as "left = right". Such a question has no options, so `questions` has an empty list for it. */
+  pairs?: string[];
   /** Whether the list labels are checked against what Word shows, by the tool. */
   labels?: boolean;
 }
@@ -45,6 +47,11 @@ export const EXPECTED: Record<string, Expectation> = {
   "G-numbered-and-lettered-lists": { questions: [PLANETS, STARS], labels: true },
   // Two questions are too few for the file to show its own habit, so the mark is named.
   "H-nested-option-tables": { questions: [PLANETS, STARS], keyMark: "label:bold", layout: "a number in one cell and the question in the next" },
+  "I-matching-rows": {
+    questions: [[]],
+    layout: "a term and its definition in each row",
+    pairs: ["Star = A sun that burns.", "Planet = A world that orbits a star.", "Moon = A world that orbits a planet."],
+  },
 };
 
 /**
@@ -81,6 +88,11 @@ export function problemsWith(name: string, bytes: Uint8Array): { problems: strin
   }
   if (result.counts.failed > 0) {
     problems.push(`${result.counts.failed} questions failed: ${result.questions.flatMap((q) => q.findings.map((f) => f.message)).join(" | ")}`);
+  }
+  if (want.pairs) {
+    const q = result.questions[0];
+    const pairs = q && "pairs" in q.body ? q.body.pairs.map((p) => `${richTextToPlain(p.left).trim()} = ${p.right}`) : [];
+    if (JSON.stringify(pairs) !== JSON.stringify(want.pairs)) problems.push(`its pairs read as ${JSON.stringify(pairs)}, wanted ${JSON.stringify(want.pairs)}`);
   }
   if (want.layout) {
     const layouts = result.fileFindings.filter((f) => f.code === FindingCode.TableLayout).map((f) => f.message).join(" ");

@@ -32,9 +32,13 @@ interface.
   once with the answers after an "Answer Key" heading, is read as one bank. The
   correct option may be marked with an asterisk (before the letter, or after it when
   the whole file does so), an `Answer:` line, an Answers list,
-  a column, or by formatting it (bold, underline, a highlight, a colour, on the words
+  a column, a letter alone under the options, `(T)` or `(F)` at the end of a true or
+  false line, or by formatting it (bold, underline, a highlight, a colour, on the words
   or on the option letter alone), which is read as a habit of the whole file and
-  reported for the author to confirm. Lists and formatting are checked against Word
+  reported for the author to confirm. Banks numbered chapter.question (`1.14`),
+  page notes such as `(Page 3)`, a note on an Answer line, matching exercises as
+  tables, and fill in the blank sentences with the answer in bold are read too. A
+  Word 97-2003 `.doc` has to be saved as `.docx` first. Lists and formatting are checked against Word
   itself, and `fixtures/word-authored` holds documents that Word wrote
   (`docs/word-import-plan.md`).
 - The first exporter: the question spreadsheet (CSV) that OpenStage Author and
@@ -86,7 +90,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 679 tests, run by Node's own test runner
+  test/                 754 tests, run by Node's own test runner
   test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word

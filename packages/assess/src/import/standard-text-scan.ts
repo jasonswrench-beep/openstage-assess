@@ -92,6 +92,8 @@ export const METADATA_LABELS: Record<string, keyof Metadata | "bloom" | "difficu
   pages: "page",
   ref: "page",
   "page reference": "page",
+  // The section of the book the question comes from, as a title ("Textbook reference: AI Alignment").
+  "textbook reference": "section",
   difficulty: "difficulty",
   dif: "difficulty",
   diff: "difficulty",
@@ -114,7 +116,7 @@ export const METADATA_LABELS: Record<string, keyof Metadata | "bloom" | "difficu
  * its two choices, is not either.
  */
 const SECTION_HEADING =
-  /^\s*(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?|essays?|matching)(?:\s+(?:questions?|items?))?\s*:?\s*$/i;
+  /^\s*(?:chapter\s+\w+(?:-\w+)?\s+)?(?:in[\s-]*depth\s+)?(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?(?:\s*\/\s*essays?)?|essays?|matching)(?:\s+(?:questions?|items?))?\s*:?\s*$/i;
 
 function sectionType(name: string): string {
   const n = name.toLowerCase();
@@ -142,6 +144,39 @@ const TF_ANSWER = /^(?:true|false)\.?$/i;
 /** The line of underscores a printed test leaves to write an answer on. */
 const ANSWER_SPACE = /^_{3,}[_\s]*$/;
 
+/**
+ * Where in the book a question comes from, in brackets: "(Page 3)", "(p. 230)",
+ * "(pp. 12-14)". Alone on a line it is the question's page; at the end of a line it is
+ * taken off the text, and either way it is kept as the question's Page. Brackets are
+ * required, so a stem that says "page 3" is left alone, and so is "(p. 24)." with a
+ * full stop after it, which is a citation that belongs to the sentence.
+ */
+const PAGE_NOTE = String.raw`\(\s*(?:pp?|pages?)\.?\s*(\d+(?:\s*[-–—,&]\s*\d+)*)\s*\)`;
+const PAGE_LINE = new RegExp(`^${PAGE_NOTE}$`, "i");
+const PAGE_SUFFIX = new RegExp(`\\s*${PAGE_NOTE}\\s*$`, "i");
+/** A true or false question's answer at the end of its line, in brackets: "(T)", "(False)". */
+const TF_SUFFIX = /\s*\(\s*(true|false|t|f)\s*\)\s*$/i;
+/** A bare "1.14", the chapter and the number of a question, alone on a line with the question on the next. */
+const DOTTED_NUMBER = /^\s*(\d{1,3})\.(\d{1,3})\s*$/;
+/** An option letter alone on a line, which is how some banks give a choice question's answer. */
+const LONE_LETTER = /^\s*([a-tA-T])\s*$/;
+/** One word with nothing else on the line. */
+const ONE_WORD = /^[A-Za-z]{2,12}\.?$/;
+/** A number alone on a line, "3." or "3)", which starts a question only when its options follow it directly. */
+const NUMBER_ALONE = /^\s*(\d{1,4})\s*[.)]\s*$/;
+/**
+ * The title that opens a chapter of a bank given chapter by chapter: "Chapter 2",
+ * "Chapter Two Test Questions". It is not part of the question above it. Only these
+ * few shapes, so a stem line that begins with the word is not one.
+ */
+const CHAPTER_TITLE = /^\s*chapter\s+\w+(?:-\w+)?(?:\s+(?:test\s+)?(?:questions|bank|items|test))?\s*$/i;
+/**
+ * A note in brackets that ends an Answer line: "(Textbook reference: Chapter 3)",
+ * "(Page 12)", "(Source: the syllabus)". Only a note that names where the question
+ * comes from is taken off; "(or d)" is part of the answer and is left to fail.
+ */
+const SOURCE_NOTE = /\s*\(\s*((?:textbook\s+)?(?:reference|ref|source|section|chapter|page|pages|pp?\.?)\b[^()]*)\)\s*\.?\s*$/i;
+
 /** An all-capital short code such as NOT, MSC or NAT that a bank may invent. */
 const UNKNOWN_LABEL = /^\s*([A-Za-z][A-Za-z'\- ]{0,28})\s*:\s*(.+)$/;
 const CODE_LABEL = /^[A-Z]{2,6}$/;
@@ -167,8 +202,42 @@ const KNOWN_EMPTY_LABEL = /^\s*(feedback|general feedback|rationale|explanation|
  */
 const LABEL_SHAPE = /^\s*[A-Za-z][A-Za-z'\-]*(?: [A-Za-z'\-]+){0,2}\s*:\s*\S/;
 
-function labelReason(number: number, after: string): string {
+function labelReason(number: number | string, after: string): string {
   return `has the shape of a label that this profile does not know, and follows ${after} of question ${number}, so it was not added to it`;
+}
+
+/** The page a line of text ends with, and the line without it. */
+function takePage(text: string): { text: string; page?: string } {
+  const found = PAGE_SUFFIX.exec(text);
+  if (!found || found.index === 0) return { text };
+  return { text: text.slice(0, found.index).trimEnd(), page: (found[1] as string).replace(/\s+/g, " ") };
+}
+
+/**
+ * An Answer line's value without the note that says where the question comes from, and
+ * without the bracket or full stop that closes a letter or a word ("b)", "False."), which
+ * is dropped only when what is left reads as a key. The note is not lost: it comes back
+ * as the label and value of a line of metadata ("Textbook reference: ...", "Page: 3").
+ */
+function splitAnswerNote(value: string): { key: string; notes: Array<{ label: string; value: string }> } {
+  const tidy = (s: string): string => {
+    const t = s.trim();
+    const bare = t.replace(/[.)]\s*$/, "").trim();
+    return bare !== t && KEY_VALUE.test(bare) ? bare : t;
+  };
+  const found = SOURCE_NOTE.exec(value);
+  const head = found ? value.slice(0, found.index).trim() : "";
+  if (!found || head === "") return { key: tidy(value), notes: [] };
+
+  const inner = (found[1] as string).trim();
+  const labelled = /^([^:]{2,30}):\s*(.+)$/.exec(inner);
+  const paged = /^(?:pp?|pages?)\.?\s*(\d.*)$/i.exec(inner);
+  const note = labelled
+    ? { label: (labelled[1] as string).trim(), value: (labelled[2] as string).trim() }
+    : paged
+      ? { label: "Page", value: (paged[1] as string).trim() }
+      : { label: "Source", value: inner };
+  return { key: tidy(head), notes: [note] };
 }
 
 /** The orphan reason for a line the state machine did not own. Should never appear. */
@@ -196,6 +265,8 @@ export interface RawOption {
 
 export interface RawQuestion {
   number: number;
+  /** The number as the file wrote it when that was more than one integer: "1.14", chapter and question. */
+  label?: string;
   typeHint?: string;
   title?: string;
   points: number;
@@ -237,6 +308,8 @@ export interface RawQuestion {
   keyed: boolean;
   /** Its answer was a line under the question with no label, which a true or false, fill in the blank or essay question has in such a copy. */
   answeredBelow: boolean;
+  /** Its answer was "(T)" or "(F)" at the end of its first line. */
+  answeredInline: boolean;
   /**
    * An @ line came straight after the stem, before any option. The generic
    * format reads that as feedback for an incorrect answer; D2L and Moodle read
@@ -287,7 +360,7 @@ type Pending = Partial<Record<DirectiveKind, { value: string; block: SourceBlock
 // The scan
 // ---------------------------------------------------------------------------
 
-export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoints: number): ScanResult {
+export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoints: number, readBoldAnswers = true): ScanResult {
   const questions: RawQuestion[] = [];
   const keyBlocks: KeyBlock[] = [];
   const orphans: Orphan[] = [];
@@ -311,6 +384,44 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
    * straight into a question. This is what separates a real Points line from a
    * stem line that happens to read "Points: 20".
    */
+  /**
+   * What starts a question at block `i`: a number and its text on one line ("12) Why?"), or
+   * a chapter and question number alone on a line ("1.14") with the question on the next.
+   * The second is only a number when it follows on from the question before it, the next
+   * one in the chapter or the start of a later chapter, or when no question is open, so
+   * that a lone "3.14" inside a stem or an option is not taken for one.
+   */
+  const questionStartAt = (i: number): { number: number; label?: string; rest: string } | undefined => {
+    const text = textAt(i);
+    const typed = QUESTION_START.exec(text);
+    if (typed) return { number: Number(typed[1]), rest: typed[2] ?? "" };
+    // A number with nothing after it and an option straight under it: a question whose
+    // text is its options, as a table of matching pairs is.
+    const alone = NUMBER_ALONE.exec(text);
+    if (alone) {
+      const under = nextContent(i);
+      return under !== -1 && OPTION_START.test(textAt(under)) ? { number: Number(alone[1]), rest: "" } : undefined;
+    }
+    const bare = DOTTED_NUMBER.exec(text);
+    if (!bare) return undefined;
+    const next = nextContent(i);
+    if (next === -1) return undefined;
+    const after = textAt(next);
+    if (QUESTION_START.test(after) || DOTTED_NUMBER.test(after) || OPTION_START.test(after)) return undefined;
+
+    const chapter = Number(bare[1]);
+    const number = Number(bare[2]);
+    // Between questions, after a heading or after a question's last line and a blank, a
+    // number and text under it is a question, whatever its number, because a bank may start
+    // the numbers again in each section. Inside a stem or an option it has to be the number
+    // that comes next, so that a "3.14" that is part of the words is not one.
+    const lastLabel = DOTTED_NUMBER.exec(questions[questions.length - 1]?.label ?? "");
+    const next_ =
+      lastLabel !== null && (chapter > Number(lastLabel[1]) || (chapter === Number(lastLabel[1]) && number > Number(lastLabel[2])));
+    const follows = mode.kind === "outside" || mode.kind === "tail" || next_;
+    return follows ? { number, label: `${chapter}.${number}`, rest: "" } : undefined;
+  };
+
   const directiveRunLeadsToQuestion = (i: number): boolean => {
     let j = nextContent(i);
     while (j !== -1 && isDirective(textAt(j))) j = nextContent(j);
@@ -344,9 +455,11 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   let mode: Mode = { kind: "outside", why: "before the first question" };
   let sawBlank = false;
   /** The type a section heading gave, until the next heading. `used` says whether a question has had it. */
-  let section: { type: string; block: SourceBlock; used: boolean } | undefined;
+  let section: { type: string; block: SourceBlock; used: boolean; title: string } | undefined;
   /** Whether a heading has said that the questions from here on are the copy with the answers. */
   let keyed = false;
+  /** Letters alone under a question's options that were taken as its answer, until the file shows it does that as a habit. */
+  const looseLetters: Array<{ question: RawQuestion; block: SourceBlock; text: string; option?: RawOption }> = [];
 
   const setDirective = (kind: DirectiveKind, value: string, block: SourceBlock): void => {
     const earlier = pending[kind];
@@ -458,6 +571,15 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       continue;
     }
 
+    // --- a chapter title -----------------------------------------------------------
+    // After the last line of a question, and a blank, it used to be added to that
+    // question's stem. It is the start of something else, so the question ends here.
+    if (CHAPTER_TITLE.test(trimmed) && mode.kind !== "outside") {
+      orphan(block, "a chapter title, which is not part of the question above it");
+      mode = { kind: "outside", why: "after a chapter title" };
+      continue;
+    }
+
     // --- headings: a type for the section, and the copy with the answers ----------
     // These come before everything else in a question, because a heading after the
     // last option used to be added to that option, or to the stem, and the section
@@ -468,7 +590,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     const heading = choicesLine ? null : SECTION_HEADING.exec(line);
     if (heading) {
       if (section && !section.used) orphan(section.block, "a section heading that no question used before the next heading");
-      section = { type: sectionType(heading[1] as string), block, used: false };
+      section = { type: sectionType(heading[1] as string), block, used: false, title: trimmed };
       claim(block);
       mode = { kind: "outside", why: "after a section heading" };
       continue;
@@ -506,18 +628,36 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     }
 
     // --- a new question ---------------------------------------------------------
-    const start = QUESTION_START.exec(line);
+    const start = questionStartAt(i);
     if (start) {
       // A Type line is the file's own word for this question, and it comes before the
       // heading of the section the question is in.
       const typeHint = pending.type?.value ?? section?.type;
       if (!pending.type && section) section.used = true;
+
+      // The end of the first line can carry the page the question comes from and, in a
+      // true or false section, its answer: "Communication is a process. (T) (Page 20)".
+      let first = start.rest.trim();
+      let page = takePage(first);
+      first = page.text;
+      let inline: string | undefined;
+      const tf = typeHint === "TF" ? TF_SUFFIX.exec(first) : null;
+      if (tf) {
+        inline = /^t/i.test(tf[1] as string) ? "true" : "false";
+        first = first.slice(0, tf.index).trimEnd();
+      }
+      if (!page.page) {
+        page = takePage(first);
+        first = page.text;
+      }
+
       const question: RawQuestion = {
-        number: Number(start[1]),
+        number: start.number,
+        ...(start.label ? { label: start.label } : {}),
         ...(typeHint ? { typeHint } : {}),
         ...(pending.title && pending.title.value.length > 0 ? { title: pending.title.value } : {}),
         points,
-        stemLines: [(start[2] ?? "").trim()],
+        stemLines: first.length > 0 ? [first] : [],
         options: [],
         correctFeedback: [],
         incorrectFeedback: [],
@@ -534,8 +674,11 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         stemAfterBlank: false,
         keyed,
         answeredBelow: false,
+        answeredInline: inline !== undefined,
         incorrectFeedbackBeforeOptions: false,
       };
+      if (page.page) question.metadata.push({ label: "Page", value: page.page, block: block.index });
+      if (inline) question.answerLines.push(inline);
       pending = {};
       questions.push(question);
       claim(block, question);
@@ -563,6 +706,19 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         textBlocks: [block.index],
         keyedByFormat: false,
       };
+      // A matching exercise given as a table of pairs has no text of its own. Its section
+      // heading is the nearest thing the file says about it, and it is used, and flagged.
+      if (question.options.length === 0 && question.stemLines.length === 0 && question.typeHint === "MT" && section) {
+        question.stemLines.push(section.title);
+        question.notes.push(
+          finding(
+            FindingCode.StemFromHeading,
+            "warn",
+            `This matching question has no text of its own, so the heading "${section.title}" was used as its text. Check that it says what the student is to do.`,
+            { field: "stem" },
+          ),
+        );
+      }
       question.options.push(option);
       claim(block, question);
       mode = { kind: "option", question, option };
@@ -602,8 +758,21 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     // reported as stray text, or kept as a custom label, and the question had no key.
     const answerMatch = ANSWER_LINE.exec(line);
     if (answerMatch) {
-      const value = (answerMatch[1] ?? "").trim();
-      if (value.length > 0) question.answerLines.push(value);
+      // "Answer: b) (Textbook reference: Chapter 3)": the key, and where the question comes from.
+      const { key, notes } = splitAnswerNote((answerMatch[1] ?? "").trim());
+      if (key.length > 0) question.answerLines.push(key);
+      for (const note of notes) question.metadata.push({ ...note, block: block.index });
+      claim(block, question);
+      mode = { kind: "tail", question };
+      continue;
+    }
+
+    // --- the page, alone on a line ------------------------------------------------
+    // "(Page 3)" under the options used to be added to the last option, which hid
+    // whether that option was bold and put a page number into its words.
+    const pageLine = PAGE_LINE.exec(trimmed);
+    if (pageLine) {
+      question.metadata.push({ label: "Page", value: (pageLine[1] as string).replace(/\s+/g, " "), block: block.index });
       claim(block, question);
       mode = { kind: "tail", question };
       continue;
@@ -640,6 +809,30 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       }
     }
 
+    // --- a letter alone under the options --------------------------------------------
+    // Some banks give a choice question's answer as the letter on a line of its own
+    // after the last option: "e. manager", then "d". It has to name an option the
+    // question has, and the question has to have none of its own marks, so a letter
+    // that happens to end a wrapped option is not the first thing read as a key.
+    const lone = LONE_LETTER.exec(trimmed);
+    if (
+      lone &&
+      (mode.kind === "option" || mode.kind === "tail") &&
+      question.options.length >= 2 &&
+      question.answerLines.length === 0 &&
+      !question.options.some((o) => o.starred) &&
+      (question.typeHint === undefined || CHOICE_HINTS.has(question.typeHint)) &&
+      question.options.some((o) => o.letter === (lone[1] as string).toLowerCase())
+    ) {
+      // Taken for now, and given back at the end if the file does not do this as a habit.
+      question.answerLines.push((lone[1] as string).toLowerCase());
+      question.answeredBelow = true;
+      looseLetters.push({ question, block, text: trimmed, ...(mode.kind === "option" ? { option: mode.option } : {}) });
+      claim(block, question);
+      mode = { kind: "tail", question };
+      continue;
+    }
+
     // --- anything else -------------------------------------------------------------
     switch (mode.kind) {
       case "stem": {
@@ -659,7 +852,10 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         // answer. Under a fill in the blank or an essay, a line after a blank is the
         // answer only in the copy that has the answers; in any other file it is more
         // of the question, as it always was.
-        if (hint === "TF" && TF_ANSWER.test(trimmed)) {
+        // A single word after a blank line is an answer too, even when it is not one the
+        // question can use ("fasle"): it must not become the second line of the statement,
+        // and as an answer it is reported as one that could not be read.
+        if (hint === "TF" && (TF_ANSWER.test(trimmed) || (afterBlank && ONE_WORD.test(trimmed)))) {
           question.answerLines.push(trimmed.replace(/\.$/, ""));
           question.answeredBelow = true;
           claim(block, question);
@@ -673,8 +869,11 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
           mode = { kind: "answer", question };
           break;
         }
-        if (afterBlank) question.stemAfterBlank = true;
-        question.stemLines.push(trimmed);
+        // A stem whose first line was the number alone has no earlier line to span a blank from.
+        if (afterBlank && question.stemLines.length > 0) question.stemAfterBlank = true;
+        const taken = takePage(trimmed);
+        if (taken.page) question.metadata.push({ label: "Page", value: taken.page, block: block.index });
+        question.stemLines.push(taken.text);
         claim(block, question);
         break;
       }
@@ -684,7 +883,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         break;
       case "option":
         if (LABEL_SHAPE.test(line)) {
-          orphan(block, labelReason(question.number, "an option"));
+          orphan(block, labelReason(question.label ?? question.number,"an option"));
           mode = { kind: "tail", question };
           break;
         }
@@ -695,7 +894,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         break;
       case "optionFeedback":
         if (LABEL_SHAPE.test(line)) {
-          orphan(block, labelReason(question.number, "an option's feedback"));
+          orphan(block, labelReason(question.label ?? question.number,"an option's feedback"));
           mode = { kind: "tail", question };
           break;
         }
@@ -705,7 +904,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         break;
       case "questionFeedback":
         if (LABEL_SHAPE.test(line)) {
-          orphan(block, labelReason(question.number, "the feedback"));
+          orphan(block, labelReason(question.label ?? question.number,"the feedback"));
           mode = { kind: "tail", question };
           break;
         }
@@ -718,7 +917,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         // this question, and it is reported as what it is.
         orphan(
           block,
-          `follows the options, feedback or labels of question ${question.number} but is not another option, a feedback line or a label, so it was not added to the question`,
+          `follows the options, feedback or labels of question ${question.label ?? question.number} but is not another option, a feedback line or a label, so it was not added to the question`,
         );
         break;
     }
@@ -732,8 +931,35 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
 
   if (section && !section.used) orphan(section.block, "a section heading with no question after it");
 
+  // A letter alone under the options is an answer only if the file gives its answers that
+  // way in most of its choice questions. One in a file that does not, such as a stray cell
+  // of a table after the last question, is given back as what it was before: stray text, or
+  // the end of the option above it. This is the same bar a mark made with formatting has.
+  if (looseLetters.length > 0) {
+    const eligible = questions.filter((q) => q.options.length >= 2 && (q.typeHint === undefined || CHOICE_HINTS.has(q.typeHint)));
+    const showing = new Set(looseLetters.map((l) => l.question)).size;
+    if (showing < AT_LEAST || showing < SHARE * eligible.length) {
+      for (const loose of looseLetters) {
+        const at = loose.question.answerLines.lastIndexOf(loose.text.toLowerCase());
+        if (at !== -1) loose.question.answerLines.splice(at, 1);
+        loose.question.answeredBelow = false;
+        if (loose.option) {
+          loose.option.lines.push(loose.text);
+          loose.option.textBlocks.push(loose.block.index);
+          loose.option.lastBlock = loose.block.index;
+        } else {
+          orphan(
+            loose.block,
+            `follows the options of question ${loose.question.label ?? loose.question.number} but is not another option, a feedback line or a label, so it was not added to the question. It is a letter that names one of its options, but only ${showing} of ${eligible.length} choice questions in the file have one, which is not enough to read it as the answer`,
+          );
+        }
+      }
+    }
+  }
+
   // Before the fold, which asks whether a copy gives an answer of its own.
   readStarsAfterLetters(questions, fileFindings);
+  if (readBoldAnswers) readBoldBlanks(blocks, questions, fileFindings);
 
   // A file with an Answers list is keyed in a way this does not touch.
   if (keyBlocks.length === 0) foldCopiesWithoutAnswers(questions, file, fileFindings);
@@ -745,6 +971,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       [count(["TF"]), "true or false"],
       [count(["F"]), "fill in the blank"],
       [count(["E"]), "essay or short answer"],
+      [below.filter((q) => q.options.length >= 2 && !["TF", "F", "E"].includes(q.typeHint ?? "")).length, "multiple choice"],
     ]
       .filter(([n]) => (n as number) > 0)
       .map(([n, what]) => `${n} ${what}`);
@@ -752,7 +979,18 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       finding(
         FindingCode.AnswerFromUnlabelledLine,
         "info",
-        `${below.length === 1 ? "One answer was" : `${below.length} answers were`} read from a line under its question that has no Answer label (${parts.join(", ")}). A true or false answer is the word True or False alone on a line; the others are read only in the copy that follows an answer key heading.`,
+        `${below.length === 1 ? "One answer was" : `${below.length} answers were`} read from a line under its question that has no Answer label (${parts.join(", ")}). A true or false answer is the word True or False alone on a line, a multiple choice answer is the letter of one of its options alone on a line after them, and the others are read only in the copy that follows an answer key heading.`,
+      ),
+    );
+  }
+
+  const inline = questions.filter((q) => q.answeredInline);
+  if (inline.length > 0) {
+    fileFindings.push(
+      finding(
+        FindingCode.AnswerFromUnlabelledLine,
+        "info",
+        `${inline.length === 1 ? "One true or false answer was" : `${inline.length} true or false answers were`} read from a (T) or (F) at the end of the question. Check that this is how the file gives its answers.`,
       ),
     );
   }
@@ -972,17 +1210,96 @@ function readStarsAfterLetters(questions: RawQuestion[], fileFindings: Finding[]
   );
 }
 
+/** What a blank is written as when the answer's words are taken out of a finished sentence. */
+const BLANK_MARK = "_____";
+
+/**
+ * A fill in the blank given as the finished sentence, with the answer in bold: "Danny is
+ * the **source** of the message." There is no blank and no Answer line, so such a question
+ * had its answer in its stem and no key. The bold words are the answer, and in the question
+ * they become a blank.
+ *
+ * Like any mark made with formatting, this is only a habit of the whole file: the bold
+ * sets part of the sentence apart in at least three of these questions and 80 percent of
+ * them. A sentence that is bold all through has no part set apart. Only a single line is
+ * read, from a question under a fill in the blank heading or Type line, and a question
+ * that already has a blank or an answer is left as it is.
+ */
+function readBoldBlanks(blocks: readonly SourceBlock[], questions: RawQuestion[], fileFindings: Finding[]): void {
+  const candidates = questions.filter(
+    (q) =>
+      q.typeHint === "F" &&
+      q.options.length === 0 &&
+      q.answerLines.length === 0 &&
+      q.keyValues.length === 0 &&
+      q.stemLines.length === 1 &&
+      !/_{3,}/.test(q.stemLines[0] ?? ""),
+  );
+  if (candidates.length === 0) return;
+
+  const readings = new Map<RawQuestion, { stem: string; answers: string[]; page?: string }>();
+  for (const q of candidates) {
+    const block = blocks[q.firstBlock];
+    if (!block?.runs || block.runs.length === 0) continue;
+    const label = /^\s*\d{1,4}\s*[.)]\s+/.exec(block.text)?.[0].length ?? 0;
+    let at = 0;
+    let rebuilt = "";
+    const answers: string[] = [];
+    for (const run of block.runs) {
+      const from = at;
+      at += run.text.length;
+      const words = run.text.trim();
+      if (run.bold && words !== "" && from >= label) {
+        answers.push(words);
+        rebuilt += run.text.replace(words, BLANK_MARK);
+      } else rebuilt += run.text;
+    }
+    if (answers.length === 0) continue;
+    const taken = takePage(rebuilt.replace(/^\s*\d{1,4}\s*[.)]\s+/, "").trim());
+    // A sentence with nothing left outside the bold has no part set apart.
+    if (taken.text.replace(new RegExp(BLANK_MARK, "g"), "").replace(/[\s\W_]/g, "").length < 3) continue;
+    readings.set(q, { stem: taken.text, answers, ...(taken.page ? { page: taken.page } : {}) });
+  }
+  if (readings.size === 0) return;
+
+  const of = `${readings.size} of ${candidates.length} fill in the blank questions`;
+  if (readings.size < AT_LEAST || readings.size < SHARE * candidates.length) {
+    fileFindings.push(
+      finding(
+        FindingCode.FormattingKeyUnclear,
+        "warn",
+        `Bold sets some words of the sentence apart in ${of}, which is not often enough to read as the answers (it takes at least ${AT_LEAST} questions and ${Math.round(SHARE * 100)} percent of them), so no answer was taken from it. Nothing was guessed.`,
+      ),
+    );
+    return;
+  }
+  for (const [q, reading] of readings) {
+    q.stemLines[0] = reading.stem;
+    // More than one bold part is one answer to each blank, in order, as "one; two" is.
+    q.answerLines.push(reading.answers.join("; "));
+    if (reading.page && !q.metadata.some((m) => m.label === "Page")) q.metadata.push({ label: "Page", value: reading.page, block: q.firstBlock });
+  }
+  fileFindings.push(
+    finding(
+      FindingCode.FormattingKeyUsed,
+      "warn",
+      `Bold set words of the sentence apart in ${of}, which were given as finished sentences. The bold words were read as the answers and each was replaced by a blank in the question. Check that bold does mean the answer in this file.`,
+    ),
+  );
+}
+
 /**
  * Repeated numbers are normal when numbering restarts after an Answers list, so
  * only a repeat inside one stretch is reported. It matters most to the key, but
  * it is also the first sign that two chapters were pasted together.
  */
 function reportRepeatedNumbers(questions: RawQuestion[], fileFindings: Finding[]): void {
-  const repeated = new Set<number>();
+  const repeated = new Set<number | string>();
   const seen = new Set<string>();
   for (const q of questions) {
-    const id = `${q.segment}:${q.number}`;
-    if (seen.has(id)) repeated.add(q.number);
+    // "1.14" and "2.14" are different questions, though both are number 14.
+    const id = `${q.segment}:${q.label ?? q.number}`;
+    if (seen.has(id)) repeated.add(q.label ?? q.number);
     seen.add(id);
   }
   if (repeated.size === 0) return;
