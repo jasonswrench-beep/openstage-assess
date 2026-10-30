@@ -48,6 +48,34 @@ function Save($doc, [string]$name) {
   $made.Add($name)
 }
 
+# A question as a publisher's bank lays it out: a table of its own, with the number (and
+# the page it comes from) in one cell, and in the next the question and then a table for
+# each option, inside the cell. The right option's letter is bold and underlined, and the
+# letters of the others are grey. This is the first time the reader meets a table inside a
+# table that Word wrote.
+function New-NestedQuestion($doc, [string]$number, [string]$page, [string]$stem, $options, [int]$correct) {
+  $outer = New-Table $doc 1 2
+  $outer.Cell(1, 1).Range.Text = $number + "`r" + $page
+  $outer.Cell(1, 1).Range.Paragraphs.Item(2).Range.Font.Italic = -1
+  $cell = $outer.Cell(1, 2)
+  # The stem, then a place for each table with an empty paragraph after it (two tables with
+  # nothing between them become one), which is also how Word keeps a paragraph after a table
+  # in a cell. The tables are put in from the last place to the first, so that putting one in
+  # does not move the places of the ones still to come.
+  $count = $options.Count
+  $cell.Range.Text = $stem + ("`r" * (2 * $count))
+  for ($k = $count; $k -ge 1; $k--) {
+    $i = $k - 1
+    $spot = $cell.Range.Paragraphs.Item(2 * $k).Range
+    $spot.Collapse(1)
+    $nested = $cell.Tables.Add($spot, 1, 2)
+    $nested.Cell(1, 1).Range.Text = ("abcde".Substring($i, 1)) + ". "
+    $nested.Cell(1, 2).Range.Text = $options[$i]
+    $letter = $nested.Cell(1, 1).Range
+    if ($i -eq $correct) { $letter.Font.Bold = -1; $letter.Font.Underline = 1 } else { $letter.Font.Color = 8421504 }
+  }
+}
+
 try {
   Retry { $word.Visible = $false }
   Retry { $word.DisplayAlerts = 0 }
@@ -161,6 +189,16 @@ try {
     foreach ($i in 7, 8) { $doc.Paragraphs.Item($i).Range.ListFormat.ApplyListTemplate($lettered, $true, 0) }
     Save $doc "G-numbered-and-lettered-lists"
   } catch { $problems.Add("G: " + $_.Exception.Message) }
+
+  # H. a publisher's layout: a table for each question, a table inside it for each option
+  try {
+    Step "H begins"
+    $doc = $word.Documents.Add()
+    Step "H has a document"
+    New-NestedQuestion $doc "1." "(p. 12)" "Which of these is a planet?" @("Sirius", "Mars", "The Sun") 1
+    New-NestedQuestion $doc "2." "(p. 13)" "Which of these is a star?" @("Venus", "Earth", "Sirius") 2
+    Save $doc "H-nested-option-tables"
+  } catch { $problems.Add("H: " + $_.Exception.Message) }
 } finally {
   Close-Word
 }

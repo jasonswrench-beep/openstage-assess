@@ -710,6 +710,32 @@ function buildBody(
           findings,
         };
       }
+      // A stem with several blanks and one answer written "channels; media" is one
+      // answer to each blank, when the semicolons make exactly as many parts as there
+      // are blanks. Any other count is not split: which part belongs to which blank
+      // would be a guess, so the answers are kept as one blank's accepted forms, as they
+      // always were, and the question says that it has more blanks than that.
+      if (blank) {
+        const places = (raw.stemLines.join(" ").match(/_{3,}/g) ?? []).length;
+        if (places >= 2) {
+          const parts = accepted.length === 1 ? (accepted[0] as string).split(";").map((p) => p.trim()) : [];
+          if (parts.length === places && parts.every((p) => p.length > 0)) {
+            return {
+              body: { caseSensitive: false, blanks: parts.map((p, i) => ({ id: `b${i + 1}`, accepted: [p] })) },
+              media,
+              findings,
+            };
+          }
+          findings.push(
+            finding(
+              FindingCode.BlankCountMismatch,
+              "warn",
+              `The stem has ${places} blanks, but the answer is not one part for each of them (${accepted.length === 1 ? `it has ${parts.length} between semicolons` : `${accepted.length} answers were given`}), so which answer belongs to which blank was not guessed. All of it is kept as the accepted forms of one blank. Check it.`,
+              { source, field },
+            ),
+          );
+        }
+      }
       return {
         body: blank ? { caseSensitive: false, blanks: [{ id: "b1", accepted }] } : { caseSensitive: false, accepted },
         media,

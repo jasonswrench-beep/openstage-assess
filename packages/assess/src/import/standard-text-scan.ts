@@ -105,6 +105,42 @@ export const METADATA_LABELS: Record<string, keyof Metadata | "bloom" | "difficu
   keywords: "tags",
 };
 
+/**
+ * A heading that gives a type to the questions under it, as publisher banks group
+ * theirs: "Fill in the Blank Questions", "True / False Questions", "Multiple Choice".
+ * The whole line has to be the heading, so a stem that mentions the words is not one,
+ * and "True    False" with spaces between, which is how a true or false question lists
+ * its two choices, is not either.
+ */
+const SECTION_HEADING =
+  /^\s*(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?|essays?|matching)(?:\s+(?:questions?|items?))?\s*:?\s*$/i;
+
+function sectionType(name: string): string {
+  const n = name.toLowerCase();
+  if (n.startsWith("fill")) return "F";
+  if (n.startsWith("true")) return "TF";
+  if (/^multiple[\s-]+choice/.test(n)) return "MC";
+  if (n.startsWith("multiple")) return "MA";
+  if (n.startsWith("short") || n.startsWith("essay")) return "E";
+  return "MT";
+}
+
+/**
+ * The line that says the questions after it are the copy with the answers: "Answer
+ * Key", or "Chapter 7 Answer Key". A short line, so that a sentence that mentions an
+ * answer key is not one.
+ */
+function isAnswerKeyHeading(text: string): boolean {
+  return /\banswer\s+key\s*[:.]?\s*$/i.test(text) && text.split(/\s+/).length <= 8 && !text.includes("?");
+}
+
+/** The two words of a true or false question's choices on one line, apart from each other. */
+const TF_CHOICES = /^true\s*(?:\/|\||-|\bor\b|\s{2,}|\t)\s*false\.?$/i;
+/** A true or false question's answer, alone on a line. */
+const TF_ANSWER = /^(?:true|false)\.?$/i;
+/** The line of underscores a printed test leaves to write an answer on. */
+const ANSWER_SPACE = /^_{3,}[_\s]*$/;
+
 /** An all-capital short code such as NOT, MSC or NAT that a bank may invent. */
 const UNKNOWN_LABEL = /^\s*([A-Za-z][A-Za-z'\- ]{0,28})\s*:\s*(.+)$/;
 const CODE_LABEL = /^[A-Z]{2,6}$/;
@@ -196,6 +232,10 @@ export interface RawQuestion {
   ambiguousKeyValues: string[];
   /** Stem text continued after a blank line. */
   stemAfterBlank: boolean;
+  /** The question stands after a heading that says the questions below it are the copy with the answers. */
+  keyed: boolean;
+  /** Its answer was a line under the question with no label, which a true or false, fill in the blank or essay question has in such a copy. */
+  answeredBelow: boolean;
   /**
    * An @ line came straight after the stem, before any option. The generic
    * format reads that as feedback for an incorrect answer; D2L and Moodle read
@@ -235,6 +275,8 @@ type Mode =
   | { kind: "questionFeedback"; question: RawQuestion; which: "correct" | "incorrect" }
   /** After a blank line or a label: only structure may follow, never loose text. */
   | { kind: "tail"; question: RawQuestion }
+  /** The lines under a fill in the blank or essay question, in a copy that gives the answers. */
+  | { kind: "answer"; question: RawQuestion }
   | { kind: "key"; block: KeyBlock; current?: KeyEntry };
 
 type DirectiveKind = "title" | "type" | "points";
@@ -300,6 +342,10 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   let pending: Pending = {};
   let mode: Mode = { kind: "outside", why: "before the first question" };
   let sawBlank = false;
+  /** The type a section heading gave, until the next heading. `used` says whether a question has had it. */
+  let section: { type: string; block: SourceBlock; used: boolean } | undefined;
+  /** Whether a heading has said that the questions from here on are the copy with the answers. */
+  let keyed = false;
 
   const setDirective = (kind: DirectiveKind, value: string, block: SourceBlock): void => {
     const earlier = pending[kind];
@@ -411,6 +457,38 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       continue;
     }
 
+    // --- headings: a type for the section, and the copy with the answers ----------
+    // These come before everything else in a question, because a heading after the
+    // last option used to be added to that option, or to the stem, and the section
+    // it began was read as more of the question above it.
+    // "True / False" under a true or false question is the list of its two choices, not
+    // the heading of a section, though the two are the same words.
+    const choicesLine = mode.kind === "stem" && mode.question.typeHint === "TF" && TF_CHOICES.test(trimmed);
+    const heading = choicesLine ? null : SECTION_HEADING.exec(line);
+    if (heading) {
+      if (section && !section.used) orphan(section.block, "a section heading that no question used before the next heading");
+      section = { type: sectionType(heading[1] as string), block, used: false };
+      claim(block);
+      mode = { kind: "outside", why: "after a section heading" };
+      continue;
+    }
+    if (isAnswerKeyHeading(trimmed)) {
+      if (!keyed) {
+        fileFindings.push(
+          finding(
+            FindingCode.AnswerKeyPart,
+            "info",
+            `"${trimmed}" was read as the heading of a copy of the questions that has their answers. From there, a line under a fill in the blank or essay question is its answer.`,
+            { source: { file, firstBlock: block.index, lastBlock: block.index } },
+          ),
+        );
+      }
+      keyed = true;
+      claim(block);
+      mode = { kind: "outside", why: "after the answer key heading" };
+      continue;
+    }
+
     // --- Title, Type and Points ------------------------------------------------
     if (isDirective(line) && (mode.kind === "outside" || directiveRunLeadsToQuestion(i))) {
       const title = TITLE_LINE.exec(line);
@@ -429,9 +507,13 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     // --- a new question ---------------------------------------------------------
     const start = QUESTION_START.exec(line);
     if (start) {
+      // A Type line is the file's own word for this question, and it comes before the
+      // heading of the section the question is in.
+      const typeHint = pending.type?.value ?? section?.type;
+      if (!pending.type && section) section.used = true;
       const question: RawQuestion = {
         number: Number(start[1]),
-        ...(pending.type ? { typeHint: pending.type.value } : {}),
+        ...(typeHint ? { typeHint } : {}),
         ...(pending.title && pending.title.value.length > 0 ? { title: pending.title.value } : {}),
         points,
         stemLines: [(start[2] ?? "").trim()],
@@ -449,6 +531,8 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         keyAmbiguous: false,
         ambiguousKeyValues: [],
         stemAfterBlank: false,
+        keyed,
+        answeredBelow: false,
         incorrectFeedbackBeforeOptions: false,
       };
       pending = {};
@@ -557,9 +641,44 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
 
     // --- anything else -------------------------------------------------------------
     switch (mode.kind) {
-      case "stem":
+      case "stem": {
+        const hint = question.typeHint;
+        // A printed true or false question lists its two choices on a line, and a
+        // fill in the blank leaves a line to write on. They say what the question is
+        // and carry no words of its own, so they are not added to the stem.
+        if (hint === "TF" && TF_CHOICES.test(trimmed)) {
+          claim(block, question);
+          break;
+        }
+        if (hint === "F" && ANSWER_SPACE.test(trimmed)) {
+          claim(block, question);
+          break;
+        }
+        // The word True or False alone under a true or false question can only be its
+        // answer. Under a fill in the blank or an essay, a line after a blank is the
+        // answer only in the copy that has the answers; in any other file it is more
+        // of the question, as it always was.
+        if (hint === "TF" && TF_ANSWER.test(trimmed)) {
+          question.answerLines.push(trimmed.replace(/\.$/, ""));
+          question.answeredBelow = true;
+          claim(block, question);
+          mode = { kind: "tail", question };
+          break;
+        }
+        if ((hint === "F" || hint === "E") && question.keyed && afterBlank) {
+          question.answerLines.push(trimmed);
+          question.answeredBelow = true;
+          claim(block, question);
+          mode = { kind: "answer", question };
+          break;
+        }
         if (afterBlank) question.stemAfterBlank = true;
         question.stemLines.push(trimmed);
+        claim(block, question);
+        break;
+      }
+      case "answer":
+        question.answerLines.push(trimmed);
         claim(block, question);
         break;
       case "option":
@@ -608,6 +727,30 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   for (const kind of ["title", "type", "points"] as const) {
     const left = pending[kind];
     if (left) orphan(left.block, `a ${kind} line at the end of the file with no question after it`);
+  }
+
+  if (section && !section.used) orphan(section.block, "a section heading with no question after it");
+
+  // A file with an Answers list is keyed in a way this does not touch.
+  if (keyBlocks.length === 0) foldCopiesWithoutAnswers(questions, file, fileFindings);
+
+  const below = questions.filter((q) => q.answeredBelow);
+  if (below.length > 0) {
+    const count = (types: string[]): number => below.filter((q) => types.includes(q.typeHint ?? "")).length;
+    const parts = [
+      [count(["TF"]), "true or false"],
+      [count(["F"]), "fill in the blank"],
+      [count(["E"]), "essay or short answer"],
+    ]
+      .filter(([n]) => (n as number) > 0)
+      .map(([n, what]) => `${n} ${what}`);
+    fileFindings.push(
+      finding(
+        FindingCode.AnswerFromUnlabelledLine,
+        "info",
+        `${below.length === 1 ? "One answer was" : `${below.length} answers were`} read from a line under its question that has no Answer label (${parts.join(", ")}). A true or false answer is the word True or False alone on a line; the others are read only in the copy that follows an answer key heading.`,
+      ),
+    );
   }
 
   for (const key of keyBlocks) {
@@ -710,6 +853,60 @@ function resolveKeys(
       ),
     );
   }
+}
+
+const same = (lines: readonly string[]): string => lines.join(" ").replace(/\s+/g, " ").trim().toLowerCase();
+/** What a question says, apart from how it is keyed: its stem and its options. */
+const contentOf = (q: RawQuestion): string => `${same(q.stemLines)}\u0000${q.options.map((o) => same(o.lines)).join("\u0001")}`;
+
+/**
+ * A test bank often holds each question twice: a copy to print for students, with no
+ * answers, and a copy for the instructor, after a heading such as "Answer Key", with
+ * them. Imported as they stand, that is every question twice and the first copy
+ * without a key, so half the bank fails and the other half repeats it.
+ *
+ * A question before the heading is folded into the question after it that says exactly
+ * the same, stem and options, when it gives no answer of its own. The copy with the
+ * answers is the one kept, and its answer is its own: nothing is taken from the copy
+ * that was folded away, and a question that has no twin is kept as it is. What was
+ * folded is reported with where it was, so that nothing goes without a word.
+ */
+function foldCopiesWithoutAnswers(questions: RawQuestion[], file: string, fileFindings: Finding[]): void {
+  const withAnswers = new Map<string, RawQuestion[]>();
+  for (const q of questions) {
+    if (!q.keyed) continue;
+    const content = contentOf(q);
+    withAnswers.set(content, [...(withAnswers.get(content) ?? []), q]);
+  }
+  if (withAnswers.size === 0) return;
+
+  const taken = new Set<RawQuestion>();
+  const folded: RawQuestion[] = [];
+  let kept = 0;
+  for (const q of questions) {
+    if (q.keyed) continue;
+    const gives = q.answerLines.length > 0 || q.options.some((o) => o.starred);
+    const twin = gives ? undefined : withAnswers.get(contentOf(q))?.find((k) => !taken.has(k));
+    if (twin) {
+      taken.add(twin);
+      folded.push(q);
+    } else kept++;
+  }
+  if (folded.length === 0) return;
+
+  for (const q of folded) questions.splice(questions.indexOf(q), 1);
+  const first = Math.min(...folded.map((q) => q.firstBlock));
+  const last = Math.max(...folded.map((q) => q.lastBlock));
+  fileFindings.push(
+    finding(
+      FindingCode.RepeatedQuestionsFolded,
+      "info",
+      `${folded.length} ${folded.length === 1 ? "question appears" : "questions appear"} twice: once without answers, in lines ${first + 1} to ${last + 1}, and again after the answer key heading, with them. ` +
+        `Each was imported once, from the copy with the answers, and the copy without them was not imported. ` +
+        (kept > 0 ? `${kept} ${kept === 1 ? "question before the heading says" : "questions before the heading say"} something different from every question after ${kept === 1 ? "it" : "them"}, and ${kept === 1 ? "was" : "were"} kept as written.` : "Nothing before the heading was left over."),
+      { source: { file, firstBlock: first, lastBlock: last } },
+    ),
+  );
 }
 
 /**

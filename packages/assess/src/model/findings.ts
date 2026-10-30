@@ -76,6 +76,10 @@ export const FindingCode = {
   FormattingKeyUsed: "import.formatting-key-used",
   FormattingKeyUnclear: "import.formatting-key-unclear",
   FormattingKeyBroken: "import.formatting-key-broken",
+  AnswerKeyPart: "import.answer-key-part",
+  AnswerFromUnlabelledLine: "import.answer-from-unlabelled-line",
+  RepeatedQuestionsFolded: "import.repeated-questions-folded",
+  BlankCountMismatch: "import.blank-count-mismatch",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",

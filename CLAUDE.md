@@ -41,7 +41,7 @@ to the item. `schema.ts` rejects them by name with an explanation.
 ## Commands
 
 ```
-npm test                       # 599 tests, Node's own runner
+npm test                       # 656 tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
@@ -79,7 +79,10 @@ gate once reported 100 percent on questions nobody could use.
 
 The corpus is only 61 questions across 21 files and should grow alongside the
 parser. Real publisher chapters go in `fixtures/publisher/`, which is
-gitignored and read when present.
+gitignored and read when present, each with an `.expected.json` beside it written
+from the document and not from the importer. `npm run assess -- score fixtures/publisher`
+measures them, and `test/word-publisher-layout.test.ts` runs them when they are there.
+One chapter so far; the acceptance criterion is three.
 
 ## The read API
 

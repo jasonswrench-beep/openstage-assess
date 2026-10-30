@@ -16,7 +16,8 @@ so is worse than a miss.
 
 The first slice (stages 0 and 1) was built on 28 October 2026, stage 2 (Word's own
 list numbering), stage 3 (answer keys from formatting and `Answer:` lines) and stage 4
-(questions in tables) on 29 and 30 October. A `.docx` goes in, questions come out, and the
+(questions in tables) on 29 and 30 October, and on 30 October stage 4b, the layout of the
+first real publisher file the project was shown (below). A `.docx` goes in, questions come out, and the
 real harness scores them. `openassess import file.docx` works, and so does
 exporting what it imports to the Author spreadsheet.
 
@@ -51,6 +52,25 @@ to a table or several in one; a check mark in a last cell marks the option corre
 Standard Format scanner already reads, so the same scanner, builder and gate do the rest.
 `test/tools/word-authored-check.ts` has Word itself write sample documents, and
 `fixtures/word-authored/` keeps them.
+
+**Stage 4b built, from the first real file.** The dialect pack was still the thing most
+wanted, and the first real publisher chapter (a test bank in Word, 60 questions) arrived
+before stage 5. Imported as stage 4 left it, it gave 0 of 60: every question was read as an
+essay or swallowed into the one before it. It is not what stage 5 (text boxes, hidden text)
+would have fixed, so this came first. Six things changed, each described below:
+
+- a fourth table layout, *numbered cells*: the number in one cell (with the page it comes
+  from under it) and everything else of the question in the next, including a table for
+  each option inside that cell;
+- a heading such as "Fill in the Blank Questions" or "True / False" gives the questions
+  under it their type;
+- a true or false answer, a fill in the blank answer and an essay's model answer can be a
+  line of their own under the question;
+- the right option can be marked on its letter alone, and a file that greys out the
+  letters of the wrong options is read as agreeing with the one that marks the right one;
+- the bank given twice, a copy to print and a copy after an "Answer Key" heading, is read as
+  one bank, and what was folded is reported;
+- a stem with several blanks and one answer written "one; two" is one answer to each blank.
 
 **Measured:**
 
@@ -116,6 +136,31 @@ Standard Format scanner already reads, so the same scanner, builder and gate do 
   got through the first tests (a merged cell in a grid, a check mark on a question
   number, a row that starts late, and a table with no labels counted as a layout), and
   each got a test of its own.
+- Stage 4b, against a real file: the first real publisher chapter, 60 questions (15 fill in
+  the blank, 15 true or false, 15 multiple choice, 15 short answer), each given twice, went
+  from 0 of 60 to 60 of 60 through the real harness. The expected file was written from the
+  document's XML by a separate script and not by the importer, and the harness counts a
+  question only when its type, stem, options, key and verdict all match. The chapter is a
+  publisher's and is kept only on the machine (`fixtures/publisher/`, ignored by git), so
+  this cannot be rerun from a clone, and it is one chapter, not the three the acceptance
+  criterion asks for.
+- Stage 4b, against an invented lookalike: `test/support/publisher-layout.ts` writes a bank in the
+  same layout with none of its words, with every part switchable (which copies, how the
+  right option is marked, the headings, the page references). The 54 tests of
+  `test/word-publisher-layout.test.ts` read it each way, take one piece away at a time,
+  and try each rule on small plain examples. 500 questions, each given twice, import in
+  about 110 ms.
+- Stage 4b, against Word itself: Word wrote an eighth sample document, two questions each a
+  table with a table inside it for every option, the right letter bold and underlined and
+  the others grey (`H-nested-option-tables`). It reads as intended, and it is the first
+  table inside a table that Word, and not our writer, produced. All eight documents read as
+  intended and the list labels still agree with Word's: 0 disagreements. Word was not asked
+  about the real file itself.
+- Fifty-five deliberate breaks of the stage 4b code: all caught by a test in the end. Six
+  got through the first tests (padding blank lines above and below a cell's words, a row
+  with an empty question cell, a long line ending in "answer key" taken as the heading, one
+  twin answering for several copies, and the options not compared when copies are folded),
+  and each got a test of its own.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -215,10 +260,12 @@ importer comes to guessing a key, so the rules are strict, and each has a test.
 **How a table is read, stage 4.** The conditions are strict, because a table that only
 looks like a layout is how a wrong answer gets in.
 
-- A table with another table in a cell, cells merged down, or a row that starts late or
-  ends early is never read as a layout, and a grid or an answer key with a cell merged
-  across is not either. Labelled rows allow one cell spread across a whole row, which is
-  how Word writes a line of text in a table of two columns.
+- Cells merged down, or a row that starts late or ends early, are never read as a layout,
+  and a grid or an answer key with a cell merged across is not either. Labelled rows allow
+  one cell spread across a whole row, which is how Word writes a line of text in a table of
+  two columns. A table with another table in a cell is read by one layout only, numbered
+  cells (stage 4b), and otherwise cell by cell as before: the grid, labelled rows and the
+  answer key would read the lines of the inner table under the wrong column.
 - A grid needs exactly one Question column, at least two option columns with different
   letters, and every row the same width as the header. Its headers are matched by name
   (a list in `tables.ts`), and a header repeated at the top of a page is not a question.
@@ -236,12 +283,63 @@ looks like a layout is how a wrong answer gets in.
 - A table that is none of these is read cell by cell as before, and the file says how
   many were, and how many were read as questions. Both are information.
 
+**How a publisher's layout is read, stage 4b.** Every rule is for one piece of the first real
+file, and each has a test, on the lookalike and on small plain examples.
+
+- *Numbered cells.* A table whose every row has two cells, the first holding a number
+  (`31.`), reads as a question to a row. The second cell's lines go on as they are, blank
+  lines included, because a blank line is what ends an option. Under the number, a line
+  such as `(p. 230)`, `(pp. 12-14)` or `Page 3` becomes a `Page:` line; any other line is
+  kept after the question, behind a blank line so that it is not read as more of the stem or
+  the last option, and the scanner reports it. A row whose question cell is empty, a merged
+  cell, a first cell that is not a number, or a third cell means the table is not read as
+  this layout. The layouts that came first are tried first and read what they always read.
+- *Headings give a type.* A line that is wholly one of "Fill in the Blank", "True / False",
+  "Multiple Choice", "Multiple Response", "Short Answer", "Essay" or "Matching", with or
+  without "Questions" and a colon, sets the type of the questions after it, until the next
+  heading. A `Type:` line on a question is the file's own word and wins. A heading no
+  question used is reported as stray text. "True / False" directly under a true or false
+  question is that question's list of choices and not a heading, and the two words with only
+  spaces between them are never a heading.
+- *Short answer is read as an essay with a model answer*, because a paragraph cannot be
+  matched exactly, and a short answer question in this model is one that is. This is a decision to
+  confirm. `Type: S` still makes a short answer in the model's sense.
+- *Answers on a line of their own.* The word True or False alone under a true or false
+  question is its answer, anywhere. Under a fill in the blank or an essay, the line after a blank
+  line is the answer only after an answer key heading (a short line ending in "Answer Key"),
+  because in any other file it is more of the stem and was always read as such. The
+  file says how many answers were read this way, as information. A printed true or false
+  question's list of choices, and a fill in the blank's line of underscores to write on,
+  are not added to the stem.
+- *Marking on the letter.* A property carried by an option's letter and by none of its
+  words (a bold underlined `A.` with plain words) is a mark, named "on the option letter",
+  and follows the same rules as a mark on words: a convention of the whole file, at least
+  three questions and 80 percent of them. A letter that is bold together with the words
+  after it, or a bold term at the start of an option with its letter, is not one. This
+  reverses an earlier test that said a bold label alone is nothing; the real file marks it that way.
+- *Letters greyed out.* Two groups of marks that split the options of every question between
+  them, such as bold letters on the right option and grey letters on all the others, are
+  one convention seen from both sides, and the side that picks out fewer options in more
+  questions is the key. One question where the two do not split the options is enough to
+  take no key at all from formatting. Two options, which is what a true or false written
+  as choices has, are always a tie, and a tie takes no key.
+- *Two copies.* Questions before an answer key heading are folded into questions after
+  it that say exactly the same, stem and options, compared without regard to case or
+  spacing, once each and in order, when the earlier question gives no answer of its own.
+  The copy with the answers is the one kept and its answer is its own: nothing is taken
+  from the copy that was dropped. A question with no twin is kept and says so. This is not
+  done in a file with an Answers list. Which copies were folded, and where, is reported.
+- *Several blanks.* A fill in the blank stem with two or more runs of three underscores or
+  more, and one answer with the same number of parts between semicolons, is one answer to
+  each blank, in order. Any other count is not split, because which answer goes with which
+  blank would be a guess; it is kept as one blank's accepted forms, as before, and flagged.
+
 **Not built yet:** a key in a table by shading, matching questions as a two-column table, a
 question that spreads over several rows of a grid, text boxes and alternate content (rest
 of stage 5), pictures with their bytes and alt text (stage 6), equations (stage 7), and
-everything that needs real Word files (stage 8). The dialect pack is still the thing most
-wanted: stages 3 and 4 were built on files our own writer made and on a few that Word
-wrote from a script, and a publisher's real layout will be messier. Word's
+the rest of stage 8: a second and a third real chapter. The dialect pack is still the thing
+most wanted. The first real file taught more in one afternoon than stages 3 and 4 had learned
+from files our own writer made, and a publisher's next layout will not be this one. Word's
 spelled-out number formats ("One", "First") and the many non-Latin ones are not read
 yet; a list in one is reported, not guessed.
 
@@ -349,6 +447,7 @@ Each stage ends in a measurement, and the work stops at each one to run it.
 | 2 | Word list numbering: restarts, `a)`, `(a)`, `A.`, roman, multi-level, numbering that comes from a paragraph style | The auto-numbered styles match |
 | 3 | Answer marks: the document convention for bold, underline, highlight and colour, and `Answer:` lines | The formatting styles match |
 | 4 | Table layouts: a question per table, a question per row, a key column | The table styles match |
+| 4b | A real publisher's layout: a table for each question with a table for each option, type headings, answers on lines of their own, a mark on the option letter, two copies | The first real chapter scores in full (done, one chapter) |
 | 5 | Tracked changes, text boxes, hyperlinks, fields, hidden text, alternate content | The noise style and the property test pass |
 | 6 | Images, alt text from the picture's description, bytes into the bank | Pictures survive a round trip and a missing description is a finding |
 | 7 | Word equations to MathML and LaTeX | The equation fixtures pass |

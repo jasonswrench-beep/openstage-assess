@@ -1,6 +1,6 @@
 # Documents that Word wrote
 
-These seven `.docx` files were written by Microsoft Word itself, through its own object
+These eight `.docx` files were written by Microsoft Word itself, through its own object
 model, by `packages/assess/test/tools/word-authored-check.ts`. The other Word tests read
 documents made by the writer in `packages/assess/test/support`, which is not Word. These
 are the XML Word really writes: its table grids, merged cells, list definitions and styles.
@@ -17,6 +17,7 @@ has been taken out, and nothing else in them has been changed.
 | `E-merged-title-row` | A table whose first row is one cell merged across the width, then labelled rows |
 | `F-typed-bold-and-answer-line` | Typed labels, the right option in bold, and an `Answer:` line |
 | `G-numbered-and-lettered-lists` | Word's numbered list for the questions, a lettered list for the options, and an Answers list |
+| `H-nested-option-tables` | A publisher's layout: a table for each question, the number and page in one cell, and in the next the question and a table for each option inside the cell, the right letter bold and underlined and the others grey |
 
 `packages/assess/test/word-authored.test.ts` reads them in `npm test`, on any machine. To make
 them again, on a Windows machine with Word:
