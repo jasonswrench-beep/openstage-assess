@@ -79,7 +79,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 512 tests, run by Node's own test runner
+  test/                 535 tests, run by Node's own test runner
   test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
 fixtures/publisher/         publisher chapters, never committed

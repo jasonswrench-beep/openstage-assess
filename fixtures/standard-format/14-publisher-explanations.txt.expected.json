@@ -1,0 +1,33 @@
+{
+  "file": "14-publisher-explanations.txt",
+  "note": "Lines a publisher puts under a question, straight under the last option with no blank line. Feedback is feedback for the student, and Rationale, Explanation and Solution are notes. None of them is part of the option above, which they used to be added to, silently, so that the correct answer came out with the explanation attached. Ans. B is the key. Source: is not a label this profile knows, and it is reported as stray text and not joined to the option.",
+  "orphans": 1,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "stem": "Which sampling method gives every member of the population an equal chance of selection?",
+      "options": ["Convenience sampling", "Simple random sampling", "Quota sampling", "Snowball sampling"],
+      "correct": [1],
+      "feedback": { "general": "Simple random sampling gives every member an equal and independent chance." },
+      "metadata": { "difficulty": "medium", "page": "212", "Rationale": "Convenience, quota and snowball sampling all depend on who is easy to reach." }
+    },
+    {
+      "type": "trueFalse",
+      "stem": "A larger sample always removes bias from a study.",
+      "correctBoolean": false,
+      "metadata": { "Explanation": "Size reduces random error, not bias from how the sample was chosen." }
+    },
+    {
+      "type": "essay",
+      "stem": "Explain why a sampling frame matters.",
+      "feedback": { "general": "A good answer says the frame decides who can be selected at all." },
+      "metadata": { "Solution": "Look for coverage error." }
+    },
+    {
+      "type": "multipleChoice",
+      "stem": "What is sampling error?",
+      "options": ["The error from a badly worded questionnaire", "The difference between a sample statistic and the population value"],
+      "correct": [1]
+    }
+  ]
+}

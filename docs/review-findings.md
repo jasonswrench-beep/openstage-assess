@@ -286,6 +286,27 @@ later source names different options the question carries a `KeysDisagree` warni
 that says both. Only the sources that resolve to options are compared, so a letter
 that names no option is still its own error.
 
+### Explanations under the correct option became part of the option
+
+Found while checking the claims above, and fixed straight after. A `Feedback:` or
+`Rationale:` line directly under an option, with no blank line, was added to that
+option's text by the same rule that joins a wrapped option. Under the correct option
+the question came out `parsed` with the right answer altered
+(`y<br>Feedback: because b`), and nothing said so. Publisher banks put exactly these
+lines there.
+
+`Feedback` and `General Feedback` are now feedback for the student
+(`feedback.general`); `Rationale`, `Explanation` and `Solution` are kept as notes
+under `metadata.custom`, with an information finding that does not stop the question
+being `parsed`; a blank one is simply a label with nothing after it. Any other line
+with the shape of a label (up to three words, a colon, something after it) directly
+under an option, an option's feedback or a question's feedback is no longer joined to
+it: it is reported as stray text, with the reason, where it can be seen. `Ans. B` is
+read as a key, as `Answer: B` is. Fixture 14 holds the layout; with the Feedback rule,
+or the rule against joining a label to an option, switched off, the gate falls from
+100 to 96.8 percent. A stem is left alone, since a stem line with a colon is far more
+often prose.
+
 ---
 
 ## Open, and roughly in the order I would take them
@@ -460,20 +481,23 @@ Media is never garbage collected either.
 - **Only the formatting of an option's own text is read.** Shading on a cell or a
   paragraph (`w:shd`), a strike-through, and a mark on the option's label are not
   marks. Highlighting by shading is common in tables, which stage 4 reads.
-- **A line straight after an option that is none of the known shapes is added to
-  that option's text, with nothing said.** This is how the scanner has always read a
-  wrapped option, and it is wrong for a bank that puts other lines there. In a check
-  made while building stage 3, `Feedback: because b` and `Rationale: ...` directly
-  under the correct option came out as `y<br>Feedback: because b` in the option's own
-  text, a clean `parsed` question whose right answer has been altered. After a blank
-  line the same lines are orphans, which is visible. `Ans. B` and `Answer B` (no
-  colon) behave the same way. The publisher-style document in the dialect pack has
-  exactly these lines, so this should be settled before real chapters are scored:
-  recognise `Feedback`, `Rationale`, `Explanation` and the like as labels of the
-  question (and decide what they become), and report any other line that is added
-  to an option after a label-like shape.
-- **An `Answer:` line needs its colon and ends at the end of its line.** An essay's
-  model answer that wraps onto a second paragraph is a stray line, reported.
+- **A line straight after an option is still added to the option when it has no
+  label shape.** Labels are fixed (below), but `Answer B` with no colon, or a
+  sentence of the author's own, directly under an option still becomes part of that
+  option's text, as a wrapped option always did. It is not flagged. A line that
+  starts the way a note would ("See also the next chapter") cannot be told from the
+  second line of a long option by its shape. The preview should show where each
+  option's text came from, and a heuristic on long, punctuated continuation lines
+  would be worth trying against real chapters.
+- **An `Answer:` line needs its colon (or `Ans.`) and ends at the end of its line.**
+  An essay's model answer that wraps onto a second paragraph is a stray line, reported.
+- **`Rationale`, `Explanation` and `Solution` are kept as notes, not as feedback, and
+  that is a decision to confirm.** A question has no field for an instructor's
+  explanation, and making it feedback would show it to students. If real banks use
+  them as the explanation students should see, the label would map to
+  `feedback.general` instead, which is one line to change. `Feedback` and `General
+  Feedback` do map to `feedback.general`, which the Author spreadsheet cannot carry
+  (the destination check says so).
 - **Two letters in an Answer line on a question with no Type are an error, not a
   guess.** `Answer: B, D` with no `Type: MA` reads as single choice with two keys,
   where two asterisks would have made it a multiple response question. Matching the
@@ -508,8 +532,8 @@ Media is never garbage collected either.
 
 ## The corpus is too small to be an accuracy measurement
 
-The gate runs on 57 questions across 20 files. At that size one wrong question
-costs 1.8 points, so a 95 percent threshold still means "at most two may fail",
+The gate runs on 61 questions across 21 files. At that size one wrong question
+costs 1.6 points, so a 95 percent threshold still means "at most three may fail",
 which makes it closer to a regression test than a measurement.
 
 It used to run on 15 questions and exercise none of: `Type: TF`, a `T`/`F`

@@ -1,0 +1,26 @@
+Type: MC
+15) Which sampling method gives every member of the population an equal chance of selection?
+a. Convenience sampling
+*b. Simple random sampling
+c. Quota sampling
+d. Snowball sampling
+Feedback: Simple random sampling gives every member an equal and independent chance.
+Rationale: Convenience, quota and snowball sampling all depend on who is easy to reach.
+DIF: Medium
+REF: 212
+
+16) A larger sample always removes bias from a study.
+a. True
+b. False
+Ans. B
+Explanation: Size reduces random error, not bias from how the sample was chosen.
+
+Type: E
+17) Explain why a sampling frame matters.
+Feedback: A good answer says the frame decides who can be selected at all.
+Solution: Look for coverage error.
+
+18) What is sampling error?
+a. The error from a badly worded questionnaire
+*b. The difference between a sample statistic and the population value
+Source: Chapter 7
