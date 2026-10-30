@@ -59,12 +59,110 @@ export function table(rows: string[][]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Lists and styles
+// ---------------------------------------------------------------------------
+
+export interface LevelSpec {
+  /** The w:numFmt value. Defaults to decimal. */
+  format?: string;
+  /** The w:lvlText value, for example "%1." Defaults to "%n." for the level. */
+  text?: string;
+  start?: number;
+  /** The w:lvlRestart value. */
+  restart?: number;
+  legal?: boolean;
+  /** The paragraph style this level is tied to. */
+  style?: string;
+}
+
+/** One level of a list definition, with its children in the order the schema requires. */
+export function level(at: number, spec: LevelSpec = {}): string {
+  return (
+    `<w:lvl w:ilvl="${at}"><w:start w:val="${spec.start ?? 1}"/><w:numFmt w:val="${spec.format ?? "decimal"}"/>` +
+    (spec.restart !== undefined ? `<w:lvlRestart w:val="${spec.restart}"/>` : "") +
+    (spec.style ? `<w:pStyle w:val="${spec.style}"/>` : "") +
+    (spec.legal ? "<w:isLgl/>" : "") +
+    `<w:suff w:val="space"/><w:lvlText w:val="${esc(spec.text ?? `%${at + 1}.`)}"/><w:lvlJc w:val="left"/></w:lvl>`
+  );
+}
+
+/** A list definition. `extra` goes before the levels (a style link, for instance). */
+export function abstractNum(id: number, levels: readonly string[], extra = ""): string {
+  const kind = levels.length > 1 ? "multilevel" : "singleLevel";
+  return `<w:abstractNum w:abstractNumId="${id}"><w:multiLevelType w:val="${kind}"/>${extra}${levels.join("")}</w:abstractNum>`;
+}
+
+export interface NumOverride {
+  level: number;
+  start?: number;
+  /** A whole replacement for the level, from level(). */
+  replacement?: string;
+}
+
+/** A list instance: a pointer at a definition, with the overrides that restart or reshape it. */
+export function num(id: number, definition: number, overrides: readonly NumOverride[] = []): string {
+  const inner = overrides
+    .map(
+      (o) =>
+        `<w:lvlOverride w:ilvl="${o.level}">${o.start !== undefined ? `<w:startOverride w:val="${o.start}"/>` : ""}${o.replacement ?? ""}</w:lvlOverride>`,
+    )
+    .join("");
+  return `<w:num w:numId="${id}"><w:abstractNumId w:val="${definition}"/>${inner}</w:num>`;
+}
+
+/** The numbering part's content: every definition has to come before every instance. */
+export function numberingPart(definitions: readonly string[], instances: readonly string[]): string {
+  return definitions.join("") + instances.join("");
+}
+
+export interface StyleSpec {
+  id: string;
+  /** "paragraph" unless it is a numbering style. */
+  type?: "paragraph" | "numbering";
+  basedOn?: string;
+  /** The list and level the style carries. */
+  numId?: number;
+  level?: number;
+  isDefault?: boolean;
+}
+
+export function style(spec: StyleSpec): string {
+  const numPr =
+    spec.numId !== undefined || spec.level !== undefined
+      ? `<w:pPr><w:numPr>${spec.level !== undefined ? `<w:ilvl w:val="${spec.level}"/>` : ""}${spec.numId !== undefined ? `<w:numId w:val="${spec.numId}"/>` : ""}</w:numPr></w:pPr>`
+      : "";
+  return (
+    `<w:style w:type="${spec.type ?? "paragraph"}"${spec.isDefault ? ' w:default="1"' : ""} w:styleId="${spec.id}"><w:name w:val="${spec.id}"/>` +
+    (spec.basedOn ? `<w:basedOn w:val="${spec.basedOn}"/>` : "") +
+    `<w:qFormat/>${numPr}</w:style>`
+  );
+}
+
+/** The properties of a paragraph in a list, or in a style. The order is the schema's. */
+export function listProperties(spec: { style?: string; numId?: number; level?: number }): string {
+  return (
+    (spec.style ? `<w:pStyle w:val="${spec.style}"/>` : "") +
+    (spec.numId !== undefined || spec.level !== undefined
+      ? `<w:numPr>${spec.level !== undefined ? `<w:ilvl w:val="${spec.level}"/>` : ""}${spec.numId !== undefined ? `<w:numId w:val="${spec.numId}"/>` : ""}</w:numPr>`
+      : "")
+  );
+}
+
+// ---------------------------------------------------------------------------
 // The package
 // ---------------------------------------------------------------------------
 
 export interface DocxParts {
   /** The XML of the body, without the section properties. */
   body: string;
+  /** The content of word/numbering.xml, from numberingPart(). */
+  numbering?: string;
+  /** How the document's relationships spell the numbering part's address. Defaults to "numbering.xml". */
+  numberingTarget?: string;
+  /** Where the numbering part is stored in the package. Defaults to "word/numbering.xml". */
+  numberingPath?: string;
+  /** The content of word/styles.xml, from style(). */
+  styles?: string;
   /** The text of each header and footer, to check that they are never read as content. */
   headers?: string[];
   footers?: string[];
@@ -80,11 +178,23 @@ export function docx(parts: DocxParts): Uint8Array {
 
   const overrides = [
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+    ...(parts.numbering !== undefined
+      ? [`<Override PartName="/${parts.numberingPath ?? "word/numbering.xml"}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>`]
+      : []),
+    ...(parts.styles !== undefined
+      ? ['<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>']
+      : []),
     ...headers.map((_, i) => `<Override PartName="/word/header${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>`),
     ...footers.map((_, i) => `<Override PartName="/word/footer${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>`),
   ].join("");
 
   const relationships = [
+    ...(parts.numbering !== undefined
+      ? [`<Relationship Id="rIdN1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="${parts.numberingTarget ?? "numbering.xml"}"/>`]
+      : []),
+    ...(parts.styles !== undefined
+      ? ['<Relationship Id="rIdS1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>']
+      : []),
     ...headers.map((_, i) => `<Relationship Id="rIdH${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header${i + 1}.xml"/>`),
     ...footers.map((_, i) => `<Relationship Id="rIdF${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer${i + 1}.xml"/>`),
   ].join("");
@@ -110,6 +220,10 @@ export function docx(parts: DocxParts): Uint8Array {
       "word/_rels/document.xml.rels",
       `${XML_DECLARATION}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationships}</Relationships>`,
     ),
+    ...(parts.numbering !== undefined
+      ? [textEntry(parts.numberingPath ?? "word/numbering.xml", `${XML_DECLARATION}<w:numbering ${NAMESPACES}>${parts.numbering}</w:numbering>`)]
+      : []),
+    ...(parts.styles !== undefined ? [textEntry("word/styles.xml", `${XML_DECLARATION}<w:styles ${NAMESPACES}>${parts.styles}</w:styles>`)] : []),
     ...headers.map((text, i) => textEntry(`word/header${i + 1}.xml`, `${XML_DECLARATION}<w:hdr ${NAMESPACES}>${paragraph(run(text))}</w:hdr>`)),
     ...footers.map((text, i) => textEntry(`word/footer${i + 1}.xml`, `${XML_DECLARATION}<w:ftr ${NAMESPACES}>${paragraph(run(text))}</w:ftr>`)),
     ...(parts.extra ?? []),
@@ -149,6 +263,183 @@ export interface LinesOptions {
    */
   noise?: boolean;
   seed?: number;
+  /**
+   * Let Word number the question numbers and option letters instead of typing
+   * them. The text of every line is the fixture's, less the label Word now shows,
+   * so the document must read back as the fixture does.
+   */
+  numbering?: NumberingOptions;
+}
+
+export interface NumberingOptions {
+  /**
+   * `lists`: a separate one-level list for each kind of label, restarted with a
+   * start override wherever the numbers do not simply carry on.
+   * `multilevel`: one list with the questions at level 1 and the options at levels
+   * 2 and 3, which restart by themselves.
+   * `style`: the same list, but the level and the list come from paragraph styles,
+   * and only a paragraph that has to leave the list says so itself.
+   * A fixture whose labels a multilevel list cannot reproduce (two kinds of
+   * bracket for the options, say) is written as `lists` instead.
+   */
+  mode: "lists" | "multilevel" | "style";
+  /** Leave the question numbers typed and number only the options. */
+  optionsOnly?: boolean;
+  /** In `lists`, start a new instance of the list partway, with no override, to show that the count carries on. */
+  split?: boolean;
+}
+
+/** One line as it will be written: the text after the label, and the list it is in. */
+interface Planned {
+  text: string;
+  numId?: number;
+  level?: number;
+  style?: string;
+}
+
+export interface NumberedLines {
+  lines: Planned[];
+  numbering: string;
+  styles?: string;
+  /** What Word should show before each line: the label, or empty for a line that is not in a list. */
+  labels: string[];
+  /** Whether the fixture could be written in the mode asked for. */
+  mode: NumberingOptions["mode"];
+}
+
+type Kind = "question" | "lower" | "upper";
+interface Item {
+  kind: Kind;
+  delimiter: string;
+  value: number;
+  text: string;
+  label: string;
+}
+
+const LABELLED = /^(\*?)(\d{1,4}|[a-tA-T])([.)])\s+(.*)$/;
+
+function classify(line: string, optionsOnly: boolean): Item | undefined {
+  const m = LABELLED.exec(line);
+  if (!m) return undefined;
+  const [, star = "", label = "", delimiter = ".", rest = ""] = m;
+  if (/\d/.test(label)) {
+    // A star before a number is not a key mark, so the line is left as it was typed.
+    if (star || optionsOnly) return undefined;
+    return { kind: "question", delimiter, value: Number(label), text: rest, label: `${label}${delimiter}` };
+  }
+  const upper = label === label.toUpperCase();
+  return {
+    kind: upper ? "upper" : "lower",
+    delimiter,
+    value: label.toLowerCase().charCodeAt(0) - 96,
+    // The star can only follow the letter once Word makes the letter.
+    text: `${star}${rest}`,
+    label: `${label}${delimiter}`,
+  };
+}
+
+const FORMAT: Record<Kind, string> = { question: "decimal", lower: "lowerLetter", upper: "upperLetter" };
+const LEVEL: Record<Kind, number> = { question: 0, lower: 1, upper: 2 };
+const STYLE: Record<Kind, string> = { question: "QNum", lower: "ONum", upper: "OUpper" };
+
+/** Decide, for each line, whether Word numbers it and in which list, and write the numbering part. */
+export function numberLines(lines: readonly string[], options: NumberingOptions): NumberedLines {
+  const optionsOnly = options.optionsOnly ?? false;
+  const items = lines.map((line) => classify(line, optionsOnly));
+  const labels = items.map((item) => item?.label ?? "");
+
+  // A multilevel list has one bracket per level, so it can only reproduce a
+  // fixture that uses one bracket for each kind of label.
+  const delimiters = new Map<Kind, Set<string>>();
+  for (const item of items) if (item) delimiters.set(item.kind, (delimiters.get(item.kind) ?? new Set<string>()).add(item.delimiter));
+  const uniform = [...delimiters.values()].every((set) => set.size === 1);
+  const mode = options.mode !== "lists" && !uniform ? "lists" : options.mode;
+
+  if (mode === "lists") {
+    const definitions: Array<{ kind: Kind; delimiter: string }> = [];
+    const instances: Array<{ id: number; definition: number; start?: number }> = [];
+    const state = new Map<string, { numId: number; last: number }>();
+    let carried = 0;
+    const planned = items.map((item, i): Planned => {
+      if (!item) return { text: lines[i] as string };
+      let definition = definitions.findIndex((d) => d.kind === item.kind && d.delimiter === item.delimiter) + 1;
+      if (definition === 0) definition = definitions.push({ kind: item.kind, delimiter: item.delimiter });
+      const key = `${item.kind}${item.delimiter}`;
+      const before = state.get(key);
+      const carries = before !== undefined && item.value === before.last + 1;
+      let numId = before?.numId ?? 0;
+      if (!carries || (options.split && ++carried % 3 === 0)) {
+        numId = instances.length + 1;
+        // The first use of a definition at its own start needs no override; anything else does.
+        const needsStart = !carries && !(before === undefined && item.value === 1);
+        instances.push({ id: numId, definition, ...(needsStart ? { start: item.value } : {}) });
+      }
+      state.set(key, { numId, last: item.value });
+      return { text: item.text, numId, level: 0 };
+    });
+    return {
+      lines: planned,
+      mode,
+      labels,
+      numbering: numberingPart(
+        definitions.map((d, k) => abstractNum(k + 1, [level(0, { format: FORMAT[d.kind], text: `%1${d.delimiter}` })])),
+        instances.map((n) => num(n.id, n.definition, n.start !== undefined ? [{ level: 0, start: n.start }] : [])),
+      ),
+    };
+  }
+
+  // One list for the whole document. Question numbers are level 1, lower case
+  // letters level 2 and upper case letters level 3.
+  const bracket = (kind: Kind): string => [...(delimiters.get(kind) ?? [])][0] ?? ".";
+  const useStyles = mode === "style";
+  const instances: Array<{ id: number; start: number; at: number }> = [];
+  const last: Array<number | undefined> = [undefined, undefined, undefined];
+  let current = 1;
+  const planned = items.map((item, i): Planned => {
+    if (!item) return { text: lines[i] as string };
+    const at = LEVEL[item.kind];
+    const expected = (last[at] ?? 0) + 1;
+    let numId = current;
+    if (item.value !== expected) {
+      // The numbers do not carry on, so a new instance restarts this level.
+      numId = 2 + instances.length;
+      instances.push({ id: numId, start: item.value, at });
+      // Styles bring a paragraph back to the first instance; a plain list stays on the new one.
+      if (!useStyles) current = numId;
+    }
+    last[at] = item.value;
+    for (let deeper = at + 1; deeper < last.length; deeper++) last[deeper] = undefined;
+    const viaStyle = useStyles && numId === 1;
+    return {
+      text: item.text,
+      ...(viaStyle ? {} : { numId, level: at }),
+      ...(useStyles ? { style: STYLE[item.kind] } : {}),
+    };
+  });
+
+  const levels = (["question", "lower", "upper"] as const).map((kind) =>
+    level(LEVEL[kind], { format: FORMAT[kind], text: `%${LEVEL[kind] + 1}${bracket(kind)}`, ...(useStyles ? { style: STYLE[kind] } : {}) }),
+  );
+  return {
+    lines: planned,
+    mode,
+    labels,
+    numbering: numberingPart(
+      [abstractNum(1, levels)],
+      [num(1, 1), ...instances.map((n) => num(n.id, 1, [{ level: n.at, start: n.start }]))],
+    ),
+    ...(useStyles
+      ? {
+          styles:
+            style({ id: "Normal", isDefault: true }) +
+            // Word's own form: each level is tied to a style, and each style names its list and level.
+            // (A style that names only the list, for a level other than the first, is not numbered by Word.)
+            style({ id: "QNum", basedOn: "Normal", numId: 1 }) +
+            style({ id: "ONum", basedOn: "Normal", numId: 1, level: 1 }) +
+            style({ id: "OUpper", basedOn: "Normal", numId: 1, level: 2 }),
+        }
+      : {}),
+  };
 }
 
 export const HEADER_TEXT = "RUNNING HEADER MUST NOT BE READ";
@@ -161,8 +452,13 @@ export const DELETED_TEXT = "DELETED WORDS MUST NOT BE READ";
  * mean the same in both.
  */
 export function docxFromLines(lines: readonly string[], options: LinesOptions = {}): Uint8Array {
+  const numbered = options.numbering ? numberLines(lines, options.numbering) : undefined;
+  const planned: Planned[] = numbered?.lines ?? lines.map((text) => ({ text }));
+  const lists = numbered ? { numbering: numbered.numbering, ...(numbered.styles !== undefined ? { styles: numbered.styles } : {}) } : {};
+  const listProps = (p: Planned): string => listProperties({ ...(p.style ? { style: p.style } : {}), ...(p.numId !== undefined ? { numId: p.numId } : {}), ...(p.level !== undefined ? { level: p.level } : {}) });
+
   if (!options.noise) {
-    return docx({ body: lines.map((line) => (line === "" ? paragraph() : paragraph(run(line)))).join("") });
+    return docx({ body: planned.map((p) => paragraph(p.text === "" ? "" : run(p.text), listProps(p))).join(""), ...lists });
   }
 
   const rng = random(options.seed ?? 1);
@@ -187,9 +483,11 @@ export function docxFromLines(lines: readonly string[], options: LinesOptions = 
     }
   };
 
-  const noisyLine = (line: string): string => {
+  const noisyLine = (planning: Planned): string => {
+    const line = planning.text;
     const attributes = `w:rsidR="${rng.hex()}" w:rsidRDefault="${rng.hex()}"`;
-    const properties = rng.chance(0.5) ? '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="left"/>' : "";
+    // The list comes first in the properties: that is where the schema puts it.
+    const properties = listProps(planning) + (rng.chance(0.5) ? '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="left"/>' : "");
     if (line === "") {
       return paragraph(rng.chance(0.5) ? '<w:r><w:rPr><w:noProof/></w:rPr></w:r>' : "", properties, attributes);
     }
@@ -210,5 +508,5 @@ export function docxFromLines(lines: readonly string[], options: LinesOptions = 
     return paragraph(inner, properties, attributes);
   };
 
-  return docx({ body: lines.map(noisyLine).join(""), headers: [HEADER_TEXT], footers: [FOOTER_TEXT] });
+  return docx({ body: planned.map(noisyLine).join(""), headers: [HEADER_TEXT], footers: [FOOTER_TEXT], ...lists });
 }

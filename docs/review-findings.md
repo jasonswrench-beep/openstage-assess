@@ -428,6 +428,31 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found while building Word list numbering (stage 2), not yet fixed
+
+- **Spelled-out and non-Latin number formats are not read.** Word's "One" and
+  "First" (`cardinalText`, `ordinalText`) and the many non-Latin systems are
+  reported as unread and the paragraph is left unnumbered. Word reads them. Add
+  the ones a real bank uses.
+- **A style that Word drops is dropped without a word.** A paragraph whose style
+  asks for a list level that another style holds is not numbered by Word, and is
+  not here. That matches the page, but the author sees a missing number and is not
+  told why. A finding could say that N paragraphs use a style that asks for a level
+  another style holds.
+- **A paragraph mark deleted by a tracked change, with text still in the paragraph.**
+  Word joins that paragraph to the next one. Here it stays a paragraph of its own
+  and keeps its number. A paragraph deleted with all its text is handled.
+- **A numbered paragraph inside a text box does not advance the list.** Text boxes
+  are not read until stage 5.
+- **The numbering reader has been checked against Word on documents this project
+  wrote.** 2,363 paragraphs agree (`npm run check:word`), but nothing a different
+  program wrote has been tried: Google Docs, LibreOffice, a script, a bank that has
+  been through years of editing. The dialect pack and the real chapters are for that.
+- **A star after a letter is a key mark only when Word made the letter, and "(a)"
+  is an option label only then too.** Deliberate, so that nothing read before is read
+  differently. If instructors also type "b. *Mars" or "(a) Mars" by hand, the
+  scanner should accept them in a text file too.
+
 ---
 
 ## The corpus is too small to be an accuracy measurement

@@ -40,6 +40,12 @@ export interface DocxPackage {
   bytes(name: string): Uint8Array | undefined;
   /** A part read as XML, or undefined if it is not there. A part that is not valid XML throws a DocxError that names it. */
   xml(name: string): XmlElement | undefined;
+  /**
+   * The part the main document is related to by a relationship whose type ends in
+   * `/kind`, for example "numbering" or "styles". Undefined when there is none or it
+   * points at a part that is not in the file.
+   */
+  related(kind: string): string | undefined;
 }
 
 const OLE_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
@@ -137,13 +143,46 @@ export function openDocx(input: Uint8Array, limits: DocxLimits = {}): DocxPackag
     );
   }
 
+  const related = (kind: string): string | undefined => {
+    const slash = mainDocument.lastIndexOf("/");
+    const folder = slash === -1 ? "" : mainDocument.slice(0, slash + 1);
+    const rels = readXml(`${folder}_rels/${mainDocument.slice(slash + 1)}.rels`);
+    if (!rels) return undefined;
+    for (const rel of elements(rels, "Relationship")) {
+      const target = rel.attrs["Target"];
+      if (!target || rel.attrs["TargetMode"] === "External" || !(rel.attrs["Type"] ?? "").endsWith(`/${kind}`)) continue;
+      const name = resolveTarget(folder, target);
+      const stored = name === undefined ? undefined : lookup(name);
+      if (stored !== undefined) return stored;
+    }
+    return undefined;
+  };
+
   return {
     names: [...parts.keys()],
     mainDocument,
     has: (name) => lookup(name) !== undefined,
     bytes: read,
     xml: readXml,
+    related,
   };
+}
+
+/** A relationship target as a part name: absolute, or relative to the folder of the part that holds it. */
+function resolveTarget(folder: string, target: string): string | undefined {
+  const segments = (target.startsWith("/") ? target.slice(1) : folder + target).split("/");
+  const resolved: string[] = [];
+  for (const segment of segments) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      if (resolved.pop() === undefined) return undefined; // climbs out of the package
+    } else resolved.push(segment);
+  }
+  try {
+    return safeEntryName(resolved.join("/"));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Where the package says the document body is, falling back to the usual place. */

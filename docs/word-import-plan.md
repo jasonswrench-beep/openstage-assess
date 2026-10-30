@@ -14,15 +14,22 @@ so is worse than a miss.
 
 ## Where it stands
 
-The first slice (stages 0 and 1) was built on 28 October 2026. A `.docx` goes in,
-questions come out, and the real harness scores them. `openassess import
-file.docx` works, and so does exporting what it imports to the Author spreadsheet.
+The first slice (stages 0 and 1) was built on 28 October 2026, and stage 2 (Word's
+own list numbering) on 29 October. A `.docx` goes in, questions come out, and the
+real harness scores them. `openassess import file.docx` works, and so does
+exporting what it imports to the Author spreadsheet.
 
 **Built:** the XML reader (`import/docx/xml.ts`), zip entry names that are checked
 on read and write, the package reader (`package.ts`), the paragraph and table walker
 (`document.ts`), the importer (`word.ts`, profile `word-docx`), an importer registry
 shared by the harness and the command line, the scanner reading list labels, and
 the test-side Word writer (`test/support/docx-writer.ts`).
+
+**Stage 2 built:** `import/docx/numbering.ts` works out the label that Word's lists
+put in front of a paragraph, from `numbering.xml`, the paragraph's own list
+properties and its style. A question numbered "1." and an option lettered "a)" by
+Word's list buttons now reach the scanner as `listLabel`, exactly as if typed.
+`test/tools/word-numbering-check.ts` asks Word itself what it shows (see below).
 
 **Measured:**
 
@@ -41,6 +48,23 @@ the test-side Word writer (`test/support/docx-writer.ts`).
   an entry that inflates far past its declared size, parts that differ only in
   case, an older `.doc` (or a password-protected file), and a PDF or RTF.
   Eight deliberate breaks of the new code were each caught by a test.
+- Stage 2: the 20 fixtures, numbered by Word's lists, come back identical to the
+  text version and score 100 percent, in five forms (a list for each kind of label;
+  the same with the list split into instances that carry on from each other; the
+  options numbered and the questions typed; one multilevel list; the same list with
+  the levels coming from paragraph styles), each also with the noise. 180 generated
+  files of lines in no sensible order read the same as text when numbered by Word.
+  500 questions in each form import in under a quarter of a second.
+- Stage 2, against Word itself: 151 documents and 2,363 paragraphs, each asked of
+  Word through `test/tools/word-numbering-check.ts`, and the reader agrees on all of
+  them except 3 where it gives no number on purpose (a format it does not know).
+  This is the strongest evidence in this plan so far, because Word is the judge and
+  not our own writer. It found five places where the first reading of the
+  specification was wrong (below), each now a test.
+- Thirty-two deliberate breaks of the numbering code and the code that finds and
+  joins its labels: all caught by a test in the last round. Four survived an earlier
+  round (an override read as once per instance and not once per level, and three in
+  how the numbering part is found) and each got a test of its own.
 
 **Decided while building:**
 
@@ -57,12 +81,57 @@ the test-side Word writer (`test/support/docx-writer.ts`).
 - Part names are matched without regard to case, as the format says, and a
   package with two parts that differ only in case is refused.
 - An XML part that declares a document type is refused outright.
+- A list the reader cannot work out is reported and left unnumbered, never guessed.
+  An Answers list matches a key to a question by its number, so a number that is off
+  by one would point a key at the wrong question without a word. The causes are a
+  list the file does not define, a level it does not define, a number format the
+  reader does not know (Word's spelled-out numbers, for instance), a restart that
+  Word itself shows nothing for, and a numbering part that cannot be read.
+- Bullets show no label and are not a finding: a bullet says "this is a list item"
+  and nothing else.
+- A paragraph whose mark was deleted by a tracked change, and whose text went with
+  it, is gone once the changes are accepted, and so is its number. Leaving it would
+  put every number after it out by one. (A paragraph whose mark is deleted but whose
+  text survives joins the next paragraph in Word; here it stays a paragraph of its own.)
+- Word lets an author who letters the options automatically put the key's asterisk
+  only after the letter ("b. *Mars"). An asterisk at the start of an item whose
+  label is an option letter is read as the mark and moved where the format has it.
+  A typed "b. *Mars" is still not a mark, so nothing read before is read differently.
+- Word writes a label as "(a)" as readily as "a)". The opening bracket is dropped,
+  because the Standard Format knows only the second.
 
-**Not built yet:** Word's own list numbering (stage 2), answer marks made with
-bold or highlight and `Answer:` lines (stage 3), table layouts as questions (stage
-4), text boxes and alternate content (rest of stage 5), pictures with their bytes
-and alt text (stage 6), equations (stage 7), and everything that needs real Word
-files (stage 8). The dialect pack is still wanted before stage 3.
+**What asking Word taught us, which the specification did not say:**
+
+- A style that names a list holds a level, and Word lets only one style hold each.
+  The holder is the style the level is tied to, and failing that the first style in
+  the styles part to ask for it. Any other style that asks for the same level is not
+  numbered at all, however its paragraphs are set, and Word shows nothing for them. A
+  style that names a list and no level asks for the first level, even when another
+  level is tied to it; the tie does not move its paragraphs to that level.
+- A skipped level counts as used once, so after an item at level 2 the next item of
+  level 1 is the second. Counting from the start would have been off by one.
+- Legal style turns the level's own number into digits as well as the levels it names.
+- A list that links to a numbering style takes that style's levels and counts on its
+  own. It does not carry on from the list it links to.
+- A restart set to a level that is not above it makes Word show nothing for that
+  level. The reader reports it and gives no number.
+- Instances of one definition carry on from each other, and an instance's start
+  override applies the first time that instance reaches that level, not the first
+  time the instance is used.
+
+**Not built yet:** answer marks made with bold or highlight and `Answer:` lines
+(stage 3), table layouts as questions (stage 4), text boxes and alternate content
+(rest of stage 5), pictures with their bytes and alt text (stage 6), equations
+(stage 7), and everything that needs real Word files (stage 8). The dialect pack is
+still wanted before stage 3. Word's spelled-out number formats ("One", "First") and
+the many non-Latin ones are not read yet; a list in one is reported, not guessed.
+
+**Asking Word itself.** `npm run check:word --workspace packages/assess` builds the
+documents, starts a separate hidden Word, reads the label Word shows on every
+paragraph and compares. It needs Windows with Word, it only ever closes the Word it
+started, and it is not part of `npm test`. Run it after any change to `numbering.ts`.
+It is the model for the later stages: where Word can be asked, ask it, and keep the
+questions.
 
 ## The shape
 
@@ -230,7 +299,9 @@ readable error. None may hang, crash or write outside its folder.
   the real chapters exist for this, and they come before stage 8 declares success.
 - **Auto-numbering has many edge cases.** Lists restart, continue, share
   definitions and take their numbering from styles. The differential styles cover
-  the common shapes and the real files find the rest.
+  the common shapes, Word itself has been asked about 2,363 paragraphs, and the
+  real files will find the rest. What remains is documents that other programs
+  (Google Docs, LibreOffice, a script) wrote in their own way.
 - **Reading a key from formatting is a guess in disguise.** The per-document
   convention, the single confirmation and the flag on every outlier are there so
   that it never becomes a silent one.

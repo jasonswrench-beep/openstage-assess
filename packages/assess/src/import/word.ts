@@ -17,8 +17,9 @@
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import { documentToBlocks, type DocumentStats } from "./docx/document.ts";
+import { readNumbering } from "./docx/numbering.ts";
 import { DocxError, openDocx, type DocxLimits, type DocxPackage } from "./docx/package.ts";
-import { hasText } from "./docx/xml.ts";
+import { hasText, type XmlElement } from "./docx/xml.ts";
 import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult, SourceBlock } from "./types.ts";
 
@@ -41,8 +42,45 @@ function headersAndFootersWithText(pkg: DocxPackage): number {
   return count;
 }
 
-function findingsFrom(stats: DocumentStats, headersAndFooters: number): Finding[] {
+/**
+ * A part the document may or may not have, found by the document's own
+ * relationships and failing that by its usual name. A part that is there and
+ * cannot be read is reported and not fatal: the body of the document is still worth reading.
+ */
+function optionalPart(pkg: DocxPackage, kind: string, usual: string): { root?: XmlElement; damaged?: string } {
+  const name = pkg.related(kind) ?? (pkg.has(usual) ? usual : undefined);
+  if (name === undefined) return {};
+  try {
+    const root = pkg.xml(name);
+    return root ? { root } : {};
+  } catch (error) {
+    if (error instanceof DocxError) return { damaged: error.message };
+    throw error;
+  }
+}
+
+function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDamaged: string | undefined): Finding[] {
   const found: Finding[] = [];
+
+  for (const [reason, count] of Object.entries(stats.unreadLists)) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `${plural(count, "paragraph is", "paragraphs are")} in a numbered list whose number could not be worked out, because ${reason}. ` +
+          `${count === 1 ? "It is" : "They are"} read without a number, and nothing was guessed.`,
+      ),
+    );
+  }
+  if (stylesDamaged !== undefined) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `The styles of this file could not be read, so a number that comes from a paragraph style may be missing. ${stylesDamaged}`,
+      ),
+    );
+  }
 
   if (stats.trackedInsertions + stats.trackedDeletions > 0) {
     found.push(
@@ -111,8 +149,11 @@ export function docxToBlocks(bytes: Uint8Array, limits?: DocxLimits): { blocks: 
   const pkg = openDocx(bytes, limits);
   const root = pkg.xml(pkg.mainDocument);
   if (!root) throw new DocxError(`The main document part "${pkg.mainDocument}" could not be read.`);
-  const { blocks, stats } = documentToBlocks(root);
-  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg)) };
+  const numberingPart = optionalPart(pkg, "numbering", "word/numbering.xml");
+  const stylesPart = optionalPart(pkg, "styles", "word/styles.xml");
+  const numbering = readNumbering({ numbering: numberingPart.root, styles: stylesPart.root, numberingDamaged: numberingPart.damaged });
+  const { blocks, stats } = documentToBlocks(root, numbering);
+  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged) };
 }
 
 /** An importer whose bytes entry point is always there, which is what a caller of this one relies on. */

@@ -28,7 +28,8 @@
     "assess": "node --experimental-strip-types --no-warnings src/cli/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts",
+    "check:word": "node --experimental-strip-types --no-warnings test/tools/word-numbering-check.ts"
   },
   "dependencies": {},
   "devDependencies": {
