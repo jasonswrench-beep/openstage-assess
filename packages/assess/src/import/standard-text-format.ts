@@ -53,8 +53,17 @@ function propertiesOf(run: SourceRun): string[] {
   return found;
 }
 
+/**
+ * A property carried by an option's letter alone, with the words after it plain, is
+ * named with this ending. Some banks mark the right option by making only its letter
+ * bold and underlined, so a mark on the words and a mark on the letter are different
+ * conventions, and a bold letter on every option says nothing.
+ */
+const ON_LETTER = "@letter";
+
 /** The phrase a property goes by in a message. */
 export function describeMark(property: string): string {
+  if (property.endsWith(ON_LETTER)) return `${describeMark(property.slice(0, -ON_LETTER.length))} on the option letter`;
   if (property === "bold") return "bold";
   if (property === "italic") return "italics";
   if (property === "underline") return "underlining";
@@ -91,6 +100,74 @@ function carried(blocks: readonly SourceBlock[], option: RawQuestion["options"][
   return shared;
 }
 
+/** Every property that any of an option's own words carries, however little of them. */
+function anyOnWords(blocks: readonly SourceBlock[], option: RawQuestion["options"][number]): Set<string> {
+  const found = new Set<string>();
+  option.textBlocks.forEach((index, k) => {
+    const block = blocks[index];
+    if (!block?.runs) return;
+    let position = 0;
+    const from = k === 0 ? option.textOffset : 0;
+    for (const run of block.runs) {
+      const text = run.text.slice(Math.max(0, from - position));
+      position += run.text.length;
+      if (text.trim().length === 0) continue;
+      for (const p of propertiesOf(run)) found.add(p);
+    }
+  });
+  return found;
+}
+
+/**
+ * The properties that all of an option's letter carries, from the start of its line to
+ * where its words begin, named as marks on the letter. A property counts only if none
+ * of the option's words has it, so that the letter is the whole of the mark: an option
+ * that is bold from its letter to its last word is marked by its words, and one that
+ * begins with a bold term, letter included, has emphasis and not a key. Undefined when
+ * there is no letter text to judge.
+ */
+function carriedByLetter(blocks: readonly SourceBlock[], option: RawQuestion["options"][number]): Set<string> | undefined {
+  const block = blocks[option.firstBlock];
+  if (!block?.runs) return undefined;
+  let shared: Set<string> | undefined;
+  let position = 0;
+  for (const run of block.runs) {
+    const text = run.text.slice(0, Math.max(0, option.textOffset - position));
+    position += run.text.length;
+    if (text.trim().length === 0) continue;
+    const here = propertiesOf(run).map((p) => p + ON_LETTER);
+    shared = shared === undefined ? new Set(here) : new Set(here.filter((p) => shared?.has(p)));
+  }
+  if (shared === undefined) return undefined;
+  const onWords = anyOnWords(blocks, option);
+  return new Set([...shared].filter((p) => !onWords.has(p.slice(0, -ON_LETTER.length))));
+}
+
+/** Everything formatting says about one option: how its words look, and how its letter does. */
+function signatureOf(blocks: readonly SourceBlock[], option: RawQuestion["options"][number]): Set<string> | undefined {
+  const words = carried(blocks, option);
+  const letter = carriedByLetter(blocks, option);
+  if (words === undefined && letter === undefined) return undefined;
+  return new Set([...(words ?? []), ...(letter ?? [])]);
+}
+
+/** A name with its particular value taken off ("color:FF0000" becomes "color"), keeping what says it is on the letter. */
+function general(property: string): string {
+  const onLetter = property.endsWith(ON_LETTER);
+  const base = onLetter ? property.slice(0, -ON_LETTER.length) : property;
+  return (base.includes(":") ? base.slice(0, base.indexOf(":")) : base) + (onLetter ? ON_LETTER : "");
+}
+
+/** Where a general property and a particular one go together, the general one is enough. */
+const reduced = (names: readonly string[]): string[] => names.filter((p) => !(general(p) !== p && names.includes(general(p))));
+
+/** Marks as a phrase: "bold and underlining on the option letter". */
+function describeAll(names: readonly string[]): string {
+  const letters = names.filter((p) => p.endsWith(ON_LETTER)).map((p) => describeMark(p.slice(0, -ON_LETTER.length)));
+  const words = names.filter((p) => !p.endsWith(ON_LETTER)).map(describeMark);
+  return [...words, ...(letters.length > 0 ? [`${letters.join(" and ")} on the option letter`] : [])].join(" and ");
+}
+
 export interface FormatKeyOutcome {
   /** Findings about the file as a whole. */
   fileFindings: Finding[];
@@ -115,7 +192,7 @@ export function applyFormattingKey(blocks: readonly SourceBlock[], questions: re
   const signatures = new Map<RawQuestion, Array<Set<string> | undefined>>();
   const candidates = new Set<string>();
   for (const q of eligible) {
-    const signature = q.options.map((o) => carried(blocks, o));
+    const signature = q.options.map((o) => signatureOf(blocks, o));
     signatures.set(q, signature);
     for (const s of signature) for (const p of s ?? []) candidates.add(p);
   }
@@ -134,9 +211,12 @@ export function applyFormattingKey(blocks: readonly SourceBlock[], questions: re
   const fileFindings: Finding[] = [];
   const keyless = eligible.filter((q) => !hasWordedKey(q));
 
+  /** The marks that, in a file that greys out the wrong options, fall on those options and say the same thing from the other side. */
+  let dimmed: string[] = [];
   let convention: string[] | undefined;
   if (keyMark !== "auto") {
-    convention = [keyMark];
+    // "label:bold" is how a caller asks for a mark on the letter alone.
+    convention = [keyMark.startsWith("label:") ? keyMark.slice(6) + ON_LETTER : keyMark];
   } else {
     const qualifying = [...candidates].filter((p) => {
       const n = shows.get(p) ?? 0;
@@ -149,10 +229,35 @@ export function applyFormattingKey(blocks: readonly SourceBlock[], questions: re
       const pattern = eligible.map((q) => markedBy(q, p).join(",")).join("|");
       groups.set(pattern, [...(groups.get(pattern) ?? []), p]);
     }
+    // Two groups that split every question into two halves between them, such as bold
+    // letters on the right option and grey letters on all the others, are one
+    // convention seen from both sides. The side that picks out fewer options in most
+    // questions is the key: a file that greys out the wrong answers is not marking the
+    // wrong ones as right. A tie, which is what a true or false question always is,
+    // settles nothing.
+    const sides = ((): { key: string[]; rest: string[] } | undefined => {
+      const both = [...groups.values()];
+      if (both.length !== 2) return undefined;
+      const [a, b] = both as [string[], string[]];
+      const sizes: Array<[number, number]> = [];
+      for (const q of eligible) {
+        const x = markedBy(q, a[0] as string);
+        const y = markedBy(q, b[0] as string);
+        const halves = x.length + y.length === q.options.length && x.every((i) => !y.includes(i));
+        if (!(x.length === 0 && y.length === 0) && !halves) return undefined;
+        if (x.length > 0) sizes.push([x.length, y.length]);
+      }
+      const fewerA = sizes.filter(([x, y]) => x < y).length;
+      const fewerB = sizes.filter(([x, y]) => y < x).length;
+      if (fewerA === fewerB) return undefined;
+      return fewerA > fewerB ? { key: a, rest: b } : { key: b, rest: a };
+    })();
+
     if (groups.size === 1) {
-      const names = [...groups.values()][0] as string[];
-      // Where a general property and a particular one go together, the general one is enough.
-      convention = names.filter((p) => !(p.includes(":") && names.includes(p.slice(0, p.indexOf(":")))));
+      convention = reduced([...groups.values()][0] as string[]);
+    } else if (sides) {
+      convention = reduced(sides.key);
+      dimmed = reduced(sides.rest);
     } else if (groups.size > 1) {
       const named = [...groups.values()].map((g) => describeMark(g[0] as string));
       fileFindings.push(
@@ -178,7 +283,7 @@ export function applyFormattingKey(blocks: readonly SourceBlock[], questions: re
 
   if (!convention || convention.length === 0) return { fileFindings };
 
-  const name = convention.map(describeMark).join(" and ");
+  const name = describeAll(convention);
   // "Bold and underlining set", but "bold sets".
   const several = convention.length > 1;
   let applied = 0;
@@ -188,6 +293,9 @@ export function applyFormattingKey(blocks: readonly SourceBlock[], questions: re
     const lists = convention.map((p) => markedBy(q, p));
     const first = lists[0] as number[];
     const agree = lists.every((l) => l.join(",") === first.join(","));
+    // The options that are greyed out in a file that does so need no check here. The
+    // two sides were only taken as one convention because, in every question, they
+    // split the options between them, so what one picks the other leaves.
     const marked = agree && first.length > 0 && first.length < q.options.length ? first : [];
 
     q.formatConvention = name;
@@ -220,6 +328,7 @@ export function applyFormattingKey(blocks: readonly SourceBlock[], questions: re
         FindingCode.FormattingKeyUsed,
         "warn",
         `${sentence(name)} ${keyMark === "auto" ? (several ? "set the correct answer apart" : "sets the correct answer apart") : several ? "were taken to mark the correct answer" : "was taken to mark the correct answer"} in ${showing} of ${eligible.length} choice questions, so it was read as the answer key for the ${applied} that had no other key.` +
+          (dimmed.length > 0 ? ` The other options have ${describeAll(dimmed)}, which agrees.` : "") +
           (broken > 0 ? ` ${broken} ${broken === 1 ? "question does" : "questions do"} not follow it and ${broken === 1 ? "is" : "are"} flagged.` : "") +
           ` Check that ${name} ${several ? "do" : "does"} mean the correct answer in this file.`,
       ),

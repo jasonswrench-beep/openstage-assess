@@ -43,6 +43,8 @@ export const EXPECTED: Record<string, Expectation> = {
   "E-merged-title-row": { questions: [PLANETS], layout: "labelled rows" },
   "F-typed-bold-and-answer-line": { questions: [PLANETS], labels: true },
   "G-numbered-and-lettered-lists": { questions: [PLANETS, STARS], labels: true },
+  // Two questions are too few for the file to show its own habit, so the mark is named.
+  "H-nested-option-tables": { questions: [PLANETS, STARS], keyMark: "label:bold", layout: "a number in one cell and the question in the next" },
 };
 
 /**

@@ -283,9 +283,29 @@ describe("what counts as a mark", () => {
     assert.equal(result.fileFindings.some((f) => f.code === FindingCode.FormattingKeyUsed), false);
   });
 
-  test("a bold label alone is not a mark", () => {
+  // This used to say that a bold letter alone is nothing, on the reasoning that a bold
+  // label says nothing about the option. A real publisher's key marks the right option
+  // by its letter alone, so it is a mark when it is the whole of one, and the report says
+  // that it is the letter. Emphasis is still not a mark: see the next test.
+  test("a bold letter alone is a mark when it sets one option apart in most questions, and the file says so", () => {
     const body = Array.from({ length: 6 }, (_, k) =>
       paragraph(run(`${k + 1}. Pick one.`)) + paragraph(run("a. ", BOLD) + run("One")) + paragraph(run("b. Two")) + paragraph(),
+    ).join("");
+    const result = parseWord(docx({ body }));
+    assert.deepEqual(keys(result), Array(6).fill("a"));
+    assert.match(fileMessages(result), /Bold on the option letter sets the correct answer apart/);
+  });
+
+  test("a bold letter on every option says nothing", () => {
+    const body = Array.from({ length: 6 }, (_, k) =>
+      paragraph(run(`${k + 1}. Pick one.`)) + paragraph(run("a. ", BOLD) + run("One")) + paragraph(run("b. ", BOLD) + run("Two")) + paragraph(),
+    ).join("");
+    assert.deepEqual(keys(parseWord(docx({ body }))), Array(6).fill(""));
+  });
+
+  test("a bold term at the start of an option, its letter included, is emphasis and not a letter mark", () => {
+    const body = Array.from({ length: 6 }, (_, k) =>
+      paragraph(run(`${k + 1}. Pick one.`)) + paragraph(run("a. ", BOLD) + run("Term", BOLD) + run(" and more")) + paragraph(run("b. Two")) + paragraph(),
     ).join("");
     assert.deepEqual(keys(parseWord(docx({ body }))), Array(6).fill(""));
   });

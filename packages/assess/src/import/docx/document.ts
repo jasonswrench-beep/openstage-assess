@@ -118,24 +118,27 @@ function markDeleted(properties: XmlElement | undefined): boolean {
   return mark !== undefined && (first(mark, "w:del") !== undefined || first(mark, "w:moveFrom") !== undefined);
 }
 
+/** Whether anything inside the element is a table. */
+const holdsTable = (element: XmlElement): boolean =>
+  element.children.some((child) => typeof child !== "string" && (child.name === "w:tbl" || holdsTable(child)));
+
 /**
- * Whether a table can be read as a layout at all: no table inside a cell, no cell
- * merged down, and no row that starts late or ends early. A cell read under the wrong
- * column is a wrong answer. A cell merged across is allowed through and marked, since
- * a line of text spread over the width of a table is ordinary, and each layout says
- * whether it can live with one.
+ * Whether a table can be read as a layout at all: no cell merged down, and no row that
+ * starts late or ends early. A cell read under the wrong column is a wrong answer. A
+ * cell merged across is allowed through and marked, since a line of text spread over
+ * the width of a table is ordinary, and each layout says whether it can live with one.
+ * A cell that holds a table is allowed through and marked in the same way, and only the
+ * layout made for it reads one.
  */
 function isSimple(rows: XmlElement[]): boolean {
   const merged = (cell: XmlElement): boolean => {
     const properties = first(cell, "w:tcPr");
     return properties !== undefined && first(properties, "w:vMerge") !== undefined;
   };
-  const holdsTable = (element: XmlElement): boolean =>
-    element.children.some((child) => typeof child !== "string" && (child.name === "w:tbl" || holdsTable(child)));
   return rows.every((tr) => {
     const properties = first(tr, "w:trPr");
     if (properties && (first(properties, "w:gridBefore") || first(properties, "w:gridAfter"))) return false;
-    return elements(tr, "w:tc").every((tc) => !merged(tc) && !holdsTable(tc));
+    return elements(tr, "w:tc").every((tc) => !merged(tc));
   });
 }
 
@@ -337,13 +340,16 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     const cells: Cell[][] = rows.map((tr, row) =>
       elements(tr, "w:tc").map((tc, cell) => {
         const lines: TableLine[] = [];
+        // A table inside this cell gathers its own cells the same way, and has to give
+        // this cell's lines back when it is done, so what was being collected is kept.
+        const outer = collecting;
         collecting = lines;
         container(tc, { table: number, row, cell });
-        collecting = undefined;
+        collecting = outer;
         const properties = first(tc, "w:tcPr");
         const span = properties ? first(properties, "w:gridSpan")?.attrs["w:val"] : undefined;
         const across = (span !== undefined && Number(span) > 1) || (properties !== undefined && first(properties, "w:hMerge") !== undefined);
-        return { lines, ...(across ? { merged: true } : {}) };
+        return { lines, ...(across ? { merged: true } : {}), ...(holdsTable(tc) ? { nested: true } : {}) };
       }),
     );
 

@@ -45,7 +45,8 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       A Word file may mark the correct option by formatting it. The file is
       read to see whether it does, and the report says what was decided.
       --key-mark overrides that: off, bold, italic, underline, highlight,
-      highlight:yellow, color, or color:FF0000.
+      highlight:yellow, color, or color:FF0000. Put label: in front (label:bold)
+      for a mark on the option letter alone, as some publishers use.
 
   openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}] [--out <folder>]
       Run the destination check for the question spreadsheet that OpenStage

@@ -24,11 +24,15 @@
  *                the option correct.
  *   Answer key.  Two columns, a question number and its answer, with or without a
  *                header. It becomes an Answers list.
+ *   Numbered cells. Two columns: the number, and in the other cell everything else of
+ *                the question, which may include a table for each option.
  *
- * A table with another table inside it, or cells merged down, is never read as a
- * layout, and a grid or an answer key with a cell merged across is not either: what
- * a merged cell means is not knowable here. Labelled rows allow a cell spread across
- * a whole row, which is how Word writes a line of text in a table of two columns.
+ * Cells merged down are never read as a layout, and a grid or an answer key with a
+ * cell merged across is not either: what a merged cell means is not knowable here.
+ * Labelled rows allow a cell spread across a whole row, which is how Word writes a
+ * line of text in a table of two columns. A table with another table inside a cell is
+ * read only as numbered cells, the one layout whose second cell is meant to hold one;
+ * the others would have read the nested lines under the wrong column.
  */
 
 import { KEY_VALUE, METADATA_LABELS, NOTE_LABELS, GENERAL_FEEDBACK_LABELS } from "../standard-text-scan.ts";
@@ -41,9 +45,16 @@ export interface Cell {
   lines: Line[];
   /** The cell spans more than one column. */
   merged?: boolean;
+  /**
+   * The cell holds a table of its own, whose lines are among this cell's lines. Only
+   * the layout built for that (a question's options in tables inside the question's
+   * cell) reads such a cell. The others never did, and a cell read under the wrong
+   * column is a wrong answer, so they still refuse it.
+   */
+  nested?: boolean;
 }
 
-export type Layout = "grid" | "labelled rows" | "answer key";
+export type Layout = "grid" | "labelled rows" | "answer key" | "numbered cells";
 
 export interface TableReading {
   layout?: Layout;
@@ -320,14 +331,80 @@ function readKey(rows: Cell[][], context: Context): Line[] | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// Numbered cells
+// ---------------------------------------------------------------------------
+
+const NUMBER_CELL = /^\d{1,4}\s*[.)]$/;
+/** "(p. 230)", "(p. 238, 239)", "pp. 12-14", "page 12": where in the book a question comes from. */
+const PAGE_REF = /^\(?\s*(?:pp?|pages?)\.?\s*(\d+(?:\s*[-–—,&]\s*\d+)*)\s*\)?$/i;
+
+/**
+ * Each row is a question: its number in the first cell, and in the second everything
+ * else, in order. This is how publishers' test banks are laid out when each question is
+ * a table of its own, and each option is a table of its own inside the second cell, so
+ * that the letter stays with the words. What is in the second cell is already the lines
+ * of a question, blank lines included, because the blank lines are what end an option,
+ * so it is passed on as it stands.
+ *
+ * A line below the number in the first cell that says where in the book the question
+ * is, "(p. 230)", becomes a Page line, which the scanner reads like any other label.
+ * Any other line there is kept after the question, where the scanner reports what it
+ * finds. The labelled-rows layout refuses a number cell with anything under the number,
+ * and refuses a cell with a table in it, which is why this one exists.
+ */
+function readNumbered(rows: Cell[][], context: Context): Line[] | undefined {
+  if (rows.length === 0) return undefined;
+  const lines: Line[] = [];
+  for (const row of rows) {
+    if (row.length !== 2 || row.some((c) => c.merged)) return undefined;
+    const [numberCell, contentCell] = row as [Cell, Cell];
+    if (numberCell.nested) return undefined;
+
+    const shown = numberCell.lines.filter((l) => textOf(l).trim() !== "");
+    const label = shown[0];
+    if (!label || !NUMBER_CELL.test(textOf(label).trim())) return undefined;
+
+    // Blank lines inside the content are structure and stay. Those before the first
+    // words, and after the last, are padding a cell has and are not.
+    const content = [...contentCell.lines];
+    while (content.length > 0 && textOf(content[0] as Line).trim() === "") content.shift();
+    while (content.length > 0 && textOf(content[content.length - 1] as Line).trim() === "") content.pop();
+    const stem = content[0];
+    if (!stem) return undefined;
+
+    const number = /\d+/.exec(textOf(label)) as RegExpExecArray;
+    lines.push(join([made(context, `${number[0]}.`, numberCell), stem], contentCell));
+    lines.push(...content.slice(1));
+
+    const pages: string[] = [];
+    const extras: Line[] = [];
+    for (const line of shown.slice(1)) {
+      const page = PAGE_REF.exec(textOf(line).trim());
+      if (page) pages.push((page[1] as string).replace(/\s+/g, " "));
+      else extras.push(line);
+    }
+    if (pages.length > 0) lines.push(made(context, `Page: ${pages.join("; ")}`, numberCell));
+    // Whatever else was under the number is not part of the question, and a blank line
+    // before it keeps it from being read as more of the stem or the last option.
+    if (extras.length > 0) lines.push(made(context, "", numberCell), ...extras);
+    lines.push(made(context, "", numberCell));
+  }
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
 
 /** Read a table as one of the layouts, or say that it is none of them. */
 export function readTable(rows: Cell[][], context: Context): TableReading {
-  const attempts: Array<[Layout, (rows: Cell[][], context: Context) => Line[] | undefined]> = [
-    ["grid", readGrid],
-    ["answer key", readKey],
-    ["labelled rows", readLabelled],
-  ];
+  const nested = rows.some((row) => row.some((c) => c.nested));
+  const attempts: Array<[Layout, (rows: Cell[][], context: Context) => Line[] | undefined]> = nested
+    ? [["numbered cells", readNumbered]]
+    : [
+        ["grid", readGrid],
+        ["answer key", readKey],
+        ["labelled rows", readLabelled],
+        ["numbered cells", readNumbered],
+      ];
   for (const [layout, read] of attempts) {
     const lines = read(rows, context);
     if (lines) return { layout, lines };

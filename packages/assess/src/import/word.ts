@@ -100,7 +100,7 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
       finding(
         FindingCode.TableLayout,
         "info",
-        `${plural(total, "table was", "tables were")} read as questions: ${layouts.map(([layout, n]) => `${n} as ${layout === "grid" ? "a grid with a header row" : layout === "answer key" ? "an answer key" : "labelled rows"}`).join(", ")}.`,
+        `${plural(total, "table was", "tables were")} read as questions: ${layouts.map(([layout, n]) => `${n} as ${layout === "grid" ? "a grid with a header row" : layout === "answer key" ? "an answer key" : layout === "numbered cells" ? "a number in one cell and the question in the next" : "labelled rows"}`).join(", ")}.`,
       ),
     );
   }
@@ -109,7 +109,7 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
       finding(
         FindingCode.TableLayout,
         "info",
-        `${plural(stats.tablesPlain, "table was", "tables were")} read cell by cell, in order, as plain text. A table is read as questions when it is a grid headed Question and A, B, C, a table of rows that begin with a label such as 1. or b., or an answer key, and has no merged cells and no table inside it.`,
+        `${plural(stats.tablesPlain, "table was", "tables were")} read cell by cell, in order, as plain text. A table is read as questions when it is a grid headed Question and A, B, C, a table of rows that begin with a label such as 1. or b., an answer key, or a number in one cell with the question in the next, and has no cells merged down.`,
       ),
     );
   }

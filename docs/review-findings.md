@@ -463,13 +463,56 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found while reading the first real publisher file (stage 4b), not yet fixed
+
+The first real chapter went from 0 of 60 to 60 of 60, and the following are what that does
+not show or what was decided on one file's evidence.
+
+- **One chapter is not three.** The 95 percent target is on three real chapters. One has been
+  measured, from one publisher, laid out one way. The rules above were each written for a piece of
+  that file, and the next publisher's file will use another. The chapter is kept only on the
+  machine, so the measurement cannot be rerun from a clone.
+- **The copy with the answers is found by a heading that ends in "Answer Key".** A bank whose
+  answers follow a heading such as "Answers", "Instructor Version" or "Solutions", or sit in
+  a separate file, is not recognised, and a fill in the blank or essay answer under its question
+  is then read as more of the stem, as it always was. The questions fail honestly (no
+  key), and nothing is made up, but they fail. A copy with the answers that comes
+  before the copy for students is also not folded: once the heading is seen, everything
+  after it is taken as the copy with the answers.
+- **A fill in the blank or essay answer is read from its position and the heading, not
+  from how it looks.** In the real file the answer is bold and underlined, and nothing checks
+  that. A second paragraph of a stem under an answer key heading would be taken as the answer. The file
+  says how many answers were read this way, but only as information.
+- **Short Answer is read as an essay with a model answer.** A paragraph cannot be matched exactly,
+  so it is not an auto-graded short answer in the model's sense. If a bank means the short
+  answers to be exact, the instructor would need `Type: S`. A decision to confirm.
+- **Several blanks are split only on semicolons**, and only when the parts are as many as the
+  blanks. "one or two", "one, two" and a different count stay as one blank and are flagged.
+- **The model turns an em dash into two hyphens** (`normalizeCharacters`, from phase 1), so
+  a stem that has an em dash in it comes out with two hyphens in its place. It was found
+  because the real file has em dashes and a comparison disagreed. It is the model's rule and
+  not this stage's, and an em dash is punctuation, not noise, so it is worth deciding whether
+  it should stay.
+- **The greyed-out letters are taken to agree, not asked.** The side that picks out fewer options
+  in more questions is the key. That is right for bold on one and grey on the rest, and it would
+  be wrong for a file that greys out the one right answer and bolds the others, which is not
+  plausible but is not impossible. A mark and its opposite on two options is a tie and takes no key.
+- **The two title lines at the top of the file** ("Chapter 07", "Communication") are reported as stray
+  text. They are the chapter's number and name, and could be read as metadata.
+- **The sections the heading list does not know** are not headings: "Matching" is one and gives
+  the type, but matching questions in tables are still unread, so they fail with a message.
+- **Word was not asked about the real file.** The sample documents Word wrote agree with the
+  reader on the layout and on the formatting of the letters. The real file was checked
+  against an independent reading of its XML, which is weaker evidence than Word's.
+
 ### Found while building table layouts (stage 4), not yet fixed
 
 - **The layouts were chosen from the plan, not from banks.** A grid headed Question and
   A, B, C, rows that begin with a label, and an answer key are the shapes the plan named.
-  Nobody has shown the project a table-based test bank, so the header names, the
-  check-mark set and the conditions are a reasoned guess. Seven documents written by Word
-  from a script read right; a publisher's own layout is the real test.
+  The one real table-based bank seen so far used none of them (stage 4b, a number in one cell
+  and a table for each option), so the header names, the check-mark set and the conditions
+  are still a reasoned guess. Eight documents written by Word from a script read right; a
+  publisher's own layout is the real test.
 - **A key marked by shading is not read.** Shading a cell or a row green is a common way
   to mark an answer in a table, and `w:shd` is not looked at (the same gap is recorded for
   formatting).
