@@ -21,11 +21,12 @@ interface.
   be removed; see `docs/design-plan.md`.
 - Profile one of the importer: the standard test-bank text format, read from plain
   text.
-- The first slice of the Word importer: a `.docx` is read into the same blocks the
-  text importer uses, so a question in a Word file goes through the same scanner,
-  builder and accuracy gate. Typed labels only so far; Word's own list numbering
-  and answer marks made with formatting are the next stages
-  (`docs/word-import-plan.md`).
+- The Word importer, so far: a `.docx` is read into the same blocks the text
+  importer uses, so a question in a Word file goes through the same scanner,
+  builder and accuracy gate. Question numbers and option letters can be typed or
+  made by Word's own lists, including multilevel lists and lists set by a paragraph
+  style; the lists are checked against Word itself. Answer marks made with
+  formatting, and tables, are the next stages (`docs/word-import-plan.md`).
 - The first exporter: the question spreadsheet (CSV) that OpenStage Author and
   OpenStage Scroll read, with a destination check that lists what will arrive,
   what will be lost and what cannot go.
@@ -75,7 +76,8 @@ packages/assess/        the engine, published as @openstage/assess
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 365 tests, run by Node's own test runner
+  test/                 438 tests, run by Node's own test runner
+  test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
 fixtures/publisher/         publisher chapters, never committed
 brand/                  the icon, and every size generated from it

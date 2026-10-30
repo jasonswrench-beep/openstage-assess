@@ -41,13 +41,19 @@ to the item. `schema.ts` rejects them by name with an explanation.
 ## Commands
 
 ```
-npm test                       # 365 tests, Node's own runner
+npm test                       # 438 tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
 npm run assess -- export <bank>  # the destination check, and the Author/Scroll CSV with --out
 npm run assess -- contract     # the read contract and consumer capabilities
+npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 ```
+
+The last one is not part of `npm test`. Run it after any change to
+`import/docx/numbering.ts`: a list number is what an Answers list matches a key
+to, so a number that is off by one gives a wrong key without a word, and Word is
+the only judge of what the number should be.
 
 `Check OpenAssess.cmd` runs the first three together by double-click, which is
 how this gets verified on a Windows machine with nothing installed but Node.

@@ -9,9 +9,10 @@
  * line.
  *
  * What is read: the text of runs, tabs, line breaks, and the content of
- * hyperlinks, fields, smart tags, content controls and tracked insertions. What
- * is not: deleted text (tracked deletions), field codes, and the formatting
- * properties, which later stages read for list numbering and answer marks.
+ * hyperlinks, fields, smart tags, content controls and tracked insertions, and the
+ * label that Word's own lists put in front of a paragraph (kept in `listLabel`,
+ * apart from the text). What is not: deleted text (tracked deletions), field
+ * codes, and the formatting of runs, which a later stage reads for answer marks.
  *
  * Nothing is dropped silently. Pictures, shapes and equations are not read yet, so
  * each leaves a visible marker ("[picture]", "[equation]") in the text and is
@@ -20,6 +21,7 @@
  */
 
 import type { SourceBlock } from "../types.ts";
+import type { Numbering } from "./numbering.ts";
 import { DocxError } from "./package.ts";
 import { allText, elements, first, hasText, type XmlElement } from "./xml.ts";
 
@@ -40,6 +42,10 @@ export interface DocumentStats {
   comments: number;
   /** Elements that hold text and were not read, by name. */
   unreadWithText: Record<string, number>;
+  /** Paragraphs given a label by Word's list numbering, such as "3." or "b)". */
+  listItems: number;
+  /** Paragraphs in a list whose number could not be worked out, by the reason. They are left unnumbered. */
+  unreadLists: Record<string, number>;
 }
 
 export interface DocumentBlocks {
@@ -100,7 +106,17 @@ interface Location {
   cell: number;
 }
 
-export function documentToBlocks(root: XmlElement): DocumentBlocks {
+/** Whether the paragraph mark was deleted by a tracked change, which takes the paragraph with it if nothing else is left. */
+function markDeleted(properties: XmlElement | undefined): boolean {
+  const mark = properties ? first(properties, "w:rPr") : undefined;
+  return mark !== undefined && (first(mark, "w:del") !== undefined || first(mark, "w:moveFrom") !== undefined);
+}
+
+/**
+ * The body as blocks. `numbering` supplies the labels of Word's own lists; without
+ * it a numbered paragraph is read as the plain text it holds.
+ */
+export function documentToBlocks(root: XmlElement, numbering?: Numbering): DocumentBlocks {
   if (root.name !== "w:document") {
     throw new DocxError(`The main document part starts with <${root.name}>, not <w:document>, so it is not a Word document.`);
   }
@@ -119,6 +135,8 @@ export function documentToBlocks(root: XmlElement): DocumentBlocks {
     notes: 0,
     comments: 0,
     unreadWithText: {},
+    listItems: 0,
+    unreadLists: {},
   };
 
   const unread = (name: string): void => {
@@ -210,13 +228,32 @@ export function documentToBlocks(root: XmlElement): DocumentBlocks {
 
   function paragraph(p: XmlElement, where: Location | undefined): void {
     stats.paragraphs++;
+    const properties = first(p, "w:pPr");
     const b: Lines = { lines: [""] };
     inline(p, b);
     // A line break at the very end of a paragraph is not a blank line after it.
     while (b.lines.length > 1 && b.lines[b.lines.length - 1] === "") b.lines.pop();
-    for (const text of b.lines) {
-      blocks.push({ index: blocks.length, text, ...(where ? { table: where } : {}) });
-    }
+
+    // A paragraph whose mark was deleted and whose text was deleted with it is gone
+    // once the changes are accepted, and so is its number. Leaving it would count it
+    // in its list and put every number after it out by one.
+    if (markDeleted(properties) && b.lines.every((line) => line === "")) return;
+
+    // The label belongs on the first line only: a soft break inside a numbered
+    // paragraph does not start another item.
+    const listed = numbering?.label(properties);
+    if (listed?.unread !== undefined) stats.unreadLists[listed.unread] = (stats.unreadLists[listed.unread] ?? 0) + 1;
+    const label = listed?.label;
+    if (label !== undefined) stats.listItems++;
+
+    b.lines.forEach((text, k) => {
+      blocks.push({
+        index: blocks.length,
+        text,
+        ...(k === 0 && label !== undefined ? { kind: "listItem" as const, listLabel: label } : {}),
+        ...(where ? { table: where } : {}),
+      });
+    });
   }
 
   function table(tbl: XmlElement): void {

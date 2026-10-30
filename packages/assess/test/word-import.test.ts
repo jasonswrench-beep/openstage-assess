@@ -28,7 +28,7 @@ import { linesToBlocks, type ImportResult, type SourceBlock } from "../src/impor
 import { docxToBlocks, wordImporter, WORD_PROFILE_ID } from "../src/import/word.ts";
 import { FindingCode } from "../src/model/findings.ts";
 import { richTextToPlain } from "../src/model/richtext.ts";
-import { DELETED_TEXT, docx, docxFromLines, FOOTER_TEXT, HEADER_TEXT, paragraph, run } from "./support/docx-writer.ts";
+import { DELETED_TEXT, docx, docxFromLines, FOOTER_TEXT, HEADER_TEXT, numberLines, paragraph, run } from "./support/docx-writer.ts";
 import { soup } from "./support/soup.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -137,6 +137,17 @@ describe("the text fixtures, written out as Word files, come back identical", ()
   const styles: Array<{ name: string; make: (lines: string[], seed: number) => Uint8Array }> = [
     { name: "typed labels", make: (lines) => docxFromLines(lines) },
     { name: "noise", make: (lines, seed) => docxFromLines(lines, { noise: true, seed }) },
+    // Word's own lists: the numbers and letters are not in the text at all.
+    { name: "Word lists, one for each kind of label", make: (lines) => docxFromLines(lines, { numbering: { mode: "lists" } }) },
+    { name: "Word lists, in instances that carry on from each other", make: (lines) => docxFromLines(lines, { numbering: { mode: "lists", split: true } }) },
+    { name: "Word lists for the options, typed question numbers", make: (lines) => docxFromLines(lines, { numbering: { mode: "lists", optionsOnly: true } }) },
+    { name: "one multilevel list", make: (lines) => docxFromLines(lines, { numbering: { mode: "multilevel" } }) },
+    { name: "one multilevel list, from paragraph styles", make: (lines) => docxFromLines(lines, { numbering: { mode: "style" } }) },
+    {
+      name: "Word lists with noise",
+      make: (lines, seed) =>
+        docxFromLines(lines, { noise: true, seed, numbering: { mode: (["lists", "multilevel", "style"] as const)[seed % 3] as "lists", split: seed % 2 === 0 } }),
+    },
   ];
 
   test("every fixture, in every style, matches the text version and scores in full", async () => {
@@ -160,6 +171,28 @@ describe("the text fixtures, written out as Word files, come back identical", ()
       questions += expected.questions.length;
     }
     assert.ok(questions >= 57, `only ${questions} questions were compared`);
+  });
+
+  test("the numbered forms really are numbered by Word, with no label left in the text", async () => {
+    const names = (await readdir(FIXTURES)).filter((n) => n.endsWith(".txt")).sort();
+    let multilevel = 0;
+    let styled = 0;
+    let labelled = 0;
+    for (const name of names) {
+      const lines = linesOf(await readFile(join(FIXTURES, name), "utf8"));
+      if (numberLines(lines, { mode: "multilevel" }).mode === "multilevel") multilevel++;
+      if (numberLines(lines, { mode: "style" }).mode === "style") styled++;
+      for (const mode of ["lists", "multilevel", "style"] as const) {
+        const { blocks } = docxToBlocks(docxFromLines(lines, { numbering: { mode } }));
+        assert.equal(blocks.length, lines.length, `${name} (${mode}) has a block for every line`);
+        for (const b of blocks.filter((x) => x.listLabel !== undefined)) {
+          labelled++;
+          assert.equal(b.text.startsWith(b.listLabel as string), false, `${name} (${mode}): "${b.text}" still has its label typed`);
+        }
+      }
+    }
+    assert.ok(labelled > 600, `only ${labelled} labelled paragraphs`);
+    assert.ok(multilevel >= 6 && styled >= 6, `only ${multilevel} fixtures fit one multilevel list (${styled} by style); the other forms would not be exercised`);
   });
 
   test("noise adds findings about the file and never changes a question", async () => {
@@ -274,6 +307,22 @@ describe("generated files lose nothing, and Word makes no difference", () => {
       }
     }
   });
+
+  test("the same lines numbered by Word's lists, in any order, read the same too", () => {
+    for (const mode of ["lists", "multilevel", "style"] as const) {
+      for (let seed = 1; seed <= 60; seed++) {
+        const { text, markers } = soup(seed, seed % 2 === 0);
+        const direct = standardTextImporter.parse(text, OPTIONS);
+        const via = wordImporter.parseBytes(
+          docxFromLines(linesOf(text), { noise: seed % 3 === 0, seed, numbering: { mode, split: seed % 2 === 1 } }),
+          OPTIONS,
+        );
+        assert.deepEqual(project(via), project(direct), `${mode}, seed ${seed} differs\n${text}`);
+        const everything = JSON.stringify([via.questions, via.orphans, via.fileFindings]);
+        for (const marker of markers) assert.ok(everything.includes(marker), `${mode}, seed ${seed}: ${marker} was lost\n${text}`);
+      }
+    }
+  });
 });
 
 describe("speed", () => {
@@ -289,5 +338,20 @@ describe("speed", () => {
     assert.equal(result.questions.length, 500);
     assert.equal(result.counts.parsed, 500);
     assert.ok(took < 3000, `500 questions took ${took.toFixed(0)} ms (${(bytes.length / 1024).toFixed(0)} KB of .docx)`);
+  });
+
+  test("the same 500 questions numbered by Word's lists, each form, within the same budget", () => {
+    const lines: string[] = [];
+    for (let i = 1; i <= 500; i++) {
+      lines.push(`${i}) Which of these is the answer to question number ${i}, and why does it matter?`, "a. A plausible but wrong option", `*b. The right option for question ${i}`, "c. Another wrong option", "d. None of these", "");
+    }
+    for (const mode of ["lists", "multilevel", "style"] as const) {
+      const bytes = docxFromLines(lines, { noise: true, seed: 11, numbering: { mode } });
+      const started = performance.now();
+      const result = wordImporter.parseBytes(bytes, OPTIONS);
+      const took = performance.now() - started;
+      assert.equal(result.counts.parsed, 500, mode);
+      assert.ok(took < 3000, `${mode}: 500 questions took ${took.toFixed(0)} ms`);
+    }
   });
 });

@@ -997,8 +997,26 @@ function buildQuestion(
 // The importer
 // ---------------------------------------------------------------------------
 
+/**
+ * The block as the page shows it: the label Word's list put there, then the text.
+ *
+ * Two things differ from joining them with a space. Word writes a label as "(a)"
+ * as readily as "a)", and the Standard Format knows only the second, so the opening
+ * bracket is dropped; it is the same letter. And an author who letters the options
+ * with Word's list can only put the key's asterisk after the letter, as "b. *Mars",
+ * where the format wants "*b. Mars". An asterisk at the start of a lettered item is
+ * the author's mark, so it is moved where the scanner looks for it. It is moved
+ * only for a label that looks like an option letter, and only when Word made the
+ * label: a typed "b. *Mars" is read as it always was.
+ */
 function withListLabel(block: SourceBlock): SourceBlock {
-  return block.listLabel ? { ...block, text: `${block.listLabel} ${block.text}` } : block;
+  if (!block.listLabel) return block;
+  const label = block.listLabel.replace(/^\((.+)\)$/, "$1)");
+  const mark = /^\s*\*\s*/.exec(block.text);
+  if (mark && /^[a-tA-T][.)]$/.test(label)) {
+    return { ...block, text: `*${label} ${block.text.slice(mark[0].length)}` };
+  }
+  return { ...block, text: `${label} ${block.text}` };
 }
 
 export const standardTextImporter: Importer = {
