@@ -463,6 +463,48 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found while reading three more of one instructor's banks (stage 4d), not yet fixed
+
+A 375-question test item file, a 42-question chapter and a 30-question bank went from 0, 0 and
+5 questions read to all of them, through the real harness. What that does not show:
+
+- **Five real files is not five tests.** Every rule was written from the file that needed it, and
+  each of the five reads at 100 percent because of that. There is no file yet that was read
+  by rules written without it. Four of the five are one instructor's, so layouts and habits
+  are shared among them. A sixth file, ideally from someone else, is the first real test of the rules.
+- **The two `.doc` files reached the importer as `.docx` that Word made from them.** The importer reads
+  `.docx` only, so a file that is a Word 97-2003 binary has to be saved as `.docx` first. Word read copies
+  in a separate hidden Word and the originals were not touched, but a person with no Word would not have
+  this route: LibreOffice and Google Docs both save `.docx`, and neither was tried.
+- **The large file has two questions with no usable answer in the source.** 7.11 reads `fasle` and 10.5
+  has no answer line. Both are reported and have no key, which is what the expected file says, and both
+  are worth fixing in the file by hand.
+- **A letter alone on a line is an answer when most of the file does it.** If a file did it for 80
+  percent of its choice questions and also had a wrapped option ending in a lone letter that names an
+  option, that letter would be taken for the answer of its question when it has no other. Rare, and the
+  file says how many answers were read this way, but it is the nearest this comes to guessing.
+- **`Textbook reference` is read as the question's section.** It names a section of the book, and
+  the model has a section; that is an interpretation. Any other note on an Answer line that names a
+  source is kept as a custom label, with a warning, and not as the section.
+- **Page numbers are now a question's Page wherever they stand in brackets.** A bank that used a bracket
+  such as `(Page 3)` in the middle of a stem on a line of its own would have it taken off the stem.
+- **A matching exercise with no text of its own uses its heading as its text.** It says so, and the
+  question is flagged for review. A matching table with another shape (two columns, no numbers, more
+  than twenty rows) is not read as one.
+- **A fill in the blank given as a finished sentence is read only for bold.** Underlined or italic
+  answers, and a sentence that goes over more than one line, are not.
+- **`(T)` and `(F)` are read at the end of a line only under a true or false heading.** The same letters at
+  the end of a line in any other section are part of the words.
+- **A chapter title is only `Chapter` and a number or word, with `Test Questions` or `Questions` after.** A
+  title such as `Unit 3 Questions` is not one, and is added to the question above, as before.
+- **Dotted numbers are `chapter.question` only.** `1.1.3` and `A.1` are not read.
+- **`Answer: c (or d)` reads `c` and warns**, as it did before; the `(or d)` is in the warning, not in the
+  key. A question this ambiguous is probably better with no key. Left alone because it is older than this stage.
+- **The model's character rule now applies to the right side of a matching pair and to distractors.**
+  The em dash that becomes two hyphens is still the phase 1 rule, still worth deciding about, and now
+  in more places.
+- **Essay and short answer questions in these banks have no model answer**, and none was expected.
+
 ### Found while reading a second real file, typed by hand (stage 4c), not yet fixed
 
 An instructor's manual chapter, 28 questions, went from 3 of 28 to 28 of 28. What that does
@@ -502,10 +544,11 @@ not show:
 The first real chapter went from 0 of 60 to 60 of 60, and the following are what that does
 not show or what was decided on one file's evidence.
 
-- **One chapter is not three.** The 95 percent target is on three real chapters. Two have been
-  measured (a second, typed by hand, is above), and this one is from one publisher, laid out one way. The rules above were each written for a piece of
-  that file, and the next publisher's file will use another. The chapter is kept only on the
-  machine, so the measurement cannot be rerun from a clone.
+- **One chapter is not three.** The 95 percent target is on three real chapters. Five real files
+  have since been measured (four of them one instructor's, described above), and this one is from
+  one publisher, laid out one way. The rules above were each written for a piece of that file, and
+  the next publisher's file will use another. The chapter is kept only on the machine, so the
+  measurement cannot be rerun from a clone.
 - **The copy with the answers is found by a heading that ends in "Answer Key".** A bank whose
   answers follow a heading such as "Answers", "Instructor Version" or "Solutions", or sit in
   a separate file, is not recognised, and a fill in the blank or essay answer under its question

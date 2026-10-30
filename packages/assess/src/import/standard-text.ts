@@ -758,7 +758,7 @@ function buildBody(
             );
             return;
           }
-          distractors.push(text.trim());
+          distractors.push(normalizeCharacters(text.trim()));
           return;
         }
         const left = text.slice(0, at).trim();
@@ -774,7 +774,10 @@ function buildBody(
           );
           return;
         }
-        pairs.push({ id: localId("p", pairs.length), left: plainToRich(left), right });
+        // The right side is a plain string, which the rich text the left side becomes is not, so
+        // the model's one character rule has to be applied to it here or it would be the only
+        // text of a question that kept its curly quotes.
+        pairs.push({ id: localId("p", pairs.length), left: plainToRich(left), right: normalizeCharacters(right) });
       });
 
       if (pairs.length < 2) {
@@ -1156,7 +1159,7 @@ export const standardTextImporter: Importer = {
     const profile = options.profile ?? PROFILE_ID;
 
     const defaultPoints = options.defaultPoints ?? DEFAULT_POINTS;
-    const scanned = scanStandardText(blocks, file, defaultPoints);
+    const scanned = scanStandardText(blocks, file, defaultPoints, (options.keyMark ?? "auto") !== "off");
     // Formatting can supply a key where the file gave none in words. It is decided
     // once for the whole file, after every question is known and before any is built.
     const formatting = applyFormattingKey(blocks, scanned.questions, options.keyMark ?? "auto");

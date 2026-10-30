@@ -100,7 +100,7 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
       finding(
         FindingCode.TableLayout,
         "info",
-        `${plural(total, "table was", "tables were")} read as questions: ${layouts.map(([layout, n]) => `${n} as ${layout === "grid" ? "a grid with a header row" : layout === "answer key" ? "an answer key" : layout === "numbered cells" ? "a number in one cell and the question in the next" : "labelled rows"}`).join(", ")}.`,
+        `${plural(total, "table was", "tables were")} read as questions: ${layouts.map(([layout, n]) => `${n} as ${layout === "grid" ? "a grid with a header row" : layout === "answer key" ? "an answer key" : layout === "numbered cells" ? "a number in one cell and the question in the next" : layout === "matching rows" ? "a term and its definition in each row" : "labelled rows"}`).join(", ")}.`,
       ),
     );
   }

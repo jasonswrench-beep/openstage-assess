@@ -5,8 +5,8 @@
  * not Word. This has Word write a few (word-author.ps1): a question to a table, a
  * grid, an answer key in a table, an outline list with the right options in bold, a
  * table with a merged title row, typed lines with an Answer line, numbered and
- * lettered lists, and a publisher's layout of a table for each question with a table
- * inside it for each option. They are the XML Word really writes, so what the reader makes of
+ * lettered lists, a publisher's layout of a table for each question with a table
+ * inside it for each option, and a matching exercise as a table of rows. They are the XML Word really writes, so what the reader makes of
  * them is the nearest this project has to a real file until the dialect pack is in.
  *
  * It then asks Word what labels it shows on the list documents and compares.

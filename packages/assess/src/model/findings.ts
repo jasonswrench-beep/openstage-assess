@@ -82,6 +82,7 @@ export const FindingCode = {
   AnswerFromUnlabelledLine: "import.answer-from-unlabelled-line",
   RepeatedQuestionsFolded: "import.repeated-questions-folded",
   BlankCountMismatch: "import.blank-count-mismatch",
+  StemFromHeading: "import.stem-from-heading",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",
