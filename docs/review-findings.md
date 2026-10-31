@@ -463,6 +463,51 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found by a blind test on thirteen openly licensed files (stage 4f), not yet fixed
+
+Thirteen files from one instructor's physical science course, shared under a CC BY 4.0 licence, were
+found on the open web and run with no rule changed. They read **0 of 618** questions, and after the
+stage 4f rules 618 of 618. The first number is the honest one. What it shows and what it does not:
+
+- **The first-contact record is now about 3 percent.** Counting the first run of each real file before a
+  rule was written for it, the importer has read about 33 of 1,231 questions (the 2002 exam, which has no
+  key, is left out). Of the 13 files, none was a near miss: the layout had no numbers and no letters, so
+  nothing was read. The earlier figures are in the entries below; some count questions read rather than
+  questions scored, so the total is rough.
+- **The 100 percent is fitted again, to one author.** There are now 21 real files, none of them a test of
+  rules written without it, and the 13 new ones share one instructor's habits, so they are one layout and
+  not thirteen. The acceptance criterion of three chapters the rules were not fitted to is still not met.
+- **Only the choice types have a type line.** `MC`, `MA` and `MR`. A bank that writes `TF`, `E` or `FIB` the
+  same way, with a stem and then an answer, is not read: the line is stray text and so is what is under it.
+  None of the 13 files had one (one file has three lines that say `SM`, `PM` and `AM`, which are options
+  of a question about radio waves).
+- **A stem of more than one paragraph is read with its second paragraph as the first option.** The key is
+  unaffected, since the star is on the option it names, but an option appears that is not one. Nothing
+  says so. The 13 files have none, and neither the shape of the file nor the star gives a way to tell.
+- **Two questions with no blank line between them are flagged, not split.** A type line among the options
+  of a question gives a warning that two questions may have been read as one. It is a warning and not a
+  split because an option can be the word `MA` (a degree), and the cost of the mistake if the two were
+  merged is a key that belongs to the other question, which the warning is there to catch.
+- **A question whose type line was left off is read, and flagged.** Three files each ended with one. The
+  importer guesses where it starts, from the stem and two or more options with exactly one star, and
+  says so. A last question that had no star would not be read, and is stray text.
+- **A star in front of the words is the key whether or not the author meant a literal star.** An option
+  that begins with `*` as part of its text, in a file that marks keys this way, is a key. The stem and the
+  middle of an option are left alone (`What is 3 * 4?`, `3 * 4`), and one question in the files has a star
+  at the end of its stem and no starred option, which is correctly refused.
+- **One question had no key in the source.** Lesson 6 has a question with no starred option, so it is
+  declared failed and no option is chosen. Worth fixing in the file by hand.
+- **The number given to such a question is the one it comes in, from 1.** A file that mixes numbered
+  questions with these would have numbers that repeat, and the file would say so.
+- **The first expected-file writer got one question wrong.** It ignored a line break inside a paragraph
+  and glued an option onto a stem. The importer disagreed, the XML showed the break, and the script was
+  fixed. The lesson is the one the files already taught: the expected-file writer is a reader too, and a
+  disagreement is a thing to look at in the document, not to settle in either one's favour.
+- **The licence and the credit are as the page gave them.** The page says the test banks are shared under CC BY
+  4.0 and were authored, remixed or curated by the platform that hosts it, and names no author. The files are kept on the
+  machine in `fixtures/publisher/` with the others. Whether to commit them as fixtures, with
+  attribution, so that the check runs from a clone is a decision owed.
+
 ### Found by a blind test on three more files (stage 4e), not yet fixed
 
 Three files the rules had not been written for were run with no rule changed. They read 200 of 200

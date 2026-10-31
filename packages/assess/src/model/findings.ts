@@ -88,6 +88,9 @@ export const FindingCode = {
   NumberOutOfSequence: "import.number-out-of-sequence",
   MetadataLineContinued: "import.metadata-line-continued",
   RationaleRead: "import.rationale-read",
+  TypeLineQuestions: "import.type-line-questions",
+  TypeLineMissing: "import.type-line-missing",
+  TypeLineAmongOptions: "import.type-line-among-options",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",
