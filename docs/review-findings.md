@@ -463,6 +463,44 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found by a blind test on sixteen generated files that passed the checker (stage 4h), not yet fixed
+
+The first set written to the new brief and held to its plan by `npm run check:generated`: pieces 1 to 4, files
+c-01 to c-16, sixteen files in sixteen layouts. Piece 1 came in one zip and passed after four stems in its answer
+files were fixed in a copy; pieces 2 to 4 came in another, from Copilot, and passed at first sight except one repeated
+matching instruction (c-15), which made the repeat check ask for the same stem and the same items and not the stem
+alone. The importer was run on them once, with no rule changed since stage 4g (`6dccbe3`). It read **47 of 232
+questions, 20.3 percent.** The first number is the honest one. What it shows:
+
+- **Seven files read as empty.** The importer made no questions from c-03, c-04, c-05, c-08, c-14, c-15 and c-16,
+  and every line of each is reported as stray text with an error that says no questions were found. Nothing is
+  dropped. What is not read: a question that begins `Q1.`, `Question 1:` or `(1)`; a chapter and question number
+  with the text on the same line (`3.1 Which ...`); questions with no number and options with no label, the right
+  one marked by highlight or bold (the type-line layout needs its `MC` lines); and options labelled `A:` or `(A)`.
+  `1.` and `1)` with `A.` and `a.` are read.
+- **Four files were read, and read wrongly.** A key table at the end (c-07) was read as 15 questions, each
+  an essay whose stem is a letter, and the real questions were left as stray text. A bank with Word's own numbering
+  and bulleted options marked `(Correct)` (c-11) came out as 14 essays with the options inside the stem. A key list at
+  the end (c-13) was taken for questions in the same way. Several options to a paragraph, split over two paragraphs,
+  with the answer at the end (c-09), made options that are merged pairs or too few, and 5 of its 12 questions failed.
+  All of this is flagged or refused except the next point.
+- **One question was wrong and was not flagged.** In c-09, `A. mother   B. aunt` and `C. sister   D. grandmother
+  ANS: C` became two options, `mother B. aunt` and `sister D. grandmother`, with the second marked right, and the
+  verdict was `parsed`. The key points at the right words, but the question has two options where it has four and
+  nothing says so. Of the 105 questions the importer made, 47 are right, 52 are flagged for review, 5 are
+  refused, and this one is wrong and looks fine. Pairing every imported question with the expected one by its stem
+  (68 pairs), no key named the wrong content: of 4 differing keys, 3 were refused and this was the fourth.
+- **Four files with typed `1.` or `1)` numbers or Word's own numbering, `A.` or `a.` options and a mark by an Answer
+  line, bold or a font colour read 62 to 86 percent** (c-01, c-02, c-06, c-10). The misses there are two to six
+  questions each, mostly of types the file does not name. They have not been looked at.
+- **What this set is.** Sixteen files from the brief and the plan, so far more varied than the first two batches,
+  which were five and six documents. It is still invented and still says nothing about what real banks do. It is
+  not counted toward the criterion of three real chapters.
+- **It is no longer blind.** To say what failed, the first lines of the seven empty files and two questions of c-09
+  and c-11 were read. Any later score on these files is a second contact and not a first. The rules for the layouts above
+  should be written from pieces 5 and 6, which exist to be fitted to, and these sixteen run again afterwards.
+- **The files are on this machine only** (the session's scratch folder, `generated/blind`), not in the repository.
+
 ### Found by a blind test on a generated batch (stage 4g), not yet fixed
 
 Twenty-four Word files that another model wrote from `docs/synthetic-bank-spec.md` were run with no rule
@@ -513,9 +551,12 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   stem, missing marks). It was tested on documents written in every assigned layout, on documents Word wrote,
   and with 80 deliberate breaks, which found and fixed three faults of its own: empty paragraphs that Word
   writes with attributes swallowed the table after them, the repeat test ignored digits, and 34 checks had no
-  test that could fail them. It has not been run on python-docx output, which is probably what the other
-  model will use, so its reading of a style that carries a list (`List Number`) is tested on a hand-made style
-  and not on that template.
+  test that could fail them. It was first tested on python-docx output when the other model gave a script
+  instead of files for piece 2: run in an empty environment (python-docx 1.2.0), it wrote c-05 and c-06 and then
+  stopped on an undefined variable in c-07. The checker read c-06's `List Number` paragraphs as Word's own
+  numbering (14 of 14), and read bold from c-05, so those two are now tested on real python-docx output. Not yet
+  seen from python-docx: `List Bullet`, highlight, underline, font colour, a table with a heading row, and a
+  line break inside a paragraph.
 - **A second generated batch ("round 2") had the same fault, and is recorded so it is not scored again as if it
   were new.** It was written under the first brief, before the checker existed. It has 24 files named like the
   first batch's, but they are 6 distinct documents copied four times with a different title, 2 or 3 questions

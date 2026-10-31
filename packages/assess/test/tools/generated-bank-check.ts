@@ -424,6 +424,8 @@ export interface FileCheck {
   /** Things that were checked and found as assigned, for the report. */
   facts: string[];
   stems: string[];
+  /** What makes each question the one it is, in the order of `stems`: the stem and what goes with it. See identityOf. */
+  identities: string[];
 }
 
 export interface CheckLimits {
@@ -460,7 +462,8 @@ export function checkFile(entry: PlanEntry, doc: Doc, expectedRaw: unknown, limi
   const problems = [...shape];
   const facts: string[] = [];
   const stems = questions.map((q) => q.stem);
-  if (shape.length > 0) return { problems, facts, stems };
+  const identities = questions.map(identityOf);
+  if (shape.length > 0) return { problems, facts, stems, identities };
 
   if (questions.length < limits.minQuestions || questions.length > limits.maxQuestions) {
     problems.push(`It has ${questions.length} questions; ${limits.minQuestions} to ${limits.maxQuestions} were asked for.`);
@@ -790,7 +793,7 @@ export function checkFile(entry: PlanEntry, doc: Doc, expectedRaw: unknown, limi
   else facts.push(`${trap} is there`);
 
   if (doc.lines.length < questions.length * 2) problems.push(`The document is too short for ${questions.length} questions with options.`);
-  return { problems, facts, stems };
+  return { problems, facts, stems, identities };
 }
 
 // ---------------------------------------------------------------------------
@@ -805,6 +808,16 @@ export interface BatchReport {
 
 /** Letters and digits only, so that case and punctuation cannot hide a repeat, and a different number cannot make one. */
 const stemKey = (s: string): string => norm(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * What makes a question the same question in two files: its stem and what goes with it, the options, the pairs or the
+ * accepted answers. A plain instruction such as "Match each term with its definition." can be in two files, as it can in
+ * two real banks, when what is under it is different. Copies of a document, which were the fault in the first batch, are
+ * the same stem with the same options, and are still found, in whatever order the options are put.
+ */
+function identityOf(q: ExpectedQuestion): string {
+  return [stemKey(q.stem), ...(q.options ?? q.pairs ?? q.accepted ?? []).map(stemKey).sort()].join("|");
+}
 
 export function checkFolder(folder: string, pieces?: number[], plan: readonly PlanEntry[] = PLAN, limits: CheckLimits = LIMITS): BatchReport {
   const wanted = plan.filter((e) => pieces === undefined || pieces.includes(e.piece));
@@ -838,12 +851,11 @@ export function checkFolder(folder: string, pieces?: number[], plan: readonly Pl
     const checked = checkFile(entry, doc, expected, limits);
     result.problems.push(...checked.problems);
     result.facts.push(...checked.facts);
-    for (const stem of checked.stems) {
-      const key = stemKey(stem);
+    checked.identities.forEach((key, i) => {
       const other = seen.get(key);
-      if (other !== undefined && other !== docxName) result.problems.push(`The stem "${short(stem)}" is also in ${other}.`);
+      if (other !== undefined && other !== docxName) result.problems.push(`The question "${short(checked.stems[i] as string)}" is also in ${other}, with the same options, pairs or answers.`);
       else seen.set(key, docxName);
-    }
+    });
   }
   const planned = new Set(plan.flatMap((e) => [`${e.name}.docx`, `${e.name}.docx.expected.json`]));
   for (const name of present) {
