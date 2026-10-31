@@ -463,6 +463,49 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found by a blind test on a generated batch (stage 4g), not yet fixed
+
+Twenty-four Word files that another model wrote from `docs/synthetic-bank-spec.md` were run with no rule
+changed. The blind set read **23 of 48** and the set that may be fitted to 10 of 24 (33 of 72), and after the
+stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What it shows and what it does not:
+
+- **The batch was five documents, not 24.** The files are identical but for the title line: three questions
+  each, 15 distinct questions in all where the brief asked for about 600, in one layout (a typed `1.`, an
+  indented `A.`, a star before the letter, an `Answer:` line). `layouts.md` describes parenthesis numbers,
+  `Q1.` prefixes, bold answer marks and bulleted options, none of which is in the files, and `checker.py`
+  checks that stems appear in the text and prints success whatever it finds. A generated batch has to be
+  checked against its own XML before it is believed. This one measures one layout from five angles, so it
+  says nothing about layout variety, and it never counts toward the criterion of three real chapters.
+- **What it did show is a real gap, and a narrow one.** 29 of the 39 misses were questions whose type the
+  file never names: a statement answered `True` or `False` (10), a blank or a question answered under
+  `Accepted answers:` (14), and a matching exercise written as `Bell = Telephone` lines (5). All came out as
+  essays with the answer in the stem or no key. Nothing was dropped and no key was invented. The other 10
+  differed only in the verdict.
+- **No question had a wrong key.** The 24 with no answer marked were all refused.
+- **The three readings are not flagged for review, and the choice is a judgment.** The rule has been that a
+  type worked out from the shape of a question is flagged. These are worked out from the answer itself or from
+  the pairs, so there is nothing to check but the type, and a bank of forty answered statements would carry
+  forty warnings on questions that are right. Each leaves an information finding that says what the type was
+  read from. If a reader would rather be asked, the change is one flag in `inferType`. What stays flagged: an
+  essay with no answer (a guess between essay and short answer) and a choice question with two stars and no
+  type (a guess between multiple response and a slip). The generator expected both to be `parsed`; they are
+  the 10 that still differ, and the expected files were left as written.
+- **`Accepted answers: Paris, France` is two answers.** The plural label names a list, and a list is cut at
+  its semicolons or, with none, at each comma followed by a space (so `1,000` stays whole). A single answer
+  that has a comma in it is cut wrongly, which the question says, with the forms. The singular label
+  (`Accepted answer:`) is never cut. The alternative, never cutting, gives a grader that accepts `0, zero`
+  and nothing else, which is worse and does not look wrong.
+- **Two holes were found by probing, not by the tests.** A matching exercise that looks complete and is
+  missing a pair is the wrong answer that looks authored. A repeated left side on the third line left the
+  first pair in the stem and read the rest as the exercise; a note or a blank line in the middle of the pairs
+  left the rest as stray text under a `parsed` question. Both are closed (the run must begin right after the
+  instruction, and a pair-shaped line after the run is a warning) and have tests.
+- **Not read:** an answer of `T` or `F` on a statement with no options (`F` is also fluorine), a blank in the
+  stem with an ordinary `Answer:` line and no label (read as an essay, with the answer kept, as before), a
+  stated `MT` over lines of pairs with no letters (it fails and says so), and a wrong answer to go with the
+  pairs. A brief for a second batch should assign each file a layout from a table, require a minimum number
+  of distinct questions, and ask for a checker that fails loudly. The brief is still the first version.
+
 ### Found by a blind test on thirteen openly licensed files (stage 4f), not yet fixed
 
 Thirteen files from one instructor's physical science course, shared under a CC BY 4.0 licence, were

@@ -41,7 +41,7 @@ to the item. `schema.ts` rejects them by name with an explanation.
 ## Commands
 
 ```
-npm test                       # 843 tests, Node's own runner
+npm test                       # 892 tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
@@ -88,6 +88,8 @@ that needed it, so none of the twenty-one is a test of rules written without it,
 criterion is three chapters the rules were not fitted to. A blind run of the last sixteen, before any
 rule was changed, read 200 of 200 (all refused, as it had no key), 25 of 45, 0 of 33 and 0 of 618: do
 not read the 100 percent as how a new file will go. `docs/review-findings.md` says what each file taught.
+A batch of 24 generated files (`docs/synthetic-bank-spec.md`) read 33 of 72 blind; it was five distinct
+documents in one layout, so it is reported apart and never counts toward the criterion.
 
 ## The read API
 

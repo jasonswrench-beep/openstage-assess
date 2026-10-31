@@ -386,6 +386,42 @@ interface TypeReading {
   unknownHint?: string;
   /** A Type line the dialects document and this profile does not read yet. */
   unsupported?: { hint: string; label: string };
+  /** The type was not stated, but the file shows it; this says what it shows, for the note beside the question. */
+  because?: string;
+}
+
+/**
+ * A type the file never names but gives away in what it does write, where the evidence is the
+ * answer itself and not the shape of the question. None of these is a guess at a key: each key is
+ * the file's own words, and the type only says where they go.
+ *
+ * - Its answer is the word True or False and it has no options, so it is true or false. Not when its
+ *   stem has a blank to fill: "A value is either ____ or false" has True for its answer.
+ * - Its answer is labelled "Accepted answers", which only a typed-in answer has: a fill in the blank
+ *   when the stem has a blank, a short answer when it has none.
+ * - Its options are lines of pairs under an instruction that says to match, which the scanner read.
+ *
+ * Everything else with no options stays an essay, flagged, as it was.
+ */
+function typeFromEvidence(raw: RawQuestion): { type: QuestionType; because: string } | undefined {
+  if (raw.pairLines) {
+    return { type: "matching", because: "its instruction says to match and each line under it is a pair written left = right" };
+  }
+  if (raw.options.length > 0) return undefined;
+
+  const written = keyTexts(raw);
+  const blank = /_{3,}/.test(raw.stemLines.join(" "));
+  if (raw.acceptedLabel && written.length > 0) {
+    return {
+      type: blank ? "fillInBlank" : "shortAnswer",
+      because: `its answer is labelled "Accepted answers", which a typed-in answer has, and its stem has ${blank ? "a blank to fill" : "no blank"}`,
+    };
+  }
+  const only = written.length === 1 ? (written[0] as string).trim().toLowerCase() : "";
+  if (!blank && (only === "true" || only === "false")) {
+    return { type: "trueFalse", because: `it has no options and its answer is the word ${only === "true" ? "True" : "False"}` };
+  }
+  return undefined;
 }
 
 function inferType(raw: RawQuestion): TypeReading {
@@ -398,6 +434,11 @@ function inferType(raw: RawQuestion): TypeReading {
   }
   const stated = hint ? TYPE_HINTS[hint] : undefined;
   if (stated) return { type: stated, inferred: false };
+
+  // Only when the file names no type at all. A Type line this profile does not know is worked out
+  // from the question as before, and flagged.
+  const shown = hint === undefined ? typeFromEvidence(raw) : undefined;
+  if (shown) return { type: shown.type, inferred: false, because: shown.because };
 
   const guess = guessType(raw);
   // A Type line that is not on the list used to be ignored without a word, so a
@@ -1038,7 +1079,12 @@ function buildQuestion(
     );
   }
 
-  const { type, inferred, unknownHint, unsupported } = inferType(raw);
+  const { type, inferred, unknownHint, unsupported, because } = inferType(raw);
+  if (because) {
+    findings.push(
+      finding(FindingCode.TypeFromEvidence, "info", `The file did not name a type, so this was read as ${type}: ${because}.`, { source, field: "type" }),
+    );
+  }
   if (unsupported) {
     findings.push(
       finding(

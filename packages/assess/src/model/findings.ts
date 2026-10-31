@@ -91,6 +91,9 @@ export const FindingCode = {
   TypeLineQuestions: "import.type-line-questions",
   TypeLineMissing: "import.type-line-missing",
   TypeLineAmongOptions: "import.type-line-among-options",
+  TypeFromEvidence: "import.type-from-evidence",
+  AcceptedAnswersSplit: "import.accepted-answers-split",
+  PairLeftOut: "import.pair-left-out",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",
