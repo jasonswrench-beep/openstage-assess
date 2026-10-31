@@ -70,7 +70,7 @@ export const MARK: Record<Mark, string> = {
 
 export const EXTRA: Record<Extra, string> = {
   TFo: "True or false questions with two options, True and False, labelled and marked like the other questions in the file.",
-  TFp: "True or false questions written as a statement with (T) or (F) at the end of the statement's paragraph, which is the answer. No options.",
+  TFp: "True or false questions written as a statement with (T) or (F) at the end of the statement's paragraph, which is the answer. No options. In the answer file the stem is the statement alone: leave the (T) or (F) out of it.",
   TFa: "True or false questions written as a statement with a line of its own under it: Answer: True (or Answer: False). No options.",
   FIB: "Fill in the blank questions: the blank is four underscores ____ and the question has no options. A line of its own under it gives the answer: Answer: word. Give exactly one answer, of one or two words, with no comma in it.",
   SA: "Short answer questions: no options, and a line of its own under the question gives the expected answer: Answer: words. Give exactly one answer, with no comma in it.",
@@ -166,7 +166,7 @@ export function assignmentFor(entry: PlanEntry): string {
           entry.mark === "K9" || entry.mark === "K10"
             ? "a missing blank line, a space before a full stop, an extra blank line, a trailing space (do not skip or repeat a question number in this file, because the key at the end goes by them)"
             : "a skipped or repeated number, a missing blank line, a space before a full stop, an extra blank line, a trailing space"
-        }, a stray note to self (leave the note out of the expected file). A lapse must never change which option is right or what any text says, and never touches the marks.`,
+        }, a stray note to self (leave the note out of the expected file). A lapse must never change which option is right or what any text says, and never touches the marks. A lapse inside a question's words or an option's words, such as a space before a question mark, goes into the answer file exactly as it is in the document.`,
   ];
   return lines.join("\n");
 }

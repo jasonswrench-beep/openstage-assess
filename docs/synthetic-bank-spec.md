@@ -143,6 +143,8 @@ hiding it, and it will not be counted against you.
   none. A lapse is one of the small slips a tired person makes: a skipped or repeated number, a missing blank
   line, a space before a full stop, an extra blank line, a trailing space, a stray note to self such as
   "check this one". Lapses never change which option is right or what any text says, and never touch the marks.
+  A lapse that falls inside a question's words or an option's words, such as a space before a question mark,
+  goes into the answer file exactly as it is in the document.
 - Vary the look from file to file: fonts and sizes, a title at the top, a line of instructions, a header or
   footer in some, section headings in some, point values in some. Nothing but questions, their options and
   their answers carries meaning; the rest is dressing.
@@ -197,9 +199,11 @@ Rules:
 
 - **`file`** is the name of the Word file. Do not add an `orphans` field.
 - **Text is exactly the words in the document**: the stem without its number, each option without its label or
-  mark (no letter, no asterisk, no `(Correct)`, no bullet), a true or false statement without its `(T)`. I will
-  ignore differences in spacing and in curly or straight quotes. A stem that runs over two paragraphs is written
-  as one string with a single space between them.
+  mark (no letter, no asterisk, no `(Correct)`, no bullet), a true or false statement without its `(T)` or
+  `(F)`, which is the answer and not part of the statement. Copy the words character for character. The only
+  differences I ignore are how many spaces there are in a row (two in a row count as one) and whether quotes are
+  curly or straight. A space before a full stop or a question mark counts, so if the document has one, the answer
+  file has it too. A stem that runs over two paragraphs is written as one string with a single space between them.
 - **Questions are in the order they appear in the document**, each once, even when the answers are in a key at
   the end. Leave out of `questions` anything that is not a question: the title, instructions, headings, notes to
   self, the key.

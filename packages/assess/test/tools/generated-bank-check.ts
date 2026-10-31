@@ -435,6 +435,25 @@ export interface CheckLimits {
 export const LIMITS: CheckLimits = { minQuestions: 12, maxQuestions: 30, minChoice: 8 };
 
 const short = (s: string): string => (norm(s).length > 48 ? `${norm(s).slice(0, 45)}...` : norm(s));
+const clip = (s: string, n = 110): string => (norm(s).length > n ? `${norm(s).slice(0, n - 3)}...` : norm(s));
+
+/**
+ * The line in this range that holds the words once spaces are ignored, when it does not hold them with spaces: the
+ * same text, spaced differently. A space before a question mark is the usual one. The scorer compares text as written,
+ * except that a run of spaces is one, so the answer file has to carry such a slip exactly, and "not found" would not say so.
+ */
+function spacedDifferently(doc: Doc, from: number, to: number, expected: string): string | undefined {
+  const squash = (s: string): string => norm(s).replace(/ /g, "");
+  const want = squash(expected);
+  for (let i = from; i < Math.min(to, doc.lines.length); i++) {
+    const text = (doc.lines[i] as Line).text;
+    // Only when the words are not there as spaced: a line that holds them has failed for some other reason.
+    if (!norm(text).includes(norm(expected)) && squash(text).includes(want)) return text;
+  }
+  return undefined;
+}
+
+const SPACING_RULE = "The answers are compared as written, so the expected file has to keep every space the document has, a space before a question mark included.";
 
 export function checkFile(entry: PlanEntry, doc: Doc, expectedRaw: unknown, limits: CheckLimits = LIMITS): FileCheck {
   const { questions, problems: shape } = validateExpected(expectedRaw, `${entry.name}.docx`);
@@ -473,7 +492,13 @@ export function checkFile(entry: PlanEntry, doc: Doc, expectedRaw: unknown, limi
   questions.forEach((q, index) => {
     const found = findText(folded, cursor, norm(q.stem));
     if (!found) {
-      problems.push(`question ${index + 1}: the stem "${short(q.stem)}" is not in the document after question ${index} (missing, reworded, or out of order).`);
+      // From the line after the last stem: its own line is that question's, not this one's.
+      const spaced = spacedDifferently(doc, cursor.col > 0 ? cursor.line + 1 : cursor.line, doc.lines.length, q.stem);
+      problems.push(
+        spaced !== undefined
+          ? `question ${index + 1}: the stem is in the document but spaced differently. The line reads "${clip(spaced)}" and the expected file has "${clip(q.stem)}". ${SPACING_RULE}`
+          : `question ${index + 1}: the stem "${short(q.stem)}" is not in the document after question ${index} (missing, reworded, or out of order).`,
+      );
       return;
     }
     located.push({ index, q, start: found.start, end: found.end });
@@ -532,7 +557,12 @@ export function checkFile(entry: PlanEntry, doc: Doc, expectedRaw: unknown, limi
       for (let j = 0; j < texts.length; j++) {
         const p = placeOption(doc, folded, at, limit, texts[j] as string);
         if (!p) {
-          problems.push(`question ${n}: option ${j + 1} "${short(texts[j] as string)}" is not under its stem.`);
+          const spaced = spacedDifferently(doc, l.end.line + 1, limit, texts[j] as string);
+          problems.push(
+            spaced !== undefined
+              ? `question ${n}: option ${j + 1} is under its stem but spaced differently. The line reads "${clip(spaced)}" and the expected file has "${clip(texts[j] as string)}". ${SPACING_RULE}`
+              : `question ${n}: option ${j + 1} "${short(texts[j] as string)}" is not under its stem.`,
+          );
           return;
         }
         placed.push(p);
@@ -617,7 +647,9 @@ export function checkFile(entry: PlanEntry, doc: Doc, expectedRaw: unknown, limi
     } else if (q.type === "trueFalse" && q.form === "inline") {
       const rest = (doc.lines[l.end.line] as Line).text.slice(l.end.col);
       const m = /^\s*[([]\s*([TtFf])\s*[)\]]/.exec(rest);
-      if (!m) problems.push(`question ${n}: the statement "${short(q.stem)}" does not end with (T) or (F).`);
+      if (!m && /[([]\s*[TtFf]\s*[)\]]\s*$/.test(q.stem)) {
+        problems.push(`question ${n}: the stem "${clip(q.stem, 70)}" ends with its (T) or (F). That is the answer and not part of the statement, so leave it out of the stem in the expected file.`);
+      } else if (!m) problems.push(`question ${n}: the statement "${short(q.stem)}" does not end with (T) or (F).`);
       else if ((m[1] as string).toUpperCase() === "T" !== q.correctBoolean) problems.push(`question ${n}: the statement ends with (${m[1]}) but the expected file says ${String(q.correctBoolean)}.`);
     } else if (q.type === "trueFalse" && q.form === "answerLine") {
       const m = lines.map((x) => ANSWER_LINE.exec(x.text)).find((x) => x !== null && /^(true|false|t|f)\.?$/i.test(x[2] as string));

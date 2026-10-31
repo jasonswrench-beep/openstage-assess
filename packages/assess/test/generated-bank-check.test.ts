@@ -96,8 +96,9 @@ function build(e: PlanEntry, qs: readonly Q[] = QUESTIONS, tweak: (parts: string
     questions: qs.map((q) => ({
       type: "multipleChoice",
       stem: q.stem,
-      options: q.options,
-      ...(q.fault ? { verdict: "failed" } : { correct: q.correct }),
+      // A copy, because tests change the expected file in place and QUESTIONS is shared by all of them.
+      options: [...q.options],
+      ...(q.fault ? { verdict: "failed" } : { correct: [...q.correct] }),
     })),
   };
   return { bytes: docx({ body: parts.join(""), numbering }), expected };
@@ -605,6 +606,67 @@ describe("each check can fail", () => {
     assert.match(mini(mtl, [para("1. Match each tree to its leaf."), para("Oak = Lobed"), para("Pine - Needle")], [pairs]).join("\n"), /the pair "Pine = Needle" is not on one line as "term = definition"/);
     const fib = entry({ extras: ["FIB"] });
     assert.match(mini(fib, [para("1. The tallest tree is the ____.")], [{ type: "fillInBlank", stem: "The tallest tree is the ____.", accepted: ["redwood"] }]).join("\n"), /no Answer line under/);
+  });
+
+  test("a slip in spacing is named as one, and the expected file has to carry it", () => {
+    // The scorer collapses a run of spaces and nothing else, so "tempo ?" and "tempo?" are different text.
+    const stem = (parts: string[]): void => {
+      const at = parts.findIndex((p) => p.includes("number 3 on the survey list"));
+      parts[at] = parts[at]!.replace("list?", "list ?");
+    };
+    const problems = check(entry(), undefined, stem);
+    assert.equal(problems.length, 1, problems.join(" | "));
+    assert.match(problems[0] as string, /^question 3: the stem is in the document but spaced differently\. The line reads "3\. Which of these trees is number 3 on the survey list \?" and the expected file has "Which of these trees is number 3 on the survey list\?"\. The answers are compared as written/);
+    // Carried exactly, it passes.
+    assert.deepEqual(check(entry(), undefined, stem, (expected) => (expected.questions[2].stem = "Which of these trees is number 3 on the survey list ?")), []);
+    // The same for an option. Two spaces in a row are one, and are not a slip.
+    const option = (parts: string[]): void => {
+      const at = parts.findIndex((p) => p.includes("Cedar 1"));
+      parts[at] = parts[at]!.replace("Cedar 1", "Cedar1");
+    };
+    assert.match(check(entry(), undefined, option).join("\n"), /question 1: option 3 is under its stem but spaced differently\. The line reads "C\. Cedar1" and the expected file has "Cedar 1"/);
+    // Different words are not a spacing slip.
+    const words = (parts: string[]): void => {
+      const at = parts.findIndex((p) => p.includes("Cedar 1"));
+      parts[at] = parts[at]!.replace("Cedar 1", "Cedar , 1");
+    };
+    assert.match(check(entry(), undefined, words).join("\n"), /question 1: option 3 "Cedar 1" is not under its stem\./);
+    const twice = (parts: string[]): void => {
+      const at = parts.findIndex((p) => p.includes("Cedar 1"));
+      parts[at] = parts[at]!.replace("Cedar 1", "Cedar   1");
+    };
+    assert.deepEqual(check(entry(), undefined, twice), []);
+  });
+
+  test("a stem is called misspaced only when the words are after the question before it", () => {
+    // The second stem is the first one with its spaces taken out. It is not in the document after the first, so it is
+    // missing, and that is what is said: the line before it is another question's.
+    const e = entry();
+    const qs = [
+      { type: "multipleChoice", stem: "Which tree is tallest?", options: ["Fir", "Elm"], correct: [0] },
+      { type: "multipleChoice", stem: "Whichtreeistallest?", options: ["Fir", "Elm"], correct: [0] },
+    ];
+    const body = [para("A short test"), para("1. Which tree is tallest?"), para("A. Fir"), para("B. Elm"), para("Answer: A")];
+    const problems = mini(e, body, qs);
+    assert.ok(problems.some((p) => /question 2: the stem "Whichtreeistallest\?" is not in the document after question 1/.test(p)), problems.join(" | "));
+  });
+
+  test("an option is called misspaced only when the words are under the stem, not in the stem", () => {
+    const qs = [{ type: "multipleChoice", stem: "Which tree is a Dog wood?", options: ["Dogwood", "Elm"], correct: [0] }];
+    const body = [para("A short test"), para("1. Which tree is a Dog wood?"), para("A. Fir"), para("B. Elm"), para("Answer: A")];
+    const problems = mini(entry(), body, qs).join(" | ");
+    assert.match(problems, /question 1: option 1 "Dogwood" is not under its stem\./);
+    assert.doesNotMatch(problems, /spaced differently/);
+  });
+
+  test("a stem that has swallowed its (T) or (F) is named, and so is a statement with none", () => {
+    const e = entry({ extras: ["TFp"] });
+    const ends = (stem: string, answer: boolean) => [{ type: "trueFalse", form: "inline", stem, correctBoolean: answer }];
+    const swallowed = mini(e, [para("A short test"), para("1. Maples lose their leaves (T)")], ends("Maples lose their leaves (T)", true)).join("\n");
+    assert.match(swallowed, /question 1: the stem "Maples lose their leaves \(T\)" ends with its \(T\) or \(F\)\. That is the answer and not part of the statement, so leave it out/);
+    assert.doesNotMatch(swallowed, /does not end with/);
+    assert.deepEqual(mini(e, [para("A short test"), para("1. Maples lose their leaves (T)")], ends("Maples lose their leaves", true)), []);
+    assert.match(mini(e, [para("A short test"), para("1. Maples lose their leaves.")], ends("Maples lose their leaves.", true)).join("\n"), /does not end with \(T\) or \(F\)/);
   });
 
   test("the case with two answers needs the document to mark two, and the case with none needs it to mark none", () => {

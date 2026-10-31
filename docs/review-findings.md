@@ -516,6 +516,30 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   test that could fail them. It has not been run on python-docx output, which is probably what the other
   model will use, so its reading of a style that carries a list (`List Number`) is tested on a hand-made style
   and not on that template.
+- **A second generated batch ("round 2") had the same fault, and is recorded so it is not scored again as if it
+  were new.** It was written under the first brief, before the checker existed. It has 24 files named like the
+  first batch's, but they are 6 distinct documents copied four times with a different title, 2 or 3 questions
+  each, 14 distinct questions in all and none of them the first batch's. It is in the first batch's layout
+  (typed numbers, indented `A.` options, a star before the letter, `Answer:` and `Accepted answers:` lines),
+  with no Word numbering, table, bold, underline, highlight or colour anywhere. So it says nothing about layout
+  variety and is not the blind set. Run with no rule changed, after the stage 4g rules, the importer read 44 of
+  56, which is 11 of the 14 distinct questions. The three it did not are the verdict only, on cases that stay
+  flagged on purpose: two questions with two stars and no type word, and an essay with no answer. Content was
+  right in all 14, the one question with no answer marked was refused, and no key was wrong. That is evidence
+  that the stage 4g rules carry over to new questions in the layout they were written for, and no evidence
+  about any other. The batch's own `layouts.md` and `checker.py` were not read. The files are on the machine
+  only (`banks-round2`, in the session's scratch folder), not in the repository.
+- **The first piece written to the new brief (piece 1, c-01 to c-04) passed the checker on one file of four, and
+  the three that failed taught two things.** All four problems were in the answer files and none in the Word
+  files: two stems that had swallowed their `(T)` and `(F)`, which the brief says to leave out, and two stems
+  written `...?` where the document has a space before the question mark (a lapse the assignment asked for). The
+  second was the brief's fault. It said differences in spacing are ignored, and the scorer ignores only runs of
+  spaces, so an answer file that tidies a slip would make a correct import score as wrong. The brief now says to
+  copy the words character for character. The checker's messages were also poor ("not found"), and now say
+  that the text is there and spaced differently, and show both. With the four stems fixed in a copy the four
+  files pass, and nothing else was behind them. The copy is what is kept for the blind run, and pieces 2 to 4
+  were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
+  as one, after all four pieces pass.
 
 ### Found by a blind test on thirteen openly licensed files (stage 4f), not yet fixed
 
