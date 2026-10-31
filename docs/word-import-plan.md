@@ -225,6 +225,25 @@ would have fixed, so this came first. Six things changed, each described below:
   fields, a one-field KEY, the message about the fields, a rationale not right under the Answer line, a
   rationale in too small a share of the questions, and the severity of the matching heading's flag. A fifteenth was a condition
   that could never matter (the scanner is in stem mode only until the first option) and was taken out.
+- Stage 4f, a blind test, against thirteen files from one instructor's physical science course, shared
+  under a CC BY 4.0 licence (found on the open web and downloaded with the user's say-so). The importer
+  was run on them with no rule changed and read 0 of 618 questions. Each file left between 88 and 456
+  blocks as stray text, three of them (lessons 1, 4 and 12) made one essay each out of a stretch of the
+  file that was flagged for review, and no key was set anywhere. The layout has no question numbers and no
+  option letters, so nothing said where a question began. The expected files were written from each
+  document's XML by a separate script, whose first version glued the first option of one question onto
+  its stem where Word had put a line break inside the paragraph; that showed as a disagreement, was
+  checked against the XML, and fixed in the script, and no other question changed. After the stage 4f
+  rules the thirteen read 618 of 618 (three declared needsReview and one declared failed), the eight
+  earlier files still 803 of 803 and the 61-question gate 61 of 61. Two expected results were chosen
+  before the importer was changed: the three questions whose type line was left off are needsReview,
+  because the importer guesses where they begin, and the one question with no starred option is failed.
+- Fifty-five deliberate breaks of the stage 4f code: all caught by a test in the end. Four got through the
+  first tests and each got a better one: the page line (the form `(Page 12)` is also caught by the
+  bracketed note, so the forms `(p. 230)` and `(pp. 12-14)` needed tests of their own), an option that looks
+  like a label in the second place, and two conditions of the read for a question with its type line
+  left off, whose first tests never reached the branch. Three conditions that could never matter (length
+  checks that the count of options already makes) were taken out.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -496,6 +515,32 @@ none of the files' words are in them.
   flagged for review as the matching table is. One exercise for each heading. The page and difficulty
   under each item are kept (the pages joined, the first difficulty used and the rest recorded with a
   warning, which the heading's flag covers anyway).
+
+**How a bank with no numbers and no letters is read, stage 4f.** A blind test found this. The rules have
+tests on invented questions in `test/type-line-layout.test.ts`, and none of the files' words are in them.
+
+- *The layout.* The type of the question alone on a line (`MC`), or `MC` and the stem on one line; the stem
+  under it; the options under that, one to a line, with no numbers or letters; the right one with a star in
+  front; a blank line before the next. Capitals only, and only `MC`, `MA` and `MR`, the choice types, which
+  are the ones whose options a star can tell apart. A line that says only `MA` is also a thing an option
+  can say, so it counts only at the start of a run of lines (after a blank line, or under a heading) and
+  only when the file does it at least three times.
+- *The options.* Every line under the stem up to the blank line, except that a line that is the question's
+  Answer line, a page, a feedback line or a label the profile knows ends them once there are two, and is
+  read in the ordinary way. The letters a, b, c are given in order only so that messages can name an
+  option. The star is the key and is taken out of the words. No star is no key, a star in the stem is not a
+  key, two stars on a multiple choice question leave both marked and fail it (as in every layout), and `MA`
+  or `MR` takes every starred option, whatever their number. A key marked by bold in a file like this is
+  read by the habit of the whole file, as in any other.
+- *A question whose type line was left off.* The last question of three files had none. Under a file that
+  has the habit, after a question that has a type line, after a blank line: a stem and two or more options
+  with exactly one starred, none of the lines numbered, lettered or a directive, and no star on the stem,
+  is read as a question and flagged for review (a warning), because the importer guessed where it begins.
+- *What it does not read.* Type lines for true or false, essay, fill in the blank and matching, which have
+  no options a star can tell apart (a question with such a line is stray text). A stem of more than one
+  paragraph: the second is taken for the first option. Questions with no blank line between them: they are
+  read as one question, which has a type line among its options and is flagged for review, because if the
+  first has no star of its own the second's would be taken for its key; with two stars it fails.
 
 **Not built yet:** a key in a table by shading, matching questions as a table of another shape
 (two columns, no numbers), a question that spreads over several rows of a grid, text boxes and

@@ -195,6 +195,15 @@ const INLINE_ANSWER = /\s+(?:ANS|Ans|Answers?|Correct Answers?)\s*:\s*(\S.*)$/;
 const RUN_ON_MARK = /(?:^|\s)([A-T])\.\s+(?=[^\sa-z])/g;
 
 /** A matching exercise written as a numbered term, then its definition, then sometimes a wrong answer to go with it. */
+/**
+ * The type of a question alone on a line, or at the start of the line that has its stem: "MC",
+ * with the options under the stem having no numbers or letters. Capitals only, and only the
+ * choice types, which are the ones whose options can be told apart by a star. A bare "MA" or
+ * "MC" is also a thing an option can say, so it is only read where the file does this as a habit
+ * and only at the start of a paragraph run: see `typeLineLayout`.
+ */
+const TYPE_LINE_START = /^(MC|MA|MR)(?:\s+(\S.*))?$/;
+
 const TERM_LINE = /^\s*term\s*:\s*(\S.*)$/i;
 const DEFINITION_LINE = /^\s*definition\s*:\s*(\S.*)$/i;
 const FOIL_LINE = /^\s*(?:foil|distractor)\s*:\s*(\S.*)$/i;
@@ -418,6 +427,16 @@ type Mode =
   | { kind: "answer"; question: RawQuestion }
   | { kind: "key"; block: KeyBlock; current?: KeyEntry };
 
+/** A question laid out as its type, its stem and then its options one to a line, found by `typeLineAt`. */
+interface TypedRun {
+  /** The type the line named. Absent when the question has no such line and is read for being laid out like the rest. */
+  tag?: string;
+  stemAt: number;
+  stem: string;
+  /** The blocks of the options, in order. Lines after them that are labels are left for the scan to read. */
+  options: number[];
+}
+
 type DirectiveKind = "title" | "type" | "points";
 type Pending = Partial<Record<DirectiveKind, { value: string; block: SourceBlock }>>;
 
@@ -522,7 +541,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   };
 
   /** What this layout did, counted for the findings that say so once for the file. */
-  const done = { runOn: 0, answersAtEnd: 0, labelsContinued: 0 };
+  const done = { runOn: 0, answersAtEnd: 0, labelsContinued: 0, typeLines: 0 };
 
   const takeAnswer = (question: RawQuestion, block: SourceBlock, answer: string): void => {
     question.answerLines.push(answer);
@@ -657,6 +676,159 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     // case was lost when the key started closing: the old scanner never closed
     // one, so every repeat was swallowed, and so was everything after it.
     return covered.some((q) => q.typeHint === "F" || q.typeHint === "S") && !value.endsWith("?");
+  };
+
+  // --- a layout with no numbers and no letters ------------------------------------------
+  // "MC" alone on a line, the stem under it, the options under that one to a line, the right
+  // one with a star in front, and a blank line before the next. Some instructors write a bank
+  // this way. The type line is all that says where a question begins, so it is read only when the
+  // file does it at least AT_LEAST times, and only at the start of a run of lines.
+
+  /** The last block of the run of lines with no blank line between them, from `i`. */
+  const runEnd = (i: number): number => {
+    let j = i;
+    while (j + 1 < count && !blankAt(j + 1)) j++;
+    return j;
+  };
+
+  /** A line under the options that is the question's answer, page or a label, and is read in the ordinary way. */
+  const isTrailer = (text: string): boolean => {
+    const t = text.trim();
+    if (ANSWER_LINE.test(t) || PAGE_LINE.test(t) || CORRECT_FEEDBACK.test(t) || INCORRECT_FEEDBACK.test(t) || KNOWN_EMPTY_LABEL.test(t)) {
+      return true;
+    }
+    const note = NOTE_LINE.exec(t);
+    if (note && METADATA_LABELS[(note[1] as string).trim().toLowerCase()]) return true;
+    const name = UNKNOWN_LABEL.exec(t)?.[1]?.trim().toLowerCase();
+    return name !== undefined && (GENERAL_FEEDBACK_LABELS.has(name) || NOTE_LABELS.has(name) || METADATA_LABELS[name] !== undefined);
+  };
+
+  /** The options from `from` to the end of the run, stopping at the first trailer once there are two. */
+  const typedOptions = (from: number, end: number): number[] => {
+    const found: number[] = [];
+    for (let j = from; j <= end; j++) {
+      if (found.length >= 2 && isTrailer(textAt(j))) break;
+      found.push(j);
+    }
+    return found;
+  };
+
+  /**
+   * Whether a question begins at `i` with its type: "MC" alone, or "MC" and the stem on one line. It
+   * needs a stem and at least two options under it, so a line that says only "MA" above a short list
+   * of other things is not one.
+   */
+  const typeLineAt = (i: number): TypedRun | undefined => {
+    const m = TYPE_LINE_START.exec(textAt(i).trim());
+    if (!m) return undefined;
+    const end = runEnd(i);
+    const stemAt = m[2] === undefined ? i + 1 : i;
+    const options = typedOptions(stemAt + 1, end);
+    if (options.length < 2) return undefined;
+    return { tag: m[1] as string, stemAt, stem: (m[2] ?? textAt(stemAt)).trim(), options };
+  };
+
+  const typeLines = ((): number => {
+    let n = 0;
+    // The start of a run is also the line under a heading, as the loop below reads it.
+    for (let i = 0; i < count; i++) if ((i === 0 || blankAt(i - 1) || SECTION_HEADING.test(textAt(i - 1))) && typeLineAt(i)) n++;
+    return n;
+  })();
+  const typeLineLayout = typeLines >= AT_LEAST;
+
+  /**
+   * A run laid out like those, with its type line missing: a stem, then two or more options, exactly
+   * one with a star in front. The star is what makes it a question; a run of lines that merely
+   * has the shape is not. Read only under a file that has type lines, and flagged.
+   */
+  const untypedAt = (i: number): TypedRun | undefined => {
+    // A type line that has too little under it to be a question is not the stem of one.
+    if (TYPE_LINE_START.test(textAt(i).trim())) return undefined;
+    const end = runEnd(i);
+    const options = typedOptions(i + 1, end);
+    if (options.length < 2) return undefined;
+    const starred = options.filter((j) => textAt(j).trim().startsWith("*")).length;
+    const lines = [i, ...options];
+    if (starred !== 1 || textAt(i).trim().startsWith("*")) return undefined;
+    if (lines.some((j) => QUESTION_START.test(textAt(j)) || OPTION_START.test(textAt(j)) || isDirective(textAt(j)))) return undefined;
+    return { stemAt: i, stem: textAt(i).trim(), options };
+  };
+
+  /** Make the question of a run and return the last block it used. */
+  const readTypedRun = (run: TypedRun, first: number): number => {
+    const stemBlock = blocks[run.stemAt] as SourceBlock;
+    const taken = takePage(run.stem);
+    if (section) section.used = true;
+    const question: RawQuestion = {
+      number: questions.length + 1,
+      ...(run.tag ? { typeHint: run.tag } : {}),
+      ...(pending.title && pending.title.value.length > 0 ? { title: pending.title.value } : {}),
+      points,
+      stemLines: [taken.text],
+      options: [],
+      correctFeedback: [],
+      incorrectFeedback: [],
+      metadata: [],
+      firstBlock: first,
+      lastBlock: first,
+      segment: keyBlocks.length,
+      keyValues: [],
+      answerLines: [],
+      generalFeedback: [],
+      notes: [],
+      keyAmbiguous: false,
+      ambiguousKeyValues: [],
+      stemAfterBlank: false,
+      keyed,
+      answeredBelow: false,
+      answeredInline: false,
+      incorrectFeedbackBeforeOptions: false,
+    };
+    if (taken.page) question.metadata.push({ label: "Page", value: taken.page, block: stemBlock.index });
+    pending = {};
+    questions.push(question);
+    for (let j = first; j <= run.stemAt; j++) claim(blocks[j] as SourceBlock, question);
+    run.options.forEach((at, k) => {
+      const optionBlock = blocks[at] as SourceBlock;
+      // The star is the file's mark for the right option, and is not part of its words.
+      const prefix = /^\s*\*?\s*/.exec(optionBlock.text)?.[0] ?? "";
+      question.options.push({
+        letter: k < 26 ? String.fromCharCode(97 + k) : "?",
+        starred: prefix.includes("*"),
+        lines: [optionBlock.text.slice(prefix.length).trim()],
+        feedback: [],
+        firstBlock: optionBlock.index,
+        lastBlock: optionBlock.index,
+        textOffset: prefix.length,
+        textBlocks: [optionBlock.index],
+        keyedByFormat: false,
+      });
+      claim(optionBlock, question);
+    });
+    // The next question with no blank line before it reads as more options of this one, and if this one has
+    // no star of its own, the other's would be taken for its key. An option that is only "MA" can be real, so
+    // this is a warning, not a split.
+    if (run.options.some((at) => TYPE_LINE_START.test(textAt(at).trim()))) {
+      question.notes.push(
+        finding(
+          FindingCode.TypeLineAmongOptions,
+          "warn",
+          `A line among this question's options is a type line. If it is the start of the next question and the blank line before it is missing, two questions were read as one, and the star that was taken for the key may belong to the other. Check it.`,
+          { field: "body.options", source: { file, firstBlock: first, lastBlock: run.options[run.options.length - 1] ?? first } },
+        ),
+      );
+    }
+    if (run.tag === undefined) {
+      question.notes.push(
+        finding(
+          FindingCode.TypeLineMissing,
+          "warn",
+          `This question has no type line above it, as the others in the file have. It was read as a question because its options are laid out like theirs and one of them has a star in front, so the start of the question was guessed. Check it.`,
+          { field: "stem", source: { file, firstBlock: first, lastBlock: run.options[run.options.length - 1] ?? first } },
+        ),
+      );
+    }
+    return run.options[run.options.length - 1] ?? run.stemAt;
   };
 
   for (let i = 0; i < count; i++) {
@@ -821,6 +993,18 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       }
     }
 
+    // --- a question that begins with its type ------------------------------------------
+    if (typeLineLayout && (afterBlank || mode.kind === "outside")) {
+      const typed = typeLineAt(i);
+      if (typed) {
+        done.typeLines++;
+        i = readTypedRun(typed, i);
+        prevContent = i;
+        mode = { kind: "tail", question: questions[questions.length - 1] as RawQuestion };
+        continue;
+      }
+    }
+
     // --- a new question ---------------------------------------------------------
     const start = questionStartAt(i);
     if (start) {
@@ -981,6 +1165,18 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       const runOn = splitStemLine(question, block, i);
       mode = question.answerBlock === block.index ? { kind: "tail", question } : runOn ? { kind: "option", question, option: runOn } : { kind: "stem", question };
       continue;
+    }
+
+    // --- the same layout with its type line missing --------------------------------------
+    // The last question of a file whose type line was left off. Only after a question that had one.
+    if (typeLineLayout && afterBlank && questions.length > 0 && (mode.kind === "tail" || mode.kind === "outside")) {
+      const untyped = untypedAt(i);
+      if (untyped) {
+        i = readTypedRun(untyped, i);
+        prevContent = i;
+        mode = { kind: "tail", question: questions[questions.length - 1] as RawQuestion };
+        continue;
+      }
     }
 
     if (mode.kind === "outside") {
@@ -1326,6 +1522,16 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         }
       }
     }
+  }
+
+  if (done.typeLines > 0) {
+    fileFindings.push(
+      finding(
+        FindingCode.TypeLineQuestions,
+        "info",
+        `${done.typeLines === 1 ? "One question" : `${done.typeLines} questions`} began with a line that is only their type (MC), with the question under it and the options under that, one to a line and with no numbers or letters. The option with a star in front was taken as the answer.`,
+      ),
+    );
   }
 
   if (done.runOn > 0) {

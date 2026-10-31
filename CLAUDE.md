@@ -41,7 +41,7 @@ to the item. `schema.ts` rejects them by name with an explanation.
 ## Commands
 
 ```
-npm test                       # 800 tests, Node's own runner
+npm test                       # 843 tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
@@ -82,11 +82,12 @@ parser. Real publisher chapters go in `fixtures/publisher/`, which is
 gitignored and read when present, each with an `.expected.json` beside it written
 from the document and not from the importer. `npm run assess -- score fixtures/publisher`
 measures them, and `test/word-publisher-layout.test.ts` runs them when they are there.
-Eight files so far, two in a publisher's layout and six from one instructor's projects, all
-at 100 percent; but every rule was written from the file that needed it, so none of the eight
-is a test of rules written without it, and the acceptance criterion is three chapters
-the rules were not fitted to. A blind run of the last three, before any rule was changed, read 200 of
-200 (all refused, as it had no key), 25 of 45 and 0 of 33: do not read the 100 percent as how a new file will go. `docs/review-findings.md` says what each file taught.
+Twenty-one files so far, two in a publisher's layout, six from one instructor's projects and
+thirteen from one open-licensed course, all at 100 percent; but every rule was written from the file
+that needed it, so none of the twenty-one is a test of rules written without it, and the acceptance
+criterion is three chapters the rules were not fitted to. A blind run of the last sixteen, before any
+rule was changed, read 200 of 200 (all refused, as it had no key), 25 of 45, 0 of 33 and 0 of 618: do
+not read the 100 percent as how a new file will go. `docs/review-findings.md` says what each file taught.
 
 ## The read API
 
