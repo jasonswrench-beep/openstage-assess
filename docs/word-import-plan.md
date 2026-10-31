@@ -284,6 +284,100 @@ would have fixed, so this came first. Six things changed, each described below:
   right, the real files are still 1421 of 1421 and the gate 61 of 61. 13 new tests (994 in all), and 18 deliberate
   breaks, 17 caught and one equivalent (letters that are unique and in the wrong order always include one later
   than expected, so "later" and "different" are the same test).
+- Stage 4h, step 2: question numbers written `Q1.`, `Question 1:`, `(1)` and `4.1 Which ...`, and options labelled
+  `(A)` and `A:`. `Q` and `Question` with a number and a stop or colon are read wherever they begin a line, but a number must
+  be followed by a space or the end of the line, so that a stem that begins "Question 1.1?" is not question 1. A
+  bracketed number is read only where the file does it as a habit (at least three, most of them going on from the one
+  before, which allows a repeat, a skip of up to three, and a restart from 1), and then only as the next number, so
+  that a line Word wrapped in an answer, "(2) the offer is ...", is not question 2; a real file showed that, and so did
+  c-16, which skips a number. `4.1 Which ...` is read on the same terms as the bare `1.14`, and only as a habit.
+  `(A)` and `A:` are options only as the next letter the question is waiting for, so "(T) Ice floats." in a true or
+  false bank, and a "Q:" and "A:" card, are not. One helper (`anyOf`) tries several forms and hands back the
+  same groups, so none of the call sites changed. Run on the sixteen files to fit to, they read 80 of 230 (33.3 percent
+  as the harness scores it, with the ten questions made from key lists counted against it), from 53; the sixteen blind
+  files, now a second contact, 102 of 232 (40.8 percent), from 53; the real files are still 1421 of 1421 and the gate
+  61 of 61; and in none of the five generated sets is a question that is wrong marked `parsed`. 24 new tests, 28
+  deliberate breaks, three of which got through the first tests (a stray "(5) minutes are allowed" before the first
+  question, decimals that mostly do not go on, and questions that follow each other with no answer lines) and each got
+  a test.
+- Stage 4h, step 3: marks at the end of an option, a line `Correct: C`, a list inside a stem, and numbers that skip.
+  `(Correct)` or a check mark at the end of an option that stands alone on its line is the right answer and is taken
+  out of the words; a star at the end of the line is a mark only where at least three options end that way and no more than
+  half of all the options do; a line of several options is left alone, because the mark could belong to any of them. The
+  file says how many options were read this way (`import.mark-at-end-of-option`). `Correct:` is an answer line, as
+  `Answer:` is, and `Correct feedback:` is not. And a plain `3.` in a file whose questions are numbered `2.5`, `(2)` or
+  `Q2.` is a step in a list inside the stem and not a question: found by a question whose stem was "To solve a system, a
+  student performs these steps:" and three typed steps, which came out `parsed` with a right key and the first half of its stem
+  gone, the one kind of fault this importer must not have, and now it is the whole stem. A bracketed number may skip up to
+  three, or repeat, as a tired author leaves it (c-16 skips a number, which made the whole file unreadable). The fit set reads
+  115 of 230 (50.0 percent as the harness scores it), from 80, and the sixteen blind files 122 of 232 (49.4 percent), from
+  102; no question in any of the five generated sets is wrong and `parsed`; the real files are 1421 of 1421. 39 new tests (1038
+  in all), and 38 deliberate breaks of the question-start rules and 21 of the end marks, all caught in the end.
+- Stage 4h, step 4: a key at the end of the bank. Under a heading such as `Answer Key`, entries with several to a line
+  (`1. B   2. C`), one to a line, with a chapter in the number (`4.1. B`), a colon (`3: B`), `True` or `False`, or in a table
+  of two columns, are a key and not questions. Before, every row of a key table became an essay whose stem was a letter and
+  every line of a key list became a question made of entries, all counted against the file. A heading that is followed by
+  questions is still the copy with the answers, not a key. A dash, `n/a` or `none` in a key says that question has no key:
+  it is never an answer, so a choice question given one is refused and a fill in the blank with its own answer keeps it. Found
+  by breaking the rules: a key list with a dash in its first or middle entry was not read as a key at all. A dotted number
+  with words after it (`4.5. Bromine`) is an entry only where a question above has that number. The fit set reads 135 of 230
+  (58.7 percent as the harness scores it), from 115, and the sixteen blind files 143 of 232 (61.6 percent), from 122; in none
+  of the five generated sets is a question that is wrong marked `parsed`; the real files are 1421 of 1421 and the gate 61 of
+  61. 24 new tests (1062 in all), and 28 deliberate breaks of the key rules. One is not caught and is left: a lone plain
+  entry takes the older path, which gives the same answer except for a lone entry with options under it or for a number no
+  question has.
+- Stage 4h, step 5: two more types read from the answer. With no type named, an answer line or key that marks two
+  options (`ANS: B, D`, `B and D`, `B/D`) is a multiple response with those two options marked, and is flagged, because two
+  letters may be a slip: it was an error on a single-answer question before. A stated `Type: MC` is not overruled and still
+  fails. A stem with a blank (`____`) and an answer in words (`Answer: Paris`) is a fill in the blank, with an information
+  note and no flag, as `Accepted answers:` is. Not when any answer is a letter or letters (`B`, `B, D`, `A and C`): that is the
+  key of a choice question whose options were not read, and a fill in the blank made of it would look right and be wrong.
+  Found when the first form of the rule took the word `Paris` for letters, since every letter of it is between A and T; the
+  separator is now required. The fit set reads 149 of 230 (64.8 percent as the harness scores it), from 135, and the blind
+  files 155 of 232 (66.8 percent), from 143; in none of the five generated sets is a question that is wrong marked `parsed`;
+  the real files are 1421 of 1421 and the gate 61 of 61. 17 new tests (1079 in all), and 19 deliberate breaks, all caught in
+  the end; three got through at first and one of them changed the rule (an answer line of words beside a key that gives a
+  letter now reads neither way).
+- Stage 4h, step 6: a bank with no numbers and no letters, or numbered stems and no letters. A stem, its options under it
+  one to a line, a blank line, the next stem, with the right option marked by bold, a highlight, a colour, `(Correct)` or a
+  star. `standard-text-relabel.ts` gives such a file the labels the page does not show, as Word's own list would (the stem is
+  numbered unless it is, the options lettered in order) and the scanner reads it again as it reads any other, so every key
+  and type rule is the existing one. It decides only where a question begins and where its options are, and only from how the
+  whole file does it: three groups at least, nearly every run of lines in the file one of them, and the second reading kept
+  only if it finds keys the first did not and keys on at least four in five groups. A stem with an answer line and no options
+  (true or false, a blank, a short answer) is a group too. Not applied to a file the plain scan already read a choice question
+  from, which includes the type-line layout. The file gets a warning that says it was read by its layout. Guards, each found
+  by thinking of the question that would be wrong and look right: a stem set apart from its options by a blank line (the
+  first option would be the stem) makes the file unreadable by this step, a word or two on a line is not a stem (a type tag),
+  a title and up to three lines of instructions at the head of the first run are left out and listed, a line under the stem
+  that ends in a question mark or a colon closes a stem that has a second paragraph, and a line far longer than the options,
+  or a stem that ends in a colon above a full sentence, flags the question for a check because it may be more of the stem.
+  The fit set reads 183 of 230 (79.6 percent as the harness scores it), from 149, and the blind files 175 of 232 (75.4
+  percent), from 155; in none of the five generated sets is a question that is wrong marked `parsed`, after the first run of
+  this step put one there (a second paragraph of a stem read as an option, which the second paragraph rule and the long-line
+  flag now catch); the real files are 1421 of 1421 and the gate 61 of 61. 39 new tests (1118 in all), and 34 deliberate breaks,
+  all caught in the end; 24 got through the first tests, and most of those were checks hidden behind a later one.
+  Not read yet: a true or false statement with its `(T)` or `(F)` at the end and no stem number (c-23).
+- Stage 4h, step 7: bulleted options. Word keeps no label for a bullet, so the reader gave nothing to tell an option from a
+  stem and a bank of numbered stems over bulleted options with no blank line between the questions was one run of lines. A
+  block now says it is a bullet (`SourceBlock.bullet`) and a later line of a bulleted paragraph, after a soft line break, says
+  it is more of that item (`bulletMore`). The step that labels a bank with no letters ends a group at the first line after the
+  last bullet, and leaves the later line of a broken bullet with its option. The fit set reads 184 of 230 (80.0 percent as the
+  harness scores it) and the blind files 187 of 232 (80.6 percent), from 183 and 175; no question in the five generated sets is
+  wrong and `parsed`; the real files are 1421 of 1421 and the gate 61 of 61. 8 new tests (1126 in all), and 11 deliberate breaks
+  of the bullet rules; one got through the first tests (a bulleted option with a soft line break in it, which would have begun a
+  new question) and now has a test.
+- Stage 4h, step 8: a statement that ends with its own answer, `The Sun is a star. (T)`, with no type line. It is a true or
+  false question where the file does it as a habit (three one-line numbered statements at least, because `(F)` may be the last
+  word of a stem that means Fahrenheit) and where the statement stands alone, with nothing under it. A stated type is not
+  overruled. In a bank with no numbers a one-line statement with its answer at the end is a group of the step that labels
+  such a bank. The fit set reads 190 of 230 (82.6 percent as the harness scores it) and the blind files 190 of 232 (81.9
+  percent), from 184 and 187; no question in the five generated sets is wrong and `parsed`; the real files are 1421 of 1421 and
+  the gate 61 of 61. 10 new tests (1136 in all), and 11 deliberate breaks, three of which got through the first tests (what the
+  habit counts) and now have tests.
+  What is left in the generated sets is mostly a question with no options and an answer in words and no blank, which is an
+  essay or a short answer and is flagged because the file does not say which, and a question with two bold options and no type
+  line, which is a multiple response and flagged because it may be a slip.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in

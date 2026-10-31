@@ -302,7 +302,7 @@ function readLabelled(rows: Cell[][], context: Context): Line[] | undefined {
 // Answer key
 // ---------------------------------------------------------------------------
 
-const KEY_NUMBER = /^[A-Za-z#]*\s*(\d{1,4})\s*[.)]?$/;
+const KEY_NUMBER = /^[A-Za-z#]*\s*(\d{1,4}(?:\.\d{1,3})?)\s*[.)]?$/;
 const KEY_HEAD_NUMBER = /^(q|no|number|question|question no|question number|#|item)$/;
 const KEY_HEAD_ANSWER = /^(answer|answers|key|ans|correct|correct answer|answer key)$/;
 

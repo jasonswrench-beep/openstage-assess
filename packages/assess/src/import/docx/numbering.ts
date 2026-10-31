@@ -66,6 +66,8 @@ interface StyleNumbering {
 export interface ListLabel {
   /** The label, such as "3." or "b)". Absent for a bullet, or when the list shows nothing. */
   label?: string;
+  /** The paragraph is a bullet: a list item that shows a mark and no number or letter. */
+  bullet?: true;
   /** Why the label could not be worked out. When set, the paragraph is in a list whose number is not known. */
   unread?: string;
 }
@@ -380,7 +382,7 @@ export function readNumbering(parts: NumberingParts): Numbering {
         if (limit !== 0 && ilvl < limit) count.delete(deeper);
       }
 
-      if (level.format === "bullet") return {};
+      if (level.format === "bullet") return { bullet: true };
 
       let unknown: string | undefined;
       const text = level.text.replace(/%([1-9])/g, (_, digit: string) => {
