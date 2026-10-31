@@ -42,6 +42,9 @@ interface.
   explanation under an answer, `(Difficulty 3)` notes, matching given as terms,
   definitions and foils, and a bank with no numbers or letters at all, each question a
   type line (`MC`), its stem and its options, with a star before the right one. A
+  question that never names its type is read from its answer when that is plain: a
+  statement answered `True` or `False`, an `Accepted answers:` line, or an instruction
+  to match with a line for each pair. A
   Word 97-2003 `.doc` has to be saved as `.docx` first. Lists and formatting are checked against Word
   itself, and `fixtures/word-authored` holds documents that Word wrote
   (`docs/word-import-plan.md`).
@@ -94,7 +97,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/cli/              the command-line tool
-  test/                 843 tests, run by Node's own test runner
+  test/                 892 tests, run by Node's own test runner
   test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word

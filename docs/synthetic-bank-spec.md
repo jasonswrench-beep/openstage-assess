@@ -32,6 +32,21 @@ new batch is cheap.
    disagree, settle it by reading the document, and fix whichever is wrong. That happened with a real file
    in the last stage, and it was the expected-file writer that was wrong.
 
+**Check the batch before you believe it.** The first batch that came back was five documents saved under
+24 names, identical but for the title, with three questions each in one layout, a `layouts.md` that described
+layouts the files did not have, and a checker that printed success whatever it found. Before a run:
+
+1. Count the distinct documents: strip the title line from each file's text and compare. Two files with the
+   same text are one file.
+2. Count the questions in each file against the 8 to 40 asked for, and the total against about 600.
+3. Open three files and look at how questions begin, how options are labelled and how the answer is marked.
+   They should differ from file to file as `layouts.md` says. If a layout in `layouts.md` is not in the
+   files, the file is wrong or `layouts.md` is.
+4. Read the checker before running it, and break one file on purpose to see that it fails.
+
+If the batch is short, send it back with the count, not forward to the importer: a blind set can only be
+used once, and a bad one spends it.
+
 **What to give the other model.** Everything under the line below, and nothing about how the importer works.
 Do not paste in the importer's rules or its source: a file written to match them proves nothing.
 

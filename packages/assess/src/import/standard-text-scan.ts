@@ -57,7 +57,22 @@ const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
  * abbreviation that also takes a full stop). "Answers:" alone is the heading of a
  * list, and is read as that first.
  */
-const ANSWER_LINE = /^\s*(?:correct\s+)?(?:answers?\s*:|ans\s*[:.])\s*(.*)$/i;
+const ANSWER_LINE = /^\s*(?:(?:correct|accept(?:ed|able))\s+)?(?:answers?\s*:|ans\s*[:.])\s*(.*)$/i;
+/**
+ * "Accepted answers: 0, zero" is a key too, and one that only a typed-in answer has: no option is
+ * accepted, a word is. The label is what says so. The plural names a list, which is cut at the
+ * semicolons it has or, with none, at a comma followed by a space, so that 1,000 is one answer.
+ * The singular is one answer however many commas it has.
+ */
+const ACCEPTED_LABEL = /^\s*accept(?:ed|able)\s+answers?\s*:/i;
+const ACCEPTED_LIST = /^\s*accept(?:ed|able)\s+answers\s*:/i;
+/**
+ * A pair written on a line of its own, "Bell = Telephone": one equals sign with a space each side. The
+ * spaces are what keep a sum such as x=3 out of it, and they are not asked of a lettered option.
+ */
+const PAIR_LINE = /^[^=]+\s=\s[^=]+$/;
+/** The instruction of a matching exercise, which is what lets lines of pairs under it be read as one. */
+const MATCH_INSTRUCTION = /\bmatch(?:ing)?\b/i;
 const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
 const INCORRECT_FEEDBACK = /^\s*@\s*(.*)$/;
 const ANSWER_ENTRY = /^\s*(\d{1,4})\s*[.)]\s*(.*)$/;
@@ -276,6 +291,15 @@ function takePage(text: string): { text: string; page?: string } {
 }
 
 /**
+ * The forms of an "Accepted answers" line. A semicolon cuts it, and without one a comma and a space do:
+ * "mitochondria, mitochondrion" is two, "1,000, one thousand" is two, and "Paris, France" is two as
+ * well, which is the one reading here that can be wrong, so the cut is reported with the question.
+ */
+function splitAcceptedList(value: string): string[] {
+  return (value.includes(";") ? value.split(";") : value.split(/,\s+/)).map((p) => p.trim()).filter((p) => p.length > 0);
+}
+
+/**
  * An Answer line's value without the note that says where the question comes from, and
  * without the bracket or full stop that closes a letter or a word ("b)", "False."), which
  * is dropped only when what is left reads as a key. The note is not lost: it comes back
@@ -356,6 +380,10 @@ export interface RawQuestion {
   generalFeedback: string[];
   /** What "Answer:" lines beside the question said. They are the question's own key, so they come before a list. */
   answerLines: string[];
+  /** One of those lines was labelled "Accepted answers", which only a typed-in answer has. */
+  acceptedLabel?: boolean;
+  /** Its options are lines of "left = right" with no letters, read under an instruction that says to match. */
+  pairLines?: boolean;
   /**
    * Things found about this question outside the builder, such as how it sits
    * with the file's formatting convention. The builder gives them the question's source.
@@ -754,8 +782,26 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     return { stemAt: i, stem: textAt(i).trim(), options };
   };
 
+  /**
+   * The lines from `from` that are pairs written "left = right", to the first line that is not. A left side
+   * that comes twice is not a matching exercise (the same rule the lettered kind has), so it is no run.
+   */
+  const pairRunAt = (from: number): number[] => {
+    const run: number[] = [];
+    const lefts = new Set<string>();
+    for (let j = from; j < count; j++) {
+      const t = textAt(j).trim();
+      if (!PAIR_LINE.test(t) || t.startsWith("*") || QUESTION_START.test(t) || OPTION_START.test(t) || isDirective(t) || isTrailer(t)) break;
+      const left = t.slice(0, t.indexOf("=")).trim().toLowerCase();
+      if (lefts.has(left)) return [];
+      lefts.add(left);
+      run.push(j);
+    }
+    return run;
+  };
+
   /** Make the question of a run and return the last block it used. */
-  const readTypedRun = (run: TypedRun, first: number): number => {
+  const readTypedRun =(run: TypedRun, first: number): number => {
     const stemBlock = blocks[run.stemAt] as SourceBlock;
     const taken = takePage(run.stem);
     if (section) section.used = true;
@@ -1255,7 +1301,23 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     if (answerMatch) {
       // "Answer: b) (Textbook reference: Chapter 3)": the key, and where the question comes from.
       const { key, notes } = splitAnswerNote((answerMatch[1] ?? "").trim());
-      if (key.length > 0) question.answerLines.push(key);
+      if (key.length > 0 && ACCEPTED_LABEL.test(line)) {
+        question.acceptedLabel = true;
+        const forms = ACCEPTED_LIST.test(line) ? splitAcceptedList(key) : [key];
+        question.answerLines.push(...forms);
+        if (forms.length > 1) {
+          question.notes.push(
+            finding(
+              FindingCode.AcceptedAnswersSplit,
+              "info",
+              `"${key}" was read as ${forms.length} accepted answers (${forms.map((f) => `"${f}"`).join(", ")}), cut where the line has a semicolon or, with none, a comma and a space. If one of them is a single answer that has a comma in it, join them again.`,
+              { field: "body" },
+            ),
+          );
+        }
+      } else if (key.length > 0) {
+        question.answerLines.push(key);
+      }
       question.answerBlock = block.index;
       for (const note of notes) question.metadata.push({ ...note, block: block.index });
       claim(block, question);
@@ -1376,6 +1438,43 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
           mode = { kind: "answer", question };
           break;
         }
+        // A matching exercise with no letters: an instruction that says to match, then a line for each
+        // pair, "Bell = Telephone". Both are asked for. A line with an equals sign is far more often a
+        // sum in a stem, and a stem that says match is not otherwise followed by lines of pairs.
+        // The run has to begin right after the instruction. One that begins after a pair line was
+        // refused (a left side that comes twice, a star) would be the rest of that exercise with its
+        // first pair left in the stem, a matching question that looks complete and is not.
+        if (
+          hint === undefined &&
+          question.options.length === 0 &&
+          question.stemLines.length > 0 &&
+          MATCH_INSTRUCTION.test(question.stemLines.join(" ")) &&
+          !question.stemLines.some((l) => PAIR_LINE.test(l.trim()))
+        ) {
+          const pairs = pairRunAt(i);
+          if (pairs.length >= 2) {
+            pairs.forEach((at, k) => {
+              const pairBlock = blocks[at] as SourceBlock;
+              question.options.push({
+                letter: k < 26 ? String.fromCharCode(97 + k) : "?",
+                starred: false,
+                lines: [pairBlock.text.trim()],
+                feedback: [],
+                firstBlock: pairBlock.index,
+                lastBlock: pairBlock.index,
+                textOffset: 0,
+                textBlocks: [pairBlock.index],
+                keyedByFormat: false,
+              });
+              claim(pairBlock, question);
+            });
+            question.pairLines = true;
+            i = pairs[pairs.length - 1] as number;
+            prevContent = i;
+            mode = { kind: "tail", question };
+            break;
+          }
+        }
         // A stem whose first line was the number alone has no earlier line to span a blank from.
         if (afterBlank && question.stemLines.length > 0) question.stemAfterBlank = true;
         const taken = takePage(trimmed);
@@ -1447,6 +1546,19 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
           (question.rationale ??= []).push({ block, text: trimmed });
           claim(block, question);
           break;
+        }
+        // A pair that comes after the pairs, past a blank line or a line of other text. The run
+        // stopped, so it is not one of them, but a matching question that looks complete with a pair
+        // missing is worse than one that is flagged.
+        if (question.pairLines && PAIR_LINE.test(trimmed)) {
+          question.notes.push(
+            finding(
+              FindingCode.PairLeftOut,
+              "warn",
+              `"${trimmed}" looks like a pair, but it comes after a blank line or other text that ended this question's pairs, so it was not read as one of them. Check that no pair is missing.`,
+              { field: "body.pairs" },
+            ),
+          );
         }
         // This is where text used to be quietly folded into the stem. A heading
         // after the options, or the start of the next section, is not part of

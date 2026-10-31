@@ -244,6 +244,30 @@ would have fixed, so this came first. Six things changed, each described below:
   like a label in the second place, and two conditions of the read for a question with its type line
   left off, whose first tests never reached the branch. Three conditions that could never matter (length
   checks that the count of options already makes) were taken out.
+- Stage 4g, a blind test, against 24 Word files that another model wrote from `docs/synthetic-bank-spec.md`,
+  run before anything was changed. The blind set read 23 of 48 questions and the set that may be fitted to
+  10 of 24 (33 of 72). The batch was less than the brief asked for: five distinct documents, identical but
+  for the title, three questions each, in one layout, with a `layouts.md` that described layouts the files do
+  not have and a checker that printed success whatever it found. So the number measures one layout from
+  five angles, and it is reported apart from the real files. Of the 39 questions missed, 29 had a type the
+  file never names (ten true or false statements answered `True` or `False`, fourteen typed-in answers under
+  `Accepted answers:`, five matching exercises written as `Bell = Telephone` lines) and came out as essays
+  with the answer in the stem or no key, and 10 differed only in the verdict. No question had a wrong key,
+  and all 24 with no answer marked were refused. After the stage 4g rules the blind set reads 42 of 48 and
+  set A 20 of 24, with every question's content right; the 10 left are the verdict on two kinds of
+  question that stay flagged on purpose (a multiple choice question with two stars and no type, and an
+  essay with no answer). The real files are still 1421 of 1421 and the 61-question gate 61 of 61. The rules
+  are fitted to these five documents now, so the honest number is the first one.
+- Sixty-seven deliberate breaks of the stage 4g code: sixty-three caught by the first tests. Of the four that
+  got through, two (the forms of an `Accepted answers` line are trimmed again further on, so only the count
+  in the note showed it) got a better test, one was the offset of a pair line's text, which has no letter to
+  tell it from and was taken out, and one, a guard that only an empty line passes through, changes nothing in
+  the whole suite and was left. A probe found two things the breaks could not, both of the same kind, a
+  matching exercise that looked complete with a pair missing and was `parsed`. A repeated left side on the
+  third line left the first pair in the stem and read the two lines after it as the exercise, so a run now
+  has to begin right after the instruction. A note or a blank line in the middle of the pairs ended the run
+  and left the rest as stray text, so a pair-shaped line after the run is now a warning on the question
+  (`import.pair-left-out`).
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -541,6 +565,39 @@ tests on invented questions in `test/type-line-layout.test.ts`, and none of the 
   paragraph: the second is taken for the first option. Questions with no blank line between them: they are
   read as one question, which has a type line among its options and is flagged for review, because if the
   first has no star of its own the second's would be taken for its key; with two stars it fails.
+
+**How a type is read from the answer or the pairs, stage 4g.** A blind test on a generated batch found this.
+The rules have tests on invented questions in `test/type-from-evidence.test.ts`. They apply only when the
+file names no type: a Type line, a section heading or a type line that is stated wins, and a Type line this
+profile does not know is worked out as before and flagged. They are not flagged for review, because the
+evidence is the file's own word or pair and not the shape of the question, and no key is guessed. Each
+leaves an information finding (`import.type-from-evidence`) that says what the type was read from. What
+stays a flagged guess: an essay with no answer, a choice question with two stars and no type.
+
+- *True or false.* A statement with no options whose answer, from an Answer line or an Answers list, is the
+  word True or False alone (any case, a full stop after it is allowed). Not `T`, `Yes` or a sentence, which
+  are not the words. Not when the stem has a blank (three underscores or more), since `A value is either
+  ____ or false` has True for its answer. Not when two sources give different answers.
+- *Accepted answers.* A line labelled `Accepted answers:`, `Acceptable answers:` or the singular is a key
+  that only a typed-in answer has. It is a fill in the blank when the stem has a blank and a short answer
+  when it has none. The plural is a list and is cut at its semicolons or, with none, at each comma followed
+  by a space, so `1,000, one thousand` is two forms. The singular is one answer however many commas it has.
+  The cut is the one judgment here: `Paris, France` is two forms, and the question says it was cut, with the
+  forms, so that someone who meant one answer can join them. An empty line, or one of separators, gives no
+  answer and does not make the question a typed-in one.
+- *Matching, with no letters.* An instruction that says to match (`Match`, `Matching`, a word and not part
+  of one), then a line of `left = right` for each pair, with a space each side of one equals sign. It needs
+  both, and at least two pairs with different left sides. The run has to begin right after the instruction:
+  a pair line that was refused (a star, a repeated left side) and left in the stem makes the rest no run,
+  because the rest would look like a complete exercise with its first pair missing. The run ends at the
+  first line that is not a pair, and that line is reported as stray text; if a pair-shaped line comes after
+  it (past a note or a blank line) the question gets a warning that a pair may be missing, so it is sent to
+  review and not passed as complete. An instruction that has an equals sign in it is not read, since its
+  own sum looks like a pair.
+- *What it does not read.* An answer of `T` or `F` on a statement with no options, a blank in the stem with an
+  ordinary `Answer:` line and no label, a stated `MT` type over lines of pairs with no letters (it fails,
+  with its lines left in the stem), pairs with a note or a blank line in the middle of them (the pairs
+  before it are read and the question is flagged), and a wrong answer to go with the pairs.
 
 **Not built yet:** a key in a table by shading, matching questions as a table of another shape
 (two columns, no numbers), a question that spreads over several rows of a grid, text boxes and
