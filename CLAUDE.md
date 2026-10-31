@@ -41,7 +41,7 @@ to the item. `schema.ts` rejects them by name with an explanation.
 ## Commands
 
 ```
-npm test                       # 892 tests, Node's own runner
+npm test                       # 975 tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
@@ -50,6 +50,7 @@ npm run assess -- contract     # the read contract and consumer capabilities
 npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks
 npm run check:word-authored --workspace packages/assess   # has Word write sample documents and reads them
+npm run check:generated --workspace packages/assess -- check <folder> --piece N   # holds a generated bank to its plan
 ```
 
 The last three are not part of `npm test`. Run the first after any change to
@@ -89,7 +90,9 @@ criterion is three chapters the rules were not fitted to. A blind run of the las
 rule was changed, read 200 of 200 (all refused, as it had no key), 25 of 45, 0 of 33 and 0 of 618: do
 not read the 100 percent as how a new file will go. `docs/review-findings.md` says what each file taught.
 A batch of 24 generated files (`docs/synthetic-bank-spec.md`) read 33 of 72 blind; it was five distinct
-documents in one layout, so it is reported apart and never counts toward the criterion.
+documents in one layout, so it is reported apart and never counts toward the criterion. The brief now gives
+each file its layout and `check:generated` holds the files to it before the importer sees them: never run
+the importer on a generated batch that has not passed it.
 
 ## The read API
 

@@ -268,6 +268,9 @@ would have fixed, so this came first. Six things changed, each described below:
   has to begin right after the instruction. A note or a blank line in the middle of the pairs ended the run
   and left the rest as stray text, so a pair-shaped line after the run is now a warning on the question
   (`import.pair-left-out`).
+- The brief for generated banks was rewritten after stage 4g, and the checker that holds a batch to it
+  (`npm run check:generated`) was built and tested before any second batch was asked for: 24 files in six
+  pieces of four, each assigned a layout, the blind set being pieces 1 to 4. See `docs/synthetic-bank-spec.md`.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in

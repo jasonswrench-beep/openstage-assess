@@ -32,6 +32,7 @@
     "check:word": "node --experimental-strip-types --no-warnings test/tools/word-numbering-check.ts",
     "check:word-formatting": "node --experimental-strip-types --no-warnings test/tools/word-formatting-check.ts",
     "check:word-authored": "node --experimental-strip-types --no-warnings test/tools/word-authored-check.ts",
+    "check:generated": "node --experimental-strip-types --no-warnings test/tools/generated-bank-check.ts",
     "update:word-authored": "node --experimental-strip-types --no-warnings test/tools/word-authored-check.ts --update-fixtures"
   },
   "dependencies": {},

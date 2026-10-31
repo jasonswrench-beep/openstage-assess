@@ -503,8 +503,19 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
 - **Not read:** an answer of `T` or `F` on a statement with no options (`F` is also fluorine), a blank in the
   stem with an ordinary `Answer:` line and no label (read as an essay, with the answer kept, as before), a
   stated `MT` over lines of pairs with no letters (it fails and says so), and a wrong answer to go with the
-  pairs. A brief for a second batch should assign each file a layout from a table, require a minimum number
-  of distinct questions, and ask for a checker that fails loudly. The brief is still the first version.
+  pairs.
+- **The brief has been rewritten, and the checker is ours.** It asks for four files at a time, in six pieces,
+  and gives each file its layout from a plan (`test/tools/generated-bank-plan.ts`): how a question begins, how
+  options are labelled, how the right one is marked, the other types, one hard case, a subject, a size and a
+  number of lapses. `npm run check:generated` reads each file's Word XML itself, holds it to the plan, reads
+  the key out of the document by the assigned mark and compares it with the expected file, and fails on a
+  repeated question. It rejects the first batch on every count (size, missing types, layout, the repeated
+  stem, missing marks). It was tested on documents written in every assigned layout, on documents Word wrote,
+  and with 80 deliberate breaks, which found and fixed three faults of its own: empty paragraphs that Word
+  writes with attributes swallowed the table after them, the repeat test ignored digits, and 34 checks had no
+  test that could fail them. It has not been run on python-docx output, which is probably what the other
+  model will use, so its reading of a style that carries a list (`List Number`) is tested on a hand-made style
+  and not on that template.
 
 ### Found by a blind test on thirteen openly licensed files (stage 4f), not yet fixed
 
