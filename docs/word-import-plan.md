@@ -204,6 +204,27 @@ would have fixed, so this came first. Six things changed, each described below:
   choice question, naming no option, in a question with one option, and given back to the option above, a
   cell spread across columns in a matching table, a table under a heading that is not Matching, and a bold
   space inside a sentence. Two of those needed a second try because the first test did not reach the code.
+- Stage 4e, a blind test, against three files from authors the rules had not been written for: the
+  importer was run on them with no rule changed, and scored against expected files written from each
+  document's XML by separate scripts. A 200-question exam from 2002 (a `.doc` with no answer key in it,
+  the answers were in a second file) read 200 of 200, each declared failed, because there is nothing to
+  read a key from and nothing was guessed. A second chapter of the 2007 bank scored 25 of 45 (34 of its
+  44 questions read right; the harness counts the ten matching items the importer made against the one
+  exercise the expected file has, and the 44 `(Difficulty n)` lines it left as stray text). A nursing
+  test bank in a publisher's layout scored 0 of 33, with 20 keys on the right option, 4 on an option
+  that had the next one fused to it, 9 with none, and no key on a wrong one. After the stage 4e rules
+  the three read 200 of 200, 35 of 35 and 33 of 33, the five earlier files still 535 of 535 and the
+  61-question gate 61 of 61. One expected result was changed after the first run, on purpose: the
+  nursing question whose stem a line wrap had broken is now declared needsReview, because the importer
+  has to guess where that question ends and says so. The two `.doc` files reached the importer the
+  same way as before, as `.docx` that a separate hidden Word made from copies.
+- Seventy-six deliberate breaks of the stage 4e code: all caught by a test in the end. Fourteen got
+  through the first tests and each got a test of its own: the spelling and the gluing of an answer label,
+  an answer that closes the question in each of the four places it can stand, a letter with no space
+  before it, formatting read from a stem line that holds options, a label other than KEY read as a list of
+  fields, a one-field KEY, the message about the fields, a rationale not right under the Answer line, a
+  rationale in too small a share of the questions, and the severity of the matching heading's flag. A fifteenth was a condition
+  that could never matter (the scanner is in stem mode only until the first option) and was taken out.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -431,10 +452,56 @@ tests, and the files themselves stay in `fixtures/publisher`.
 - *The right side of a matching pair, and a distractor, follow the model's character rule*, as the left
   side does, because they are plain strings and rich text is where the rule was applied.
 
+**How a publisher's layout and a second chapter are read, stage 4e.** A blind test (see Measured)
+found these. Each rule has a test on small invented examples in `test/blind-layouts.test.ts`, and
+none of the files' words are in them.
+
+- *Options on one line.* `B. SOLER C. DAR` is two options, and the first option may be at the end of
+  the question's own line (`Which is a planet? A. Sirius`), when B is on the same line or begins the
+  next. The letters have to come in order, from A (or from the letter after the option the line
+  began with), each a capital letter and a full stop with a space before it and no lower case letter
+  after it, so `C. difficile` and a stem that ends in `vitamin A.` are not options. The options
+  that share a line are marked as sharing it, and the formatting reader skips them: how a line looks
+  says nothing about one of its options. The file says how many lines were split, as information.
+- *An answer at the end of a line.* `D. Affect ANS: C` is the option and the key `C`, and it ends the
+  question, so the line under it is not added to the option. Only `ANS`, `Ans`, `Answer`, `Answers` and
+  `Correct Answer` with a colon, and only when what follows is a key (letters, or True and False), so
+  `answer:` in the middle of a sentence is not one. The same on the last line of a stem, for a true or
+  false statement (`... ANS: T`).
+- *A number that goes back to the start inside a stem.* `13. ... by the end of day` and then `1. Which
+  diagnosis...` is a sentence that a line wrap broke. Directly under a stem that has no options yet, with
+  no blank line between, a number that is the same as or lower than the question's own is more of its
+  text, and the question is flagged for review (a warning), because the importer guessed where it ends.
+  A number that goes on from the last is a question, and so is one after a blank line, after options, or a
+  gap upward. A steps list inside a stem (`1. wash`, `2. dry`) stops being a run of questions.
+- *A KEY line of fields.* `KEY: Cognitive Level: Application | Client Need: Safe Care` is a field of
+  metadata for each, so the Bloom level is read from `Cognitive Level` and the rest are kept under
+  `metadata.custom` with an information finding, not the warning an unknown label gets. A KEY line that
+  Word broke across paragraphs (`... | Client` and then `Need: Safe Care`) goes on into the line directly
+  under it, with no blank line between, but only for a label whose value is a list of fields separated by
+  bars: stray text under `DIF: Easy` is still stray text. A `KEY:` that is not a list of fields stays one
+  label this profile does not know, and says so.
+- *The explanation under an Answer line.* A paragraph or two directly under an Answer line, with no label,
+  is the explanation of the answer, kept as a note under `metadata.custom.Rationale`. It is **not made
+  feedback**: a question's feedback is what a student is shown, and the profile already declines to make a
+  `Rationale:` or `Explanation:` label feedback for that reason. Read only as a habit of the whole file
+  (three questions and 80 percent of the questions that have an Answer line); in a file that does it
+  now and then it is given back as stray text, as before.
+- *A note in brackets alone on a line.* `(Difficulty 3)`, `(Chapter 4)`: any label this profile knows,
+  as the page already was. `3` is read as hard, as `DIF: 3` is. A label it does not know (`(Note to self)`)
+  is stray text.
+- *Terms, definitions and foils.* `1) Term: ...`, a `Definition:` line, and sometimes a `Foil:` line, under
+  a matching heading or none, are the items of one matching exercise: a pair to an item and the foil as a
+  wrong answer to go with it. The exercise is under its heading, which stands for the instruction, so it is
+  flagged for review as the matching table is. One exercise for each heading. The page and difficulty
+  under each item are kept (the pages joined, the first difficulty used and the rest recorded with a
+  warning, which the heading's flag covers anyway).
+
 **Not built yet:** a key in a table by shading, matching questions as a table of another shape
 (two columns, no numbers), a question that spreads over several rows of a grid, text boxes and
 alternate content (rest of stage 5), pictures with their bytes and alt text (stage 6), equations
-(stage 7), and the rest of stage 8: real chapters written by other people than the two sources so
+(stage 7), the answers of a test kept in a second file (the 2002 exam's answers are in
+a second file), and the rest of stage 8: real chapters written by other people than the two sources so
 far. The dialect pack is still the thing most wanted. The first real file taught more in one
 afternoon than stages 3 and 4 had learned from files our own writer made, and each file since has
 needed rules of its own; the next layout will not be these. Word's spelled-out number formats

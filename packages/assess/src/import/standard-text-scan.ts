@@ -176,6 +176,59 @@ const CHAPTER_TITLE = /^\s*chapter\s+\w+(?:-\w+)?(?:\s+(?:test\s+)?(?:questions|
  * comes from is taken off; "(or d)" is part of the answer and is left to fail.
  */
 const SOURCE_NOTE = /\s*\(\s*((?:textbook\s+)?(?:reference|ref|source|section|chapter|page|pages|pp?\.?)\b[^()]*)\)\s*\.?\s*$/i;
+/**
+ * A note in brackets that gives a question's difficulty, objective or another label this
+ * profile knows, alone on a line: "(Difficulty 3)". Like the page, it describes the question
+ * above it. The label has to be a known one, so that a line of brackets that is part of the
+ * text is not taken for one.
+ */
+const NOTE_LINE = /^\(\s*([A-Za-z][A-Za-z' ]{1,24}?)\s*:?\s+([^()]{1,40}?)\s*\)$/;
+
+/**
+ * An answer at the end of a line that has other words before it: "D. Affect ANS: C". Only
+ * the spellings of the label that publishers use, so that "answer:" in the middle of a
+ * sentence is not one, and only when what follows is a key and not more words.
+ */
+const INLINE_ANSWER = /\s+(?:ANS|Ans|Answers?|Correct Answers?)\s*:\s*(\S.*)$/;
+
+/** Capital letters and a full stop in a line, where the next option of a line that runs several together starts. */
+const RUN_ON_MARK = /(?:^|\s)([A-T])\.\s+(?=[^\sa-z])/g;
+
+/** A matching exercise written as a numbered term, then its definition, then sometimes a wrong answer to go with it. */
+const TERM_LINE = /^\s*term\s*:\s*(\S.*)$/i;
+const DEFINITION_LINE = /^\s*definition\s*:\s*(\S.*)$/i;
+const FOIL_LINE = /^\s*(?:foil|distractor)\s*:\s*(\S.*)$/i;
+
+/** The letter after this one. */
+const nextLetter = (letter: string): string => String.fromCharCode(letter.charCodeAt(0) + 1);
+
+/** The answer a line ends with, and the line without it. */
+function peelInlineAnswer(text: string): { text: string; answer?: string } {
+  const found = INLINE_ANSWER.exec(text);
+  if (!found || found.index === 0) return { text };
+  const answer = (found[1] as string).trim();
+  if (!KEY_VALUE.test(answer.replace(/[.)]\s*$/, "").trim())) return { text };
+  return { text: text.slice(0, found.index).trimEnd(), answer: answer.replace(/[.)]\s*$/, "").trim() };
+}
+
+/**
+ * Where the options that a line runs together start. Each is a capital letter and a full
+ * stop, and they have to come in order from `first`: "B. SOLER C. DAR" is two options, and a
+ * "C." in the middle of option B's words is not one, because B has not been followed by C.
+ * What comes after the full stop must not begin with a lower case letter, so "C. difficile" is
+ * left alone.
+ */
+function runOnMarks(text: string, first: string): Array<{ at: number; end: number; letter: string }> {
+  const marks: Array<{ at: number; end: number; letter: string }> = [];
+  let expect = first.toUpperCase();
+  for (const m of text.matchAll(RUN_ON_MARK)) {
+    if (m[1] !== expect) continue;
+    const at = (m.index ?? 0) + (m[0].length - m[0].trimStart().length);
+    marks.push({ at, end: (m.index ?? 0) + m[0].length, letter: expect });
+    expect = nextLetter(expect);
+  }
+  return marks;
+}
 
 /** An all-capital short code such as NOT, MSC or NAT that a bank may invent. */
 const UNKNOWN_LABEL = /^\s*([A-Za-z][A-Za-z'\- ]{0,28})\s*:\s*(.+)$/;
@@ -261,6 +314,11 @@ export interface RawOption {
   textBlocks: number[];
   /** The file's formatting convention marks this option as correct. Set after the scan; see standard-text-format.ts. */
   keyedByFormat: boolean;
+  /**
+   * Its line holds other options too ("B. SOLER C. DAR"), so the formatting of the line says
+   * nothing about this one option and is not read for it.
+   */
+  shared?: boolean;
 }
 
 export interface RawQuestion {
@@ -310,6 +368,13 @@ export interface RawQuestion {
   answeredBelow: boolean;
   /** Its answer was "(T)" or "(F)" at the end of its first line. */
   answeredInline: boolean;
+  /** The block of its Answer line, whether on a line of its own or at the end of another. */
+  answerBlock?: number;
+  /**
+   * Text under its Answer line that has no label, taken for now as the explanation of the
+   * answer; settled at the end of the scan, when it is known whether the file does this as a habit.
+   */
+  rationale?: Array<{ block: SourceBlock; text: string }>;
   /**
    * An @ line came straight after the stem, before any option. The generic
    * format reads that as feedback for an incorrect answer; D2L and Moodle read
@@ -450,12 +515,115 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     });
   };
 
+  /** The next option of a line that has several, when the line after this one begins with it. */
+  const optionBFollows = (i: number): boolean => {
+    const j = nextContent(i);
+    return j !== -1 && OPTION_START.exec(textAt(j))?.[2]?.toLowerCase() === "b";
+  };
+
+  /** What this layout did, counted for the findings that say so once for the file. */
+  const done = { runOn: 0, answersAtEnd: 0, labelsContinued: 0 };
+
+  const takeAnswer = (question: RawQuestion, block: SourceBlock, answer: string): void => {
+    question.answerLines.push(answer);
+    question.answerBlock = block.index;
+    done.answersAtEnd++;
+  };
+
+  /**
+   * The options that follow `option`'s own words on its line: "B. SOLER C. DAR" is B and C. Each
+   * is made an option of its own, in order, and the last is returned, because the lines that
+   * follow belong to it. An answer at the end of the line is taken off first. The options that
+   * share a line are marked, because how the line looks says nothing about one of them.
+   */
+  const splitOptionLine = (question: RawQuestion, block: SourceBlock, option: RawOption, at: number): RawOption => {
+    let text = option.lines[at] ?? "";
+    const peeled = peelInlineAnswer(text);
+    if (peeled.answer !== undefined) {
+      takeAnswer(question, block, peeled.answer);
+      text = peeled.text;
+    }
+    const marks = runOnMarks(text, nextLetter(option.letter));
+    if (marks.length === 0) {
+      option.lines[at] = text;
+      return option;
+    }
+    option.lines[at] = text.slice(0, marks[0]?.at).trimEnd();
+    option.shared = true;
+    let last = option;
+    marks.forEach((mark, k) => {
+      last = {
+        letter: mark.letter.toLowerCase(),
+        starred: false,
+        lines: [text.slice(mark.end, marks[k + 1]?.at ?? text.length).trim()],
+        feedback: [],
+        firstBlock: block.index,
+        lastBlock: block.index,
+        textOffset: 0,
+        textBlocks: [block.index],
+        keyedByFormat: false,
+        shared: true,
+      };
+      question.options.push(last);
+    });
+    done.runOn++;
+    return last;
+  };
+
+  /**
+   * The first option of a question, written at the end of the last line of its stem: "Which
+   * is right? A. This B. That". Only when the letters then go on in order, from A, and B is
+   * on the same line or begins the next one, so that a stem that ends in "vitamin A." is not
+   * read as having an option. Returns the last option made, or nothing if the line was left as it was.
+   */
+  const splitStemLine = (question: RawQuestion, block: SourceBlock, i: number): RawOption | undefined => {
+    const at = question.stemLines.length - 1;
+    if (at < 0) return undefined;
+    let text = question.stemLines[at] ?? "";
+    const peeled = peelInlineAnswer(text);
+    if (peeled.answer !== undefined) {
+      takeAnswer(question, block, peeled.answer);
+      text = peeled.text;
+    }
+    const marks = runOnMarks(text, "a");
+    const first = marks[0];
+    if (!first || first.at === 0 || (marks.length < 2 && !optionBFollows(i))) {
+      question.stemLines[at] = text;
+      return undefined;
+    }
+    question.stemLines[at] = text.slice(0, first.at).trimEnd();
+    let last: RawOption | undefined;
+    marks.forEach((mark, k) => {
+      last = {
+        letter: mark.letter.toLowerCase(),
+        starred: false,
+        lines: [text.slice(mark.end, marks[k + 1]?.at ?? text.length).trim()],
+        feedback: [],
+        firstBlock: block.index,
+        lastBlock: block.index,
+        textOffset: 0,
+        textBlocks: [block.index],
+        keyedByFormat: false,
+        shared: true,
+      };
+      question.options.push(last);
+    });
+    done.runOn++;
+    return last;
+  };
+
+  /** The label whose value the line above may go on into, until a line of anything else comes between. */
+  let lastLabel: { question: RawQuestion; entry: { label: string; value: string; block: number }; block: number } | undefined;
+  /** The last line that had anything on it, so that "directly under" can be told from "after a blank line". */
+  let prevContent = -1;
   let points = defaultPoints;
   let pending: Pending = {};
   let mode: Mode = { kind: "outside", why: "before the first question" };
   let sawBlank = false;
   /** The type a section heading gave, until the next heading. `used` says whether a question has had it. */
   let section: { type: string; block: SourceBlock; used: boolean; title: string } | undefined;
+  /** The matching exercise that numbered terms and their definitions are being gathered into, and the heading it is under. */
+  let termGroup: { question: RawQuestion; section: typeof section } | undefined;
   /** Whether a heading has said that the questions from here on are the copy with the answers. */
   let keyed = false;
   /** Letters alone under a question's options that were taken as its answer, until the file shows it does that as a habit. */
@@ -507,6 +675,8 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     }
     const afterBlank = sawBlank;
     sawBlank = false;
+    const before = prevContent;
+    prevContent = i;
 
     // --- inside an answer key -------------------------------------------------
     if (mode.kind === "key") {
@@ -627,13 +797,139 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       continue;
     }
 
+    // --- a number out of sequence, in the middle of a stem --------------------------
+    // A line wrapped in Word can break a sentence before a number: "...by the end of day" and
+    // then "1. Which diagnosis...". Directly under a stem that has no options yet, a number
+    // that is not the next one but the same or an earlier one is the rest of that sentence, not
+    // a question that starts the numbers again. A number that goes on from the last is a question.
+    // (The scanner is in stem mode only until the first option, so there are none to look for.)
+    if (mode.kind === "stem" && !afterBlank && mode.question.stemLines.length > 0 && mode.question.label === undefined) {
+      const typed = QUESTION_START.exec(line);
+      if (typed && Number(typed[1]) <= mode.question.number) {
+        const q = mode.question;
+        q.stemLines.push(trimmed);
+        q.notes.push(
+          finding(
+            FindingCode.NumberOutOfSequence,
+            "warn",
+            `A line that begins with the number ${typed[1]} came straight under the text of question ${q.number}, which is a number that does not go on from it, so it was read as part of that question's text and not as a question of its own. Check where the question ends.`,
+            { field: "stem", source: { file, firstBlock: block.index, lastBlock: block.index } },
+          ),
+        );
+        claim(block, q);
+        continue;
+      }
+    }
+
     // --- a new question ---------------------------------------------------------
     const start = questionStartAt(i);
     if (start) {
       // A Type line is the file's own word for this question, and it comes before the
       // heading of the section the question is in.
-      const typeHint = pending.type?.value ?? section?.type;
+      let typeHint = pending.type?.value ?? section?.type;
       if (!pending.type && section) section.used = true;
+
+      // A matching exercise written as "1) Term: ...", "Definition: ..." and "Foil: ...": each
+      // numbered item is one pair and a wrong answer to go with it, and the items of a section
+      // are one exercise, as the rows of a table of pairs are.
+      const termItem = ((): { term: string; definition: string; foil?: string; defAt: number; foilAt?: number } | undefined => {
+        if (start.label !== undefined || (typeHint !== undefined && typeHint !== "MT")) return undefined;
+        const term = TERM_LINE.exec(start.rest);
+        if (!term) return undefined;
+        const defAt = nextContent(i);
+        const definition = defAt === -1 ? null : DEFINITION_LINE.exec(textAt(defAt));
+        if (defAt === -1 || !definition) return undefined;
+        const foilAt = nextContent(defAt);
+        const foil = foilAt === -1 ? null : FOIL_LINE.exec(textAt(foilAt));
+        return {
+          term: (term[1] as string).trim(),
+          definition: (definition[1] as string).trim(),
+          ...(foil && foilAt !== -1 ? { foil: (foil[1] as string).trim(), foilAt } : {}),
+          defAt,
+        };
+      })();
+      if (termItem) {
+        typeHint = "MT";
+        const group = termGroup && termGroup.section === section && questions[questions.length - 1] === termGroup.question ? termGroup : undefined;
+        const into: RawQuestion = group?.question ?? {
+          number: start.number,
+          typeHint: "MT",
+          ...(pending.title && pending.title.value.length > 0 ? { title: pending.title.value } : {}),
+          points,
+          stemLines: [],
+          options: [],
+          correctFeedback: [],
+          incorrectFeedback: [],
+          metadata: [],
+          firstBlock: block.index,
+          lastBlock: block.index,
+          segment: keyBlocks.length,
+          keyValues: [],
+          answerLines: [],
+          generalFeedback: [],
+          notes: [],
+          keyAmbiguous: false,
+          ambiguousKeyValues: [],
+          stemAfterBlank: false,
+          keyed,
+          answeredBelow: false,
+          answeredInline: false,
+          incorrectFeedbackBeforeOptions: false,
+        };
+        if (!group) {
+          pending = {};
+          questions.push(into);
+          termGroup = { question: into, section };
+          if (section) {
+            into.stemLines.push(section.title);
+            into.notes.push(
+              finding(
+                FindingCode.StemFromHeading,
+                "warn",
+                `These matching items have no instruction of their own, so the heading "${section.title}" was used as the question's text. Check that it says what the student is to do.`,
+                { field: "stem" },
+              ),
+            );
+          }
+        }
+        const letterFor = (n: number): string => (n < 26 ? String.fromCharCode(97 + n) : "?");
+        const pair: RawOption = {
+          letter: letterFor(into.options.length),
+          starred: false,
+          lines: [`${termItem.term} = ${termItem.definition}`],
+          feedback: [],
+          firstBlock: block.index,
+          lastBlock: termItem.defAt,
+          textOffset: 0,
+          textBlocks: [block.index, termItem.defAt],
+          keyedByFormat: false,
+          shared: true,
+        };
+        into.options.push(pair);
+        claim(block, into);
+        claim(blocks[termItem.defAt] as SourceBlock, into);
+        if (termItem.foil !== undefined && termItem.foilAt !== undefined) {
+          into.options.push({
+            letter: letterFor(into.options.length),
+            starred: false,
+            lines: [termItem.foil],
+            feedback: [],
+            firstBlock: termItem.foilAt,
+            lastBlock: termItem.foilAt,
+            textOffset: 0,
+            textBlocks: [termItem.foilAt],
+            keyedByFormat: false,
+            shared: true,
+          });
+          claim(blocks[termItem.foilAt] as SourceBlock, into);
+        }
+        // The lines under the item up to the next one are read with it, so that the page and
+        // the difficulty written under each are kept, and the next item is found by its number.
+        i = termItem.foilAt ?? termItem.defAt;
+        prevContent = i;
+        mode = { kind: "tail", question: into };
+        continue;
+      }
 
       // The end of the first line can carry the page the question comes from and, in a
       // true or false section, its answer: "Communication is a process. (T) (Page 20)".
@@ -682,7 +978,8 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       pending = {};
       questions.push(question);
       claim(block, question);
-      mode = { kind: "stem", question };
+      const runOn = splitStemLine(question, block, i);
+      mode = question.answerBlock === block.index ? { kind: "tail", question } : runOn ? { kind: "option", question, option: runOn } : { kind: "stem", question };
       continue;
     }
 
@@ -721,7 +1018,9 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       }
       question.options.push(option);
       claim(block, question);
-      mode = { kind: "option", question, option };
+      const last = splitOptionLine(question, block, option, 0);
+      // An answer at the end of the line closes the question: what is under it is not more of the option.
+      mode = question.answerBlock === block.index ? { kind: "tail", question } : { kind: "option", question, option: last };
       continue;
     }
 
@@ -761,6 +1060,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       // "Answer: b) (Textbook reference: Chapter 3)": the key, and where the question comes from.
       const { key, notes } = splitAnswerNote((answerMatch[1] ?? "").trim());
       if (key.length > 0) question.answerLines.push(key);
+      question.answerBlock = block.index;
       for (const note of notes) question.metadata.push({ ...note, block: block.index });
       claim(block, question);
       mode = { kind: "tail", question };
@@ -773,6 +1073,15 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     const pageLine = PAGE_LINE.exec(trimmed);
     if (pageLine) {
       question.metadata.push({ label: "Page", value: (pageLine[1] as string).replace(/\s+/g, " "), block: block.index });
+      claim(block, question);
+      mode = { kind: "tail", question };
+      continue;
+    }
+
+    // --- another note in brackets, alone on a line: "(Difficulty 3)" ----------------
+    const noteLine = NOTE_LINE.exec(trimmed);
+    if (noteLine && METADATA_LABELS[(noteLine[1] as string).trim().toLowerCase()]) {
+      question.metadata.push({ label: (noteLine[1] as string).trim(), value: (noteLine[2] as string).trim(), block: block.index });
       claim(block, question);
       mode = { kind: "tail", question };
       continue;
@@ -802,7 +1111,9 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         continue;
       }
       if (METADATA_LABELS[known] || NOTE_LABELS.has(known) || CODE_LABEL.test(label)) {
-        question.metadata.push({ label, value, block: block.index });
+        const entry = { label, value, block: block.index };
+        question.metadata.push(entry);
+        lastLabel = { question, entry, block: block.index };
         claim(block, question);
         mode = { kind: "tail", question };
         continue;
@@ -875,6 +1186,9 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         if (taken.page) question.metadata.push({ label: "Page", value: taken.page, block: block.index });
         question.stemLines.push(taken.text);
         claim(block, question);
+        const runOn = splitStemLine(question, block, i);
+        if (question.answerBlock === block.index) mode = { kind: "tail", question };
+        else if (runOn) mode = { kind: "option", question, option: runOn };
         break;
       }
       case "answer":
@@ -887,10 +1201,15 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
           mode = { kind: "tail", question };
           break;
         }
-        mode.option.lines.push(trimmed);
-        mode.option.textBlocks.push(block.index);
-        mode.option.lastBlock = block.index;
-        claim(block, question);
+        {
+          const current: RawOption = mode.option;
+          current.lines.push(trimmed);
+          current.textBlocks.push(block.index);
+          current.lastBlock = block.index;
+          claim(block, question);
+          const last = splitOptionLine(question, block, current, current.lines.length - 1);
+          mode = question.answerBlock === block.index ? { kind: "tail", question } : { kind: "option", question, option: last };
+        }
         break;
       case "optionFeedback":
         if (LABEL_SHAPE.test(line)) {
@@ -911,7 +1230,28 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         (mode.which === "correct" ? question.correctFeedback : question.incorrectFeedback).push(trimmed);
         claim(block, question);
         break;
-      case "tail":
+      case "tail": {
+        // A KEY line that Word broke across paragraphs: "KEY: Cognitive Level: ... | Client" and then
+        // "Need: Safe Care". Only a label whose value is a list of fields separated by bars, so that a
+        // line of stray text under "DIF: Easy" is still stray text, and only directly under it, with
+        // no blank line between. A line that is a label, an option or a question of its own is read above.
+        const open = lastLabel;
+        if (open && open.question === question && !afterBlank && before === open.block && open.entry.value.includes("|")) {
+          open.entry.value = `${open.entry.value} ${trimmed}`.trim();
+          open.block = i;
+          done.labelsContinued++;
+          claim(block, question);
+          break;
+        }
+        // The explanation of the answer, in a paragraph or two under the Answer line and with no
+        // label of its own. It is taken for now and settled at the end of the scan, when it is
+        // known whether the file does this in most of its questions.
+        const lastRationale = question.rationale?.[question.rationale.length - 1];
+        if (question.answerBlock !== undefined && !afterBlank && (before === question.answerBlock || (lastRationale !== undefined && lastRationale.block.index === before))) {
+          (question.rationale ??= []).push({ block, text: trimmed });
+          claim(block, question);
+          break;
+        }
         // This is where text used to be quietly folded into the stem. A heading
         // after the options, or the start of the next section, is not part of
         // this question, and it is reported as what it is.
@@ -920,6 +1260,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
           `follows the options, feedback or labels of question ${question.label ?? question.number} but is not another option, a feedback line or a label, so it was not added to the question`,
         );
         break;
+      }
     }
   }
 
@@ -955,6 +1296,64 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
         }
       }
     }
+  }
+
+  // Text directly under an Answer line, with no label, is the explanation of the answer, but only
+  // if the file does it in most of the questions that have an Answer line. A paragraph that
+  // follows one now and then is stray text, as it always was, and is given back as that.
+  const explained = questions.filter((q) => (q.rationale?.length ?? 0) > 0);
+  if (explained.length > 0) {
+    const answered = questions.filter((q) => q.answerBlock !== undefined);
+    if (explained.length >= AT_LEAST && explained.length >= SHARE * answered.length) {
+      for (const q of explained) {
+        const lines = q.rationale ?? [];
+        q.metadata.push({ label: "Rationale", value: lines.map((l) => l.text).join(" "), block: lines[0]?.block.index ?? q.firstBlock });
+      }
+      fileFindings.push(
+        finding(
+          FindingCode.RationaleRead,
+          "info",
+          `${explained.length} of ${answered.length} questions that give their answer on an Answer line have text under it with no label, which was read as the explanation of the answer and kept as a note. A question has no field for an explanation, and it was not made feedback, which a student is shown.`,
+        ),
+      );
+    } else {
+      for (const q of explained) {
+        for (const line of q.rationale ?? []) {
+          orphan(
+            line.block,
+            `follows the options, feedback or labels of question ${q.label ?? q.number} but is not another option, a feedback line or a label, so it was not added to the question. It is directly under an Answer line, but only ${explained.length} of ${answered.length} questions that have one have text there, which is not enough to read it as the explanation of the answer`,
+          );
+        }
+      }
+    }
+  }
+
+  if (done.runOn > 0) {
+    fileFindings.push(
+      finding(
+        FindingCode.OptionsSplitFromLine,
+        "info",
+        `${done.runOn === 1 ? "A line that held" : `${done.runOn} lines that held`} several options, or the first option at the end of the question's text, ${done.runOn === 1 ? "was" : "were"} split at their letters, taken in order from A. Check that each option was cut in the right place.`,
+      ),
+    );
+  }
+  if (done.answersAtEnd > 0) {
+    fileFindings.push(
+      finding(
+        FindingCode.AnswerEndsLine,
+        "info",
+        `${done.answersAtEnd === 1 ? "One answer was" : `${done.answersAtEnd} answers were`} read from an Answer label at the end of a line that also has the question's words on it, such as "ANS: C" after the last option.`,
+      ),
+    );
+  }
+  if (done.labelsContinued > 0) {
+    fileFindings.push(
+      finding(
+        FindingCode.MetadataLineContinued,
+        "info",
+        `${done.labelsContinued === 1 ? "One line" : `${done.labelsContinued} lines`} directly under a KEY line, which is a list of fields separated by bars, ${done.labelsContinued === 1 ? "was" : "were"} read as the rest of it, where Word had broken the line across paragraphs.`,
+      ),
+    );
   }
 
   // Before the fold, which asks whether a copy gives an answer of its own.

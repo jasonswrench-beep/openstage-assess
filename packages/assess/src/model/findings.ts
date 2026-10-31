@@ -83,6 +83,11 @@ export const FindingCode = {
   RepeatedQuestionsFolded: "import.repeated-questions-folded",
   BlankCountMismatch: "import.blank-count-mismatch",
   StemFromHeading: "import.stem-from-heading",
+  OptionsSplitFromLine: "import.options-split-from-line",
+  AnswerEndsLine: "import.answer-ends-line",
+  NumberOutOfSequence: "import.number-out-of-sequence",
+  MetadataLineContinued: "import.metadata-line-continued",
+  RationaleRead: "import.rationale-read",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",
