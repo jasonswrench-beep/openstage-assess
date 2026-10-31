@@ -207,11 +207,17 @@ plan.
 the accuracy harness and the plain-text importer, which reads the generic
 dialect plus Moodle, D2L and Blackboard additions (61 questions across 21
 fixtures, 100 percent), the first exporter, the question spreadsheet for Author
-and Scroll, with the destination check, and the Word importer through its third
-stage (a `.docx` whose question numbers and option letters are typed or made by
-Word's own lists, whose questions may be laid out in tables, and whose right answers are
-marked by an asterisk, an `Answer:` line, an Answers list or formatting, all read through
-the same scanner and gate).
+and Scroll, with the destination check, and the Word importer as far as stage 4h
+(`docs/word-import-plan.md`): a `.docx` whose question numbers and option letters are typed
+(`1.`, `1)`, `Q1.`, `Question 1:`, `(1)`, `4.1`) or made by Word's own lists, whose questions
+may be laid out in tables, in a publisher's layout, or with no numbers or letters, and whose
+right answers are marked by an asterisk, an `Answer:` line, an Answers list, a key beside the
+question or formatting, all read through the same scanner and gate. It reads 21 real files at
+100 percent, which were fitted to; the honest numbers are the first contact with files it was
+not fitted to, 3 percent on real files and 20 to 41 percent on sixteen generated ones, with
+no question wrong and marked fine in any of them. After the stage 4h rules, run again on those
+files and on a second set that may be fitted to, the generated ones read 75 to 80 percent, still
+with no question wrong and marked fine; that is a second contact and says nothing about real banks.
 
 **Next, in this order.**
 

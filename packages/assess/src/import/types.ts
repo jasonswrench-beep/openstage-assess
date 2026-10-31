@@ -41,6 +41,10 @@ export interface SourceBlock {
    * shows, so a question numbered by Word is read like one numbered by hand.
    */
   listLabel?: string;
+  /** The block is a bullet of a Word list: it shows a mark and no label, which is what tells an option from a stem in a bank that letters nothing. */
+  bullet?: true;
+  /** The block is a later line of a bulleted paragraph, after a soft line break: more of the same item, not another. */
+  bulletMore?: true;
   /** Where a block inside a table sits, counting from zero, so a preview can find it. */
   table?: { table: number; row: number; cell: number };
 }

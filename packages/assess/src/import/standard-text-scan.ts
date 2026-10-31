@@ -42,14 +42,52 @@ import type { Orphan, SourceBlock } from "./types.ts";
 // Line patterns
 // ---------------------------------------------------------------------------
 
-export const QUESTION_START = /^\s*(\d{1,4})\s*[.)]\s+(.*)$/;
+/**
+ * Several ways of writing one thing, tried in turn. Each form puts its groups in the same places, so a caller reads
+ * whichever matched the same way, as it would the match of a single expression.
+ */
+function anyOf(...forms: RegExp[]): { exec(text: string): RegExpExecArray | null; test(text: string): boolean } {
+  return {
+    exec: (text) => {
+      for (const form of forms) {
+        const found = form.exec(text);
+        if (found) return found;
+      }
+      return null;
+    },
+    test: (text) => forms.some((form) => form.test(text)),
+  };
+}
+
+/**
+ * A number and the question's words: "12. Why?", "12) Why?", "Q12. Why?", "Question 12: Why?". The number is the first
+ * group and the words the second. A prefixed number may have nothing after it, with the question on the next line, but
+ * it has to be followed by a space or the end of the line, so that a stem that begins "Question 1.1?" is not question 1.
+ */
+export const QUESTION_START = anyOf(
+  /^\s*(\d{1,4})\s*[.)]\s+(.*)$/,
+  /^\s*(?:Q|Question)\s*(\d{1,4})\s*[.):](?:\s+|$)(.*)$/i,
+);
+/**
+ * "(12) Why?". Not in QUESTION_START, because a line that Word wrapped in the middle of an answer can begin "(2) the
+ * offer is ...": it is read as a question only where the file does it as a habit, and only as the next number. See `parenNumbers`.
+ */
+const PAREN_NUMBER = /^\s*\((\d{1,4})\)\s+(\S.*)$/;
+/** How far a bracketed number may jump from the last and still be the next question: a skipped number or two, or a repeat. */
+const MAX_SKIP = 3;
 export const OPTION_START = /^\s*(\*?)\s*([a-tA-T])\s*[.)]\s+(.*)$/;
-const TITLE_LINE = /^\s*Title\s*:\s*(.*)$/i;
+/**
+ * Labels that are options only in the order a bank letters them, "(A) text" and "A: text": the star, the letter and the
+ * words are the first three groups, as in OPTION_START. "(T) Ice floats." in a true or false bank, and "A: ..." in a list of
+ * questions and answers, are not options, so the letter has to be the next one the question is waiting for.
+ */
+const OPTION_START_ORDERED = anyOf(/^\s*(\*?)\s*\(([a-tA-T])\)\s+(.*)$/, /^\s*(\*?)\s*([a-tA-T])\s*:\s+(.*)$/);
+export const TITLE_LINE = /^\s*Title\s*:\s*(.*)$/i;
 // Up to three letters: the generic format has E, F, MT, MA and MC, and the D2L,
 // Moodle and Blackboard dialects add MR, S, FMB, ORD and JUM.
-const TYPE_LINE = /^\s*Type\s*:\s*([A-Za-z]{1,3})\s*$/i;
-const POINTS_LINE = /^\s*Points\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$/i;
-const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
+export const TYPE_LINE = /^\s*Type\s*:\s*([A-Za-z]{1,3})\s*$/i;
+export const POINTS_LINE = /^\s*Points\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$/i;
+export const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
 /**
  * The key written beside the question it belongs to, as publisher banks do:
  * "Answer: C", "ANS: B, D", "Correct Answer: True". A colon is required, so that
@@ -57,7 +95,7 @@ const ANSWERS_HEADER = /^\s*Answers\s*:\s*$/i;
  * abbreviation that also takes a full stop). "Answers:" alone is the heading of a
  * list, and is read as that first.
  */
-const ANSWER_LINE = /^\s*(?:(?:correct|accept(?:ed|able))\s+)?(?:answers?\s*:|ans\s*[:.])\s*(.*)$/i;
+export const ANSWER_LINE = /^\s*(?:(?:(?:correct|accept(?:ed|able))\s+)?(?:answers?\s*:|ans\s*[:.])|correct\s*:)\s*(.*)$/i;
 /**
  * "Accepted answers: 0, zero" is a key too, and one that only a typed-in answer has: no option is
  * accepted, a word is. The label is what says so. The plural names a list, which is cut at the
@@ -73,8 +111,8 @@ const ACCEPTED_LIST = /^\s*accept(?:ed|able)\s+answers\s*:/i;
 const PAIR_LINE = /^[^=]+\s=\s[^=]+$/;
 /** The instruction of a matching exercise, which is what lets lines of pairs under it be read as one. */
 const MATCH_INSTRUCTION = /\bmatch(?:ing)?\b/i;
-const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
-const INCORRECT_FEEDBACK = /^\s*@\s*(.*)$/;
+export const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
+export const INCORRECT_FEEDBACK = /^\s*@\s*(.*)$/;
 const ANSWER_ENTRY = /^\s*(\d{1,4})\s*[.)]\s*(.*)$/;
 
 /**
@@ -167,12 +205,17 @@ const ANSWER_SPACE = /^_{3,}[_\s]*$/;
  * full stop after it, which is a citation that belongs to the sentence.
  */
 const PAGE_NOTE = String.raw`\(\s*(?:pp?|pages?)\.?\s*(\d+(?:\s*[-–—,&]\s*\d+)*)\s*\)`;
-const PAGE_LINE = new RegExp(`^${PAGE_NOTE}$`, "i");
+export const PAGE_LINE = new RegExp(`^${PAGE_NOTE}$`, "i");
 const PAGE_SUFFIX = new RegExp(`\\s*${PAGE_NOTE}\\s*$`, "i");
 /** A true or false question's answer at the end of its line, in brackets: "(T)", "(False)". */
 const TF_SUFFIX = /\s*\(\s*(true|false|t|f)\s*\)\s*$/i;
 /** A bare "1.14", the chapter and the number of a question, alone on a line with the question on the next. */
 const DOTTED_NUMBER = /^\s*(\d{1,3})\.(\d{1,3})\s*$/;
+/**
+ * The same number with the question's words on the line: "4.1 Which ...". A decimal at the start of a line in a stem
+ * ("3.5 grams of salt ...") looks the same, so this is read only where the file does it as a habit: see `dottedText`.
+ */
+const DOTTED_TEXT = /^\s*(\d{1,2})\.(\d{1,3})\s+(\S.*)$/;
 /** An option letter alone on a line, which is how some banks give a choice question's answer. */
 const LONE_LETTER = /^\s*([a-tA-T])\s*$/;
 /** One word with nothing else on the line. */
@@ -204,7 +247,10 @@ const NOTE_LINE = /^\(\s*([A-Za-z][A-Za-z' ]{1,24}?)\s*:?\s+([^()]{1,40}?)\s*\)$
  * the spellings of the label that publishers use, so that "answer:" in the middle of a
  * sentence is not one, and only when what follows is a key and not more words.
  */
-const INLINE_ANSWER = /\s+(?:ANS|Ans|Answers?|Correct Answers?)\s*:\s*(\S.*)$/;
+const INLINE_ANSWER = /\s+(?:ANS|Ans|Answers?|Correct(?: Answers?)?)\s*:\s*(\S.*)$/;
+/** What ends an option that is the right one: "(Correct)" or a check mark. A star at the end is read only as a habit. */
+const END_CORRECT = /\s*(?:\(\s*correct\s*\)|[✓✔])\s*$/i;
+const END_STAR = /\s*\*\s*$/;
 
 /**
  * Capital letters and a full stop in a line, where the next option of a line that runs several together starts.
@@ -261,6 +307,26 @@ function runOnMarks(text: string, first: string): Array<{ at: number; end: numbe
   return marks;
 }
 
+/**
+ * An entry of a key written as a list, several to a line or one: "3. B", "3) B, D", "4.1. C", "7: True". A dash, "n/a" or
+ * "none" is an entry too, one that says the question has no key: a key list with one of those in it was not read as a key at all,
+ * and every row of it came out as a question. "n/a" needs no word of its own, because it reads as the letters N and A, and
+ * `addKeyEntry` drops it as a value that is no key.
+ */
+const KEY_ENTRY_ALL = /(\d{1,4}(?:\.\d{1,3})?)\s*[.):]\s*(true|false|none|[-–—]+|[A-Za-z](?:\s*(?:,|&|\/|\band\b)\s*[A-Za-z])*)(?![A-Za-z0-9])/gi;
+/** A dotted entry with anything after it, "4.5. Bromine" or "4.5. —": it is an entry only if a question has that label. */
+const DOTTED_ENTRY = /^\s*(\d{1,3}\.\d{1,3})\s*[.):]?\s*(.*)$/;
+/** What a key puts where a question has no key in it: nothing, a dash, or n/a. It is not an answer. */
+const NO_KEY = /^\s*(?:[-–—]*|n\/?a|none)\s*$/i;
+
+/** The entries a line holds when all it holds is entries, or nothing if it holds anything else. */
+function keyEntriesOnLine(text: string): Array<{ label: string; value: string }> | undefined {
+  const found = [...text.matchAll(KEY_ENTRY_ALL)];
+  if (found.length === 0) return undefined;
+  if (text.replace(KEY_ENTRY_ALL, "").replace(/[\s,;|]+/g, "").length > 0) return undefined;
+  return found.map((m) => ({ label: m[1] as string, value: (m[2] as string).trim() }));
+}
+
 /** An all-capital short code such as NOT, MSC or NAT that a bank may invent. */
 const UNKNOWN_LABEL = /^\s*([A-Za-z][A-Za-z'\- ]{0,28})\s*:\s*(.+)$/;
 const CODE_LABEL = /^[A-Z]{2,6}$/;
@@ -275,7 +341,7 @@ const CODE_LABEL = /^[A-Z]{2,6}$/;
  */
 export const GENERAL_FEEDBACK_LABELS = new Set(["feedback", "general feedback"]);
 export const NOTE_LABELS = new Set(["rationale", "explanation", "solution"]);
-const KNOWN_EMPTY_LABEL = /^\s*(feedback|general feedback|rationale|explanation|solution)\s*:\s*$/i;
+export const KNOWN_EMPTY_LABEL = /^\s*(feedback|general feedback|rationale|explanation|solution)\s*:\s*$/i;
 
 /**
  * A line that has the shape of a label, a few words and a colon and something
@@ -429,6 +495,8 @@ export interface RawQuestion {
 
 export interface KeyEntry {
   number: number;
+  /** The chapter and number as the key wrote them, "4.1", when the questions are numbered that way. It is what the entry is matched on. */
+  label?: string;
   values: string[];
   firstBlock: number;
   lastBlock: number;
@@ -438,7 +506,7 @@ export interface KeyBlock {
   segment: number;
   firstBlock: number;
   lastBlock: number;
-  entries: Map<number, KeyEntry>;
+  entries: Map<number | string, KeyEntry>;
 }
 
 export interface ScanResult {
@@ -504,16 +572,116 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
    * stem line that happens to read "Points: 20".
    */
   /**
+   * Whether the file numbers its questions "(3) Which ...": at least three lines that begin that way, most of those lines
+   * going on from the one before.
+   */
+  const parenNumbers = ((): boolean => {
+    let seen = 0;
+    let going = 0;
+    let last = 0;
+    for (let i = 0; i < count; i++) {
+      const m = PAREN_NUMBER.exec(textAt(i));
+      if (!m) continue;
+      seen++;
+      const number = Number(m[1]);
+      // The next number, a number that skips a few or repeats the last, as a tired author leaves them, or the first
+      // again, as a bank that numbers each section from the start does.
+      if (number === 1 || (number >= last && number - last <= MAX_SKIP)) {
+        going++;
+        last = number;
+      }
+    }
+    return going >= AT_LEAST && going >= SHARE * seen;
+  })();
+
+  /**
+   * Whether the file numbers its questions "4.1 Which ...": at least three lines that begin that way, most of those lines
+   * going on from the one before, the next number of the chapter or a later chapter.
+   */
+  const dottedText = ((): boolean => {
+    let seen = 0;
+    let going = 0;
+    let last = { chapter: 0, number: 0 };
+    for (let i = 0; i < count; i++) {
+      const m = DOTTED_TEXT.exec(textAt(i));
+      if (!m) continue;
+      seen++;
+      const chapter = Number(m[1]);
+      const number = Number(m[2]);
+      // A later number or chapter, or the first again, as a bank that numbers each section from the start does.
+      if (chapter > last.chapter || (chapter === last.chapter && number > last.number) || number === 1) {
+        going++;
+        last = { chapter, number };
+      }
+    }
+    return going >= AT_LEAST && going >= SHARE * seen;
+  })();
+
+  /** Whether the file numbers its questions "Q3." or "Question 3:": at least three lines that begin that way. */
+  const prefixedNumbers = ((): boolean => {
+    let seen = 0;
+    for (let i = 0; i < count && seen < AT_LEAST; i++) if (/^\s*(?:Q|Question)\s*\d{1,4}\s*[.):](?:\s+|$)/i.test(textAt(i))) seen++;
+    return seen >= AT_LEAST;
+  })();
+
+  /** The file numbers its questions in a way other than a plain "3.": see questionStartAt. */
+  const numberedElsewhere = dottedText || parenNumbers || prefixedNumbers;
+
+  /**
    * What starts a question at block `i`: a number and its text on one line ("12) Why?"), or
    * a chapter and question number alone on a line ("1.14") with the question on the next.
    * The second is only a number when it follows on from the question before it, the next
    * one in the chapter or the start of a later chapter, or when no question is open, so
    * that a lone "3.14" inside a stem or an option is not taken for one.
    */
+  /**
+   * Whether the file ends its one-line numbered statements with "(T)" or "(F)": at least three of them, and no other kind of
+   * one-line statement among them that is more. Without a type line to say so, one such stem alone is its own words.
+   */
+  let tfSuffixHabit: boolean | undefined;
+  const hasTfSuffixHabit = (): boolean => {
+    if (tfSuffixHabit === undefined) {
+      let n = 0;
+      for (let k = 0; k < count; k++) {
+        const found = blankAt(k) ? null : QUESTION_START.exec(textAt(k));
+        if (found && TF_SUFFIX.test((found[2] as string).trim()) && (k + 1 >= count || blankAt(k + 1))) n++;
+      }
+      tfSuffixHabit = n >= AT_LEAST;
+    }
+    return tfSuffixHabit;
+  };
+
   const questionStartAt = (i: number): { number: number; label?: string; rest: string } | undefined => {
     const text = textAt(i);
     const typed = QUESTION_START.exec(text);
+    // A plain "3." in a file whose questions are numbered some other way, "2.5", "(2)" or "Q2.", is a step in a list
+    // inside a stem, and not a question: that is how a stem with numbered steps lost its first half and was read as fine.
+    if (typed && numberedElsewhere && !/^\s*(?:Q|Question)/i.test(text)) return undefined;
     if (typed) return { number: Number(typed[1]), rest: typed[2] ?? "" };
+    // "(3) Which ...": in a file that numbers its questions that way, and as the number that comes next, or as the first.
+    const parenthesised = parenNumbers ? PAREN_NUMBER.exec(text) : null;
+    if (parenthesised) {
+      const number = Number(parenthesised[1]);
+      const last = questions[questions.length - 1];
+      const next =
+        last === undefined
+          ? number === 1
+          : (number >= last.number && number - last.number <= MAX_SKIP) || ((mode.kind === "outside" || mode.kind === "tail") && number === 1);
+      return next ? { number, rest: parenthesised[2] ?? "" } : undefined;
+    }
+    // The chapter and number with the words after them, "4.1 Which ...", in a file that does that as a habit. Like the
+    // bare form below it is a question between questions, whatever its number, and inside one only when it is the next.
+    const sameLine = dottedText ? DOTTED_TEXT.exec(text) : null;
+    if (sameLine) {
+      const chapter = Number(sameLine[1]);
+      const number = Number(sameLine[2]);
+      const previous = DOTTED_NUMBER.exec(questions[questions.length - 1]?.label ?? "");
+      const goesOn =
+        previous !== null && (chapter > Number(previous[1]) || (chapter === Number(previous[1]) && number > Number(previous[2])));
+      return mode.kind === "outside" || mode.kind === "tail" || goesOn
+        ? { number, label: `${chapter}.${number}`, rest: sameLine[3] ?? "" }
+        : undefined;
+    }
     // A number with nothing after it and an option straight under it: a question whose
     // text is its options, as a table of matching pairs is.
     const alone = NUMBER_ALONE.exec(text);
@@ -544,7 +712,8 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   const directiveRunLeadsToQuestion = (i: number): boolean => {
     let j = nextContent(i);
     while (j !== -1 && isDirective(textAt(j))) j = nextContent(j);
-    return j !== -1 && QUESTION_START.test(textAt(j));
+    // Any way of starting a question, "4.2 ..." and "(2) ..." as well as "2. ...", so that a Type line above one is a Type line.
+    return j !== -1 && questionStartAt(j) !== undefined;
   };
 
   /** The line after this one is an option or a feedback line: a question has begun. */
@@ -576,7 +745,25 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   };
 
   /** What this layout did, counted for the findings that say so once for the file. */
-  const done = { runOn: 0, answersAtEnd: 0, labelsContinued: 0, typeLines: 0 };
+  const done = { runOn: 0, answersAtEnd: 0, labelsContinued: 0, typeLines: 0, marksAtEnd: 0 };
+
+  /**
+   * Whether the file marks its right options with a star at the end of their line, "Router *": at least three
+   * options end that way, and no more than half of all the options do, so that it is a mark and not a
+   * decoration. A star in front is another habit, read by its own rule.
+   */
+  const starAtEnd = ((): boolean => {
+    let ending = 0;
+    let all = 0;
+    for (let i = 0; i < count; i++) {
+      const m = OPTION_START.exec(textAt(i)) ?? OPTION_START_ORDERED.exec(textAt(i));
+      if (!m) continue;
+      all++;
+      const words = (m[3] ?? "").trim();
+      if (/\S\s*\*$/.test(words) && !words.startsWith("*")) ending++;
+    }
+    return ending >= AT_LEAST && ending * 2 <= all;
+  })();
 
   const takeAnswer = (question: RawQuestion, block: SourceBlock, answer: string): void => {
     question.answerLines.push(answer);
@@ -599,6 +786,14 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     }
     const marks = runOnMarks(text, nextLetter(option.letter));
     if (marks.length === 0) {
+      // The mark at the end of an option that stands alone on its line: "Router (Correct)", "Router *". A line that
+      // holds several options says nothing about which of them a mark at its end belongs to, so it is left.
+      const ended = END_CORRECT.test(text) ? text.replace(END_CORRECT, "") : starAtEnd && END_STAR.test(text) ? text.replace(END_STAR, "") : undefined;
+      if (ended !== undefined && ended.trim().length > 0) {
+        option.starred = true;
+        done.marksAtEnd++;
+        text = ended;
+      }
       option.lines[at] = text;
       return option;
     }
@@ -690,6 +885,36 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     if (earlier) orphan(earlier.block, `a ${kind} line that a later ${kind} line replaced before any question used it`);
     pending[kind] = { value, block };
     claim(block);
+  };
+
+  /** Add a value to the entry of a key block for this question, making the entry if it is the first. A dash or n/a is no value. */
+  const addKeyEntry = (keyBlock: KeyBlock, label: string, value: string, at: SourceBlock): KeyEntry => {
+    const dotted = label.includes(".");
+    const number = Number(dotted ? label.slice(label.indexOf(".") + 1) : label);
+    const mapKey = dotted ? label : number;
+    let target = keyBlock.entries.get(mapKey);
+    if (!target) {
+      target = { number, ...(dotted ? { label } : {}), values: [], firstBlock: at.index, lastBlock: at.index };
+      keyBlock.entries.set(mapKey, target);
+    }
+    if (value.length > 0 && !NO_KEY.test(value)) target.values.push(value);
+    target.lastBlock = at.index;
+    keyBlock.lastBlock = at.index;
+    return target;
+  };
+
+  /** Whether the lines under the heading at `i` are the entries of a key: several on the first, or two lines of them. */
+  const keyListFollows = (i: number): boolean => {
+    const j = nextContent(i);
+    const first = j === -1 ? undefined : keyEntriesOnLine(textAt(j));
+    if (!first) {
+      // "4.5. Bromine": a dotted number with words after it is an entry when a question above has that number.
+      const dotted = j === -1 ? null : DOTTED_ENTRY.exec(textAt(j));
+      return dotted !== null && questions.some((q) => q.segment === keyBlocks.length && q.label === dotted[1]);
+    }
+    if (first.length >= 2 || (first[0] as { label: string }).label.includes(".")) return true;
+    const k = nextContent(j);
+    return k !== -1 && keyEntriesOnLine(textAt(k)) !== undefined;
   };
 
   /**
@@ -905,6 +1130,24 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
 
     // --- inside an answer key -------------------------------------------------
     if (mode.kind === "key") {
+      // A key written as a list with several entries to a line, "1. B   2. D   3. A", or with the chapter in the
+      // number, "4.1. B", which is how a key table of such a bank comes through. Whatever is on the line, if it is
+      // only entries, is entries: with one question's number alone a line is also a question, so a single plain
+      // entry is left to the test below.
+      const listed = keyEntriesOnLine(line);
+      const dottedEntry = listed === undefined ? DOTTED_ENTRY.exec(line) : null;
+      if (listed && (listed.length >= 2 || (listed[0] as { label: string }).label.includes(".") || NO_KEY.test((listed[0] as { value: string }).value))) {
+        let last: KeyEntry | undefined;
+        for (const e of listed) last = addKeyEntry(mode.block, e.label, e.value, block);
+        mode.current = last;
+        claim(block);
+        continue;
+      }
+      if (dottedEntry && questions.some((q) => q.segment === (mode as { block: KeyBlock }).block.segment && q.label === dottedEntry[1])) {
+        mode.current = addKeyEntry(mode.block, dottedEntry[1] as string, (dottedEntry[2] ?? "").trim(), block);
+        claim(block);
+        continue;
+      }
       const entry = ANSWER_ENTRY.exec(line);
       if (entry && belongsToKey(i, Number(entry[1]), (entry[2] ?? "").trim(), mode.block)) {
         const number = Number(entry[1]);
@@ -964,6 +1207,24 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       mode = { kind: "key", block: keyBlock };
       claim(block);
       continue;
+    }
+
+    // --- a key written as a list, under its heading ------------------------------------------
+    // "Answer Key" and then entries: "1. B   2. D   3. A", or one to a line, or a table that came through as an Answers
+    // list. A heading that is followed by questions is the copy with the answers, read below, so the entries have to be there.
+    if (isAnswerKeyHeading(trimmed)) {
+      const next = nextContent(i);
+      if (next !== -1 && ANSWERS_HEADER.test(textAt(next))) {
+        claim(block);
+        continue;
+      }
+      if (keyListFollows(i)) {
+        const keyBlock: KeyBlock = { segment: keyBlocks.length, firstBlock: block.index, lastBlock: block.index, entries: new Map() };
+        keyBlocks.push(keyBlock);
+        mode = { kind: "key", block: keyBlock };
+        claim(block);
+        continue;
+      }
     }
 
     // --- a chapter title -----------------------------------------------------------
@@ -1174,7 +1435,10 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       let page = takePage(first);
       first = page.text;
       let inline: string | undefined;
-      const tf = typeHint === "TF" ? TF_SUFFIX.exec(first) : null;
+      // The answer after a statement: in a true or false section, and in a file that ends its one-line statements that way
+      // as a habit, whatever section they are in. The habit is the file's, because "(F)" may be a stem's own last word.
+      const alone = i + 1 >= count || blankAt(i + 1);
+      const tf = typeHint === "TF" || (typeHint === undefined && alone && hasTfSuffixHabit()) ? TF_SUFFIX.exec(first) : null;
       if (tf) {
         inline = /^t/i.test(tf[1] as string) ? "true" : "false";
         first = first.slice(0, tf.index).trimEnd();
@@ -1239,7 +1503,10 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     const question: RawQuestion = mode.question;
 
     // --- an option ---------------------------------------------------------------
-    const optionMatch = OPTION_START.exec(line);
+    // "(A)" and "A:" count only as the next letter the question is waiting for: A first, then each in order.
+    const ordered = OPTION_START_ORDERED.exec(line);
+    const waitingFor = question.options.length === 0 ? "a" : nextLetter((question.options[question.options.length - 1] as RawOption).letter);
+    const optionMatch = OPTION_START.exec(line) ?? (ordered && (ordered[2] ?? "").toLowerCase() === waitingFor ? ordered : null);
     if (optionMatch) {
       const option: RawOption = {
         letter: (optionMatch[2] ?? "").toLowerCase(),
@@ -1662,6 +1929,15 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       ),
     );
   }
+  if (done.marksAtEnd > 0) {
+    fileFindings.push(
+      finding(
+        FindingCode.MarkAtEndOfOption,
+        "info",
+        `${done.marksAtEnd === 1 ? "One option was" : `${done.marksAtEnd} options were`} taken as the right answer because "(Correct)", a check mark or a star ended ${done.marksAtEnd === 1 ? "its" : "their"} line, and the mark was taken out of the words. Check that this is how the file marks its answers.`,
+      ),
+    );
+  }
   if (done.answersAtEnd > 0) {
     fileFindings.push(
       finding(
@@ -1776,10 +2052,13 @@ function resolveKeys(
   fileFindings: Finding[],
 ): void {
   const unmatched: Array<{ block: KeyBlock; entry: KeyEntry }> = [];
+  /** An entry names a question by its number, or by its chapter and number when the key wrote them: "4.1". */
+  const isFor = (q: RawQuestion, entry: KeyEntry): boolean => (entry.label !== undefined ? q.label === entry.label : q.number === entry.number);
+  const nameOf = (entry: KeyEntry): string => entry.label ?? String(entry.number);
 
   for (const block of keyBlocks) {
     for (const entry of block.entries.values()) {
-      const covered = questions.filter((q) => q.segment === block.segment && q.number === entry.number);
+      const covered = questions.filter((q) => q.segment === block.segment && isFor(q, entry));
       if (covered.length === 1) {
         (covered[0] as RawQuestion).keyValues = [...entry.values];
       } else if (covered.length > 1) {
@@ -1796,14 +2075,14 @@ function resolveKeys(
   // A list placed before its questions, which some banks do, still works when
   // the number picks out exactly one later question.
   for (const { block, entry } of unmatched) {
-    const later = questions.filter((q) => q.segment > block.segment && q.number === entry.number);
+    const later = questions.filter((q) => q.segment > block.segment && isFor(q, entry));
     const open = later.filter((q) => q.keyValues.length === 0 && !q.keyAmbiguous);
     if (later.length === 1 && open.length === 1) {
       (open[0] as RawQuestion).keyValues = [...entry.values];
       continue;
     }
 
-    const exists = questions.some((q) => q.number === entry.number);
+    const exists = questions.some((q) => isFor(q, entry));
     // The entry's words are quoted so that they survive in the finding. If the
     // line was really a question that looked like an entry, this is where its
     // text ends up.
@@ -1813,8 +2092,8 @@ function resolveKeys(
         FindingCode.KeyLetterMissing,
         "warn",
         (exists
-          ? `The Answers list has an entry for question ${entry.number}, but no question numbered ${entry.number} is in the part of the file that list covers, so the entry was not applied.`
-          : `The Answers list has an entry for question ${entry.number}, but no question ${entry.number} was found in the file.`) + said,
+          ? `The Answers list has an entry for question ${nameOf(entry)}, but no question numbered ${nameOf(entry)} is in the part of the file that list covers, so the entry was not applied.`
+          : `The Answers list has an entry for question ${nameOf(entry)}, but no question ${nameOf(entry)} was found in the file.`) + said,
         { source: { file, firstBlock: entry.firstBlock, lastBlock: entry.lastBlock } },
       ),
     );

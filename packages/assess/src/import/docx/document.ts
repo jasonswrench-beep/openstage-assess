@@ -305,6 +305,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     const listed = numbering?.label(properties);
     if (listed?.unread !== undefined) stats.unreadLists[listed.unread] = (stats.unreadLists[listed.unread] ?? 0) + 1;
     const label = listed?.label;
+    const bullet = listed?.bullet === true;
     if (label !== undefined) stats.listItems++;
 
     b.lines.forEach((line, k) => {
@@ -312,6 +313,8 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
         text: line.text,
         ...(formatting ? { runs: line.runs } : {}),
         ...(k === 0 && label !== undefined ? { kind: "listItem" as const, listLabel: label } : {}),
+        ...(k === 0 && bullet ? { bullet: true as const } : {}),
+        ...(k > 0 && bullet ? { bulletMore: true as const } : {}),
         ...(where ? { table: where } : {}),
       });
     });

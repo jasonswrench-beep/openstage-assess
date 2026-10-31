@@ -533,6 +533,45 @@ questions, 20.3 percent.** The first number is the honest one. What it shows:
   version showed: an option whose words begin with a star (the hard case assigned to c-18), in a file that marks
   its answers another way, was taken for the key mark and skipped, so the answer file's correct option was
   reported as not in the document. Both readings are now tried.
+- **After the question starts, the safety fix and the end marks** the fit set reads 115 of 230 and the blind files 122 of
+  232. A numbered list inside a stem, in a file whose questions are numbered `2.5`, `(2)` or `Q2.`, had been read as
+  questions, and gave one question that was `parsed` with a right key and half its stem; that was the only wrong question
+  marked `parsed` found in any set, and it is fixed. Still read as nothing or as junk, by layout: no numbers at all with unlabelled
+  options (c-04, c-14, c-23); bulleted options (c-11, c-21); and a key at the end, as a table or a list, that is read as
+  questions, so that its rows are made into essays, each refused or flagged and each counted against the score (c-07, c-13,
+  c-22). The lines `Correct: C`, `(Correct)` at the end of an option and a star at the end of its line are read. Also two
+  rules the importer lacks: two letters on an answer line with no type, `ANS: A, B`, are a multiple response, and a blank
+  `____` with a plain `Answer:` line is a fill in the blank. No question wrong and marked `parsed`, in any of the
+  five sets, compared by stem on type, options, key, accepted answers and pairs. Two answer files were corrected after the
+  importer disagreed and the documents were read: c-13 (a statement with `Answer: false` under it is true or false, not a
+  fill in the blank with the answer line in its stem) and c-15 (the instruction is repeated as a second paragraph of
+  the stem, and the answer file had dropped it).
+- **After the keys at the end** the fit set reads 135 of 230 and the blind files 143 of 232; the real files are 1421 of
+  1421, the gate 61 of 61, and no question in the five sets is wrong and `parsed`. A key under `Answer Key`, as a list
+  (several entries to a line, or one, `4.1. B`, `3: B`, `True`) or as a table, is a key, and the rows are no longer made into
+  questions (c-07, c-13, c-22). A heading followed by questions is still the copy with the answers. Breaking the rules found
+  a fault the generated files had not reached: a key list with a dash, `n/a` or `none` in its first or middle entry was not
+  recognised as a key at all and was read as questions. A dash now means the question has no key, and never an answer: a
+  choice question given one is refused and a fill in the blank with its own answer keeps it. Left alone, and recorded here: a
+  lone plain entry such as `9. A` under a key, for a number no question has, is read as a question and flagged, as it was
+  before, and not as an entry applied to nothing.
+- **After the two types read from the answer** the fit set reads 149 of 230 and the blind files 155 of 232. No type named
+  and two letters on the answer line or in the key: a multiple response, flagged. A blank in the stem with an answer in
+  words: a fill in the blank. Both rules refuse to read a letter answer to a stem with a blank, because that is a choice
+  question's key and its options may have been lost. Two blanks and one answer is read and flagged for the count. Still
+  not read: no numbers at all with unlabelled options (c-04, c-14, c-23) and bulleted options (c-11, c-21).
+- **After reading a bank with no numbers and no letters** the fit set reads 183 of 230 and the blind files 175 of 232. This is
+  the layout that most needed a guard: reading a file by its shape alone is where a question that is wrong and looks right can
+  come from, and the first version of the step put one into the results (c-21: a stem of two paragraphs, the second read as an
+  option, the question `parsed` with five options and half its stem). The guards are listed in the plan, step 6. Still wrong in
+  principle and not caught: a stem of two paragraphs where the second is a short phrase that does not end in a question mark
+  or a colon, and options that are all long. They read as a stem and options and look right. The file is told that it was read
+  by its layout, which is the only warning such a question has, so the first few questions of any file read this way are
+  worth checking by eye (`TESTING-TODO.md`). Bulleted options (c-11) are read since the reader says which blocks are bullets;
+  the fit set reads 184 of 230 and the blind files 187 of 232. A statement with `(T)` or `(F)` at its end is read as true or
+  false where the file does it three times or more; after it the fit set reads 190 of 230 and the blind files 190 of 232.
+  What is left is flagged on purpose: an answer in words with no blank and no options is an essay or a short answer and the
+  file does not say which, and two marked options without a type may be a multiple response or a slip.
 - **The files are on this machine only** (the session's scratch folder, `generated/blind`,
   `generated/second-author-3-4` and `generated/second-author-5-6`), not in the repository.
 

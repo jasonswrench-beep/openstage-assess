@@ -86,6 +86,8 @@ export const FindingCode = {
   StemFromHeading: "import.stem-from-heading",
   OptionsSplitFromLine: "import.options-split-from-line",
   AnswerEndsLine: "import.answer-ends-line",
+  UnlabelledGroups: "import.unlabelled-groups",
+  MarkAtEndOfOption: "import.mark-at-end-of-option",
   NumberOutOfSequence: "import.number-out-of-sequence",
   MetadataLineContinued: "import.metadata-line-continued",
   RationaleRead: "import.rationale-read",

@@ -46,7 +46,8 @@ import {
 } from "../model/richtext.ts";
 import { addFindings, createQuestion, DEFAULT_POINTS, emptyMetadata } from "../model/create.ts";
 import { checkAnswerKey } from "../quality/answer-key.ts";
-import { applyFormattingKey } from "./standard-text-format.ts";
+import { applyFormattingKey, SHARE } from "./standard-text-format.ts";
+import { relabelUnlabelledGroups } from "./standard-text-relabel.ts";
 import {
   MAX_POINTS,
   MAX_TITLE_LENGTH,
@@ -388,6 +389,8 @@ interface TypeReading {
   unsupported?: { hint: string; label: string };
   /** The type was not stated, but the file shows it; this says what it shows, for the note beside the question. */
   because?: string;
+  /** The file names no type and its key marks this many options right, so it was read as a multiple response. */
+  keyNames?: number;
 }
 
 /**
@@ -421,8 +424,17 @@ function typeFromEvidence(raw: RawQuestion): { type: QuestionType; because: stri
   if (!blank && (only === "true" || only === "false")) {
     return { type: "trueFalse", because: `it has no options and its answer is the word ${only === "true" ? "True" : "False"}` };
   }
+  // A blank in the stem and an answer that is words. Not when any answer is a letter or letters: that is the key of a
+  // choice question whose options were not read, and a fill in the blank made of it would look right and be wrong. And
+  // where one source gives words and another a letter, they disagree about what the question is, so none is read.
+  if (blank && written.length > 0 && !written.some((w) => LETTERS_ONLY.test(w.trim()))) {
+    return { type: "fillInBlank", because: "its stem has a blank to fill and the file gives its answer as words" };
+  }
   return undefined;
 }
+
+/** A key that is only option letters, as many as it has separators for: "B", "B, D", "A and C", and not "Paris". */
+const LETTERS_ONLY = /^[a-t](?:(?:\s*(?:,|;|&|\/|\band\b)\s*|\s+)[a-t])*$/i;
 
 function inferType(raw: RawQuestion): TypeReading {
   const hint = raw.typeHint;
@@ -483,6 +495,12 @@ function guessType(raw: RawQuestion): TypeReading {
 
   const starred = raw.options.filter((o) => o.starred || o.keyedByFormat).length;
   if (starred > 1) return { type: "multipleResponse", inferred: true };
+
+  // The file names no type and its answer line or its key marks two options, "B, D". Read as a multiple response and
+  // flagged, with the options as the file marked them: that is its own key, and only the type is a reading. The
+  // alternative was an error on a single-answer question for a key that two letters make plain.
+  const named = resolveKey(raw).correct.size;
+  if (named > 1) return { type: "multipleResponse", inferred: true, keyNames: named };
 
   return { type: "multipleChoice", inferred: false };
 }
@@ -1106,7 +1124,7 @@ function buildQuestion(
     );
   }
 
-  const { type, inferred, unknownHint, unsupported, because } = inferType(raw);
+  const { type, inferred, unknownHint, unsupported, because, keyNames } = inferType(raw);
   if (because) {
     findings.push(
       finding(FindingCode.TypeFromEvidence, "info", `The file did not name a type, so this was read as ${type}: ${because}.`, { source, field: "type" }),
@@ -1129,7 +1147,9 @@ function buildQuestion(
         "warn",
         unknownHint
           ? `The Type line said "${unknownHint}", which this profile does not know, so the type was worked out from the question and read as ${type}. Check it.`
-          : `The file did not say what kind of question this is, so it was read as ${type}. Check it.`,
+          : keyNames
+            ? `The file did not say what kind of question this is, and its answer marks ${keyNames} options as right, so it was read as ${type}. If only one was meant, it is a single-answer question: check it.`
+            : `The file did not say what kind of question this is, so it was read as ${type}. Check it.`,
         { source, field: "type" },
       ),
     );
@@ -1234,6 +1254,17 @@ export function withListLabel(block: SourceBlock): SourceBlock {
   return { ...block, text, runs };
 }
 
+/** Whether the file gave any key for this question at all: a star, a mark, an Answer line or an Answers entry. */
+function hasAnyKey(q: RawQuestion): boolean {
+  return (
+    q.options.some((o) => o.starred || o.keyedByFormat) ||
+    q.answerLines.length > 0 ||
+    q.keyValues.length > 0 ||
+    q.answeredInline ||
+    (q.formatMarked?.length ?? 0) > 0
+  );
+}
+
 export const standardTextImporter: Importer = {
   id: PROFILE_ID,
   label: "standard test-bank text format (plain text)",
@@ -1244,16 +1275,58 @@ export const standardTextImporter: Importer = {
     // A block from a Word file keeps its list label apart from its text. The scanner
     // reads what the page shows, which is the label then the text, so a question
     // numbered by Word is read like one numbered by hand.
-    const blocks = (typeof input === "string" ? linesToBlocks(input) : input).map(withListLabel);
+    const raw = typeof input === "string" ? linesToBlocks(input) : input;
+    const blocks = raw.map(withListLabel);
     const at = options.at ?? new Date().toISOString();
     const author = options.author ?? "import";
     const profile = options.profile ?? PROFILE_ID;
 
     const defaultPoints = options.defaultPoints ?? DEFAULT_POINTS;
-    const scanned = scanStandardText(blocks, file, defaultPoints, (options.keyMark ?? "auto") !== "off");
+    const keyMark = options.keyMark ?? "auto";
+    let scanned = scanStandardText(blocks, file, defaultPoints, keyMark !== "off");
     // Formatting can supply a key where the file gave none in words. It is decided
     // once for the whole file, after every question is known and before any is built.
-    const formatting = applyFormattingKey(blocks, scanned.questions, options.keyMark ?? "auto");
+    let formatting = applyFormattingKey(blocks, scanned.questions, keyMark);
+    const relabelFindings: Finding[] = [];
+
+    // A bank that letters nothing, and numbers nothing or only its stems. It is read again with the labels the page does
+    // not show, and that reading is kept only when it found keys that the plain one did not.
+    // Not when the plain reading found a choice question: a file that is read as one has labels, or a type line, and what
+    // it did not read it reports; this is for the file that no question of which has its options.
+    const relabelled = scanned.questions.some((q) => q.options.length >= 2) ? undefined : relabelUnlabelledGroups(raw);
+    if (relabelled) {
+      const labelled = relabelled.blocks.map(withListLabel);
+      const again = scanStandardText(labelled, file, defaultPoints, keyMark !== "off");
+      const againFormatting = applyFormattingKey(labelled, again.questions, keyMark);
+      const keyedNow = again.questions.filter(hasAnyKey).length;
+      if (keyedNow > scanned.questions.filter(hasAnyKey).length && keyedNow >= SHARE * relabelled.groups) {
+        scanned = again;
+        formatting = againFormatting;
+        const suspect = new Set(relabelled.suspect);
+        for (const raw of scanned.questions) {
+          if (!suspect.has(raw.firstBlock)) continue;
+          raw.notes.push(
+            finding(
+              FindingCode.UnlabelledGroups,
+              "warn",
+              "The options of this question were not lettered in the file, and one of the lines read as an option is much longer than the others, or the stem ends in a colon. It may be more of the stem. Check where the stem ends.",
+              { field: "stem" },
+            ),
+          );
+        }
+        relabelFindings.push(
+          finding(
+            FindingCode.UnlabelledGroups,
+            "warn",
+            (relabelled.stemsLabelled
+              ? `This file has no question numbers and no option letters. ${relabelled.groups} groups of lines were read as questions: the first line of each group as the stem and the lines under it, in order, as the options.`
+              : `This file has question numbers but no option letters. In ${relabelled.groups} questions the lines under the stem were read as the options, in order.`) +
+              (relabelled.preamble > 0 ? ` The first ${relabelled.preamble} lines of the file, a title and instructions, were left out of the first question and are listed as text no question claimed.` : "") +
+              " Check the first few questions against the file.",
+          ),
+        );
+      }
+    }
     const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints, profile }));
 
     return {
@@ -1262,7 +1335,7 @@ export const standardTextImporter: Importer = {
       questions,
       orphans: scanned.orphans,
       counts: countVerdicts(questions, scanned.orphans.length),
-      fileFindings: [...scanned.fileFindings, ...formatting.fileFindings],
+      fileFindings: [...relabelFindings, ...scanned.fileFindings, ...formatting.fileFindings],
     };
   },
 };

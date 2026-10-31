@@ -97,8 +97,8 @@ describe("a statement with no options whose answer is True or False", () => {
   test("a stem with a blank in it is not true or false, whatever the answer is", () => {
     const q = at(text(["1. A boolean is either ____ or false.", "Answer: True"]), 0);
     assert.notEqual(q.type, "trueFalse");
-    assert.ok(has(q, FindingCode.TypeInferred), "it is read as before: an essay, flagged");
-    assert.match(plain(body(q)["modelAnswer"]), /True/, "and the answer is kept, not dropped");
+    assert.equal(q.type, "fillInBlank", "a blank and an answer in words is a fill in the blank");
+    assert.deepEqual(blanksOf(q), ["True"], "and the answer is kept, not dropped");
   });
 
   test("two answers that disagree are not a key", () => {
@@ -130,7 +130,7 @@ describe("a statement with no options whose answer is True or False", () => {
   test("underscores that are not a blank do not stop a statement being true or false", () => {
     assert.equal(at(text(["1. In Python, my_var is a valid name.", "Answer: True"]), 0).type, "trueFalse");
     assert.equal(at(text(["1. The __init__ method runs when an object is made.", "Answer: True"]), 0).type, "trueFalse");
-    assert.equal(at(text(["1. A boolean is either ___ or false.", "Answer: True"]), 0).type, "essay", "three are a blank");
+    assert.equal(at(text(["1. A boolean is either ___ or false.", "Answer: True"]), 0).type, "fillInBlank", "three are a blank");
   });
 
   test("a question with options is read as before", () => {
