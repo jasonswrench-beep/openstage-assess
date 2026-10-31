@@ -271,6 +271,19 @@ would have fixed, so this came first. Six things changed, each described below:
 - The brief for generated banks was rewritten after stage 4g, and the checker that holds a batch to it
   (`npm run check:generated`) was built and tested before any second batch was asked for: 24 files in six
   pieces of four, each assigned a layout, the blind set being pieces 1 to 4. See `docs/synthetic-bank-spec.md`.
+- Stage 4h, begun: the layouts that sixteen generated files could not be read in. With the importer unchanged the
+  sixteen files of the blind set read 47 of 232 questions and the sixteen of the fit set (pieces 5 and 6, and a second
+  version of pieces 3 and 4) 44 of 230; `docs/review-findings.md` has what was not read. The first step is the safety
+  fix. Options that share a paragraph are now split where two spaces or a tab come before the next capital letter and
+  a full stop, whatever follows, because a bank whose options are all lower case (a vocabulary test's) had no other
+  way to show where one ends; a single space before a lower case word is still not a new option, so "C. difficile" stays
+  in its sentence. And options lettered with a letter missing, A and C with no B, are a warning on a choice question
+  (`import.option-letter-gap`), because that is what a question looks like when two options were not told apart, and
+  one such question had been `parsed` with two merged options and a key that pointed at the right words. After it the
+  fit set reads 53 of 230 (23.0 percent), c-09 10 of 12 (from 4), the five refused questions in the blind set are
+  right, the real files are still 1421 of 1421 and the gate 61 of 61. 13 new tests (994 in all), and 18 deliberate
+  breaks, 17 caught and one equivalent (letters that are unique and in the wrong order always include one later
+  than expected, so "later" and "different" are the same test).
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in

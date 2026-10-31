@@ -289,7 +289,15 @@ function placeOption(doc: Doc, folded: readonly string[], cursor: Pos, limit: nu
     const tail = t.slice(from);
     const candidates: Array<{ skip: number; labelText: string; letter?: string }> = [];
     const labelled = LEAD_LABEL.exec(tail);
-    if (labelled) candidates.push({ skip: labelled[0].length, labelText: labelled[2] as string, letter: (labelled[3] as string).toUpperCase() });
+    if (labelled) {
+      const letter = (labelled[3] as string).toUpperCase();
+      candidates.push({ skip: labelled[0].length, labelText: labelled[2] as string, letter });
+      // The star after the label is the mark, or it is the first word of the option: "A. * Reliability" in a file that
+      // marks its answers some other way. Taken as a mark first, and as words if the words are not there without it.
+      const lead = (labelled[1] as string).length + (labelled[2] as string).length;
+      const bare = lead + (/^\s*/.exec(tail.slice(lead)) as RegExpExecArray)[0].length;
+      if (bare !== labelled[0].length) candidates.push({ skip: bare, labelText: labelled[2] as string, letter });
+    }
     candidates.push({ skip: (LEAD_PLAIN.exec(tail) as RegExpExecArray)[0].length, labelText: "" });
     for (const c of candidates) {
       const start = { line, col: from + c.skip };

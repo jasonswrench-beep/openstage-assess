@@ -688,6 +688,21 @@ describe("each check can fail", () => {
     assert.doesNotMatch(problems, /spaced differently/);
   });
 
+  test("a star that is the first word of an option, in a file that marks its answers another way, is words and not a mark", () => {
+    // The hard case "an asterisk as part of its words". With the answer given by an Answer line, "A. * Reliability" is an
+    // option whose words begin with a star, and the answer file keeps it.
+    const star = (parts: string[]): void => {
+      const at = parts.findIndex((p) => p.includes("Cedar 1"));
+      parts[at] = parts[at]!.replace("Cedar 1", "* Cedar 1");
+    };
+    assert.deepEqual(check(entry({ trap: "T3" }), undefined, star, (expected) => (expected.questions[0].options[2] = "* Cedar 1")), []);
+    // The star as the mark is still the mark, and is not part of the words, when the file marks that way.
+    assert.deepEqual(check(entry({ mark: "K1" })), []);
+    // And where the file marks with a star, an expected option that keeps the star is not what the document says: the
+    // document has the star as a mark, hard against the word, and the answer file has it as a word.
+    assert.match(check(entry({ mark: "K1" }), undefined, undefined, (expected) => (expected.questions[0].options[1] = "* Birch 1")).join("\n"), /question 1: option 2 .*(spaced differently|is not under its stem)/);
+  });
+
   test("a stem that has swallowed its (T) or (F) is named, and so is a statement with none", () => {
     const e = entry({ extras: ["TFp"] });
     const ends = (stem: string, answer: boolean) => [{ type: "trueFalse", form: "inline", stem, correctBoolean: answer }];

@@ -206,8 +206,11 @@ const NOTE_LINE = /^\(\s*([A-Za-z][A-Za-z' ]{1,24}?)\s*:?\s+([^()]{1,40}?)\s*\)$
  */
 const INLINE_ANSWER = /\s+(?:ANS|Ans|Answers?|Correct Answers?)\s*:\s*(\S.*)$/;
 
-/** Capital letters and a full stop in a line, where the next option of a line that runs several together starts. */
-const RUN_ON_MARK = /(?:^|\s)([A-T])\.\s+(?=[^\sa-z])/g;
+/**
+ * Capital letters and a full stop in a line, where the next option of a line that runs several together starts.
+ * Whether a lower case word may follow is decided in runOnMarks.
+ */
+const RUN_ON_MARK = /(?:^|\s)([A-T])\.\s+(?=\S)/g;
 
 /** A matching exercise written as a numbered term, then its definition, then sometimes a wrong answer to go with it. */
 /**
@@ -240,7 +243,9 @@ function peelInlineAnswer(text: string): { text: string; answer?: string } {
  * stop, and they have to come in order from `first`: "B. SOLER C. DAR" is two options, and a
  * "C." in the middle of option B's words is not one, because B has not been followed by C.
  * What comes after the full stop must not begin with a lower case letter, so "C. difficile" is
- * left alone.
+ * left alone, unless the letter has a wide gap before it, two spaces or a tab: "A. mother   B. aunt".
+ * Words are not set off from each other like that, and a bank whose options are all lower case,
+ * as a vocabulary test's are, has no other way to show where one ends and the next begins.
  */
 function runOnMarks(text: string, first: string): Array<{ at: number; end: number; letter: string }> {
   const marks: Array<{ at: number; end: number; letter: string }> = [];
@@ -248,6 +253,8 @@ function runOnMarks(text: string, first: string): Array<{ at: number; end: numbe
   for (const m of text.matchAll(RUN_ON_MARK)) {
     if (m[1] !== expect) continue;
     const at = (m.index ?? 0) + (m[0].length - m[0].trimStart().length);
+    const wide = at >= 1 && (text[at - 1] === "\t" || (at >= 2 && /\s/.test(text[at - 1] as string) && /\s/.test(text[at - 2] as string)));
+    if (/[a-z]/.test(text.charAt((m.index ?? 0) + m[0].length)) && !wide) continue;
     marks.push({ at, end: (m.index ?? 0) + m[0].length, letter: expect });
     expect = nextLetter(expect);
   }
