@@ -66,6 +66,7 @@ export const FindingCode = {
   MarkupRemoved: "import.markup-removed",
   EquationAsImage: "import.equation-as-image",
   DuplicateQuestionNumber: "import.duplicate-question-number",
+  OptionLetterGap: "import.option-letter-gap",
   DuplicateOptionLetter: "import.duplicate-option-letter",
   DuplicateMetadataLabel: "import.duplicate-metadata-label",
   StemSpansBlankLine: "import.stem-spans-blank-line",

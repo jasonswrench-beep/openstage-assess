@@ -490,6 +490,14 @@ questions, 20.3 percent.** The first number is the honest one. What it shows:
   nothing says so. Of the 105 questions the importer made, 47 are right, 52 are flagged for review, 5 are
   refused, and this one is wrong and looks fine. Pairing every imported question with the expected one by its stem
   (68 pairs), no key named the wrong content: of 4 differing keys, 3 were refused and this was the fourth.
+  **Fixed, in the first step of the stage 4h rules.** The cause was that "B. aunt" is not taken for an option when a
+  lower case word follows the letter, so that "C. difficile" in the middle of a sentence is left alone, and all of this
+  bank's options were lower case. A gap of two spaces or a tab before the letter now says a new option begins,
+  whatever follows it. And options lettered with a letter missing (A and C, no B) are a warning on a choice question
+  whatever caused them, because that is what a question looks like when two options were not told apart. After it
+  c-09 reads 10 of 12 (from 4), the question has its four options and the right key, and no question in the sixteen
+  files is wrong and not flagged. Not fixed: a bank whose options share a line on a single space, with lower case
+  words, is still not split, and is now flagged and not passed.
 - **Four files with typed `1.` or `1)` numbers or Word's own numbering, `A.` or `a.` options and a mark by an Answer
   line, bold or a font colour read 62 to 86 percent** (c-01, c-02, c-06, c-10). The misses there are two to six
   questions each, mostly of types the file does not name. They have not been looked at.
@@ -499,7 +507,34 @@ questions, 20.3 percent.** The first number is the honest one. What it shows:
 - **It is no longer blind.** To say what failed, the first lines of the seven empty files and two questions of c-09
   and c-11 were read. Any later score on these files is a second contact and not a first. The rules for the layouts above
   should be written from pieces 5 and 6, which exist to be fitted to, and these sixteen run again afterwards.
-- **The files are on this machine only** (the session's scratch folder, `generated/blind`), not in the repository.
+- **The failures follow the layout, not the author.** A second, independent version of pieces 3 and 4 arrived
+  (`c_files_piece3_and_4.zip`: the same eight assignments, different questions). It passed the checker after five stems
+  were repaired in a copy, the two mistakes already seen in piece 1: three statements with their `(T)` or `(F)`
+  left in the stem, and two stems written without the document's space before a question mark. Run once with no rule
+  changed, the importer read 15 of its 114 questions (13.2 percent), against 14 of 114 (12.3 percent) for the first
+  version of the same eight files. Layout by layout the two agree: six of the eight layouts score no question right
+  in either version (c-11 to c-16), c-10 reads 10 and 12 questions right, and c-09 4 and 3. So the gap list above
+  is a list of layouts, and it did not depend on who wrote the files. These eight
+  are kept as material to fit to, since their layouts are the ones already read about in the blind set.
+- **The fit set, and its baseline.** Pieces 5 and 6 (`test-banks-c17-c24.zip`, written with the corrected brief) passed
+  the checker at first sight with nothing repaired. With the second version of pieces 3 and 4 they make a fit set of
+  sixteen files, which the stage 4h rules are written from. Importer unchanged, before any rule: **44 of 230 questions,
+  19.1 percent**; pieces 5 and 6 alone read 29 of 116 (25.0 percent). Eight layouts read nothing in either set: a
+  question that begins `Q1.`, `Question 1:`, `(1)` or `4.1 text`, no numbers at all, options labelled `A:` or `(A)`, and
+  options that are bullets marked `(Correct)`. The sixteen blind files are run again after the rules, as a second
+  contact.
+- **A second version of pieces 5 and 6 arrived the same way**, in `c_files_pieces_1_to_6.zip`, which also held pieces
+  1, 3 and 4 again, byte for byte the files already held (twelve of its twenty files; it had no piece 2). The eight
+  new files passed after five stems were repaired in a copy, the same two kinds of mistake. With the safety fix in
+  place, the importer read 33 of its 116 questions (28.4 percent) against 31 of 116 (26.7 percent) for Copilot's
+  version of the same eight, and layout by layout the two agree again: `1.` with `A)` and a key table, `1)` with
+  several options to a paragraph, and Word's numbering with `a.` and a star each read 9 to 14 questions right in
+  both, and `Q1.`, `Question 1:`, `(1)`, no numbers and `4.1` read none in both. The checker had a fault that this
+  version showed: an option whose words begin with a star (the hard case assigned to c-18), in a file that marks
+  its answers another way, was taken for the key mark and skipped, so the answer file's correct option was
+  reported as not in the document. Both readings are now tried.
+- **The files are on this machine only** (the session's scratch folder, `generated/blind`,
+  `generated/second-author-3-4` and `generated/second-author-5-6`), not in the repository.
 
 ### Found by a blind test on a generated batch (stage 4g), not yet fixed
 

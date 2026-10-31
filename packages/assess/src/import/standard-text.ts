@@ -998,6 +998,33 @@ function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef)
     );
   }
 
+  // Letters that do not run on from A in order, each once: A and C with no B. An option written on the line of the one
+  // before it, in a way that was not told apart, leaves exactly this, and the question looks complete, with one option
+  // that holds two. It was marked as read, with a key that points at the right words and at too few options. It is said.
+  const lettered = raw.options.map((option) => option.letter);
+  if (
+    (type === "multipleChoice" || type === "multipleResponse") &&
+    lettered.length >= 2 &&
+    repeated.length === 0 &&
+    lettered.every((letter) => /^[a-z]$/.test(letter)) &&
+    lettered.some((letter, i) => letter !== String.fromCharCode(97 + i))
+  ) {
+    const lowest = lettered.reduce((a, b) => (a < b ? a : b));
+    const highest = lettered.reduce((a, b) => (a > b ? a : b));
+    const missing: string[] = [];
+    for (let code = 97; code <= highest.charCodeAt(0); code++) {
+      if (!lettered.includes(String.fromCharCode(code))) missing.push(String.fromCharCode(code).toUpperCase());
+    }
+    found.push(
+      finding(
+        FindingCode.OptionLetterGap,
+        "warn",
+        `The options are lettered ${lettered.map((l) => l.toUpperCase()).join(", ")}, which does not run on from A in order${missing.length > 0 ? `, so ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} missing` : ""}${lowest !== "a" ? ", and the first is not A" : ""}. If an option was written on the same line as another and was not told apart from it, two were read as one, and the question is not as the file has it. Check the options.`,
+        { source, field: "body.options" },
+      ),
+    );
+  }
+
   // Only the two choice types have feedback for each option. On any other type
   // the options become something else (a model answer, accepted answers, pairs)
   // and the feedback beneath them has nowhere to go. It used to disappear with
