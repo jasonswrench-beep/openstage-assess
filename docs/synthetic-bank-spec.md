@@ -90,7 +90,9 @@ reader, and it was tested on documents written by the test writer and on documen
 - the assigned hard case is there, the other types it must include are there, the size is right, and the
   Answer line of a fill in the blank or short answer, a true or false answer, and each pair of a matching
   question are in the document as the expected file says;
-- no question is in two files, whatever the case or punctuation.
+- no question is in two files, whatever the case or punctuation: the same stem with the same options, pairs or
+  accepted answers, in any order. A plain instruction such as "Match each term with its definition." can be in two
+  files when what is under it differs.
 
 It does not check that the questions are good or read like a real instructor's, that the lapses asked for are
 there, the formatting of anything but the options, or the answers of essay and short answer questions beyond
@@ -136,8 +138,9 @@ hiding it, and it will not be counted against you.
 - Invent every question, in the subject you are given. Do not copy text from a textbook, a publisher's test
   bank or another instructor's exam, and do not name publishers, products, brands or real people. No student
   names or identifiers.
-- No question may appear in more than one file, and no two files may share a question's wording. Each file is
-  about its own subject.
+- No question may appear in more than one file, and no two files may share a question's wording. The one
+  exception is a plain instruction such as "Match each term with its definition.", which may be reused over
+  different items. Each file is about its own subject.
 - A real file has one habit that it keeps most of the time and a few places where it does not. Follow the
   assignment's layout throughout, and put in exactly the number of lapses it asks for, none if it asks for
   none. A lapse is one of the small slips a tired person makes: a skipped or repeated number, a missing blank

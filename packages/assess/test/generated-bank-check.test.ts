@@ -429,6 +429,35 @@ describe("a folder of files", () => {
     }
   });
 
+  test("the same plain stem in two files is not a repeat when what goes with it differs, and is when it does not", () => {
+    // "Match each term with its definition." is in real banks everywhere. The repeat that matters is a copied document.
+    const dir = mkdtempSync(join(tmpdir(), "bankcheck-"));
+    try {
+      const [a, b] = plan() as [PlanEntry, PlanEntry];
+      write(dir, a);
+      write(dir, b, QUESTIONS.map((q) => ({ ...q, options: q.options.map((o) => `${o} again`) })));
+      assert.deepEqual(checkFolder(dir, undefined, [a, b], LIMITS).files[1]!.problems, [], "the same stems, other options");
+      write(dir, b, QUESTIONS.map((q) => ({ ...q, options: [...q.options].reverse(), correct: q.correct.map((j) => 3 - j) })));
+      assert.match(checkFolder(dir, undefined, [a, b], LIMITS).files[1]!.problems.join("\n"), /is also in c-91\.docx, with the same options, pairs or answers/, "the same options in another order are the same options");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("what makes a question the same one: its stem with its options, pairs or answers, in any order", () => {
+    const doc = readDocx(docx({ body: para("x") }));
+    const idOf = (q: object): string => checkFile(entry(), doc, { file: "c-99.docx", questions: [q] }, LIMITS).identities[0] as string;
+    const match = (pairs: string[]) => ({ type: "matching", stem: "Match each term with its definition.", pairs });
+    assert.notEqual(idOf(match(["Oak = Lobed", "Pine = Needle"])), idOf(match(["Fir = Needle", "Elm = Toothed"])), "other pairs");
+    assert.equal(idOf(match(["Oak = Lobed", "Pine = Needle"])), idOf(match(["Pine = Needle", "Oak = Lobed"])), "the same pairs in another order");
+    const blank = (accepted: string[]) => ({ type: "fillInBlank", stem: "The tallest tree is the ____.", accepted });
+    assert.notEqual(idOf(blank(["redwood"])), idOf(blank(["sequoia"])), "another accepted answer");
+    assert.equal(idOf(blank(["redwood"])), idOf(blank(["Redwood."])), "case and punctuation");
+    const essay = (stem: string) => ({ type: "essay", stem });
+    assert.equal(idOf(essay("Discuss how forests change after a fire.")), idOf(essay("discuss how FORESTS change after a fire")), "an essay is its stem");
+    assert.notEqual(idOf(essay("Discuss how forests change after a fire.")), idOf(essay("Discuss how forests change after a flood.")), "another essay");
+  });
+
   test("a missing file, a file that is not a Word document, a damaged expected file and a file not in the plan", () => {
     const dir = mkdtempSync(join(tmpdir(), "bankcheck-"));
     try {
