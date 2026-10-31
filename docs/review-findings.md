@@ -463,6 +463,52 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Found by a blind test on three more files (stage 4e), not yet fixed
+
+Three files the rules had not been written for were run with no rule changed. They read 200 of 200
+(refused, correctly), 25 of 45 and 0 of 33, and after the stage 4e rules 200, 35 and 33. The honest
+number is the first one. What it shows and what it does not:
+
+- **The five-files-100-percent result did not carry over.** Of the three new files, two needed new rules
+  before they read at all, and the third was only a partial surprise because it is another chapter of a
+  bank already read. Rules written from the file that needed them fit that file. The three are now fitted
+  to as well, so there are eight files and none of them is a test of rules written without it. The
+  acceptance criterion of three chapters the rules were not fitted to is still not met.
+- **The 2002 exam has its answers in another file.** The importer reads one file. Questions that come from
+  a document with no key are refused, one by one, which is right, but the instructor has the key in
+  a second file next to it and the importer cannot use it. A second file as a key is a feature to decide on,
+  not a bug: it needs the user to say which file, and it matches by number, so it has the repeated-number
+  problem of the Answers list.
+- **The explanation under an answer is a note, not feedback.** The default proposed was to make it
+  feedback. The profile already refused that for `Rationale:` and `Explanation:` labels, because feedback is
+  what a student is shown, so the unlabelled explanation is kept the same way, under
+  `metadata.custom.Rationale`, and not shown to students. If the model grows a field for the explanation of
+  an answer, both should go there.
+- **A question whose stem a line wrap broke is flagged for review.** The importer joins a number that is not
+  the next one to the stem above it, and says it guessed. A bank that restarts its numbers with no blank
+  line and no heading between two questions that have no options (two essays, say) would have the second
+  joined to the first, and flagged. Rare, and visible, but it is a guess.
+- **Options that share a line are split at their letters, and a stray capital letter can be one.** `A. Vitamin
+  B. Rigel` is read as two options, because B follows A and a capital letter follows the full stop. Only
+  capital letters in order from A, so the cost of the mistake is a split option, which the file reports
+  (how many lines were split), and not a wrong key.
+- **The formatting of an option that shares a line is not read.** A question whose options share a line and
+  whose key is bold has no key from formatting, and says so. Right, but it means a bold-keyed bank laid out
+  like that gets no keys at all.
+- **An answer at the end of a line is read only with `ANS`, `Ans`, `Answer`, `Answers` or `Correct Answer`
+  and a colon.** `Key: C` or `(C)` at the end of an option is not.
+- **A KEY line is read as fields only when its fields are separated by bars and each has a label.** The
+  continuation across Word's paragraphs is only for such a line.
+- **Matching in terms, definitions and foils is read as one exercise.** An instructor who meant ten
+  separate one-pair questions gets one ten-pair exercise, flagged for review. The difficulty of the items
+  goes to the exercise: the first is used and the rest are kept as a custom label with a warning.
+- **`(Difficulty n)` and the other bracketed notes are metadata whenever the label is known.** A stem
+  line made entirely of a known label in brackets would be read as metadata.
+- **Two files could not be read at all, and are not Word files.** A publisher test generator's book file (a
+  proprietary binary container) and a Blackboard question pool export (an IMS package with a QTI `.dat`, 31 questions: 22
+  multiple choice, 6 true or false, 4 essay, 1 matching). The Blackboard one is plain XML and is the first
+  test of a Blackboard importer.
+
 ### Found while reading three more of one instructor's banks (stage 4d), not yet fixed
 
 A 375-question test item file, a 42-question chapter and a 30-question bank went from 0, 0 and

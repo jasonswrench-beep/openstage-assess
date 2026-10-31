@@ -149,6 +149,8 @@ function carriedByLetter(blocks: readonly SourceBlock[], option: RawQuestion["op
 
 /** Everything formatting says about one option: how its words look, and how its letter does. */
 function signatureOf(blocks: readonly SourceBlock[], option: RawQuestion["options"][number]): Set<string> | undefined {
+  // An option that shares its line with others has no formatting of its own to read.
+  if (option.shared) return undefined;
   const words = carried(blocks, option);
   const letter = carriedByLetter(blocks, option);
   if (words === undefined && letter === undefined) return undefined;

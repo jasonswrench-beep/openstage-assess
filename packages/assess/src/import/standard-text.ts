@@ -209,6 +209,21 @@ function guessMime(fileName: string): string {
   return "image/jpeg";
 }
 
+/**
+ * A "KEY:" line as publishers write it for a question's classification: fields with their
+ * own labels, separated by bars ("KEY: Cognitive Level: Application | Client Need: Safe
+ * Care"). Each field is read as a line of metadata of its own, so that "Cognitive Level"
+ * becomes the Bloom level. A KEY line that is not shaped like that is left as one label,
+ * which is not one this profile knows, and is reported as that.
+ */
+function expandKeyLine(entry: RawQuestion["metadata"][number]): Array<RawQuestion["metadata"][number] & { fromKey?: boolean }> {
+  if (entry.label.toLowerCase() !== "key") return [entry];
+  const parts = entry.value.split("|").map((p) => p.trim()).filter((p) => p.length > 0);
+  const fields = parts.map((p) => /^([A-Za-z][A-Za-z' ]{1,40}?)\s*:\s*(\S.*)$/.exec(p));
+  if (parts.length < 2 || fields.some((f) => f === null)) return [entry];
+  return fields.map((f) => ({ label: (f?.[1] ?? "").trim(), value: (f?.[2] ?? "").trim(), block: entry.block, fromKey: true }));
+}
+
 function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; findings: Finding[] } {
   const metadata: Metadata = emptyMetadata();
   const findings: Finding[] = [];
@@ -240,7 +255,7 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
     return "joined";
   };
 
-  for (const entry of raw.metadata) {
+  for (const entry of raw.metadata.flatMap(expandKeyLine)) {
     const source: SourceRef = { file, firstBlock: entry.block, lastBlock: entry.block };
     const key = METADATA_LABELS[entry.label.toLowerCase()];
     const value = entry.value;
@@ -314,13 +329,16 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
       // note. That is said, but it is information and not a warning, because a
       // whole bank of these should not need review for it.
       const note = NOTE_LABELS.has(entry.label.toLowerCase());
+      const kept = note || entry.fromKey === true;
       findings.push(
         finding(
-          note ? FindingCode.MetadataKeptAsNote : FindingCode.UnknownMetadataLabel,
-          note ? "info" : "warn",
+          kept ? FindingCode.MetadataKeptAsNote : FindingCode.UnknownMetadataLabel,
+          kept ? "info" : "warn",
           note
             ? `"${entry.label}" is kept as a note under metadata.custom.${entry.label}. A question has no field for an explanation, and it was not made feedback, which a student is shown.`
-            : `"${entry.label}" is not a metadata label this profile knows, so it was kept under metadata.custom rather than dropped.`,
+            : entry.fromKey
+              ? `"${entry.label}" is one of the fields of a KEY line, and a question has no field for it, so it is kept under metadata.custom.${entry.label}.`
+              : `"${entry.label}" is not a metadata label this profile knows, so it was kept under metadata.custom rather than dropped.`,
           { source, field: `metadata.custom.${entry.label}` },
         ),
       );
