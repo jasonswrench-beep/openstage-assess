@@ -6,7 +6,8 @@
  * are used, and a change to a bank is written before the answer says it was made.
  */
 
-import { extname } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
+import { extname, join } from "node:path";
 
 import {
   BANK_EXTENSION,
@@ -33,7 +34,8 @@ import { blankInput, editFromInput, EDITABLE_TYPES, missingText, parseInput, que
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { destinationsRoute, exportRoute } from "./exports.ts";
 import { printRoute } from "./printing.ts";
-import { checkName, cleanName, insideLibrary, type Library } from "./library.ts";
+import { checkName, cleanName, freeFileName, insideLibrary, type Library } from "./library.ts";
+import { sampleById, samplePath, SAMPLES } from "./samples.ts";
 import { summarise, type Sessions } from "./sessions.ts";
 
 /** Who changes are recorded as made by. Nobody's name is asked for or kept. */
@@ -116,18 +118,29 @@ function readInput(raw: Record<string, unknown>): EditorInput {
 // Importing
 // ---------------------------------------------------------------------------
 
-async function importFile(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
-  const name = req.query.get("name") ?? "import.txt";
-  const extension = extname(name).toLowerCase();
-  if (extension === ".doc") {
-    throw badRequest("This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).");
-  }
-  if (extension === BANK_EXTENSION) throw badRequest("This is an OpenAssess bank, not a file to import. Use Open a bank.");
-  if (req.body.length === 0) throw badRequest("That file is empty.");
+/** Files that are known, by name, to be ones this cannot read, and what to do instead. A message beats reading them as text. */
+const CANNOT_READ: Record<string, string> = {
+  ".doc": "This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).",
+  ".xls": "This is an older Excel file (.xls). In Excel, choose File, then Save As, and pick Excel Workbook (*.xlsx) or CSV UTF-8.",
+  ".pdf":
+    "OpenAssess does not read PDF files yet. A PDF holds text placed on pages, not questions and answers, so reading one means guessing which line belongs to which question, and a guessed answer key is worse than none. " +
+    "If the text in the PDF can be selected, open the PDF in Word, which turns it into a document you can edit, check it, save it as Word Document (*.docx), and bring that in.",
+};
 
-  const bytes = new Uint8Array(req.body);
+async function importFile(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
+  return importBytes(ctx, req.query.get("name") ?? "import.txt", req.body, req.query.get("keyMark"));
+}
+
+/** Reads a file's bytes into an import to look at. The same for a file the person chose and for a sample. */
+function importBytes(ctx: Context, name: string, body: Buffer, keyMark: string | null): ApiResponse {
+  const extension = extname(name).toLowerCase();
+  const cannot = CANNOT_READ[extension];
+  if (cannot) throw badRequest(cannot);
+  if (extension === BANK_EXTENSION) throw badRequest("This is an OpenAssess bank, not a file to import. Use Open a bank.");
+  if (body.length === 0) throw badRequest("That file is empty.");
+
+  const bytes = new Uint8Array(body);
   const importer = importerForContent(name, bytes);
-  const keyMark = req.query.get("keyMark");
   let result;
   try {
     result = runImporter(importer, bytes, { file: name, author: BY, ...(keyMark ? { keyMark } : {}) });
@@ -135,13 +148,35 @@ async function importFile(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
     throw new HttpError(422, `That file could not be read: ${(error as Error).message}`);
   }
 
-  // The lines of the file as the importer saw them, so that a question's block numbers point at the same lines on screen.
+  // The lines of the file as the importer saw them, so that a question's block numbers point at the same lines on screen. A
+  // table has its rows for lines, and says so itself.
   const source =
-    extension === ".docx"
+    result.sourceLines ??
+    (extension === ".docx"
       ? docxToBlocks(bytes).blocks.map((b) => `${b.listLabel ? `${b.listLabel} ` : ""}${b.text}`)
-      : linesToBlocks(Buffer.from(bytes).toString("utf8")).map((b) => b.text);
+      : linesToBlocks(Buffer.from(bytes).toString("utf8")).map((b) => b.text));
 
   return ok(ctx.sessions.view(ctx.sessions.create(result, source)));
+}
+
+/** The samples: what there is, one of them made into an import, or one saved into the exports folder to be filled in. */
+async function samplesRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
+  const [, id, action] = req.segments;
+  if (id === undefined) {
+    if (req.method !== "GET") throw notFound("There is no such page.");
+    return ok({ samples: SAMPLES.map(({ id, title, description, kind, template }) => ({ id, title, description, kind, template: template === true })) });
+  }
+  const sample = sampleById(id);
+  if (!sample || req.method !== "POST") throw notFound("There is no such sample.");
+  const bytes = await readFile(samplePath(sample));
+  if (action === "import") return importBytes(ctx, sample.file, Buffer.from(bytes), null);
+  if (action === "save") {
+    const fileName = await freeFileName(ctx.library.exports, checkName(sample.file));
+    const path = join(ctx.library.exports, fileName);
+    await writeFile(path, bytes);
+    return ok({ name: fileName, path });
+  }
+  throw notFound("There is no such page.");
 }
 
 async function sessionRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
@@ -432,6 +467,7 @@ export async function handleApi(ctx: Context, req: ApiRequest): Promise<ApiRespo
   if (first === "destinations" && req.method === "GET") return destinationsRoute();
   if (first === "banks") return bankRoute(ctx, req);
   if (first === "import" && req.method === "POST") return importFile(ctx, req);
+  if (first === "samples") return samplesRoute(ctx, req);
   if (first === "sessions") return sessionRoute(ctx, req);
   if (first === "reveal" && req.method === "POST") {
     const body = jsonBody(req);
