@@ -601,8 +601,44 @@ and have tests now.
   the right answer on each multiple choice question, and any multiselect, short answer, matching, ordering, formatted or
   accented question. Whether the article is complete, and how Brightspace treats a row it does not know, is not known
   (`TESTING-TODO.md`).
-- **Open: no QTI.** Brightspace's Quizzes tool imports QTI up to 1.2 and its Course Import takes a subset of 2.x and 3.x. Neither
-  exporter exists.
+- **Open: Course Import's QTI.** Brightspace's Quizzes tool imports QTI up to 1.2 (a package for it is built, below) and its
+  Course Import takes a subset of 2.x and 3.x, which is not built.
+
+### Found while building the QTI 1.2 and Blackboard exports (stage 10)
+
+`src/export/qti12.ts` and `src/export/blackboard-upload.ts`, tested by `test/export-qti12.test.ts` (37 tests) and
+`test/export-blackboard-upload.test.ts` (33), and two routes in `packages/app/test/server.test.ts`. 47 deliberate breaks of the two
+exporters and the app's file writer, on a baseline that passed: 46 caught, and one survives because it is equivalent (the Blackboard
+guard against a true or false with neither answer chosen is behind the key check, which leaves such a question out first; the
+QTI exporter has the same guard and it was not in the list of breaks). Three survived the first tests. Two were missing
+assertions and have tests now: text stored as plain text keeps a tab that would end a field (the model's own text turns a tab into
+a space, so only a hand-built plain-text field shows it), and a matching question with a blank left side.
+
+- **Fixed before the first run: matching conditions stopped at the first match.** QTI 1.2 stops at the first condition that is met
+  unless it says `continue="Yes"`, and a matching question adds one share for each right pair, so the first draft would have
+  scored one pair at most for a standard processor. The response processor in the tests follows the standard's rule, and a
+  break of this is caught.
+- **Fixed: the shares of a matching question added up to 0.99999.** A three-pair question worth one point had three shares of
+  0.33333. The last share is what is left, so they add up to the points exactly. Found by the response processor on its first run.
+- **Decided: a file can be bytes.** `ExportedFile` has an optional `bytes` beside `content`. A zip written as text would be damaged,
+  and the app test reads the first two bytes of the file on disk and compares the download with it byte for byte.
+- **Decided, not fixed: what neither tool documents is left out.** Ordering, numeric, hotspot and calculated questions are not
+  written to a QTI file, because neither Brightspace nor Canvas says it reads them from one. Feedback and the partial credit of a
+  multiple answer question are not carried in this first version. Blackboard's file has no points, feedback, formatting or picture,
+  and a numeric question is left out because the page does not say what its tolerance means.
+- **Open: nothing has been imported anywhere.** The QTI package is written from the standard, from the shapes Canvas is known to
+  write (its `question_type` and `points_possible` metadata fields, one response for each left side of a matching question, a
+  condition of every right label and none of the wrong ones), and from help pages. No Canvas-written package and no
+  Brightspace-accepted QTI file was available to compare with: the example a D2L staff member posted in the community thread is a
+  Blackboard question pool (`questions.dat`), not QTI. The names Canvas uses are from memory of its own export, not from a file
+  read here. The resource type `imsqti_xmlv1p2`, the questestinterop namespace and the matching layout are the likeliest things
+  to need changing after a first import.
+- **Open: the sources for Canvas are thin.** The guide that could be read is for Classic Quizzes, dated 2021, and names no QTI
+  version. Canvas's own community document was not found at its address, so "QTI 1.2 and 2.1" rests on a secondary source.
+- **Open: what Blackboard does not say.** The encoding and line endings of the upload file, whether a quote at the start of a field
+  must be doubled, whether HTML is accepted, and whether Ultra refuses an ordering row are not stated or not tried
+  (`TESTING-TODO.md`). Blackboard's own pool package and its QTI import are not written: the first is undocumented and Ultra reads
+  only pools exported from Original, and the sources disagree about the second.
 
 ### Found by the first real PDF test banks (stage 8)
 

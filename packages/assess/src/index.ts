@@ -63,6 +63,10 @@ export type { GiftOptions } from "./export/gift.ts";
 export { exportMoodleXml, checkMoodleXml, MOODLE_XML_ID, MOODLE_XML_LABEL } from "./export/moodle-xml.ts";
 export { exportD2lCsv, checkD2lCsv, D2L_CSV_ID, D2L_CSV_LABEL } from "./export/d2l-csv.ts";
 export type { D2lCsvOptions } from "./export/d2l-csv.ts";
+export { exportBlackboardUpload, checkBlackboardUpload, BLACKBOARD_UPLOAD_ID, BLACKBOARD_UPLOAD_LABEL } from "./export/blackboard-upload.ts";
+export type { BlackboardUploadOptions } from "./export/blackboard-upload.ts";
+export { exportQti12, checkQti12, QTI12_ID, QTI12_LABEL, QTI12_RESOURCE_TYPE } from "./export/qti12.ts";
+export type { Qti12Options } from "./export/qti12.ts";
 export type { MoodleXmlOptions } from "./export/moodle-xml.ts";
 
 // Printing
