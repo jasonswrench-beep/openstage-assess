@@ -27,18 +27,39 @@ function encodeTime(ms: number): string {
   return out;
 }
 
-function encodeRandom(): string {
-  const bytes = randomBytes(RANDOM_LEN);
-  let out = "";
-  for (let i = 0; i < RANDOM_LEN; i++) {
-    out += ALPHABET[(bytes[i] as number) % 32];
+/**
+ * The random part, as digits. A second id made in the same millisecond as the last is that one plus one, not a fresh
+ * random value. An import makes dozens of questions in one millisecond, and ids that sort by time were sorting them in
+ * random order within it: a bank came out with its questions shuffled, and a test printed from it with them out of order.
+ * Counting up keeps ids in the order they were made, and two of them cannot be equal.
+ */
+let lastTime = -1;
+let lastDigits: number[] = [];
+
+function nextDigits(time: number): number[] {
+  if (time === lastTime && lastDigits.length === RANDOM_LEN) {
+    const next = [...lastDigits];
+    for (let i = RANDOM_LEN - 1; i >= 0; i--) {
+      if ((next[i] as number) < 31) {
+        next[i] = (next[i] as number) + 1;
+        lastDigits = next;
+        return next;
+      }
+      next[i] = 0;
+    }
+    // Every digit was at its largest: more than 2^80 ids in one millisecond. Start again rather than wrap to a smaller one.
   }
-  return out;
+  const bytes = randomBytes(RANDOM_LEN);
+  // The first digit is kept below the top, so that a run of ids made in one millisecond has room to count up.
+  const fresh = Array.from(bytes, (b, i) => (i === 0 ? (b % 16) : b % 32));
+  lastTime = time;
+  lastDigits = fresh;
+  return fresh;
 }
 
 /** The raw 26-character value, without a prefix. */
 export function newUlid(now: number = Date.now()): string {
-  return encodeTime(now) + encodeRandom();
+  return encodeTime(now) + nextDigits(now).map((d) => ALPHABET[d]).join("");
 }
 
 export type IdPrefix = "q" | "bank" | "m" | "e" | "o" | "f" | "t" | "flt";

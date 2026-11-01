@@ -1,0 +1,22 @@
+{
+  "name": "@openstage/app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The OpenAssess app: a small local server that puts the engine behind a web interface, shown in a browser or in the Tauri window.",
+  "license": "Apache-2.0",
+  "author": "Jason S. Wrench",
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types --no-warnings src/main.ts --open",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.ui.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}
