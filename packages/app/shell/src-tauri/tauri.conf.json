@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "OpenAssess",
+  "version": "0.1.0",
+  "identifier": "org.openstage.assess",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "OpenAssess",
+        "url": "index.html",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 720,
+        "minHeight": 560,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "resources": ["resources/**/*"],
+    "publisher": "OpenStage",
+    "copyright": "Licensed under the Apache License 2.0",
+    "category": "Education",
+    "shortDescription": "Write, import, organise and export assessment questions.",
+    "longDescription": "OpenAssess turns a Word test bank into an LMS-ready quiz without retyping. It reads Word, text, Aiken and GIFT files, shows what it found beside the lines it came from, lets you repair what needs it, and writes Moodle XML, GIFT, a question spreadsheet, and printed tests as Word and PDF.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"]
+      }
+    }
+  }
+}

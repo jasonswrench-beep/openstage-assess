@@ -1,0 +1,16 @@
+{
+  "name": "@openstage/app-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The OpenAssess desktop window: a Tauri shell around the app's local server. Not part of the npm workspaces, so installing the repository never fetches it.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "prepare-resources": "node prepare.mjs",
+    "dev": "node prepare.mjs && tauri dev",
+    "build": "node prepare.mjs && tauri build",
+    "build:exe": "node prepare.mjs && tauri build --no-bundle"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}
