@@ -7,10 +7,8 @@
  */
 
 import { get, post } from "./api.js";
-import { clear, h, plural } from "./dom.js";
-
-/** How many questions are named under one note before the rest are only numbered. */
-const MAX_LISTED = 8;
+import { clear, h, plural, put } from "./dom.js";
+import { EXPORT_WORDS, reportNodes } from "./reportview.js";
 
 /**
  * @param {HTMLElement} host
@@ -108,62 +106,10 @@ export async function renderExport(host, params, shell) {
     }
   }
 
-  /**
-   * One note, said once, with the questions it applies to listed under it.
-   * @param {string} heading
-   * @param {string} outcome
-   * @param {boolean} open
-   */
-  function section(heading, outcome, open) {
-    /** @type {any[]} */
-    const items = report.items.filter(/** @param {any} item */ (item) => item.outcome === outcome);
-    if (items.length === 0) return null;
-    /** @type {Map<string, any[]>} */
-    const groups = new Map();
-    for (const item of items) for (const note of item.notes) groups.set(note, [...(groups.get(note) ?? []), item]);
-    return h(
-      "details",
-      { class: "more", open },
-      h("summary", { text: `${heading} (${items.length})` }),
-      ...[...groups].map(([note, members]) =>
-        h(
-          "div",
-          { class: "note-group" },
-          h("p", { text: note }),
-          h(
-            "ul",
-            null,
-            ...members.slice(0, MAX_LISTED).map((m) => h("li", { text: `#${m.position} ${m.title.length > 60 ? `${m.title.slice(0, 57)}...` : m.title}` })),
-            members.length > MAX_LISTED ? h("li", { text: `and ${members.length - MAX_LISTED} more: ${members.slice(MAX_LISTED).map((m) => `#${m.position}`).join(", ")}` }) : null,
-          ),
-        ),
-      ),
-    );
-  }
-
   function renderReport() {
     clear(resultHost);
     if (!report) return;
-    const total = report.total;
-    if (total === 0) {
-      resultHost.append(h("p", { class: "problem", text: "No question matches those statuses, so there is nothing to export." }));
-      return;
-    }
-    resultHost.append(
-      h(
-        "ul",
-        { class: "counts" },
-        h("li", null, h("b", { text: String(report.exported) }), h("span", { text: "go as they are" })),
-        h("li", null, h("b", { text: String(report.exportedWithLosses) }), h("span", { text: "go with something lost" })),
-        h("li", null, h("b", { text: String(report.leftOut) }), h("span", { text: "cannot go" })),
-      ),
-      report.files.length === 0
-        ? h("p", { class: "problem", text: "No question can be exported to this format, so no file would be written." })
-        : h("p", { class: "sub", text: `This writes ${plural(report.files.length, "file", "files")}: ${report.files.join(", ")}.` }),
-      report.general.length > 0 ? h("ul", { class: "general" }, ...report.general.map(/** @param {string} g */ (g) => h("li", { text: g }))) : null,
-      section("Cannot go", "leftOut", true),
-      section("Goes with something lost", "exportedWithLosses", report.leftOut === 0),
-    );
+    put(resultHost, ...reportNodes(report, EXPORT_WORDS));
   }
 
   async function write() {

@@ -6,8 +6,8 @@
  * two files, the second with a number in its name.
  */
 
-import { stat, writeFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import {
   exportGift,
@@ -25,7 +25,7 @@ import {
 } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest } from "./errors.ts";
-import { checkName, cleanName } from "./library.ts";
+import { checkName, cleanName, freeFileName } from "./library.ts";
 
 interface Destination {
   id: string;
@@ -65,26 +65,6 @@ function chosen(questions: Question[], statuses: unknown): Question[] {
   return questions.filter((q) => wanted.has(q.metadata.status));
 }
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** `name`, or `name 2.ext`, `name 3.ext`: a file that is already there is never written over. */
-async function freeName(dir: string, name: string): Promise<string> {
-  const ext = extname(name);
-  const base = name.slice(0, name.length - ext.length);
-  for (let n = 1; n < 10_000; n++) {
-    const candidate = n === 1 ? name : `${base} ${n}${ext}`;
-    if (!(await exists(join(dir, candidate)))) return candidate;
-  }
-  throw badRequest("There are too many exports with that name. Move some out of the Exports folder.");
-}
-
 function body(req: ApiRequest): Record<string, unknown> {
   if (req.body.length === 0) return {};
   try {
@@ -116,7 +96,7 @@ export async function exportRoute(ctx: Context, req: ApiRequest, rawName: string
 
   const written: Array<{ name: string; path: string; questions: number }> = [];
   for (const file of result.files) {
-    const fileName = await freeName(ctx.library.exports, checkName(file.name));
+    const fileName = await freeFileName(ctx.library.exports, checkName(file.name));
     const path = join(ctx.library.exports, fileName);
     await writeFile(path, file.content, "utf8");
     written.push({ name: fileName, path, questions: file.questions });

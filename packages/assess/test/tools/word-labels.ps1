@@ -29,10 +29,14 @@ try {
           # The text of the paragraph without its mark, as bold|italic|underline|colour|highlight|hidden.
           $range = $doc.Range($paragraph.Range.Start, [Math]::Max($paragraph.Range.Start, $paragraph.Range.End - 1))
           $labels.Add(("{0}|{1}|{2}|{3}|{4}|{5}" -f $range.Font.Bold, $range.Font.Italic, $range.Font.Underline, $range.Font.Color, $range.HighlightColorIndex, $range.Font.Hidden))
+        } elseif ($What -eq 'text') {
+          # The text of the paragraph as Word holds it, without the paragraph mark.
+          $labels.Add([string]$paragraph.Range.Text.TrimEnd([char]13, [char]7))
         } else {
           $labels.Add([string]$paragraph.Range.ListFormat.ListString)
         }
       }
+      if ($What -eq 'text') { $labels.Add("PAGES:" + $doc.ComputeStatistics(2)) }
       $result[$f.BaseName] = $labels.ToArray()
       $doc.Close($false)
     } catch {

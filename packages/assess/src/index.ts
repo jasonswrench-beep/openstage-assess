@@ -55,6 +55,10 @@ export type { GiftOptions } from "./export/gift.ts";
 export { exportMoodleXml, checkMoodleXml, MOODLE_XML_ID, MOODLE_XML_LABEL } from "./export/moodle-xml.ts";
 export type { MoodleXmlOptions } from "./export/moodle-xml.ts";
 
+// Printing
+export { printTest, printOptions, layoutTest, writeDocx, writePdf, PAPERS, PRINT_ID, PRINT_LABEL } from "./print/index.ts";
+export type { PrintFormat, PrintOptions, PrintDocument, PrintResult, PrintedFile, Layout as PrintLayout } from "./print/index.ts";
+
 // Harness
 export * from "./harness/score.ts";
 export { runHarness, TARGET_SCORE } from "./harness/run.ts";
