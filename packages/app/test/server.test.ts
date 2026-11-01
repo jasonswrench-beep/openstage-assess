@@ -681,7 +681,32 @@ describe("exporting", () => {
     await withApp(async (client) => {
       const reply = await client.get("/api/destinations");
       const ids = (reply.json["destinations"] as Array<{ id: string; label: string; blurb: string }>).map((d) => d.id);
-      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift"]);
+      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv"]);
+    });
+  });
+
+  test("exports a bank to Brightspace's question library: what the check said is what the file holds", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      const checked = (await client.post(`${bank}/export/check`, { destination: "d2l-csv" })).json["report"] as Report;
+      assert.equal(checked.total, 3);
+      assert.equal(checked.exported, 2, "the multiple choice, and the ordering that Brightspace can hold");
+      assert.equal(checked.leftOut, 1, "the true or false with no answer is not written with a guessed one");
+      assert.deepEqual(readdirSync(join(home, "Exports")), []);
+
+      const written = await client.post(`${bank}/export`, { destination: "d2l-csv" });
+      assert.equal(written.status, 200, written.text);
+      const files = written.json["written"] as Array<{ name: string; questions: number }>;
+      assert.equal(files[0]?.name, "Quiz - Brightspace.csv");
+      assert.equal(files[0]?.questions, 2);
+      const onDisk = readFileSync(join(home, "Exports", "Quiz - Brightspace.csv"), "utf8");
+      assert.ok(onDisk.startsWith("// Written by OpenAssess"), "no byte order mark in front of the first keyword");
+      // Every row is three cells wide, as Brightspace's own template is, so a row with nothing to say in the third ends in a comma.
+      assert.match(onDisk, /NewQuestion,MC,\r\n/);
+      assert.match(onDisk, /Option,100,Four\r\n/);
+      assert.match(onDisk, /NewQuestion,O,\r\n/);
+      assert.match(onDisk, /Item,First,\r\nItem,Second,\r\n/);
+      assert.doesNotMatch(onDisk, /cheese/);
     });
   });
 

@@ -482,6 +482,29 @@ Media is never garbage collected either.
   and bold; it does not yet write a text box or hidden text, so how Word spells a box, and what `mc:Fallback` holds in a real
   file, is read from memory of the format.
 
+### Found while building the Brightspace question library export (stage 9)
+
+`src/export/d2l-csv.ts`, tested by `test/export-d2l-csv.test.ts` (31 tests, one of which runs the real banks in the private
+fixtures folder when they are there). 35 deliberate breaks of the exporter, on a baseline that passed: 34 caught, and one
+survives because it is equivalent (the guard against a true or false with neither answer chosen is behind the key check, which
+leaves such a question out first; it stays as defence and as the narrowing the types need). Two breaks survived the first
+tests, both missing assertions (the note on a fill in the blank written as a short answer; a matching question with one pair),
+and have tests now.
+
+- **Fixed: the file's own comment row was quoted.** The first row is a `//` comment, and its text had a comma, so the writer
+  quoted the cell and the line began with a quote mark, not with `//`. A reader that looks for the two slashes at the start of a
+  line would not have seen a comment. The comment has no comma now, and a test reads the first line for a quote mark.
+- **Decided, not fixed: what the CSV cannot hold is said, and left out where it would be a guess.** A numeric question, a fill in
+  the blank with several blanks, a hot spot and a calculated question have no row Brightspace's CSV imports, and are left out
+  with the reason. Feedback for one answer, for a right answer and for a wrong one, a rubric, a model answer, difficulty, tags and
+  pictures are lost and named against the question.
+- **Open: nothing was imported into a Brightspace course.** The format was read from Brightspace's published article, in the
+  browser, because a fetching agent reported the pages unreadable. The tests hold every exported file, including 1421 real
+  questions, to a second reading of that article, so they find a file that departs from it. Whether the article is complete, and
+  how Brightspace treats a row it does not know, is not known (`TESTING-TODO.md`).
+- **Open: no QTI.** Brightspace's Quizzes tool imports QTI up to 1.2 and its Course Import takes a subset of 2.x and 3.x. Neither
+  exporter exists.
+
 ### Found by the first real PDF test banks (stage 8)
 
 Five PDFs from one typesetting program (a page-layout program), kept in the private fixtures folder. Fixed, each with a test that fails when

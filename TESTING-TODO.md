@@ -68,6 +68,27 @@ item says what has been run and what has not. Items are removed when done, with 
   engine would have. Refusing a scan with the way round (an original document, or text recognition done in a PDF program) is what
   it does now.
 
+## Brightspace
+
+- [ ] **Import a file this wrote into a Brightspace course.** Quizzes, Question Library, Import, Upload a File. No Brightspace
+  course has read one; the tests hold the file to Brightspace's published description of its CSV, and to the CSV reader, which
+  shows it follows the description and nothing about whether Brightspace agrees. Use `Brightspace (D2L) Question Library, CSV` in the
+  app's export screen on a bank with one question of each type, and look at every question in the library afterwards: the right
+  answer marked, the points, the order of an ordering, the pairs of a matching, the multiselect's scoring.
+- [ ] **Download Brightspace's own template CSV and put the two side by side.** The article gives the rows but its template file
+  was not available here. Look at how many cells wide its rows are (these are three), whether it has a header or comment line,
+  and whether its Points and Scoring rows sit where these do.
+- [ ] **Check the three values that are easy to get wrong.** A multiple choice's right answer is `100`, a multiselect's is `1`,
+  and a true or false has a `TRUE` row and a `FALSE` row. These are from the article; a question that imports with the wrong
+  answer marked is the failure to look for.
+- [ ] **Import a question with an accent, a quotation mark and a line break in it.** The file is UTF-8 with no byte order
+  mark, as the article does not ask for one. If Brightspace shows accented letters wrongly, the mark is the first thing to try
+  (it is one line in `d2l-csv.ts`).
+- [ ] **A question with bold in its wording.** It is written as HTML with `HTML` in the third cell, which the article shows for
+  the question text only. Check that it arrives bold and not as visible tags.
+- [ ] **Try the QTI route too, if you have one in mind.** Brightspace's Quizzes tool takes QTI up to 1.2 and Course Import takes
+  a subset of 2.x and 3.x; neither exporter is built, and which one matters depends on how you move content.
+
 ## The app and its window
 
 Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in
@@ -181,6 +202,17 @@ These change what the app does, and were made without asking. Each is one flag o
   should open itself in the browser, or sit beside the document, is yours.
 - [ ] **The 13 openly licensed files** (CC BY 4.0) are kept on this machine only. Whether to commit them as fixtures, with
   attribution, so that the check runs from a clone. The page that shared them names no author.
+
+- [ ] **Brightspace takes plain text for options, items, answers and feedback.** Only the question text is written as HTML,
+  because that is the one place the article shows it. Bold in an option arrives plain, and the check says so. Whether
+  Brightspace also reads the `HTML` flag on an option is a thing to try in a course, and it is one line to change.
+- [ ] **Difficulty, tags, images, an answer key for a written response, and a model answer are not written to the Brightspace
+  file.** The article does not document entries for them (it documents `Image`, but as a file path that would have to travel
+  with the CSV), so none is guessed. The check names each loss.
+- [ ] **A points value that is not a whole number from 1 to 100 is not written to the Brightspace file,** and the question is
+  said to arrive with Brightspace's default. Half a point is the usual case.
+- [ ] **A fill in the blank with one blank goes to Brightspace as a short answer;** one with several blanks is left out,
+  because Brightspace's CSV cannot import a fill in the blanks question.
 
 ## Not in this repository
 

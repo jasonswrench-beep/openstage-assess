@@ -33,7 +33,7 @@
     "copyright": "Licensed under the Apache License 2.0",
     "category": "Education",
     "shortDescription": "Write, import, organise and export assessment questions.",
-    "longDescription": "OpenAssess turns a Word test bank into an LMS-ready quiz without retyping. It reads Word, text, Aiken and GIFT files, shows what it found beside the lines it came from, lets you repair what needs it, and writes Moodle XML, GIFT, a question spreadsheet, and printed tests as Word and PDF.",
+    "longDescription": "OpenAssess turns a Word test bank into an LMS-ready quiz without retyping. It reads Word, Excel, CSV, PDF, text, Aiken and GIFT files, shows what it found beside the lines it came from, lets you repair what needs it, and writes Moodle XML, GIFT, a Brightspace question library file, a question spreadsheet, and printed tests as Word and PDF.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
