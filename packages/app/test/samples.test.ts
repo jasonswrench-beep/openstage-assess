@@ -104,45 +104,48 @@ describe("the samples", () => {
     });
   });
 
-  test("a copy is saved into the exports folder, never over another, and its own bytes are the sample's", async () => {
+  // A copy to keep is a download of the sample's own file, so that the window asks where it goes like it does for an export. It
+  // used to be a route that wrote the file into the exports folder and opened the folder, which gave the person no choice.
+  test("every sample can be downloaded as its own file, named as it is, and nothing is written", async () => {
     await withApp(async (client, home) => {
-      const first = await client.post<{ name: string; path: string }>("/api/samples/blank-table/save");
-      assert.equal(first.status, 200, first.text);
-      assert.equal(first.json.name, "blank-question-table.xlsx");
-      const second = await client.post<{ name: string; path: string }>("/api/samples/blank-table/save");
-      assert.notEqual(second.json.name, first.json.name, "a second copy gets its own name");
-      assert.deepEqual(readFileSync(join(home, "Exports", first.json.name)), readFileSync(samplePath(SAMPLES[3] as (typeof SAMPLES)[number])));
-      assert.deepEqual(readdirSync(join(home, "Exports")).length, 2);
-      // And what was saved is something the app can be asked to show, which it will only do inside the library.
-      const shown = await client.post("/api/reveal", { path: first.json.path });
-      assert.equal(shown.status, 200, shown.text);
+      for (const sample of SAMPLES) {
+        const reply = await client.get(`/files/samples/${sample.id}`);
+        assert.equal(reply.status, 200, sample.id);
+        assert.deepEqual(reply.bytes, readFileSync(samplePath(sample)), `${sample.id}: the sample's own bytes`);
+        assert.match(reply.headers.get("content-disposition") ?? "", new RegExp(`^attachment; filename\\*=UTF-8''${sample.file.replace(/\./g, "\\.")}$`), sample.id);
+        assert.match(reply.headers.get("content-type") ?? "", /officedocument/, sample.id);
+      }
+      assert.equal(readdirSync(join(home, "Exports")).length, 0, "nothing was written into the library");
     });
   });
 
   test("an id that is not a sample is not found, and no path can be asked for", async () => {
     await withApp(async (client) => {
       // (A bare ".." never reaches the server: the address is tidied first, and the tidied address is another route.)
-      for (const id of ["nope", "..%2F..%2Fpackage", "solar-system-test-bank.docx", "word-bank%2F..%2F..%2Fstate", "WORD-BANK"]) {
+      for (const id of ["nope", "..%2F..%2Fpackage", "solar-system-test-bank.docx", "word-bank%2F..%2F..%2Fstate", "WORD-BANK", ""]) {
         assert.equal((await client.post(`/api/samples/${id}/import`)).status, 404, id);
-        assert.equal((await client.post(`/api/samples/${id}/save`)).status, 404, id);
+        assert.equal((await client.get(`/files/samples/${id}`)).status, 404, `download ${id}`);
       }
+      assert.equal((await client.get("/files/samples/%E0%A4%A")).status, 404, "an escape that is not one is not a sample either");
       assert.equal((await client.get("/api/samples/word-bank")).status, 404, "a sample is not a page of its own");
       assert.equal((await client.post("/api/samples/word-bank/other")).status, 404);
+      assert.equal((await client.post("/api/samples/word-bank/save")).status, 404, "the route that wrote a copy into the library is gone");
     });
   });
 
-  test("only a change can import or save one: a plain GET, which needs no header, does neither", async () => {
+  test("a plain GET, which needs no header, does not import a sample", async () => {
     await withApp(async (client, home) => {
-      for (const action of ["import", "save"]) assert.equal((await client.get(`/api/samples/blank-table/${action}`)).status, 404, action);
+      assert.equal((await client.get("/api/samples/blank-table/import")).status, 404);
       assert.equal(readdirSync(join(home, "Exports")).length, 0, "nothing was written");
     });
   });
 
-  test("saving a sample is a change, so it needs the app's own header like every change", async () => {
-    await withApp(async (client, home) => {
-      const reply = await rawRequest(client.server.port, "/api/samples/blank-table/save", { host: `127.0.0.1:${client.server.port}`, cookie: client.cookie }, "POST");
-      assert.equal(reply.status, 403);
-      assert.equal(existsSync(join(home, "Exports", "blank-question-table.xlsx")), false);
+  test("a sample can only be downloaded by the window that holds the key", async () => {
+    await withApp(async (client) => {
+      const keyless = await rawRequest(client.server.port, "/files/samples/blank-table", { host: `127.0.0.1:${client.server.port}` });
+      assert.equal(keyless.status, 401, "no cookie, no file");
+      const foreign = await rawRequest(client.server.port, "/files/samples/blank-table", { host: "evil.example", cookie: client.cookie });
+      assert.equal(foreign.status, 421, "a name pointed at this machine is not answered");
     });
   });
 });

@@ -49,7 +49,7 @@ item says what has been run and what has not. Items are removed when done, with 
   top of the review: which columns were not used, which sheets were not read, how many rows were hidden. It reads a workbook
   that Excel wrote correctly (`check:excel-authored`, run on 1 November 2026: 246 comparisons with what Excel says, none
   differing) and has not read one of yours.
-- [ ] **Open the blank table and the Excel sample in Excel** (use Save a copy on the first screen) and look at them: the bold first row, the
+- [ ] **Open the blank table and the Excel sample in Excel** (use Save a copy… on the first screen) and look at them: the bold first row, the
   drop-down on Type, the "How to fill it in" sheet. Excel opened them without repair when asked by the check, and nothing
   can say how they look.
 - [ ] **Try a workbook from Google Sheets and one from LibreOffice** (File, Download, Microsoft Excel). Only Excel's own files
@@ -96,6 +96,11 @@ Everything below was run by tests (`npm test` in `packages/app`, 96 of them, thr
 the browser pane and in the built window at desktop width. None of it has been used by a person, and none of it has been
 run on a machine other than the one it was built on.
 
+- [ ] **In the window, press Save a copy… on a sample on the first screen.** It should open the same Save dialog with the
+  sample's own name (`solar-system-test-bank.docx` and so on) and nothing should be written into the Exports folder: before this
+  the button wrote the file there without asking and opened the folder. Checked in the built window by a script (the dialog
+  opens with the right name and type; closing it saves nothing; accepting it writes one file identical to the sample), and not
+  by a hand. The blank table's button is "Save a copy to fill in…".
 - [ ] **In the window, press Save a copy… on an exported or printed file.** Windows' own Save dialog should open, titled "Save a
   copy", with the file's name filled in and its type chosen; saving writes the file where you chose, and closing the dialog
   writes nothing. This was checked in the built window by a script that found the dialog, closed it (nothing saved) and accepted
