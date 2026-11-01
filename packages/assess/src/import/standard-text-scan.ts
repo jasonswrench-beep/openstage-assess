@@ -65,7 +65,8 @@ function anyOf(...forms: RegExp[]): { exec(text: string): RegExpExecArray | null
  * it has to be followed by a space or the end of the line, so that a stem that begins "Question 1.1?" is not question 1.
  */
 export const QUESTION_START = anyOf(
-  /^\s*(\d{1,4})\s*[.)]\s+(.*)$/,
+  // A doubled full stop, "13.. Why?", is a typed slip and is the same number. It is read as the number it follows on from.
+  /^\s*(\d{1,4})\s*[.)]{1,2}\s+(.*)$/,
   /^\s*(?:Q|Question)\s*(\d{1,4})\s*[.):](?:\s+|$)(.*)$/i,
 );
 /**
@@ -169,7 +170,7 @@ export const METADATA_LABELS: Record<string, keyof Metadata | "bloom" | "difficu
  * its two choices, is not either.
  */
 const SECTION_HEADING =
-  /^\s*(?:chapter\s+\w+(?:-\w+)?\s+)?(?:in[\s-]*depth\s+)?(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?(?:\s*\/\s*essays?)?|essays?|matching)(?:\s+(?:questions?|items?))?\s*:?\s*$/i;
+  /^\s*(?:chapter\s+\w+(?:-\w+)?\s+)?(?:in[\s-]*depth\s+)?(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or|and)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?(?:\s*\/\s*essays?)?|essays?|matching)(?:\s+(?:questions?|items?))?\s*:?\s*$/i;
 
 function sectionType(name: string): string {
   const n = name.toLowerCase();
