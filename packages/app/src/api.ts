@@ -17,13 +17,12 @@ import {
   ENGINE_VERSION,
   FindingCode,
   finding,
-  importerFor,
+  importerForContent,
   liveFindings,
   linesToBlocks,
   newQuestionId,
   QUESTION_TYPES,
   runImporter,
-  standardTextImporter,
   validateQuestion,
   verdictOf,
   type Question,
@@ -125,7 +124,7 @@ async function importFile(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   if (req.body.length === 0) throw badRequest("That file is empty.");
 
   const bytes = new Uint8Array(req.body);
-  const importer = importerFor(name) ?? standardTextImporter;
+  const importer = importerForContent(name, bytes);
   const keyMark = req.query.get("keyMark");
   let result;
   try {

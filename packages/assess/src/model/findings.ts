@@ -97,6 +97,8 @@ export const FindingCode = {
   TypeFromEvidence: "import.type-from-evidence",
   AcceptedAnswersSplit: "import.accepted-answers-split",
   PairLeftOut: "import.pair-left-out",
+  WeightsNotKept: "import.weights-not-kept",
+  MoreThanOneRight: "import.more-than-one-right",
 
   // Item quality. Advisory by design; authors may dismiss any of them.
   AllOrNoneOfTheAbove: "quality.all-or-none-of-the-above",

@@ -6,11 +6,13 @@
  * would score one way and import another. So it is done here, once.
  */
 
+import { aikenImporter, looksLikeAiken } from "./aiken.ts";
+import { giftImporter, looksLikeGift } from "./gift.ts";
 import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult } from "./types.ts";
 import { wordImporter } from "./word.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter];
+export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter];
 
 /** The importer that reads files with this name's extension, if there is one. */
 export function importerFor(file: string): Importer | undefined {
@@ -18,6 +20,24 @@ export function importerFor(file: string): Importer | undefined {
   if (dot === -1) return undefined;
   const extension = file.slice(dot).toLowerCase();
   return IMPORTERS.find((importer) => importer.extensions.includes(extension));
+}
+
+/** How much of a text file is looked at to tell which format it is in. More than enough to see a pattern, and bounded. */
+const SNIFF_BYTES = 400_000;
+
+/**
+ * The importer for a file, from its name and then, for a plain text file, from what is in it. A file called .txt may be the
+ * Standard Format, Aiken or GIFT, and each is told by its shape: GIFT has answers in braces, Aiken has unnumbered questions
+ * with an ANSWER line, and anything else is the Standard Format, which is what a .txt file was always read as. A name that
+ * names a format (.docx, .aiken, .gift) is believed.
+ */
+export function importerForContent(file: string, bytes: Uint8Array): Importer {
+  const named = importerFor(file);
+  if (named && named !== standardTextImporter) return named;
+  const text = Buffer.from(bytes.subarray(0, SNIFF_BYTES)).toString("utf8");
+  if (looksLikeGift(text)) return giftImporter;
+  if (looksLikeAiken(text)) return aikenImporter;
+  return standardTextImporter;
 }
 
 /**

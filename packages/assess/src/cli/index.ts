@@ -14,8 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { BANK_EXTENSION, PRODUCT_NAME, ENGINE_VERSION } from "../naming.ts";
 import { Bank } from "../bank/store.ts";
-import { standardTextImporter } from "../import/standard-text.ts";
-import { importerFor, runImporter } from "../import/registry.ts";
+import { importerForContent, runImporter } from "../import/registry.ts";
 import { linesToBlocks, verdictOf } from "../import/types.ts";
 import { docxToBlocks } from "../import/word.ts";
 import { reviewHtml } from "../report/review-html.ts";
@@ -29,6 +28,10 @@ import { createQuestion } from "../model/create.ts";
 import { localId } from "../model/ids.ts";
 import { formatReport } from "../export/types.ts";
 import { DESTINATION_ID, exportOpenStageSpreadsheet } from "../export/openstage-spreadsheet.ts";
+import { exportGift, GIFT_ID } from "../export/gift.ts";
+import { exportMoodleXml, MOODLE_XML_ID } from "../export/moodle-xml.ts";
+import type { ExportResult } from "../export/types.ts";
+import type { Question } from "../model/question.ts";
 
 const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
 
@@ -41,9 +44,10 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess new <bank${BANK_EXTENSION}> --title "Course bank"
       Create an empty bank.
 
-  openassess import <file.txt|file.docx> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
-      Read a file (the standard test-bank text format as text, or a Word .docx) and
-      report the verdicts. With --out, write the questions into a new bank.
+  openassess import <file.txt|file.docx|file.gift|file.aiken> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
+      Read a file (the standard test-bank text format, Aiken or GIFT as text, or a
+      Word .docx) and report the verdicts. A .txt file is told apart by what is
+      in it. With --out, write the questions into a new bank.
       A Word file may mark the correct option by formatting it. The file is
       read to see whether it does, and the report says what was decided.
       --key-mark overrides that: off, bold, italic, underline, highlight,
@@ -56,10 +60,11 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       the text no question used. Open the page in any browser. Nothing is
       written to a bank and the file is not changed.
 
-  openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}] [--out <folder>]
-      Run the destination check for the question spreadsheet that OpenStage
-      Author and Scroll read: what will arrive, what will be lost, what cannot
-      go. With --out, write the file or files into that folder.
+  openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}|${GIFT_ID}|${MOODLE_XML_ID}] [--out <folder>]
+      Run the destination check for a format: the question spreadsheet that
+      OpenStage Author and Scroll read (the default), GIFT, or Moodle XML. It
+      says what will arrive, what will be lost, what cannot go. With --out,
+      write the file or files into that folder.
 
   openassess search <bank${BANK_EXTENSION}> <words...>
       Search a bank.
@@ -183,10 +188,12 @@ async function cmdImport(args: string[]): Promise<number> {
   if (extname(full).toLowerCase() === ".doc") {
     return fail("This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).");
   }
-  // A file with an extension no importer claims is read as the plain-text format, as it always was.
-  const importer = importerFor(full) ?? standardTextImporter;
+  // A .txt file may be the Standard Format, Aiken or GIFT, and is told by what is in it. A file with an extension no importer
+  // claims is read as the plain-text format, as it always was.
+  const bytes = await readFile(full);
+  const importer = importerForContent(full, bytes);
   const keyMark = arg(args, "key-mark");
-  const result = runImporter(importer, await readFile(full), { file: basename(full), ...(keyMark ? { keyMark } : {}) });
+  const result = runImporter(importer, bytes, { file: basename(full), ...(keyMark ? { keyMark } : {}) });
 
   console.log(`${result.file}  profile ${result.profile}`);
   console.log(`  parsed        ${result.counts.parsed}`);
@@ -232,7 +239,7 @@ async function cmdReview(args: string[]): Promise<number> {
     return fail("This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).");
   }
   const bytes = await readFile(full);
-  const importer = importerFor(full) ?? standardTextImporter;
+  const importer = importerForContent(full, bytes);
   const keyMark = arg(args, "key-mark");
   const result = runImporter(importer, bytes, { file: basename(full), ...(keyMark ? { keyMark } : {}) });
 
@@ -251,14 +258,22 @@ async function cmdReview(args: string[]): Promise<number> {
   return 0;
 }
 
+/** Where a bank can be exported to: each takes the questions and a name, and answers with the files and the destination check. */
+const EXPORTERS: Record<string, (questions: Question[], options: { name: string }) => ExportResult> = {
+  [DESTINATION_ID]: exportOpenStageSpreadsheet,
+  [GIFT_ID]: exportGift,
+  [MOODLE_XML_ID]: exportMoodleXml,
+};
+
 async function cmdExport(args: string[]): Promise<number> {
   const path = positional(args)[0];
   if (!path) return fail("Name a bank file.");
   const to = arg(args, "to") ?? DESTINATION_ID;
-  if (to !== DESTINATION_ID) return fail(`Unknown destination "${to}". The only one so far is ${DESTINATION_ID}.`);
+  const exporter = EXPORTERS[to];
+  if (!exporter) return fail(`Unknown destination "${to}". The destinations are ${Object.keys(EXPORTERS).join(", ")}.`);
 
   const { bank } = await Bank.open(resolve(path));
-  const result = exportOpenStageSpreadsheet(bank.list(), { name: bank.manifest.title });
+  const result = exporter(bank.list(), { name: bank.manifest.title });
   for (const line of formatReport(result.report)) console.log(line);
 
   const out = arg(args, "out");
