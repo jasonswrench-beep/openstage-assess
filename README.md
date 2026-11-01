@@ -83,7 +83,9 @@ only and answers only to the window it opened.
   ordering and written response. What its CSV cannot take (a numeric or arithmetic question,
   several blanks) is left out with the reason, and what it cannot carry (feedback on one
   answer, a rubric, pictures) is said against the question. It has been checked against
-  Brightspace's published description of the file, not yet against a Brightspace course.
+  Brightspace's published description of the file, and one file of multiple choice, true or
+  false and written response questions has been imported into a real Brightspace course and
+  arrived as written. The other types have not yet been imported there.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question

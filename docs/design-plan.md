@@ -243,8 +243,13 @@ decided from it:
 - **No byte order mark,** CRLF line ends, and a first row that is a `//` comment with no comma in it, so that it is never
   quoted. The CSV cannot place questions in a section; the check says to move them afterwards.
 
-**What has not been checked.** No Brightspace course has imported a file this wrote (`TESTING-TODO.md` lists what a person
-with a course should try). The tests read the file back through the CSV reader and hold every question of every fixture bank to
+**What has been checked, and what has not.** On 1 November 2026 a person imported one file this wrote into a real Brightspace
+course (Question Library, Import, Upload a File, then a quiz built from it): 13 multiple choice, 10 true or false and 5 written
+response questions arrived as 28 questions of those types, each worth 1 point, with their text, and the one true or false that
+was opened in Brightspace's editor had the answer the source document gives (False). That was seen in a recording, so it says
+nothing about the right answer on each multiple choice question, which the preview does not show. Multiselect, short answer,
+matching, ordering, a question with formatting, accented letters and a multiselect's scoring have not been imported
+(`TESTING-TODO.md` lists what a person with a course should try). The tests read the file back through the CSV reader and hold every question of every fixture bank to
 a second reading of the article, which shows the file follows the article and nothing about whether the article is complete.
 Brightspace's own blank template file was not available to compare with.
 
@@ -380,7 +385,7 @@ home screen and stops its server when it is closed; the installer is unsigned.
 - **M2, LMS exports.** QTI 1.2, 2.1 and 3.0, the per-LMS compatibility matrix
   built by importing every type into a sandbox course on each LMS, destination
   checks, and round-trip tests. The Brightspace question library CSV is done
-  and unchecked against a real course; the QTI exporters are not started.
+  and imported once into a real course for three of its seven types; the QTI exporters are not started.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
   pools, blueprints, versions, the item quality and accessibility checks (phase
   7), and the web quiz.
