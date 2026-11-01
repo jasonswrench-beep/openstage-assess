@@ -96,25 +96,25 @@ Everything below was run by tests (`npm test` in `packages/app`, 96 of them, thr
 the browser pane and in the built window at desktop width. None of it has been used by a person, and none of it has been
 run on a machine other than the one it was built on.
 
-- [ ] **Repair a question whose Answer line disagreed with its option, in the window, and tick the right answer.** The error about
+- [x] **Repair a question whose Answer line disagreed with its option, in the window, and tick the right answer.** The error about
   the file's key should turn into "Replaced by your answer" (with its words), the other error should go, the question should
   read Parsed, and the save should say that your answer replaces what the file's key said. Then put it into a bank with the
-  others: it should be kept as an ordinary question, and export. It was checked in a browser and by tests, and not in the
-  window. The rule's edges are under Decisions below.
-- [ ] **In the window, press Save a copy… on a sample on the first screen.** It should open the same Save dialog with the
+  others: it should be kept as an ordinary question, and export. Done in the window on 1 November 2026, seen in a recording
+  with `repair-practice.docx`: all six faulty questions repaired, each save saying so, the file's error listed as "Replaced by
+  your answer", 10 of 10 Parsed, put into a bank and exported as it was. The rule's edges are under Decisions below.
+- [x] **In the window, press Save a copy… on a sample on the first screen.** It should open the same Save dialog with the
   sample's own name (`solar-system-test-bank.docx` and so on) and nothing should be written into the Exports folder: before this
-  the button wrote the file there without asking and opened the folder. Checked in the built window by a script (the dialog
-  opens with the right name and type; closing it saves nothing; accepting it writes one file identical to the sample), and not
-  by a hand. The blank table's button is "Save a copy to fill in…".
-- [ ] **In the window, press Save a copy… on an exported or printed file.** Windows' own Save dialog should open, titled "Save a
+  the button wrote the file there without asking and opened the folder. Done: reported as a pop up where you decide where to
+  save, on 1 November 2026. The blank table's button is "Save a copy to fill in…".
+- [x] **In the window, press Save a copy… on an exported or printed file.** Windows' own Save dialog should open, titled "Save a
   copy", with the file's name filled in and its type chosen; saving writes the file where you chose, and closing the dialog
-  writes nothing. This was checked in the built window by a script that found the dialog, closed it (nothing saved) and accepted
-  it (one new file, identical to the export), and not by a hand on it. Look at where the dialog appears (in front of the window,
-  not behind it), and try a folder other than Downloads, a name that already exists (Windows should ask before replacing it), and
-  pressing Save a copy… twice quickly. In a browser the link does whatever the browser does with a download.
-- [ ] **Press Show in folder on a file with spaces in its name** (most have them: a bank titled with two words, or the suffix on a Brightspace file). It should open the
-  Exports folder with the file selected. Before this was fixed it opened Documents and showed nothing, which was found in a
-  recording of the window and checked here by opening Explorer both ways and reading where it landed.
+  writes nothing. Done in the window on 1 November 2026, seen in a recording: the dialog opens in front of the window with the
+  name and "PDF file" filled in, in the Documents folder (the person chose Downloads, and the file is there). Not yet tried: a
+  name that already exists (Windows should ask before replacing it), and pressing Save a copy… twice quickly. In a browser the
+  link does whatever the browser does with a download.
+- [x] **Press Show in folder on a file with spaces in its name** (most have them: a bank titled with two words, or the suffix on a Brightspace file). It should open the
+  Exports folder with the file selected. Before this was fixed it opened Documents and showed nothing. Done in the window on
+  1 November 2026, seen in recordings: it opens the Exports folder with the file selected.
 - [ ] **Double-click `Open OpenAssess.cmd`, make a bank, import a real Word bank, repair a question, export, print.** The
   whole loop as a person would walk it. Write down the first place you hesitate; that is where the screen is wrong.
 - [ ] **Run the window** (`packages/app/shell/src-tauri/target/release/openassess-shell.exe` after `npm run build:exe` in
@@ -129,7 +129,9 @@ run on a machine other than the one it was built on.
   questions, none split across a page; before the fix Word split 20 of them). It cannot say whether the page looks right: the
   spacing, the writing lines, how much white space is left at the foot of a page by moving a whole question to the next. A long
   test is a page or so longer than it was, because a question that would have been split is moved whole. Look at one, and at
-  a question that is taller than a page (a long essay prompt), which is still broken where it must be.
+  a question that is taller than a page (a long essay prompt), which is still broken where it must be. Seen so far, in a
+  recording of 1 November 2026: a PDF student copy of ten questions in a desktop PDF program, with question 5 ending page 1 and question 6
+  beginning page 2, and some white space under question 5. The Word copy has not been looked at since the change.
 - [ ] **Open a printed PDF in the viewers you use** (a browser, a desktop PDF program, a phone). The PDF is written by hand with the
   standard fonts and no tags, so a viewer that is stricter than the ones tried here may complain. Look for a character that
   printed as `?`; the print screen lists those before you print.
