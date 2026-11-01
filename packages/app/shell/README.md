@@ -42,6 +42,11 @@ folder: `npx tauri icon ../ui/icon.svg -o <an empty folder>`, then copy `32x32.p
 `128x128@2x.png`, `icon.png` and `icon.ico` into `src-tauri/icons`. Look at them afterwards: a first
 set was made from a picture that had failed to load and was a broken-image symbol in every size.
 
+The setup file and the uninstaller have to be given the icon on their own: `installerIcon` and `uninstallerIcon` in
+`tauri.conf.json`. `bundle.icon` reaches only the program, and without them Windows shows NSIS's own install icon on the
+setup file. To see what Windows shows, extract the icon of the file with `System.Drawing.Icon.ExtractAssociatedIcon` and look
+at it; a build that ran without an error says nothing about it.
+
 ## Finding out why a start went wrong
 
 Set `OPENASSESS_SHELL_LOG` to a file name before starting the window, and every line the server
