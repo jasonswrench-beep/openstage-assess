@@ -169,6 +169,61 @@ export function checkAnswerKey(question: Question): Finding[] {
 }
 
 /**
+ * What a question records as its answer, as a string that is the same when the answer is the same: the options marked right
+ * (by id, so that editing an option's words, or taking away a wrong one, is not a change of answer), the true or false, the
+ * accepted answers, the number. It is how an edit is told to have chosen an answer, as opposed to having touched the question.
+ */
+export function answerOf(question: Question): string {
+  const body = question.body as unknown as Record<string, unknown>;
+  switch (question.type) {
+    case "multipleChoice":
+    case "multipleResponse":
+      return JSON.stringify(optionsOf(question).filter((o) => o.correct).map((o) => o.id).sort());
+    case "trueFalse":
+      return JSON.stringify(body["correct"] ?? null);
+    case "shortAnswer":
+      return JSON.stringify(body["accepted"] ?? null);
+    case "fillInBlank":
+      return JSON.stringify(((body["blanks"] ?? []) as Array<{ accepted: string[] }>).map((b) => b.accepted));
+    default:
+      return JSON.stringify(body);
+  }
+}
+
+/**
+ * What an importer says about the key the FILE gave: that it named an answer the question does not have (or two answers that
+ * are the same), or that its letter and its words named different answers. Each is about the file, and says that no answer, or
+ * not the whole answer, was taken from it.
+ */
+const FILE_KEY_PROBLEMS: ReadonlySet<string> = new Set<string>([FindingCode.KeyLetterMissing, FindingCode.KeysDisagree]);
+
+/**
+ * A person who chooses the answer has replaced the one the file gave, so what an importer said about the file's key no longer
+ * describes the question. Those findings were kept, and kept the question marked Failed with an error that the screen says goes
+ * when the question is fixed, which it never did: a person marked B right and the error about B stayed.
+ *
+ * The findings are not deleted. They are dismissed, by whoever chose, and still listed as dismissed, so that what the file said
+ * is kept beside what was decided. It happens only when the answer itself changed (a change of title or wording leaves them
+ * alone, since the file's key is still what is applied), and only when what the person chose is a usable answer (marking two
+ * on a single-answer question, or none, is not, and the findings stay). Nothing is chosen for the person: this is only a
+ * question about whether the answer in front of us is theirs.
+ */
+export function replaceFileKeyProblems(before: Question, after: Question, by: string, at: string): { question: Question; replaced: Finding[] } {
+  const none = { question: after, replaced: [] as Finding[] };
+  if (answerOf(before) === answerOf(after)) return none;
+  if (checkAnswerKey(after).some((f) => f.severity === "error")) return none;
+  const replaced = after.findings.filter((f) => !f.dismissed && FILE_KEY_PROBLEMS.has(f.code));
+  if (replaced.length === 0) return none;
+  return {
+    question: {
+      ...after,
+      findings: after.findings.map((f) => (!f.dismissed && FILE_KEY_PROBLEMS.has(f.code) ? { ...f, dismissed: true, dismissedBy: by, dismissedAt: at } : f)),
+    },
+    replaced,
+  };
+}
+
+/**
  * True when the question has a usable key. Used by exporters and the test
  * builder, which is why it has to be conservative.
  *

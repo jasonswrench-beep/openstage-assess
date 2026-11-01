@@ -525,12 +525,30 @@ tests, and both invisible to them:
     was testing (`PDF TB 2 - Brightspace.csv` and `PDF TB 1 - Brightspace (2).csv`). Both were restored from identical copies
     (same hash as the untouched sibling downloads and the export). The check now posts OK or Close to the one dialog it found,
     only ever saves under a name no file has, lists Downloads before and after, and removes its own file.
-- **Open: a key chosen by hand does not clear the importer's error about the key.** In the recording a person ticked the right
+- **Fixed: a key chosen by hand did not clear the importer's error about the key.** In the recording a person ticked the right
   answer on a question whose Answer line disagreed with its option (`Verbally bullying` against `Verbal bullying`), pressed
   Apply changes, and the question stayed Failed with the same error under Checks, which says an error goes when the question
-  is fixed. It does not, because a stored finding about the key (`KeysDisagree`, `KeyLetterMissing`) is kept on purpose: the
-  importer knew something the finished question no longer shows. Both such questions were then left out of the save. Whether a
-  key written by a person should replace those findings is a decision about what the repair screen means, and is not made.
+  is fixed. It did not, because the findings about the key the file gave (`KeysDisagree`, `KeyLetterMissing`) were kept on
+  purpose: the importer knew something the finished question no longer shows. Both such questions were then left out of the
+  save. The decision, taken when asked: an answer chosen by hand replaces what the file's key said. The rule (`answerOf` and
+  `replaceFileKeyProblems` in `quality/answer-key.ts`, called by `editQuestion`) is narrow on purpose:
+  - It happens only when the answer itself changed, which is the options marked right (by id, so that rewording an option or
+    taking away a wrong one is not a change), the true or false, the accepted answers. A new stem, a new title, a reworded
+    option or a case setting leaves what the file said, and the question stays Failed, because the file's key is still the one
+    applied.
+  - It happens only when what was chosen is a usable answer. Two marked on a single-answer question, or none, is not, and the
+    findings stay with the new error beside them.
+  - It touches only those two codes. A question kept as an essay (`UnsupportedType`), a placeholder option (`EmptyOption`,
+    `TooFewOptions`, `NoOptions`) and every other finding stay as they were, and a question carrying one is still not usable.
+  - Nothing is deleted and nothing is chosen. The findings are dismissed by whoever chose and are listed on the screen as
+    "Replaced by your answer", with the words they had; the history entry says that the answer was chosen and which codes it
+    replaced; the save says so ("Your answer replaces what the file's key said"); an earlier dismissal is not rewritten.
+  Seen on the screen in a browser (an import with the same fault: two errors before; after ticking B, one listed as replaced,
+  the other gone, the question Parsed and the toast as above), and by 13 deliberate breaks of the rule, every one caught
+  (the first run missed one, a check that case is not an answer, which hid behind the usable-answer test and now has its own).
+  **Still open, same class:** a placeholder option that a person has since replaced with real words keeps its error, so such a
+  question stays unusable after it is repaired. It is not touched here because telling that a placeholder was replaced needs a
+  rule of its own (the placeholder's own text is `(missing)`), and it has not been seen in a recording.
 - **Fixed: a printed question could be split across a page.** In a recording of a printed student copy opened in Word, question 6
   ended page 1 with its choices A and B and went on with C and D at the head of page 2. The layout tied only a question's wording
   to its first choice (`keepNext`), and the choices after the first were free to be separated, in Word and in the PDF. Measured with

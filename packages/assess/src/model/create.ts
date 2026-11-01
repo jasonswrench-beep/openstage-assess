@@ -8,7 +8,7 @@
 
 import { newQuestionId } from "./ids.ts";
 import type { Finding } from "./findings.ts";
-import { checkAnswerKey } from "../quality/answer-key.ts";
+import { checkAnswerKey, replaceFileKeyProblems } from "../quality/answer-key.ts";
 import { collectRefs, plainToRich, richTextToPlain, sanitizeDeep, type RichText } from "./richtext.ts";
 import {
   MAX_TITLE_LENGTH,
@@ -148,7 +148,15 @@ export function editQuestion(question: Question, rawEdit: QuestionEdit, opts: Ed
     ],
   };
 
-  return substantive ? withRecomputedFindings(next, question.findings) : next;
+  if (!substantive) return next;
+  const recomputed = withRecomputedFindings(next, question.findings);
+  // An answer chosen here replaces what the file's key said, and the history says so.
+  const { question: settled, replaced } = replaceFileKeyProblems(question, recomputed, by, at);
+  if (replaced.length === 0) return settled;
+  const entries = settled.history.slice();
+  const last = entries.pop();
+  if (last) entries.push({ ...last, change: `${last.change}; the answer was chosen, so what the file's key said no longer applies (${replaced.map((f) => f.code).join(", ")})` });
+  return { ...settled, history: entries };
 }
 
 /** The finding codes this engine can re-derive from a question on its own. */
