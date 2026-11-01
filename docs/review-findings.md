@@ -523,10 +523,14 @@ and have tests now.
   the blank with several blanks, a hot spot and a calculated question have no row Brightspace's CSV imports, and are left out
   with the reason. Feedback for one answer, for a right answer and for a wrong one, a rubric, a model answer, difficulty, tags and
   pictures are lost and named against the question.
-- **Open: nothing was imported into a Brightspace course.** The format was read from Brightspace's published article, in the
-  browser, because a fetching agent reported the pages unreadable. The tests hold every exported file, including 1421 real
-  questions, to a second reading of that article, so they find a file that departs from it. Whether the article is complete, and
-  how Brightspace treats a row it does not know, is not known (`TESTING-TODO.md`).
+- **Open: only three of the seven types have been imported into a Brightspace course.** The format was read from Brightspace's
+  published article, in the browser, because a fetching agent reported the pages unreadable. The tests hold every exported file,
+  including 1421 real questions, to a second reading of that article, so they find a file that departs from it. A recording of
+  the first real import (1 November 2026) shows 13 multiple choice, 10 true or false and 5 written response questions arriving
+  as 28 questions of those types with 1 point each, and the true or false that was opened showing the source's answer. Not seen:
+  the right answer on each multiple choice question, and any multiselect, short answer, matching, ordering, formatted or
+  accented question. Whether the article is complete, and how Brightspace treats a row it does not know, is not known
+  (`TESTING-TODO.md`).
 - **Open: no QTI.** Brightspace's Quizzes tool imports QTI up to 1.2 and its Course Import takes a subset of 2.x and 3.x. Neither
   exporter exists.
 

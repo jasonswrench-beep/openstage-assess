@@ -70,11 +70,12 @@ item says what has been run and what has not. Items are removed when done, with 
 
 ## Brightspace
 
-- [ ] **Import a file this wrote into a Brightspace course.** Quizzes, Question Library, Import, Upload a File. No Brightspace
-  course has read one; the tests hold the file to Brightspace's published description of its CSV, and to the CSV reader, which
-  shows it follows the description and nothing about whether Brightspace agrees. Use `Brightspace (D2L) Question Library, CSV` in the
-  app's export screen on a bank with one question of each type, and look at every question in the library afterwards: the right
-  answer marked, the points, the order of an ordering, the pairs of a matching, the multiselect's scoring.
+- [ ] **Import a file with every type into a Brightspace course.** Quizzes, Question Library, Import, Upload a File. One file
+  has been (1 November 2026, seen in a recording): 13 multiple choice, 10 true or false and 5 written response questions arrived
+  as 28 questions of those types, 1 point each, and the one true or false opened showed the right answer. Still to look at:
+  the right answer marked on each multiple choice question, and a multiselect with its scoring, a short answer, a matching
+  question, an ordering, a question with bold, and accented letters. Use `Brightspace (D2L) Question Library, CSV` in the app's
+  export screen on a bank with one question of each type, and look at every question in the library afterwards.
 - [ ] **Download Brightspace's own template CSV and put the two side by side.** The article gives the rows but its template file
   was not available here. Look at how many cells wide its rows are (these are three), whether it has a header or comment line,
   and whether its Points and Scoring rows sit where these do.
