@@ -56,9 +56,17 @@ item says what has been run and what has not. Items are removed when done, with 
   have been read; the others write the same format with their own habits.
 - [ ] **Read a CSV this writes in Author** and a CSV Author's template gives in OpenAssess. The second is tested (the template
   reads here as five questions with their keys); the first needs Author running, and the exporter is unchanged.
-- [ ] **Decide about PDF.** Today a PDF is refused, with the way in through Word (`docs/design-plan.md`, "A PDF is not read").
-  If you have PDF banks that matter, put two or three in `fixtures/publisher/` with what they should read as, and the question
-  stops being a guess.
+- [ ] **Bring in PDFs from other programs, and look at what comes out.** Only five PDFs, all from one typesetting program
+  (a page-layout program), have been read. Word's own "Save as PDF", a desktop PDF program, Google Docs and a publisher's tools each set their text another way,
+  and none has been tried. Put two or three in `fixtures/publisher/pdf/` with an `.expected.json` written from the document, and
+  the question of how they read stops being a guess. `npm run assess -- score fixtures/publisher/pdf` measures them.
+- [ ] **Look at the PDF review screen on a PDF of yours.** Each question's source shows its page. Check the answers against the
+  PDF, as the file's first warning says to: that is what a PDF costs.
+- [ ] **A PDF set in two columns, a PDF with a table of questions, and a scanned PDF.** The first is read across and said to be, the
+  second as lines of text, and the third is refused. Which of these you meet is the question; none was in the five.
+- [ ] **Decide about text recognition for scans.** It would be a service or a model, which is a dependency and the first one the
+  engine would have. Refusing a scan with the way round (an original document, or text recognition done in a PDF program) is what
+  it does now.
 
 ## The app and its window
 
@@ -122,6 +130,19 @@ These change what the app does, and were made without asking. Each is one flag o
 - [ ] **An `ES` row is an essay, and a row whose Type is empty is worked out only where the row says what it is** (two answers
   or more is multiple choice, no answers and True or False in Correct is true or false, anything else is an essay, flagged).
 - [ ] **A PDF is refused with a message, not read.** See above. The message says to open the PDF in Word and save it as `.docx`.
+- [ ] **A PDF is read from its text alone, and formatting is never read as a key.** A bold option in a PDF, with no asterisk and no
+  Answer line, has no key: the question fails and says so. A Word file whose author bolded the answers reads differently, because
+  Word says what is bold; a PDF's fonts are only names, and a font named Bold is often bold for another reason.
+- [ ] **A page number and a running title are left out of a PDF**, counted and quoted in the file's notes, never a line that begins
+  like a question or an option.
+- [ ] **A broken word at the end of a PDF line keeps its hyphen** unless the document spells the word whole elsewhere
+  ("writ-ten" stays so; "self-concept" is not run together). The other way (always joining) would change real words.
+- [ ] **An Answer line is believed only where its letter and its words agree.** A line that spells an option's words another way
+  ("Speaking" for "Spoken") is refused and says both, and no answer is marked, where a person would see the one letter and trust
+  it. Whether to match loosely is yours; it would sometimes be a guess.
+- [ ] **A numbered outline before the questions is read as essays and flagged**, as eight were in one PDF. Telling an outline from a
+  list of essay prompts would be a guess, and numbered prompts with no heading are common. They are marked for review and can be
+  left out of the save from the import screen.
 - [ ] **The samples are about the planets, and are in the repository** (`packages/app/samples`, made by `tools/make-samples.ts`),
   so they are offered on the first screen of any install. Saving one writes it to the Exports folder, never over a file.
 

@@ -8,7 +8,7 @@ One of the OpenStage suite of tools; it stands on its own. Apache 2.0.
 
 The engine came first, on purpose: the parse-accuracy target is the whole product, and it
 cannot be iterated on through a user interface. It is built and measured, and **there is
-now an app on top of it**: open a Word, Excel, CSV, text, Aiken or GIFT file, see what was found beside
+now an app on top of it**: open a Word, Excel, CSV, PDF, text, Aiken or GIFT file, see what was found beside
 the lines it came from, repair what needs it, save it into a bank, write and edit questions,
 and export or print them. The Word importer's acceptance target (95 percent on three real
 chapters it was not fitted to) is not yet met, because no such chapters exist yet; see
@@ -87,7 +87,14 @@ only and answers only to the window it opened.
   column is read, hidden rows and sheets are read and counted, and a column, a sheet or
   a cell that was not used is named. The workbook is read with no library, as an untrusted
   file, and is checked against what Excel itself says each cell holds (`check:excel-authored`).
-  PDF files are refused, with the way to bring one in through Word; see `docs/design-plan.md`.
+- A PDF in, from its text alone (`src/import/pdf/`, no library): the pages' words are put back into lines
+  and paragraphs, the page numbers and running titles are left out and counted, and the result goes through the
+  same scanner as a Word file. A PDF has no list numbering and no styles, so nothing is read from formatting, and an
+  answer is read only where it is written down (an asterisk, an `Answer:` line, an Answers list). A picture
+  shows as `[Picture]` where it was, a page that looks set in columns is said to be, a scan (a picture of a page) or a
+  protected file is refused with the reason, and the file always says it was read from a page and that its answers
+  should be checked. Five real banks from one typesetting program read at 100 percent on four of them; the fifth begins
+  with a lecture outline whose numbered items are read as essays and flagged. See `docs/design-plan.md`.
 - Samples on the first screen: a clean Word bank, one with problems to repair, an Excel
   table, and a blank table to fill in, so a person with nothing to import can see what the
   app does.
@@ -128,8 +135,8 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `info <bank>` | Manifest, counts by type and status, finding totals |
 | `validate <bank>` | Check every question against the model |
 | `new <bank> --title "..."` | Create an empty bank |
-| `import <file> [--out <bank>] [--details] [--key-mark <mark>]` | Read a `.txt`, `.docx`, `.xlsx`, `.csv`, `.aiken` or `.gift` file and report the verdicts. `--key-mark` says what formatting means in a Word file: `off`, `bold`, `underline`, `highlight`, `color` and so on |
-| `review <file> [--out <page>] [--key-mark <mark>]` | Read a `.txt` or `.docx` file as `import` does and write one web page showing each question with its answer, its checks and its lines of the file, then the text no question used. Nothing is written to a bank |
+| `import <file> [--out <bank>] [--details] [--key-mark <mark>]` | Read a `.txt`, `.docx`, `.xlsx`, `.csv`, `.pdf`, `.aiken` or `.gift` file and report the verdicts. `--key-mark` says what formatting means in a Word file: `off`, `bold`, `underline`, `highlight`, `color` and so on |
+| `review <file> [--out <page>] [--key-mark <mark>]` | Read a file as `import` does and write one web page showing each question with its answer, its checks and its lines of the file, then the text no question used. Nothing is written to a bank |
 | `export <bank> [--to <destination>] [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet (the default), Moodle XML (`moodle-xml`) or GIFT (`gift`), and with `--out` write it |
 | `print <bank> [--kind student\|key\|both] [--format docx\|pdf] [--paper letter\|a4] [--out <folder>]` | Say what a printed student copy and answer key would hold, and with `--out` write them |
 | `search <bank> <words>` | Search a bank |
@@ -146,7 +153,8 @@ packages/assess/        the engine, published as @openstage/assess
   src/container/        the zip reader and writer, and the bank file layout
   src/bank/             opening, saving, changing and searching a bank
   src/quality/          item quality checks
-  src/import/           importers: the Standard Format, Word (docx/ is its XML and package reader), Aiken, GIFT and
+  src/import/           importers: the Standard Format, Word (docx/ is its XML and package reader), PDF (pdf/ is its
+                        reader, from the file's objects to lines and paragraphs), Aiken, GIFT and
                         the question table (spreadsheet.ts, with table-csv.ts and table-xlsx.ts to read the file)
   src/export/           exporters and the destination check: the spreadsheet, GIFT and Moodle XML
   src/print/            a printed test: the layout, and the Word and PDF writers
@@ -154,12 +162,12 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1347 tests, run by Node's own test runner
+  test/                 1418 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question
   ui/                   the screens: plain JavaScript modules, no framework, no build step
-  test/                 111 tests
+  test/                 115 tests
   shell/                the Tauri window (kept out of the npm workspaces; see its README)
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word

@@ -63,6 +63,18 @@ as the names only if it names two known columns, so a note with the word Questio
 is not mistaken for them. A cell that holds an error, or a formula with no stored result,
 is read as empty and named, never as text that could be taken for a letter.
 
+**A PDF is read from its words and where they stand, and never from a font.** It has no list numbers and no styles, so
+the whole of what is known of a question is its text, and an answer is read only where it is written down (an asterisk, an
+`Answer:` line, an Answers list). A bold or italic option is never taken for a key, because it can be bold for another
+reason. What the reader leaves out is counted and quoted (page numbers, running titles), what it cannot read is marked
+(`[Picture]`) or refused with the reason (a scan, a protected file), and every PDF import says that it was read from a page.
+
+**An Answer line is read as letters only when it is nothing but letters, or when its letter and its words name the same
+option.** The scanner once split a whole Answer line into words and took every single-letter word for an option letter, so a
+line such as `Answer: c. <the option>. <a reason with the word "a" in it>` marked option A, a wrong key that looked read.
+Prose is never mined for letters. Where the letter and the words name different options it is an error that quotes both, and
+no answer is marked.
+
 **The editor never writes back what the person did not change.** An edit keeps
 every field it was not given as stored, formatting and all; text that holds a
 picture or an equation is refused, not rewritten without it; a new answer row is
@@ -78,10 +90,11 @@ the order of the key. What cannot be printed is said against the question.
 ## Commands
 
 ```
-npm test                       # 1347 engine tests and 111 app tests, Node's own runner
+npm test                       # 1418 engine tests and 115 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
+npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine
 npm run assess -- perf         # the speed budget on a 500-question bank
 npm run assess -- export <bank> --to gift|moodle-xml   # the destination check; the Author/Scroll CSV is the default; --out writes it
 npm run assess -- print <bank> --out <folder>   # a student copy and an answer key, as Word or PDF
@@ -145,6 +158,11 @@ that needed it, so none of the twenty-one is a test of rules written without it,
 criterion is three chapters the rules were not fitted to. A blind run of the last sixteen, before any
 rule was changed, read 200 of 200 (all refused, as it had no key), 25 of 45, 0 of 33 and 0 of 618: do
 not read the 100 percent as how a new file will go. `docs/review-findings.md` says what each file taught.
+Five PDF banks from one typesetting program are in `fixtures/publisher/pdf` (the harness does not descend into folders, so
+`assess score fixtures/publisher` does not run them and `assess score fixtures/publisher/pdf` does): measured before and after
+the answer-line rule above they went from 50.6 to 77.7 percent, 100 on four of the five. The fifth begins with a numbered
+lecture outline that is read as eight flagged essays, which shifts every question by position; `test/pdf-publisher.test.ts`
+holds that state. Every rule was fitted to these five, and they are one producer's.
 A batch of 24 generated files (`docs/synthetic-bank-spec.md`) read 33 of 72 blind; it was five distinct
 documents in one layout, so it is reported apart and never counts toward the criterion. The brief now gives
 each file its layout and `check:generated` holds the files to it before the importer sees them: never run
