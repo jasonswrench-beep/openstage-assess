@@ -13,6 +13,7 @@ import { createQuestion } from "../../src/model/create.ts";
 import { plainToRich } from "../../src/model/richtext.ts";
 import type { Question, QuestionBody, QuestionType } from "../../src/model/question.ts";
 import { layoutTest, printOptions, writeDocx, type Block, type PrintOptions } from "../../src/print/index.ts";
+import { longTest, questionSpans } from "../support/long-test.ts";
 import { askWord, wordIsAvailable } from "./ask-word.ts";
 
 const AT = "2026-01-01T00:00:00.000Z";
@@ -98,6 +99,42 @@ function main(): void {
   }
   console.log(`${cases.length} documents, ${paragraphs} paragraphs, ${disagreements} disagreements with Word.`);
   if (disagreements > 0) process.exitCode = 1;
+
+  // Where Word breaks the pages: a question that begins on one page and goes on over the next is a question a student has to turn
+  // the page in the middle of. Word is asked what page each paragraph starts and ends on, in a long test, student copy and key.
+  const long = longTest();
+  const documents = new Map<string, Uint8Array>();
+  const spans = new Map<string, Array<[number, number]>>();
+  const paragraphsOf = new Map<string, number[]>();
+  for (const kind of ["student", "key"] as const) {
+    const { document } = layoutTest(long, printOptions({ title: "Long test", kind, paper: "letter" }));
+    documents.set(kind, writeDocx(document));
+    spans.set(kind, questionSpans(document.blocks));
+    // How many paragraphs each block is in the Word file: a block of writing lines is one for each line.
+    let at = 0;
+    paragraphsOf.set(kind, document.blocks.map((b: Block) => { const first = at; at += b.kind === "lines" ? b.count : 1; return first; }).concat(at));
+  }
+  const pageAnswers = askWord(documents, "pages");
+  let split = 0;
+  let questions = 0;
+  let pageCount = 0;
+  for (const kind of ["student", "key"] as const) {
+    const theirs = pageAnswers[kind] ?? [];
+    const firstOf = paragraphsOf.get(kind) as number[];
+    for (const [start, end] of spans.get(kind) as Array<[number, number]>) {
+      questions++;
+      const pages = theirs.slice(firstOf[start], firstOf[end]).flatMap((p) => p.split(":").map(Number));
+      pageCount = Math.max(pageCount, ...pages);
+      const first = Math.min(...pages);
+      const last = Math.max(...pages);
+      if (first !== last) {
+        split++;
+        console.log(`${kind}: question ${questions % long.length || long.length} runs from page ${first} to page ${last} in Word`);
+      }
+    }
+  }
+  console.log(`${questions} questions in ${documents.size} long documents, up to ${pageCount} pages, ${split} split across a page by Word.`);
+  if (split > 0) process.exitCode = 1;
 }
 
 main();

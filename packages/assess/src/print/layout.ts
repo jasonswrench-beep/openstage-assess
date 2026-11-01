@@ -294,7 +294,8 @@ const asText = (paragraphs: Run[][]): string => paragraphs.map((p) => p.map((r) 
 // One question
 // ---------------------------------------------------------------------------
 
-const NUMBER_INDENT = 28;
+/** Where a question's text starts, which is how its first line is told from the lines under it. */
+export const NUMBER_INDENT = 28;
 const OPTION_INDENT = 58;
 
 interface Built {
@@ -451,6 +452,16 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
     const last = out[out.length - 1];
     if (last && last.kind === "para") last.after = 6;
   }
+
+  // A question stays on one page when it fits on one: every part of it but the last stays with the part after it. Only the
+  // wording and a few notes were tied before, so the choices of a question could be split across a page break (A and B at the
+  // foot of one page, C and D at the head of the next), which Word did to 20 of 180 questions in a long test. A question taller
+  // than a page is still broken, because Word and the PDF writer both give up on a chain that cannot fit. The last part is
+  // never tied: a question made of its wording alone (a blank in the text and nothing to write under it) used to be tied to the
+  // question after it, and a run of those would have been one chain.
+  for (const block of out) if (block.kind === "para") block.keepNext = true;
+  const lastBlock = out.at(-1);
+  if (lastBlock?.kind === "para") delete lastBlock.keepNext;
 
   if (losses.pictures > 0) notes.push(`${plural(losses.pictures, "picture", "pictures")} cannot be printed. Each is printed as [Picture: its alternative text], so that the question still reads; add it back by hand.`);
   if (losses.equations > 0) notes.push(`${plural(losses.equations, "equation", "equations")} printed as [Equation: LaTeX]. Check how it reads.`);

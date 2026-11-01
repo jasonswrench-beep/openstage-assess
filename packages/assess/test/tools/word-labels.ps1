@@ -23,9 +23,16 @@ try {
       $doc = $word.Documents.Open($f.FullName, $false, $true, $false)
       $labels = New-Object System.Collections.Generic.List[string]
       $count = $doc.Paragraphs.Count
+      if ($What -eq 'pages') { $doc.Repaginate() }
       for ($i = 1; $i -le $count; $i++) {
         $paragraph = $doc.Paragraphs.Item($i)
-        if ($What -eq 'format') {
+        if ($What -eq 'pages') {
+          # The page Word puts the start of the paragraph on, and the page it ends on: wdActiveEndPageNumber, 3. A paragraph
+          # that Word breaks across a page has two different numbers.
+          $first = $doc.Range($paragraph.Range.Start, $paragraph.Range.Start)
+          $last = $doc.Range([Math]::Max($paragraph.Range.Start, $paragraph.Range.End - 1), [Math]::Max($paragraph.Range.Start, $paragraph.Range.End - 1))
+          $labels.Add(("{0}:{1}" -f $first.Information(3), $last.Information(3)))
+        } elseif ($What -eq 'format') {
           # The text of the paragraph without its mark, as bold|italic|underline|colour|highlight|hidden.
           $range = $doc.Range($paragraph.Range.Start, [Math]::Max($paragraph.Range.Start, $paragraph.Range.End - 1))
           $labels.Add(("{0}|{1}|{2}|{3}|{4}|{5}" -f $range.Font.Bold, $range.Font.Italic, $range.Font.Underline, $range.Font.Color, $range.HighlightColorIndex, $range.Font.Hidden))

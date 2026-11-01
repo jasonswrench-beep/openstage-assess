@@ -531,6 +531,17 @@ tests, and both invisible to them:
   is fixed. It does not, because a stored finding about the key (`KeysDisagree`, `KeyLetterMissing`) is kept on purpose: the
   importer knew something the finished question no longer shows. Both such questions were then left out of the save. Whether a
   key written by a person should replace those findings is a decision about what the repair screen means, and is not made.
+- **Fixed: a printed question could be split across a page.** In a recording of a printed student copy opened in Word, question 6
+  ended page 1 with its choices A and B and went on with C and D at the head of page 2. The layout tied only a question's wording
+  to its first choice (`keepNext`), and the choices after the first were free to be separated, in Word and in the PDF. Measured with
+  Word itself (`check:word-print` now has it say what page every paragraph of a long test starts and ends on): before, Word split
+  20 of 180 questions (12 of 90 in a student copy, 8 of 90 in the key); after, none, at the cost of a long test being about a page
+  longer (19 pages to 20 here), since a question that would have been split moves whole. Every part of a question but its last is
+  now tied to the next, in every kind of question, and the last never is. That also fixes an older fault of the same kind: a
+  question made of its wording alone (a blank in the text, nothing to write under it) was tied to the question after it. A
+  question taller than a page is still broken where it must be (Word and the PDF writer both give up on a chain that cannot
+  fit; the PDF's is tested). 8 deliberate breaks of the layout, the PDF writer and the Word writer, every one caught.
+  The PDF is checked by taking it apart, not by Word, so how it looks is for a person (`TESTING-TODO.md`).
 
 ### Found while building the Brightspace question library export (stage 9)
 
