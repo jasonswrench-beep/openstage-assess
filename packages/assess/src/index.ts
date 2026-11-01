@@ -31,6 +31,7 @@ export { SearchIndex, tokenize, searchableText, matchesQuery } from "./bank/sear
 
 // Quality
 export * from "./quality/answer-key.ts";
+export * from "./quality/placeholders.ts";
 
 // Import
 export * from "./import/types.ts";

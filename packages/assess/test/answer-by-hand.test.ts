@@ -114,12 +114,23 @@ describe("an answer chosen by hand", () => {
     const before = read(NO_SUCH_OPTION);
     const withOthers: Question = {
       ...before,
-      findings: [...before.findings, finding(FindingCode.UnsupportedType, "error", "kept as an essay"), finding(FindingCode.EmptyOption, "error", "an option had no text"), finding(FindingCode.TypeInferred, "warn", "the type was guessed")],
+      findings: [...before.findings, finding(FindingCode.UnsupportedType, "error", "kept as an essay"), finding(FindingCode.TypeInferred, "warn", "the type was guessed")],
     };
     const after = choose(withOthers, 1);
-    for (const code of [FindingCode.UnsupportedType, FindingCode.EmptyOption, FindingCode.TypeInferred]) assert.ok(live(after, code), code);
+    for (const code of [FindingCode.UnsupportedType, FindingCode.TypeInferred]) assert.ok(live(after, code), code);
     assert.equal(live(after, FindingCode.KeyLetterMissing), false);
-    assert.equal(hasUsableKey(after), false, "a question kept as an essay, or with a placeholder option, is still not ready");
+    assert.equal(hasUsableKey(after), false, "a question kept as an essay is still not ready");
+  });
+
+  test("leaves a placeholder option's error when the answer is chosen but the words are still missing", () => {
+    // Option B has a letter and no words, and the key names an option that is not there: two different things to repair.
+    const before = read(["1. Which of these is a chair?", "a. Chair", "b.  ", "c. Desk", "Answer: e"]);
+    assert.ok(live(before, FindingCode.EmptyOption));
+    assert.ok(live(before, FindingCode.KeyLetterMissing));
+    const after = choose(before, 0);
+    assert.equal(live(after, FindingCode.KeyLetterMissing), false, "the answer was chosen");
+    assert.ok(live(after, FindingCode.EmptyOption), "but option B still has no words");
+    assert.equal(hasUsableKey(after), false);
   });
 
   test("works for a multiple response, a true or false and a short answer, whose keys are not letters", () => {

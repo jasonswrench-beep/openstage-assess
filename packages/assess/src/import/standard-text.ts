@@ -46,6 +46,7 @@ import {
 } from "../model/richtext.ts";
 import { addFindings, createQuestion, DEFAULT_POINTS, emptyMetadata } from "../model/create.ts";
 import { checkAnswerKey } from "../quality/answer-key.ts";
+import { PLACEHOLDER_TEXT } from "../quality/placeholders.ts";
 import { applyFormattingKey, SHARE } from "./standard-text-format.ts";
 import { relabelUnlabelledGroups } from "./standard-text-relabel.ts";
 import {
@@ -87,7 +88,7 @@ export const PROFILE_ID = "standard-text";
  * Only ever beside an error finding, so that the question fails and cannot be
  * mistaken for one that was authored this way. See `STORED_KEY_PROBLEMS`.
  */
-const PLACEHOLDER = "(missing)";
+const PLACEHOLDER = PLACEHOLDER_TEXT;
 
 const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?\s*\]/gi;
 const HTML_BLOCK = /\[HTML\]([\s\S]*?)\[\/HTML\]/gi;

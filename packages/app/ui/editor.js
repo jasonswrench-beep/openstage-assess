@@ -10,6 +10,9 @@
 import { get } from "./api.js";
 import { badge, clear, EDITABLE_TYPES, grow, h, put, SEVERITY_NAMES, TYPE_NAMES } from "./dom.js";
 
+/** The importer's errors about options it had to make up, which words written in the place of the placeholder replace. */
+const WORDS_WRITTEN = new Set(["import.empty-option", "import.too-few-options", "import.no-options"]);
+
 let counter = 0;
 
 /**
@@ -32,7 +35,7 @@ function inputOf(q) {
 /**
  * @param {{
  *   question: EditorQuestion,
- *   save: (input: any, version: number) => Promise<{ question: EditorQuestion, flattened?: string[], replaced?: string[] }>,
+ *   save: (input: any, version: number) => Promise<{ question: EditorQuestion, flattened?: string[], replaced?: Array<{ code: string, message: string }> }>,
  *   dismiss: (payload: { code?: string, all?: boolean }) => Promise<{ question: EditorQuestion }>,
  *   saveLabel?: string,
  *   onChange?: (dirty: boolean) => void,
@@ -427,9 +430,11 @@ export function createEditor(options) {
       );
     }
     for (const f of dismissed) {
-      // An error cannot be dismissed from here, so one that is dismissed is one that the person's own answer replaced: what the
-      // file's key said is kept in the list, with its words, and says that it no longer applies.
-      list.append(h("li", { class: "dismissed" }, h("span", { class: "sev", text: f.severity === "error" ? "Replaced by your answer" : "Dismissed" }), h("span", { class: "msg", text: f.message })));
+      // An error cannot be dismissed from here, so one that is dismissed is one that the person's own change replaced: either the
+      // answer they chose (what the file's key said) or the words they wrote (where a placeholder was). It is kept in the list,
+      // with its words, and says that it no longer applies.
+      const label = f.severity !== "error" ? "Dismissed" : WORDS_WRITTEN.has(f.code) ? "Fixed by your words" : "Replaced by your answer";
+      list.append(h("li", { class: "dismissed" }, h("span", { class: "sev", text: label }), h("span", { class: "msg", text: f.message })));
     }
     checksHost.append(list);
     if (notes.length > 1) checksHost.append(h("button", { type: "button", class: "small-button", text: "Mark all checks as checked", on: { click: () => dismiss({ all: true }) } }));
@@ -507,7 +512,9 @@ export function createEditor(options) {
       options.onSaved?.(question, result.flattened ?? []);
       const said = [];
       if (result.flattened && result.flattened.length > 0) said.push(`The formatting in ${result.flattened.join(", ")} became plain text.`);
-      if (result.replaced && result.replaced.length > 0) said.push(`Your answer replaces what the file's key said (${result.replaced.length === 1 ? "listed" : `${result.replaced.length} are listed`} under Checks).`);
+      const replaced = result.replaced ?? [];
+      if (replaced.some((r) => !WORDS_WRITTEN.has(r.code))) said.push("Your answer replaces what the file's key said (listed under Checks).");
+      if (replaced.some((r) => WORDS_WRITTEN.has(r.code))) said.push("The words you wrote replace the placeholder (listed under Checks).");
       options.notify(said.length > 0 ? `Saved. ${said.join(" ")}` : "Saved.", "ok");
     } catch (error) {
       options.notify(/** @type {Error} */ (error).message, "error");

@@ -243,10 +243,19 @@ These change what the app does, and were made without asking. Each is one flag o
   usable.** You asked for the repair screen to stop keeping the error after a person chooses the answer; where the edges are is
   mine. Replaced: "the key names an option the question does not have" and "the letter and the words name different answers",
   dismissed under the person's name and still listed, with the save saying so. Not replaced: anything when only the wording,
-  the title or a setting changed; anything when two answers are marked on a single-answer question; a question kept as an essay;
-  a placeholder option. The wider choices were turned down: replacing on any edit that leaves a usable key (it would hide an
-  error while the file's key is still the one in use), and treating a placeholder that has been written over as repaired (it is a
-  separate rule, and not seen yet). Each is one set or one condition in `quality/answer-key.ts`.
+  the title or a setting changed; anything when two answers are marked on a single-answer question; a question kept as an essay.
+  The wider choice was turned down: replacing on any edit that leaves a usable key (it would hide an error while the file's key
+  is still the one in use). Each is one set or one condition in `quality/answer-key.ts`.
+- [ ] **Words written where a placeholder was replace the importer's error about it, one option at a time.** Also asked for as a
+  follow-up, and the edges are mine: "Option C has no text" goes when option C has words, "only one option" and "no options" go
+  when there are two or more options and none is `(missing)`, empty or only spaces. A placeholder typed in again keeps its error.
+  Dismissed under the person's name, listed as "Fixed by your words". A matching question with fewer than two pairs is not
+  covered (its placeholder pairs are raised as a missing answer, which an edit re-derives). Each is a condition in
+  `quality/placeholders.ts`.
+- [ ] **Repair the second practice file, in the window.** `repair-practice-2.docx` (in Downloads) has an option with no words, a
+  question with one option, and a multiple response with none. Write words into each placeholder, tick the answer where the
+  question needs one, and each question should turn Parsed with "Fixed by your words" beside it. Checked in a browser and by
+  tests, and not in the window.
 
 ## Not in this repository
 
