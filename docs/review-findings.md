@@ -497,9 +497,27 @@ tests, and both invisible to them:
   Documents, the new one the Exports folder. The test of the route had stood in for Explorer, so it could not have seen this.
 - **Fixed: Download saved the file and said nothing.** In the window a link with the download attribute sent the file straight
   into the Downloads folder, with no dialog and no message, so it looked as if nothing had happened and it was pressed again
-  (three copies of one export were in Downloads). The button is now Save a copy…, which opens the system's Save dialog with the
-  file's name filled in (`ui/files.js`), says where it saved, says nothing when the dialog is closed, and falls back to a
-  plain download, saying so, in a browser that has no such dialog. Not operated in the window itself: see `TESTING-TODO.md`.
+  (three copies of one export were in Downloads). Two ways of fixing it were tried and one failed on the first real use:
+  - The page's own save dialog (`showSaveFilePicker`) was written first and tested in a browser with a stand-in for the
+    dialog. In the installed window it is offered (`typeof` says function, in a secure context) and then never opens: the call
+    is made and never answers. The person who used it saw no dialog. A stand-in cannot show that, which is why the next one was
+    tried in the built window itself.
+  - What it is now: the link is a plain link again (`ui/files.js`), and the window's shell (`shell/src-tauri/src/main.rs`)
+    answers any download of one of this app's own files with the system's Save dialog, the file's name filled in and the type
+    set. Showing the dialog from inside the window's download event does not work: the dialog is owned by a window whose thread
+    is waiting for it, so it never appears (once it returned the default path at once, and once it never returned). So the first
+    request is declined, the dialog is shown from a thread of its own, and when a place has been chosen the same address is asked
+    for again and let through to it. Closing the dialog drops the download. A download of anything else is declined. This is the
+    first Rust crate the shell has beyond Tauri (`rfd`, the system's file dialogs, on Windows only); the page still has no
+    command to call.
+  - Checked in the built window, by pressing the real link and finding the dialog among the shell's own windows: it opens titled
+    "Save a copy" with the name filled in and "CSV file" as the type; closing it saves nothing and changes nothing in Downloads;
+    pressing OK writes one new file at the chosen path, byte for byte the exported file. Not done by a hand on the dialog.
+  - Two checks of this were first written carelessly: a script that pressed controls by their ids pressed file-list rows (ids
+    "1" and "2" are not Save and Cancel in this dialog), and so overwrote two files in the Downloads folder of the person who
+    was testing (`PDF TB 2 - Brightspace.csv` and `PDF TB 1 - Brightspace (2).csv`). Both were restored from identical copies
+    (same hash as the untouched sibling downloads and the export). The check now posts OK or Close to the one dialog it found,
+    only ever saves under a name no file has, lists Downloads before and after, and removes its own file.
 - **Open: a key chosen by hand does not clear the importer's error about the key.** In the recording a person ticked the right
   answer on a question whose Answer line disagreed with its option (`Verbally bullying` against `Verbal bullying`), pressed
   Apply changes, and the question stayed Failed with the same error under Checks, which says an error goes when the question

@@ -96,11 +96,12 @@ Everything below was run by tests (`npm test` in `packages/app`, 96 of them, thr
 the browser pane and in the built window at desktop width. None of it has been used by a person, and none of it has been
 run on a machine other than the one it was built on.
 
-- [ ] **In the window, press Save a copy… on an exported or printed file.** It should open Windows' own Save dialog with the
-  file's name filled in, and say "Saved <name>." when you save, and say nothing when you close the dialog. The page was
-  driven in a browser with a stand-in for the dialog (the dialog itself cannot be operated by a test), so whether the
-  window's WebView2 offers it is the open question: if it does not, the button falls back to an ordinary download, says
-  "Your browser is saving it, usually into the Downloads folder", and the file lands in Downloads with no dialog.
+- [ ] **In the window, press Save a copy… on an exported or printed file.** Windows' own Save dialog should open, titled "Save a
+  copy", with the file's name filled in and its type chosen; saving writes the file where you chose, and closing the dialog
+  writes nothing. This was checked in the built window by a script that found the dialog, closed it (nothing saved) and accepted
+  it (one new file, identical to the export), and not by a hand on it. Look at where the dialog appears (in front of the window,
+  not behind it), and try a folder other than Downloads, a name that already exists (Windows should ask before replacing it), and
+  pressing Save a copy… twice quickly. In a browser the link does whatever the browser does with a download.
 - [ ] **Press Show in folder on a file with spaces in its name** (most have them: a bank titled with two words, or the suffix on a Brightspace file). It should open the
   Exports folder with the file selected. Before this was fixed it opened Documents and showed nothing, which was found in a
   recording of the window and checked here by opening Explorer both ways and reading where it landed.
