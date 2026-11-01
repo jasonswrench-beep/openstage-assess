@@ -31,6 +31,7 @@ import { DESTINATION_ID, exportOpenStageSpreadsheet } from "../export/openstage-
 import { exportGift, GIFT_ID } from "../export/gift.ts";
 import { exportMoodleXml, MOODLE_XML_ID } from "../export/moodle-xml.ts";
 import type { ExportResult } from "../export/types.ts";
+import { printOptions, printTest } from "../print/index.ts";
 import type { Question } from "../model/question.ts";
 
 const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
@@ -53,6 +54,11 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       --key-mark overrides that: off, bold, italic, underline, highlight,
       highlight:yellow, color, or color:FF0000. Put label: in front (label:bold)
       for a mark on the option letter alone, as some publishers use.
+
+  openassess print <bank${BANK_EXTENSION}> [--kind student|key|both] [--format docx|pdf] [--paper letter|a4] [--out <folder>]
+      Say what a printed test holds (a student copy, an answer key) and, with
+      --out, write it as a Word file or a PDF. The student copy shows no answer.
+      The key marks only what the bank records, and says when it records none.
 
   openassess review <file.txt|file.docx> [--out <review.html>] [--key-mark <mark>]
       Read a file as import does and write one web page that shows each question
@@ -228,6 +234,42 @@ async function cmdImport(args: string[]): Promise<number> {
     console.log(`\nWrote ${result.questions.length} question(s) to ${written}`);
   }
   return result.counts.failed > 0 ? 1 : 0;
+}
+
+async function cmdPrint(args: string[]): Promise<number> {
+  const path = positional(args)[0];
+  if (!path) return fail("Name a bank file.");
+  const kindArg = arg(args, "kind") ?? "both";
+  const format = arg(args, "format") ?? "docx";
+  const paper = arg(args, "paper") ?? "letter";
+  if (!["student", "key", "both"].includes(kindArg)) return fail(`Unknown kind "${kindArg}". The kinds are student, key and both.`);
+  if (format !== "docx" && format !== "pdf") return fail(`Unknown format "${format}". The formats are docx and pdf.`);
+  if (paper !== "letter" && paper !== "a4") return fail(`Unknown paper "${paper}". The papers are letter and a4.`);
+
+  const { bank } = await Bank.open(resolve(path));
+  const questions = bank.sortedQuestions().filter((q) => q.metadata.status !== "retired");
+  const out = arg(args, "out");
+  let wrote = 0;
+  for (const kind of kindArg === "both" ? (["student", "key"] as const) : [kindArg as "student" | "key"]) {
+    const result = printTest(questions, printOptions({ title: bank.manifest.title, kind, paper }), format);
+    const report = result.report;
+    console.log(`${kind === "key" ? "Answer key" : "Student copy"}: ${report.total} question(s), ${report.exported} print as written, ${report.exportedWithLosses} with a note, ${report.leftOut} cannot be printed.`);
+    for (const item of report.items) for (const note of item.notes) console.log(`  #${item.position} ${note}`);
+    if (out && result.file.bytes.length > 0) {
+      const folder = resolve(out);
+      await mkdir(folder, { recursive: true });
+      const target = join(folder, result.file.name);
+      await writeFile(target, result.file.bytes);
+      console.log(`  Wrote ${target}`);
+      wrote++;
+    }
+  }
+  if (!out) console.log("\nNothing was written. Add --out <folder> to write the file.");
+  else if (wrote === 0) {
+    console.log("\nNo question could be printed, so no file was written.");
+    return 1;
+  }
+  return 0;
 }
 
 async function cmdReview(args: string[]): Promise<number> {
@@ -460,6 +502,8 @@ async function main(): Promise<number> {
       return cmdNew(args);
     case "import":
       return cmdImport(args);
+    case "print":
+      return cmdPrint(args);
     case "review":
       return cmdReview(args);
     case "export":

@@ -32,6 +32,7 @@ import type { BankStore } from "./banks.ts";
 import { blankInput, editFromInput, EDITABLE_TYPES, missingText, parseInput, questionFromInput, toEditor, type EditorInput } from "./editor.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { destinationsRoute, exportRoute } from "./exports.ts";
+import { printRoute } from "./printing.ts";
 import { checkName, cleanName, insideLibrary, type Library } from "./library.ts";
 import { summarise, type Sessions } from "./sessions.ts";
 
@@ -332,6 +333,10 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
 
   if (what === "export" && req.method === "POST" && (id === "check" || id === undefined)) {
     return exportRoute(ctx, req, name, id === "check" ? "check" : "write");
+  }
+
+  if (what === "print" && req.method === "POST" && (id === "check" || id === undefined)) {
+    return printRoute(ctx, req, name, id === "check" ? "check" : "write");
   }
 
   if (what === "questions") {

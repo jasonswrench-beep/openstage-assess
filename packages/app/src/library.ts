@@ -7,7 +7,7 @@
 
 import { mkdir, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 
 import { BANK_EXTENSION } from "./engine.ts";
 import { badRequest } from "./errors.ts";
@@ -80,6 +80,17 @@ export async function uniqueName(dir: string, wanted: string, extension: string)
     if (!(await exists(join(dir, `${candidate}${extension}`)))) return candidate;
   }
   throw badRequest("There are too many files with that name.");
+}
+
+/** `name`, or `name 2.ext`, `name 3.ext`: a file that is already there is never written over. */
+export async function freeFileName(dir: string, name: string): Promise<string> {
+  const ext = extname(name);
+  const base = name.slice(0, name.length - ext.length);
+  for (let n = 1; n < 10_000; n++) {
+    const candidate = n === 1 ? name : `${base} ${n}${ext}`;
+    if (!(await exists(join(dir, candidate)))) return candidate;
+  }
+  throw badRequest("There are too many files with that name. Move some out of the folder.");
 }
 
 export async function bankNames(library: Library): Promise<string[]> {

@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
-import { Bank } from "../src/engine.ts";
+import { Bank, unzipSync } from "../src/engine.ts";
 import { chunkedPost, liarPost, rawRequest, withApp, type Client } from "./support/app.ts";
 
 const FIXTURES = fileURLToPath(new URL("../../../fixtures/standard-format/", import.meta.url));
@@ -780,6 +780,165 @@ describe("exporting", () => {
       assert.equal(written.status, 200, written.text);
       assert.deepEqual(readdirSync(join(home, "Exports")), ["Questions.txt"]);
       assert.equal((written.json["written"] as Array<{ name: string }>)[0]?.name, "Questions.txt");
+    });
+  });
+});
+
+describe("printing", () => {
+  interface Report {
+    total: number;
+    exported: number;
+    exportedWithLosses: number;
+    leftOut: number;
+    general: string[];
+    items: Array<{ outcome: string; notes: string[] }>;
+  }
+  const blank = async (client: Client, type: string): Promise<Record<string, unknown>> => (await client.get(`/api/blank?type=${type}`)).json["input"] as Record<string, unknown>;
+
+  async function seeded(client: Client, title = "Test bank"): Promise<string> {
+    await client.post("/api/banks", { title });
+    const base = `/api/banks/${encodeURIComponent(title)}`;
+    const add = async (type: string, stem: string, b: unknown): Promise<void> => {
+      const reply = await client.post(`${base}/questions`, { input: { ...(await blank(client, type)), stem, body: b } });
+      assert.equal(reply.status, 200, reply.text);
+    };
+    await add("multipleChoice", "What is two plus two?", { shuffle: true, options: [{ text: "Three", correct: false, feedback: "" }, { text: "Four", correct: true, feedback: "" }] });
+    await add("trueFalse", "The Moon is made of cheese.", { correct: null });
+    await add("essay", "Explain why the sky is blue.", { modelAnswer: "Scattering." });
+    return base;
+  }
+  const both = { kinds: ["student", "key"], formats: ["docx", "pdf"] };
+
+  test("checks what each copy would hold, and writes nothing", async () => {
+    await withApp(async (client, home) => {
+      const base = await seeded(client);
+      const checked = await client.post(`${base}/print/check`, both);
+      assert.equal(checked.status, 200, checked.text);
+      const reports = checked.json["reports"] as Record<string, Report>;
+      assert.deepEqual(Object.keys(reports).sort(), ["key", "student"]);
+      assert.equal(reports["student"]?.total, 3);
+      assert.deepEqual((reports["student"] as unknown as { files: string[] }).files, ["Test bank - Student copy.docx", "Test bank - Student copy.pdf"], "the files of every format");
+      assert.ok(reports["student"]?.general.some((g) => /not tagged for screen readers/.test(g)), "and the notes that are true of the PDF");
+      assert.equal(reports["student"]?.exportedWithLosses, 0, "the student copy has nothing to say about a missing answer");
+      assert.equal(reports["key"]?.exportedWithLosses, 1, "the key says that one question has no answer");
+      assert.ok(reports["key"]?.items.some((i) => i.notes.some((n) => /Nothing was guessed/.test(n))));
+      assert.deepEqual(readdirSync(join(home, "Exports")), []);
+    });
+  });
+
+  test("writes a Word file and a PDF of each copy, named for the title, and serves them", async () => {
+    await withApp(async (client, home) => {
+      const base = await seeded(client);
+      const written = await client.post(`${base}/print`, both);
+      assert.equal(written.status, 200, written.text);
+      const files = written.json["written"] as Array<{ name: string; path: string; kind: string; format: string; pages?: number }>;
+      assert.deepEqual(files.map((f) => f.name).sort(), ["Test bank - Answer key.docx", "Test bank - Answer key.pdf", "Test bank - Student copy.docx", "Test bank - Student copy.pdf"]);
+      assert.deepEqual(readdirSync(join(home, "Exports")).sort(), files.map((f) => f.name).sort());
+      for (const f of files.filter((x) => x.format === "pdf")) assert.ok((f.pages ?? 0) >= 1);
+
+      const pdf = await client.get(`/files/${encodeURIComponent("Test bank - Student copy.pdf")}`);
+      assert.equal(pdf.status, 200);
+      assert.match(pdf.headers.get("content-type") ?? "", /^application\/pdf/);
+      assert.equal(pdf.bytes.subarray(0, 5).toString("latin1"), "%PDF-");
+      const docx = await client.get(`/files/${encodeURIComponent("Test bank - Answer key.docx")}`);
+      assert.match(docx.headers.get("content-type") ?? "", /wordprocessingml\.document/);
+      assert.equal(docx.bytes.subarray(0, 2).toString("latin1"), "PK");
+    });
+  });
+
+  test("puts no answer on the student copy and marks the right one on the key", async () => {
+    await withApp(async (client, home) => {
+      const base = await seeded(client);
+      await client.post(`${base}/print`, { kinds: ["student", "key"], formats: ["docx"] });
+      const textOf = (name: string): string => Buffer.from(unzipSync(new Uint8Array(readFileSync(join(home, "Exports", name)))).get("word/document.xml") ?? new Uint8Array()).toString("utf8");
+      const student = textOf("Test bank - Student copy.docx");
+      const key = textOf("Test bank - Answer key.docx");
+      assert.match(student, /What is two plus two\?/);
+      assert.doesNotMatch(student, /\(correct\)|Scattering|No answer is recorded/);
+      assert.match(key, /Four<\/w:t><\/w:r><w:r>.*?\(correct\)/);
+      assert.match(key, /Model answer:/);
+      assert.match(key, /No answer is recorded for this question\./);
+    });
+  });
+
+  test("never writes over an earlier file", async () => {
+    await withApp(async (client, home) => {
+      const base = await seeded(client);
+      await client.post(`${base}/print`, { kinds: ["student"], formats: ["pdf"] });
+      writeFileSync(join(home, "Exports", "Test bank - Student copy.pdf"), "changed by hand");
+      const again = await client.post(`${base}/print`, { kinds: ["student"], formats: ["pdf"] });
+      assert.equal((again.json["written"] as Array<{ name: string }>)[0]?.name, "Test bank - Student copy 2.pdf");
+      assert.equal(readFileSync(join(home, "Exports", "Test bank - Student copy.pdf"), "utf8"), "changed by hand");
+    });
+  });
+
+  test("uses the title and the options it is given, and leaves out retired questions by default", async () => {
+    await withApp(async (client, home) => {
+      const base = await seeded(client);
+      const written = await client.post(`${base}/print`, { kinds: ["student"], formats: ["docx"], title: "Unit 3 quiz", paper: "a4", nameLine: false, dateLine: false, showPoints: false, instructions: "Use a pen." });
+      assert.equal((written.json["written"] as Array<{ name: string }>)[0]?.name, "Unit 3 quiz - Student copy.docx");
+      const xml = Buffer.from(unzipSync(new Uint8Array(readFileSync(join(home, "Exports", "Unit 3 quiz - Student copy.docx")))).get("word/document.xml") ?? new Uint8Array()).toString("utf8");
+      assert.match(xml, /w:w="11906"/, "A4");
+      assert.match(xml, /Use a pen\./);
+      assert.doesNotMatch(xml, /Name:|Date:|\(1 point\)/);
+
+      const checked = await client.post(`${base}/print/check`, { kinds: ["student"], formats: ["docx"], statuses: ["retired"] });
+      assert.equal((checked.json["reports"] as Record<string, Report>)["student"]?.total, 0);
+      assert.equal(((await client.post(`${base}/print/check`, { kinds: ["student"], formats: ["docx"] })).json["questions"]), 3);
+    });
+  });
+
+  test("leaves a retired question off the page unless it is asked for", async () => {
+    await withApp(async (client) => {
+      const base = await seeded(client);
+      const list = (await client.get(base)).json as { questions: Array<{ id: string; title: string }> };
+      const keyed = list.questions.find((q) => /two plus two/.test(q.title)) as { id: string };
+      const { question } = (await client.get(`${base}/questions/${keyed.id}`)).json as { question: { version: number } };
+      const input = JSON.parse(JSON.stringify(question));
+      input.metadata.status = "retired";
+      assert.equal((await client.put(`${base}/questions/${keyed.id}`, { input, expectVersion: question.version })).status, 200);
+      const total = async (extra: Record<string, unknown> = {}): Promise<number> => ((await client.post(`${base}/print/check`, { kinds: ["student"], formats: ["docx"], ...extra })).json["reports"] as Record<string, Report>)["student"]?.total ?? -1;
+      assert.equal(await total(), 2, "the retired one is not printed by default");
+      assert.equal(await total({ statuses: ["draft", "retired"] }), 3, "and is when it is asked for");
+    });
+  });
+
+  test("says so when nothing can be printed, and writes no file", async () => {
+    await withApp(async (client, home) => {
+      await client.post("/api/banks", { title: "Empty" });
+      const written = await client.post("/api/banks/Empty/print", both);
+      assert.deepEqual(written.json["written"], []);
+      assert.deepEqual(readdirSync(join(home, "Exports")), []);
+    });
+  });
+
+  test("refuses what it does not understand, with words", async () => {
+    await withApp(async (client) => {
+      const base = await seeded(client);
+      const refuse = async (input: Record<string, unknown>, pattern: RegExp): Promise<void> => {
+        const reply = await client.post(`${base}/print/check`, input);
+        assert.equal(reply.status, 400, JSON.stringify(input));
+        assert.match(String(reply.json["error"]), pattern);
+      };
+      await refuse({ formats: ["pdf"] }, /Say what to print/);
+      await refuse({ kinds: [], formats: ["pdf"] }, /Say what to print/);
+      await refuse({ kinds: ["student", "answers"], formats: ["pdf"] }, /Say what to print/);
+      await refuse({ kinds: ["student"], formats: ["rtf"] }, /Say what to print it as/);
+      await refuse({ kinds: ["student"], formats: ["pdf"], paper: "legal" }, /letter or a4/);
+      await refuse({ kinds: ["student"], formats: ["pdf"], statuses: ["published"] }, /Say which statuses/);
+      await refuse({ kinds: ["student"], formats: ["pdf"], title: "x".repeat(201) }, /title must be text/);
+      await refuse({ kinds: ["student"], formats: ["pdf"], essayLines: "many" }, /must be a number/);
+      await refuse({ kinds: ["student"], formats: ["pdf"], nameLine: "yes" }, /must be true or false/);
+      assert.equal((await client.post("/api/banks/Nowhere/print/check", both)).status, 404);
+    });
+  });
+
+  test("brings a page size that cannot be inside what a page holds", async () => {
+    await withApp(async (client, home) => {
+      const base = await seeded(client);
+      const written = await client.post(`${base}/print`, { kinds: ["student"], formats: ["pdf"], fontSize: 400, essayLines: 9999, shortAnswerLines: -5 });
+      assert.equal(written.status, 200, written.text);
+      assert.equal(readdirSync(join(home, "Exports")).length, 1);
     });
   });
 });

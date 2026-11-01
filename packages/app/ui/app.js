@@ -44,6 +44,7 @@ const ROUTES = [
   [/^#\/import\/([^/]+)$/, "./review.js", "renderReview"],
   [/^#\/bank\/([^/]+)$/, "./bank.js", "renderBank"],
   [/^#\/export\/([^/]+)$/, "./export.js", "renderExport"],
+  [/^#\/print\/([^/]+)$/, "./print.js", "renderPrint"],
 ];
 
 async function show() {
