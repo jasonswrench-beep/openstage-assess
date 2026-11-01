@@ -89,13 +89,14 @@ only and answers only to the window it opened.
   imported later and the person who did it said it worked fine; no record was kept of each
   question, so the right answer on each, a multiselect's scoring and the formatting have
   not been looked at one by one.
-- A QTI 1.2 package out, for Brightspace's Quizzes and Question Library and for Canvas's Import
-  Course Content (QTI .zip file): multiple choice, multiple answer, true or false, short
-  answer, matching and essay, each with its points. Ordering, numeric, hotspot and calculated
-  questions are left out with the reason, and feedback and partial credit are not carried.
-  It is held to the structure of QTI 1.2 and to a response processor that scores every
-  possible answer, so the key is shown to travel; it has not been imported into Brightspace
-  or Canvas, and only an import can say whether either accepts it.
+- A QTI 1.2 package out, for Brightspace's Import/Export/Copy Components (quizzes) and for
+  Canvas's Import Course Content (QTI .zip file): multiple choice, multiple answer, true or
+  false, short answer, matching and essay, each with its points. Ordering, numeric, hotspot
+  and calculated questions are left out with the reason, and feedback and partial credit are
+  not carried. It is held to the structure of QTI 1.2 and to a response processor that scores
+  every possible answer, so the key is shown to travel. It has not been seen to import
+  anywhere: the one try in Brightspace stored the zip as a zip and made no questions, by a
+  route that D2L's own help does not give for QTI (see `TESTING-TODO.md`).
 - A Blackboard Upload questions file out: the tab-delimited text that Blackboard's Ultra and
   Original courses read, for multiple choice, multiple answer, true or false, fill in the
   blank, matching, ordering and essay. A short answer is written as a fill in the blank.
