@@ -64,12 +64,16 @@ describe("who is let in", () => {
       assert.equal(wrong.status, 403);
 
       const right = await fetch(client.server.entry, { redirect: "manual" });
-      assert.equal(right.status, 302);
-      assert.equal(right.headers.get("location"), "/");
+      // A page that moves on by itself, not a redirect: a redirect that began on another site is sent without a Strict cookie.
+      assert.equal(right.status, 200);
+      assert.equal(right.headers.get("location"), null, "not a redirect");
       const cookie = right.headers.getSetCookie()[0] ?? "";
       assert.match(cookie, /HttpOnly/);
       assert.match(cookie, /SameSite=Strict/);
-      assert.ok(!right.headers.get("location")?.includes(client.server.token), "the key does not stay in the address");
+      const page = await right.text();
+      assert.match(page, /<meta http-equiv="refresh" content="0;url=\/">/);
+      assert.ok(!page.includes(client.server.token), "the key does not stay in the page, or in the address it moves on to");
+      assert.doesNotMatch(page, /<script/);
     });
   });
 

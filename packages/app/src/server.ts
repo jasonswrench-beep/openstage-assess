@@ -66,6 +66,8 @@ const POLICY = [
 
 export interface ServerOptions {
   home?: string;
+  /** Told of every request once it has been answered, with no address or text from the request that could hold a key. */
+  log?: (line: string) => void;
   /** 0 picks a free port. */
   port?: number;
   token?: string;
@@ -200,10 +202,14 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     const method = req.method ?? "GET";
 
     // The key arrives once, in the address the window is opened at, and is turned into a cookie and taken out of the address.
+    // It is answered with a page that moves on by itself, not with a redirect. The window's first load starts on another site
+    // (the page it shows while it starts), and a browser will not send a SameSite=Strict cookie on any hop of a navigation
+    // that began on another site, redirects included: the redirect would arrive with no cookie and be turned away. The page's
+    // own move to "/" begins here, on this site, so the cookie goes with it, and the cookie can stay Strict.
     if (method === "GET" && url.pathname === "/" && url.searchParams.has("k")) {
       if (!sameText(url.searchParams.get("k") ?? "", token)) throw new HttpError(403, "That key is not right. Open OpenAssess again.");
-      res.writeHead(302, headers({ location: "/", "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict` }));
-      res.end();
+      res.writeHead(200, headers({ "content-type": "text/html; charset=utf-8", "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict` }));
+      res.end('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><link rel="icon" href="data:,"><title>OpenAssess</title></head><body><p>Opening OpenAssess…</p></body></html>');
       return;
     }
 
@@ -247,6 +253,8 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   }
 
   const server: Server = createServer((req, res) => {
+    // What was asked and what was answered, without the query, which is where the key is.
+    if (options.log) res.on("finish", () => options.log?.(`${req.method ?? "?"} ${(req.url ?? "").split("?")[0]} ${res.statusCode}`));
     handle(req, res).catch((error: unknown) => {
       const status = error instanceof HttpError ? error.status : 500;
       if (status === 500) console.error(error);
