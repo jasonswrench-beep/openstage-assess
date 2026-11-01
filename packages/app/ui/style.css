@@ -57,7 +57,9 @@ code { font: 0.9em ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
 .bar nav a { color: var(--muted); text-decoration: none; padding: 6px 4px; }
 .bar nav a:hover { color: var(--text); text-decoration: underline; }
 
-main { padding: 18px 20px 60px; max-width: 1400px; margin: 0 auto; outline: none; }
+/* The app moves focus to the content when a screen changes, for a screen reader. That focus is not drawn: the keyboard's own
+   focus on the controls inside is. The second selector is needed because :focus-visible is more specific than main. */
+main, main:focus, main:focus-visible { padding: 18px 20px 60px; max-width: 1400px; margin: 0 auto; outline: none; }
 .screen { min-width: 0; }
 .page-head { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
 .head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
