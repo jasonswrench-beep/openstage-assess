@@ -55,6 +55,14 @@ interface sets all text with `textContent`, never as markup (`server.test.ts`
 reads every script for `innerHTML`). Do not loosen any of it to make something
 easier to test.
 
+**A table's columns are never assumed.** A spreadsheet or CSV is read by the names in its
+first row. With no names it is read in the template's order only if its first cells are
+question types; any other layout is refused with a message, because reading one column's
+words as another's is how a key lands where there was none. A row below the first counts
+as the names only if it names two known columns, so a note with the word Question in it
+is not mistaken for them. A cell that holds an error, or a formula with no stored result,
+is read as empty and named, never as text that could be taken for a letter.
+
 **The editor never writes back what the person did not change.** An edit keeps
 every field it was not given as stored, formatting and all; text that holds a
 picture or an equation is refused, not rewritten without it; a new answer row is
@@ -70,7 +78,7 @@ the order of the key. What cannot be printed is said against the question.
 ## Commands
 
 ```
-npm test                       # 1281 engine tests and 96 app tests, Node's own runner
+npm test                       # 1347 engine tests and 111 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -83,6 +91,7 @@ npm run check:word --workspace packages/assess   # asks Word itself what its lis
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks
 npm run check:word-authored --workspace packages/assess   # has Word write sample documents and reads them
 npm run check:word-print --workspace packages/assess   # has Word open the printed tests and read back every paragraph
+npm run check:excel-authored --workspace packages/assess   # has Excel write a workbook and CSV and compares every cell with what Excel says
 npm run check:generated --workspace packages/assess -- check <folder> --piece N   # holds a generated bank to its plan
 ```
 
@@ -101,6 +110,13 @@ writes in `fixtures/word-authored`, where `npm test` reads them on any machine.
 repair it, is a test that cannot be handed out. (The PDF is checked by taking it
 apart in `print.test.ts` and by opening it in a browser's own viewer, since no Word
 is involved.)
+
+`check:excel-authored` is the fifth, and is run after any change to `import/table-xlsx.ts`
+or `import/table-csv.ts`: a cell the reader takes for something other than what Excel stored
+in it (a typed TRUE read as text, a stored 0.30000000000000004 shown as it is stored, a
+formula's answer lost) is a key that is wrong or missing in a column called Correct. It starts
+its own hidden Excel and closes only that one. The workbook writer in `container/xlsx.ts`
+is not Excel, so tests that use it say nothing about files Excel wrote.
 
 `Check OpenAssess.cmd` runs the engine tests, the app tests, the accuracy gate
 and the speed check by double-click, which is how this gets verified on a

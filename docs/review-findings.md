@@ -482,6 +482,48 @@ Media is never garbage collected either.
   and bold; it does not yet write a text box or hidden text, so how Word spells a box, and what `mc:Fallback` holds in a real
   file, is read from memory of the format.
 
+### Found while building the question table importer (stage 7)
+
+Fixed while building, each by a test that fails when the fix is taken out. 47 deliberate breaks of the importer and its
+readers were made, and two got through until a test was added for each; 8 more were made in the sample routes, and one got
+through until a test was added:
+
+- **A note with the word Question in it was read as the row of column names.** Found by the blank table the app offers: its
+  sheet of instructions has a row that begins `Question`, and the importer took it for the names and read the instructions
+  below as essays. A row below the first now has to name two known columns, and a sheet of notes is said in a line, not
+  warned about.
+- **A table in a layout nobody had told it was read in the template's order.** `Nothing,Useful` would have put "Useful" in
+  the question and "Nothing" in the type. Author does this on purpose. Here, with no names in the first row, a file is read in
+  the template's order only if its first cells are question types, and any other is refused with a message.
+- **A sample could have been saved by a plain GET.** The route checked the method only by accident, through a later "not
+  found". A GET needs no special header, so a page on another site could have asked for it. There is a test that no GET
+  imports or saves.
+- **An Excel error read as text could have named a letter.** A cell of `#N/A` in a Correct column is empty, and the question
+  says so.
+
+Open:
+
+- **A date or a time in a cell is read as the number Excel stores.** The workbook's number formats are not read. A Points or a
+  Correct cell is never a date, so this changes nothing a key depends on, but a stem that is a date would read as 46023.
+- **Merged cells** have their words in the first cell and nothing in the others, as Excel stores them. A merged Category over
+  several rows tags only the first.
+- **Rich text in a cell** (bold, a superscript) is read as its words, and the formatting is not kept. A picture or a comment
+  on a sheet is not read, and is not counted either.
+- **Hidden rows are read.** A filter hides rows without removing them, and a person who filtered to the questions they
+  wanted may not want the rest. The file says how many were hidden. Whether to read them is the person's to say.
+- **A formula with no stored result is read as empty and named.** A workbook written by a program that never calculated it
+  (some report generators) has such cells, and the person is told to open it in Excel and save it again.
+- **Only A to H are answers.** A table with answers in nine columns has the rest named as not used.
+- **Author's own reader was not run against a workbook this writes.** The columns and the codes are the ones its
+  documentation and code give, and the template it ships reads here as five questions with their keys, but the reverse (a CSV
+  this writes, read by Author) belongs to the exporter, which has not changed.
+- **Excel itself has checked the reader, on one machine and one version.** `check:excel-authored` made 246 comparisons: every
+  cell Excel wrote, in the workbook and in the three text files it saved (CSV, CSV UTF-8, Unicode text), against what Excel
+  says it holds; and the workbooks this project's own writer makes (the samples, the blank table) opened in Excel, which
+  opened all of them without repair, with the header bold and the drop-down in place. Google Sheets and LibreOffice write their
+  own variants of the same XML, and no workbook from them has been read.
+- **A PDF is refused.** See `docs/design-plan.md`.
+
 ### Found while building the app, the cheap formats, printing and the window (stage 6)
 
 Fixed while building, each with a test that fails when the fix is taken out (the fix was removed, the test run, and the
