@@ -182,6 +182,15 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.5); }
 .note-group { margin: 8px 0; }
 .note-group ul { margin: 4px 0 0; padding-left: 20px; color: var(--muted); font-size: 0.92rem; }
 .written { background: var(--ok-bg); border: 1px solid var(--ok); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+fieldset.panel { min-width: 0; }
+legend { font-weight: 600; padding: 0 6px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; }
+.choice input { margin-top: 4px; flex: none; }
+.choice label { display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.choice .hint { font-weight: normal; margin: 0; }
+.file-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+.file-name { font-weight: 600; overflow-wrap: anywhere; }
+.general { color: var(--muted); font-size: 0.92rem; padding-left: 20px; margin: 6px 0 10px; }
 
 @media (max-width: 860px) {
   .panes { grid-template-columns: 1fr; }

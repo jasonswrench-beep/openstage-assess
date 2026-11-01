@@ -14,7 +14,8 @@
  */
 
 import { hasUsableKey } from "../quality/answer-key.ts";
-import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
+import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, titleFromStem, type Question } from "../model/question.ts";
+import { richTextToPlain } from "../model/richtext.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { buildReport, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
@@ -58,7 +59,10 @@ function plan(question: Question, position: number): Planned {
   // A stem with formatting keeps it, by being marked as HTML. The answers cannot be marked, so theirs becomes plain text.
   const formatted = question.stem.format === "rich" && FORMATTING.test(question.stem.content);
   const stemText = formatted ? `[html]${giftEscape(htmlText(question.stem, question, newLosses()).replace(/\n/g, ""))}` : giftEscape(stem);
-  const title = question.title.replace(/::/g, ":").replace(/\s+/g, " ").trim();
+  // A title that is only the start of the question text, which is what an untitled question is given, says nothing the text
+  // does not, and Moodle makes the same name from the text. Only a title someone wrote is written.
+  const automatic = question.title === titleFromStem(richTextToPlain(question.stem));
+  const title = automatic ? "" : question.title.replace(/::/g, ":").replace(/\s+/g, " ").trim();
 
   const lines: string[] = [];
   const answer = (marker: "=" | "~", text: string, feedback?: string, weight?: string): string =>

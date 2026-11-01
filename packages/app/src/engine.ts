@@ -5,3 +5,4 @@
 
 export * from "../../assess/src/index.ts";
 export { checkAnswerKey } from "../../assess/src/quality/answer-key.ts";
+export { DESTINATION_LABEL as OPENSTAGE_SPREADSHEET_LABEL } from "../../assess/src/export/openstage-spreadsheet.ts";

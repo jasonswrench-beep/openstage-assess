@@ -84,6 +84,38 @@ export function rawRequest(port: number, path: string, headers: Record<string, s
   });
 }
 
+/**
+ * A POST whose size is not told in advance (chunked), so that only counting what arrives can stop it. Resolves with the
+ * status the server gave, whether or not it had read it all.
+ */
+export function chunkedPost(port: number, path: string, headers: Record<string, string>, megabytes: number): Promise<number> {
+  return new Promise((resolve) => {
+    const req = httpRequest({ host: "127.0.0.1", port, path, method: "POST", headers: { ...headers, "transfer-encoding": "chunked" } }, (res) => {
+      res.resume();
+      resolve(res.statusCode ?? 0);
+    });
+    req.on("error", () => resolve(0));
+    const chunk = Buffer.alloc(1024 * 1024, 120);
+    for (let i = 0; i < megabytes; i++) req.write(chunk);
+    req.end();
+  });
+}
+
+/** A POST that says it is enormous and sends nothing. The answer has to come without waiting for the body. */
+export function liarPost(port: number, path: string, headers: Record<string, string>): Promise<number> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(-1), 3000);
+    const req = httpRequest({ host: "127.0.0.1", port, path, method: "POST", headers: { ...headers, "content-length": "999999999" } }, (res) => {
+      clearTimeout(timer);
+      res.resume();
+      resolve(res.statusCode ?? 0);
+      req.destroy();
+    });
+    req.on("error", () => undefined);
+    req.write("{");
+  });
+}
+
 export async function withApp(fn: (client: Client, home: string, revealed: string[]) => Promise<void>, options: ServerOptions = {}): Promise<void> {
   const home = mkdtempSync(join(tmpdir(), "openassess-app-"));
   const revealed: string[] = [];
