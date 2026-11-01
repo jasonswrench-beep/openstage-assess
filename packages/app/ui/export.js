@@ -8,6 +8,7 @@
 
 import { get, post } from "./api.js";
 import { clear, h, plural, put } from "./dom.js";
+import { fileButtons } from "./files.js";
 import { EXPORT_WORDS, reportNodes } from "./reportview.js";
 
 /**
@@ -131,14 +132,7 @@ export async function renderExport(host, params, shell) {
               { class: "file-row" },
               h("span", { class: "file-name", text: file.name }),
               h("span", { class: "meta", text: plural(file.questions, "question", "questions") }),
-              h("a", { class: "button", href: `/files/${encodeURIComponent(file.name)}`, text: "Download", attrs: { download: file.name } }),
-              h("button", { type: "button", text: "Show in folder", on: { click: async () => {
-                try {
-                  await post("reveal", { path: file.path });
-                } catch (error) {
-                  shell.notify(/** @type {Error} */ (error).message, "error");
-                }
-              } } }),
+              ...fileButtons(file, shell),
             ),
           ),
         ),

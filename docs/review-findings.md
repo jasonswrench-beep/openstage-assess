@@ -482,6 +482,31 @@ Media is never garbage collected either.
   and bold; it does not yet write a text box or hidden text, so how Word spells a box, and what `mc:Fallback` holds in a real
   file, is read from memory of the format.
 
+### Found by watching a recording of the window (stage 9)
+
+The first person to use the export screen in the installed window recorded what happened. Two defects, both in code that had
+tests, and both invisible to them:
+
+- **Fixed: Show in folder opened the Documents folder and showed nothing.** The server ran `explorer.exe /select,<path>` and
+  Node, given an argument with a space in it, put quotes around the whole of it, `"/select,C:\...\Quiz - Brightspace.csv"`.
+  Explorer cannot read that, and falls back to the Documents folder without a word. A path with a space in it is nearly every
+  path (a two-word bank title, the ` - Brightspace` suffix, a Windows user name with a space), so the button rarely worked on
+  an exported file; only a one-word title with no space anywhere in the path got through. The argument is now passed as Explorer wants it, with the
+  quotes around the path (`revealCommand`, tested), and a path with a quote mark in it is refused. The old call and the new one
+  were each run against a file with spaces in its name, and where Explorer landed was read back: the old one reached
+  Documents, the new one the Exports folder. The test of the route had stood in for Explorer, so it could not have seen this.
+- **Fixed: Download saved the file and said nothing.** In the window a link with the download attribute sent the file straight
+  into the Downloads folder, with no dialog and no message, so it looked as if nothing had happened and it was pressed again
+  (three copies of one export were in Downloads). The button is now Save a copy…, which opens the system's Save dialog with the
+  file's name filled in (`ui/files.js`), says where it saved, says nothing when the dialog is closed, and falls back to a
+  plain download, saying so, in a browser that has no such dialog. Not operated in the window itself: see `TESTING-TODO.md`.
+- **Open: a key chosen by hand does not clear the importer's error about the key.** In the recording a person ticked the right
+  answer on a question whose Answer line disagreed with its option (`Verbally bullying` against `Verbal bullying`), pressed
+  Apply changes, and the question stayed Failed with the same error under Checks, which says an error goes when the question
+  is fixed. It does not, because a stored finding about the key (`KeysDisagree`, `KeyLetterMissing`) is kept on purpose: the
+  importer knew something the finished question no longer shows. Both such questions were then left out of the save. Whether a
+  key written by a person should replace those findings is a decision about what the repair screen means, and is not made.
+
 ### Found while building the Brightspace question library export (stage 9)
 
 `src/export/d2l-csv.ts`, tested by `test/export-d2l-csv.test.ts` (31 tests, one of which runs the real banks in the private
