@@ -37,7 +37,9 @@ export * from "./import/types.ts";
 export { standardTextImporter, PROFILE_ID as STANDARD_TEXT_PROFILE } from "./import/standard-text.ts";
 export { wordImporter, docxToBlocks, WORD_PROFILE_ID } from "./import/word.ts";
 export { DocxError, openDocx } from "./import/docx/package.ts";
-export { IMPORTERS, importerFor, runImporter } from "./import/registry.ts";
+export { IMPORTERS, importerFor, importerForContent, runImporter } from "./import/registry.ts";
+export { aikenImporter, AIKEN_PROFILE_ID, looksLikeAiken } from "./import/aiken.ts";
+export { giftImporter, GIFT_PROFILE_ID, looksLikeGift, giftUnescape } from "./import/gift.ts";
 
 // Export
 export * from "./export/types.ts";
@@ -48,6 +50,10 @@ export {
   MAX_QUESTIONS_PER_FILE as OPENSTAGE_SPREADSHEET_MAX_QUESTIONS,
 } from "./export/openstage-spreadsheet.ts";
 export type { SpreadsheetOptions } from "./export/openstage-spreadsheet.ts";
+export { exportGift, checkGift, giftEscape, GIFT_ID, GIFT_LABEL } from "./export/gift.ts";
+export type { GiftOptions } from "./export/gift.ts";
+export { exportMoodleXml, checkMoodleXml, MOODLE_XML_ID, MOODLE_XML_LABEL } from "./export/moodle-xml.ts";
+export type { MoodleXmlOptions } from "./export/moodle-xml.ts";
 
 // Harness
 export * from "./harness/score.ts";

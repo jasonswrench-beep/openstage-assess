@@ -30,19 +30,10 @@
  * builds the rows, so the report cannot disagree with the file.
  */
 
-import { checkAnswerKey, hasUsableKey } from "../quality/answer-key.ts";
-import { liveFindings } from "../model/findings.ts";
-import { escapeHtml, richTextToPlain, type RichText } from "../model/richtext.ts";
-import {
-  isChoice,
-  isFillInBlank,
-  isMultipleResponse,
-  isShortAnswer,
-  isTrueFalse,
-  type Question,
-  type QuestionType,
-} from "../model/question.ts";
+import { hasUsableKey } from "../quality/answer-key.ts";
+import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import type { DestinationReport, ExportedFile, ExportResult, ReportItem } from "./types.ts";
+import { hasText, keyProblem, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
 export const DESTINATION_ID = "openstage-spreadsheet";
 export const DESTINATION_LABEL = "OpenStage question spreadsheet (Author and Scroll)";
@@ -57,20 +48,6 @@ export const MAX_ACCEPTED = 10;
 const LETTERS = "ABCDEFGH";
 const BYTE_ORDER_MARK = "﻿";
 
-const TYPE_NAMES: Record<QuestionType, string> = {
-  multipleChoice: "multiple choice",
-  multipleResponse: "multiple response",
-  trueFalse: "true or false",
-  fillInBlank: "fill in the blank",
-  matching: "matching",
-  ordering: "ordering",
-  numeric: "numeric",
-  shortAnswer: "short answer",
-  essay: "essay",
-  hotspot: "hotspot",
-  calculated: "calculated",
-};
-
 interface Row {
   type: "MC" | "MR" | "TF" | "SA";
   question: string;
@@ -82,84 +59,8 @@ interface Row {
 }
 
 // ---------------------------------------------------------------------------
-// Text
-// ---------------------------------------------------------------------------
-
-/** What turning rich text into a plain cell cost, counted so that it can be reported. */
-interface Losses {
-  pictures: number;
-  equations: number;
-  formatting: boolean;
-  breaks: boolean;
-}
-
-const FORMATTING = /<(strong|em|u|s|sub|sup|code|pre|ul|ol|li|blockquote|table|thead|tbody|tr|th|td)[\s>/]/i;
-
-/**
- * Rich text as a plain cell.
- *
- * A picture or an equation cannot be carried, but simply deleting it would
- * leave a question such as "What does [the chart] show?" reading "What does
- * show?". They are written into the text instead, with their alternative text
- * or LaTeX, so the question still makes sense and the author can see where to
- * put the picture back. Every one is counted and reported.
- */
-function plainCell(text: RichText, question: Question, losses: Losses, keepBreaks: boolean): string {
-  let plain: string;
-  if (text.format === "plain") {
-    // Not markup, so no tag handling: a stem reading "x < y" must not lose text.
-    plain = text.content.trim();
-  } else {
-    if (FORMATTING.test(text.content)) losses.formatting = true;
-    const html = text.content
-      .replace(/<oa-media\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-media>/gi, (_whole, ref: string) => {
-        losses.pictures++;
-        const media = question.media.find((m) => m.id === ref);
-        if (media?.decorative) return " ";
-        const alt = media ? media.alt.trim() : "";
-        return alt.length > 0 ? ` [Picture: ${escapeHtml(alt)}] ` : " [Picture] ";
-      })
-      .replace(/<oa-math\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi, (_whole, ref: string) => {
-        losses.equations++;
-        const math = question.math.find((m) => m.id === ref);
-        const latex = math ? math.latex.trim() : "";
-        return latex.length > 0 ? ` [Equation: ${escapeHtml(latex)}] ` : " [Equation] ";
-      })
-      // Without this the cells of a table run together into one word.
-      .replace(/<\/(td|th)\s*>/gi, " ");
-    plain = richTextToPlain(html);
-  }
-
-  if (!keepBreaks && plain.includes("\n")) {
-    losses.breaks = true;
-    plain = plain.replace(/\s*\n\s*/g, " ");
-  }
-  return plain.trim();
-}
-
-function hasText(text: RichText): boolean {
-  return text.format === "plain" ? text.content.trim().length > 0 : richTextToPlain(text).length > 0;
-}
-
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
-// ---------------------------------------------------------------------------
 // One question
 // ---------------------------------------------------------------------------
-
-/** Why a question has no usable key, in the words the bank already uses for it. */
-function keyProblem(question: Question): string {
-  const messages = new Set<string>();
-  for (const found of [...checkAnswerKey(question), ...liveFindings(question.findings)]) {
-    if (found.severity === "error") messages.add(found.message);
-  }
-  const list = [...messages].slice(0, 3);
-  return list.length > 0
-    ? `It cannot be exported until this is fixed in the bank: ${list.join(" ")}`
-    : "It has no usable answer key, and the spreadsheet needs one.";
-}
 
 interface Planned {
   item: ReportItem;
@@ -184,12 +85,12 @@ function plan(question: Question, position: number): Planned {
   }
   // Never export a question whose key is missing or broken: the row would be
   // refused by Author, or worse, read as if it were keyed.
-  if (!hasUsableKey(question)) return leftOut(keyProblem(question));
+  if (!hasUsableKey(question)) return leftOut(keyProblem(question, "the spreadsheet"));
 
-  const losses: Losses = { pictures: 0, equations: 0, formatting: false, breaks: false };
+  const losses = newLosses();
   const notes: string[] = [];
 
-  const stem = plainCell(question.stem, question, losses, false);
+  const stem = plainText(question.stem, question, losses, false);
   if (stem === "") return leftOut("It has no question text once it is written as plain text.");
 
   let type: Row["type"];
@@ -202,7 +103,7 @@ function plan(question: Question, position: number): Planned {
     if (options.length > MAX_ANSWERS) {
       return leftOut(`It has ${options.length} answers and the spreadsheet holds ${MAX_ANSWERS}.`);
     }
-    answers = options.map((option) => plainCell(option.content, question, losses, false));
+    answers = options.map((option) => plainText(option.content, question, losses, false));
     if (answers.some((answer) => answer === "")) {
       return leftOut("One of its answers has no text, and an empty answer would shift the letters of the ones after it.");
     }
@@ -283,8 +184,8 @@ function plan(question: Question, position: number): Planned {
     if (caseSensitive) notes.push("Upper and lower case count in this question, and the spreadsheet cannot say so.");
   }
 
-  const right = question.feedback.correct ? plainCell(question.feedback.correct, question, losses, true) : "";
-  const wrong = question.feedback.incorrect ? plainCell(question.feedback.incorrect, question, losses, true) : "";
+  const right = question.feedback.correct ? plainText(question.feedback.correct, question, losses, true) : "";
+  const wrong = question.feedback.incorrect ? plainText(question.feedback.incorrect, question, losses, true) : "";
   if (question.feedback.general && hasText(question.feedback.general)) {
     notes.push("General feedback is not carried: the spreadsheet has feedback for a right answer and for a wrong one only.");
   }
@@ -341,17 +242,6 @@ function renderCsv(rows: readonly Row[]): string {
     row.wrong,
   ]);
   return BYTE_ORDER_MARK + [header, ...lines].map((line) => line.map(csvCell).join(",")).join("\r\n") + "\r\n";
-}
-
-/** A name that is safe as a file name on Windows. */
-function safeName(name: string | undefined): string {
-  const cleaned = (name ?? "")
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^\.+/, "")
-    .replace(/[. ]+$/, "");
-  return cleaned.length > 0 ? cleaned.slice(0, 80) : "questions";
 }
 
 export interface SpreadsheetOptions {
