@@ -44,6 +44,14 @@ export interface DocumentStats {
   comments: number;
   /** Elements that hold text and were not read, by name. */
   unreadWithText: Record<string, number>;
+  /** The start of the text in the first of each, so that a finding can say what was left out. */
+  unreadSamples: Record<string, string>;
+  /** Paragraphs in which text that Word hides was left out. */
+  hiddenText: number;
+  /** The start of the first hidden text left out. */
+  hiddenSample: string | undefined;
+  /** Paragraphs whose mark is hidden, which Word joins to the paragraph after. */
+  hiddenMarks: number;
   /** Paragraphs given a label by Word's list numbering, such as "3." or "b)". */
   listItems: number;
   /** Paragraphs in a list whose number could not be worked out, by the reason. They are left unnumbered. */
@@ -106,6 +114,26 @@ const INLINE_CONTAINERS = new Set([
 
 const OBJECTS = new Set(["w:drawing", "w:pict", "w:object", "mc:AlternateContent"]);
 
+/** What `unreadWithText` calls text in any of them. */
+export const OBJECT_TEXT = "a picture, shape or text box";
+
+/**
+ * The text inside something that was not read, for a finding to quote. Word writes a text box twice, in `mc:Choice` for
+ * a Word that understands it and again in `mc:Fallback` for one that does not, so the quote is taken from one of them.
+ */
+function textOf(element: XmlElement): string {
+  if (element.name === "mc:AlternateContent") {
+    const shown = first(element, "mc:Choice") ?? first(element, "mc:Fallback");
+    return shown ? allText(shown) : "";
+  }
+  return allText(element);
+}
+
+/** A few words of a text, on one line, for a finding to quote. */
+function quote(text: string): string {
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > 60 ? `${line.slice(0, 57).trimEnd()}...` : line;
+}
 interface Location {
   table: number;
   row: number;
@@ -172,14 +200,19 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     notes: 0,
     comments: 0,
     unreadWithText: {},
+    unreadSamples: {},
+    hiddenText: 0,
+    hiddenSample: undefined,
+    hiddenMarks: 0,
     listItems: 0,
     unreadLists: {},
     tableLayouts: {},
     tablesPlain: 0,
   };
 
-  const unread = (name: string): void => {
+  const unread = (name: string, element: XmlElement): void => {
     stats.unreadWithText[name] = (stats.unreadWithText[name] ?? 0) + 1;
+    stats.unreadSamples[name] ??= quote(textOf(element));
   };
 
   /** While a table's cells are being read, their lines are gathered here and not yet blocks. */
@@ -201,6 +234,8 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     lines: Line[];
     /** The id of the paragraph's style, which a run's format can depend on. */
     style: string | undefined;
+    /** The text of the runs that Word hides, which are not read. */
+    hidden: string;
   }
   const add = (b: Lines, text: string, format: RunFormat = NO_FORMAT): void => {
     if (text === "") return;
@@ -215,6 +250,12 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   };
 
   function run(r: XmlElement, b: Lines): void {
+    // Text that Word hides is not on the page a person reads. A note to self, or an old answer, left hidden in the file
+    // must not turn up in a question, so it is not read, and the count says it was there.
+    if (formatting?.hidden(first(r, "w:rPr"), b.style)) {
+      b.hidden += elements(r, "w:t").map(allText).join("");
+      return;
+    }
     const format = formatting ? formatting.run(first(r, "w:rPr"), b.style) : NO_FORMAT;
     for (const child of r.children) {
       if (typeof child === "string") continue;
@@ -255,9 +296,9 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
           if (OBJECTS.has(child.name)) {
             stats.pictures++;
             add(b, "[picture]", format);
-            if (hasText(child)) unread("text inside a picture, shape or text box");
+            if (hasText(child)) unread(OBJECT_TEXT, child);
           } else if (!SILENT.has(child.name) && hasText(child)) {
-            unread(child.name);
+            unread(child.name, child);
           }
       }
     }
@@ -282,16 +323,20 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
       } else if (OBJECTS.has(name)) {
         stats.pictures++;
         add(b, "[picture]");
-        if (hasText(child)) unread("text inside a picture, shape or text box");
-      } else if (!SILENT.has(name) && hasText(child)) unread(name);
+        if (hasText(child)) unread(OBJECT_TEXT, child);
+      } else if (!SILENT.has(name) && hasText(child)) unread(name, child);
     }
   }
 
   function paragraph(p: XmlElement, where: Location | undefined): void {
     stats.paragraphs++;
     const properties = first(p, "w:pPr");
-    const b: Lines = { lines: [{ text: "", runs: [] }], style: properties ? first(properties, "w:pStyle")?.attrs["w:val"] : undefined };
+    const b: Lines = { lines: [{ text: "", runs: [] }], style: properties ? first(properties, "w:pStyle")?.attrs["w:val"] : undefined, hidden: "" };
     inline(p, b);
+    if (b.hidden.trim() !== "") {
+      stats.hiddenText++;
+      stats.hiddenSample ??= quote(b.hidden);
+    }
     // A line break at the very end of a paragraph is not a blank line after it.
     while (b.lines.length > 1 && (b.lines[b.lines.length - 1] as Line).text === "") b.lines.pop();
 
@@ -303,6 +348,14 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     // The label belongs on the first line only: a soft break inside a numbered
     // paragraph does not start another item.
     const listed = numbering?.label(properties);
+
+    // Word joins a paragraph whose mark is hidden to the one after it, so one with no text left to show is not a line at all,
+    // and not a blank one. It still takes its number in a list: asked of Word, the item after a hidden one was numbered as
+    // if it were there. In a table the end of a cell can not be joined to anything, so it is read as it stands.
+    const markHidden = formatting?.hidden(properties ? first(properties, "w:rPr") : undefined, b.style) === true;
+    if (markHidden) stats.hiddenMarks++;
+    if (markHidden && where === undefined && b.lines.every((line) => line.text === "")) return;
+
     if (listed?.unread !== undefined) stats.unreadLists[listed.unread] = (stats.unreadLists[listed.unread] ?? 0) + 1;
     const label = listed?.label;
     const bullet = listed?.bullet === true;
@@ -377,7 +430,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
         stats.trackedInsertions++;
         container(child, where);
       } else if (name === "w:del" || name === "w:moveFrom") stats.trackedDeletions++;
-      else if (!SILENT.has(name) && hasText(child)) unread(name);
+      else if (!SILENT.has(name) && hasText(child)) unread(name, child);
     }
   }
 

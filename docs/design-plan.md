@@ -219,6 +219,12 @@ no question wrong and marked fine in any of them. After the stage 4h rules, run 
 files and on a second set that may be fitted to, the generated ones read 75 to 80 percent, still
 with no question wrong and marked fine; that is a second contact and says nothing about real banks.
 
+A first look at the preview and repair screen exists as a page. `openassess review <file>` writes one web page that shows
+each question as the importer built it, with its answer, its checks and the lines of the file it came from, then the text
+no question used and the warnings about the file. It has no script and no outside address, shows no answer the importer did
+not find, and changes nothing. It cannot repair anything and is not the desktop app; it is the first version of what the
+app's preview screen will show, built from the same result that screen will read.
+
 **Next, in this order.**
 
 1. **The question spreadsheet exporter** and the destination-check mechanism.

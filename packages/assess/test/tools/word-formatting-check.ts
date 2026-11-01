@@ -142,6 +142,42 @@ add(
     characterStyle("NoHigh", '<w:highlight w:val="none"/>'),
 );
 
+// Hidden text. It is not read, so the reader's side of the answer is a paragraph with no text. A paragraph style that hides
+// text hides the paragraph mark too, and Word joins such a paragraph to the next and says one paragraph fewer, so each
+// paragraph here has its mark shown by itself; what a hidden mark does is for the reader to count (see document.ts).
+const hline = (inStyle?: string, inCharacterStyle?: string, direct = ""): string =>
+  paragraph(
+    run("Some text", (inCharacterStyle ? `<w:rStyle w:val="${inCharacterStyle}"/>` : "") + direct),
+    (inStyle ? `<w:pStyle w:val="${inStyle}"/>` : "") + '<w:rPr><w:vanish w:val="0"/></w:rPr>',
+  );
+add(
+  "hidden",
+  [
+    hline(undefined, undefined, "<w:vanish/>"),
+    hline(undefined, undefined, '<w:vanish w:val="0"/>'),
+    hline(undefined, "Hid"),
+    hline("PHid"),
+    hline("PHid", "Hid"),
+    hline("PHid", undefined, '<w:vanish w:val="0"/>'),
+    hline("PHidChild"),
+    hline("PHidOff"),
+    hline("PHidAgain"),
+    hline("PHidChild", "Hid"),
+    hline(undefined, "Hid", "<w:vanish/>"),
+    hline(undefined, "Hid", '<w:vanish w:val="0"/>'),
+  ].join(""),
+  NORMAL +
+    characterStyle("Hid", "<w:vanish/>") +
+    paragraphStyle("PHid", "<w:vanish/>") +
+    paragraphStyle("PHidChild", "", "PHid") +
+    paragraphStyle("PHidOff", '<w:vanish w:val="0"/>', "PHid") +
+    paragraphStyle("PHidAgain", "<w:vanish/>", "PHid"),
+);
+// Hidden by the document's defaults, and shown again by a paragraph style. A character style that hides, met with defaults
+// that hide, is left out: Word does not apply the plain toggle there (it shows "paragraph style off, character style on" and
+// hides "defaults on, character style on"), the reader does, and no file sets hidden text in its defaults.
+add("hidden-defaults", [hline(), hline("PShown")].join(""), NORMAL + paragraphStyle("PShown", '<w:vanish w:val="0"/>'), "<w:vanish/>");
+
 // the document's defaults, and the default paragraph style
 add(
   "defaults",
@@ -206,8 +242,14 @@ function main(): void {
         disagreements++;
         return;
       }
-      const [bold, italic, underline, color, highlight] = (theirs[i] ?? "").split("|").map(Number);
+      const [bold, italic, underline, color, highlight, hidden] = (theirs[i] ?? "").split("|").map(Number);
       const problems: string[] = [];
+      // Hidden text is left out of the block, so a paragraph that is all hidden reads as no text at all. Only the cases built
+      // for it say so: in the others an empty paragraph is a blank line, and no text is hidden.
+      const hiddenCase = c.name.startsWith("hidden");
+      if (hiddenCase ? (hidden === -1) !== (block.text === "") : hidden === -1) {
+        problems.push(`hidden: reader ${block.text === "" ? "hides" : "shows"} it, Word ${hidden === -1 ? "hides" : "shows"} it`);
+      }
       if ((bold === -1) !== !!ours.bold) problems.push(`bold: reader ${!!ours.bold}, Word ${bold === -1}`);
       if ((italic === -1) !== !!ours.italic) problems.push(`italic: reader ${!!ours.italic}, Word ${italic === -1}`);
       if ((underline !== 0) !== !!ours.underline) problems.push(`underline: reader ${!!ours.underline}, Word ${underline !== 0}`);

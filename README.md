@@ -45,9 +45,17 @@ interface.
   question that never names its type is read from its answer when that is plain: a
   statement answered `True` or `False`, an `Accepted answers:` line, or an instruction
   to match with a line for each pair. A
+  Text that Word hides is not read, so a note or an old answer left hidden in a bank
+  does not turn up in a question; the file says how much was left out and quotes it.
+  Text inside a text box is not read either, and the file says so. A
   Word 97-2003 `.doc` has to be saved as `.docx` first. Lists and formatting are checked against Word
   itself, and `fixtures/word-authored` holds documents that Word wrote
   (`docs/word-import-plan.md`).
+- A review page: `review <file>` writes one web page that shows each question as the
+  importer built it, with its answer, its checks and the lines of the file it came from,
+  then the text no question used. It has no script and no outside address, shows no
+  answer the importer did not find, and changes nothing. It is the first look at the
+  preview screen the desktop app will have, not the app.
 - The first exporter: the question spreadsheet (CSV) that OpenStage Author and
   OpenStage Scroll read, with a destination check that lists what will arrive,
   what will be lost and what cannot go.
@@ -77,6 +85,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `validate <bank>` | Check every question against the model |
 | `new <bank> --title "..."` | Create an empty bank |
 | `import <file> [--out <bank>] [--details] [--key-mark <mark>]` | Read a `.txt` or `.docx` file and report the verdicts. `--key-mark` says what formatting means in a Word file: `off`, `bold`, `underline`, `highlight`, `color` and so on |
+| `review <file> [--out <page>] [--key-mark <mark>]` | Read a `.txt` or `.docx` file as `import` does and write one web page showing each question with its answer, its checks and its lines of the file, then the text no question used. Nothing is written to a bank |
 | `export <bank> [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet, and with `--out` write it |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
@@ -96,8 +105,9 @@ packages/assess/        the engine, published as @openstage/assess
   src/export/           exporters and the destination check
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
+  src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1136 tests, run by Node's own test runner
+  test/                 1172 tests, run by Node's own test runner
   test/tools/           a check that asks Word itself what its lists show
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word

@@ -132,7 +132,13 @@ for (const legal of [false, true]) {
   add(`legal-${legal}`, docx({ body: sequence.map((at) => L(1, at)).join(""), numbering }));
 }
 add("level-used-before-the-levels-above", docx({ body: L(1, 1) + L(1, 1) + L(1, 0) + L(1, 2) + L(1, 1), numbering: outline() }));
-add("paragraphs-between-items", docx({ body: L(1, 0) + P("plain") + P("plain") + L(1, 0) + P("plain") + L(1, 0), numbering: numberingPart([abstractNum(1, [level(0)])], [num(1, 1)]) }));
+// Hidden text leaves its numbered paragraph where it was, so the number still shows and the items after it are not moved.
+// A hidden paragraph mark is not here: Word joins that paragraph to the next, and says one paragraph fewer than the file holds.
+add("hidden-text-keeps-its-number", docx({
+  body: P("a") + paragraph(run("b", "<w:vanish/>"), listProperties({ numId: 1, level: 0 })) + P("c") + P("d"),
+  numbering: numberingPart([abstractNum(1, [level(0)])], [num(1, 1)]),
+}));
+add("paragraphs-between-items",docx({ body: L(1, 0) + P("plain") + P("plain") + L(1, 0) + P("plain") + L(1, 0), numbering: numberingPart([abstractNum(1, [level(0)])], [num(1, 1)]) }));
 
 // instances of one list, and overrides
 const instances = numberingPart([abstractNum(1, [level(0), level(1, { format: "lowerLetter", text: "%2)" })])], [

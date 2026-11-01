@@ -463,6 +463,25 @@ Media is never garbage collected either.
   number the stretch above already used and no options follow it. The words are
   quoted in a finding, so nothing is lost, but the question is.
 
+### Hidden text and text in boxes (stage 5)
+
+- **Hidden text was read as ordinary text.** Nothing looked at `w:vanish`, so a note to self or an old answer left hidden in
+  a bank turned up in a stem, an option or the key. **Fixed:** it is left out and counted, the file quotes the first, and the
+  rules (a toggle, a hidden paragraph that has no text left is not a blank line, it still takes its list number) were checked
+  against Word. See `docs/word-import-plan.md`, stage 5.
+- **Open: a hidden paragraph mark that still has text.** Word joins that paragraph to the next one, so Word counts one paragraph
+  fewer than the file holds. The reader keeps it as a line of its own, and the file says how many marks are hidden. It is
+  left out of `check:word` for that reason, and is not a case any real file has been seen to hold.
+- **Open: document defaults that hide text, met by a character style that hides too.** Word does not apply the plain toggle
+  there and the reader does. No file sets hidden text in its defaults.
+- **Open: a question that stands in a text box is not read.** It is counted and quoted, and the message says it is in no
+  question and no orphan, so it is looked for. The text could be offered as an orphan with the place of its anchor, so that a
+  repair screen could show it, but a box has no sure place in the reading order of the page, and a margin note read in the
+  middle of a question would be worse than a note about one. Decided against until a real file holds a question in a box.
+- **Open: the XML for boxes was written by our test writer, not by Word.** `check:word-authored` has Word write tables, lists
+  and bold; it does not yet write a text box or hidden text, so how Word spells a box, and what `mc:Fallback` holds in a real
+  file, is read from memory of the format.
+
 ### Found by a blind test on sixteen generated files that passed the checker (stage 4h), not yet fixed
 
 The first set written to the new brief and held to its plan by `npm run check:generated`: pieces 1 to 4, files

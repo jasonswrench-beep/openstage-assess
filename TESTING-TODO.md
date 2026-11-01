@@ -12,9 +12,22 @@ item says what has been run and what has not. Items are removed when done, with 
   shows. Worth opening: `c-06` (Word's own numbering), `c-11` (bullets and `(Correct)`), `c-16` (highlight), `c-21` (bullets
   and underline), `c-10` (font colour). They are in the session's scratch folder under `generated/` and in the zips you sent.
 - [ ] **Run `npm run check:word-authored`, `check:word` and `check:word-formatting`** after any change to
-  `import/docx/numbering.ts`, `formatting.ts` or how tables are read. None of those changed in stage 4h, so none is due yet.
+  `import/docx/numbering.ts`, `formatting.ts` or how tables are read. Stage 4h changed none of them. The hidden text change
+  (stage 5) touched `formatting.ts`, so `check:word-formatting` and `check:word` were run on 1 November 2026, each with
+  hidden text added, and found no disagreement with Word. `check:word-authored` is not due.
+- [ ] **Hide a whole numbered paragraph in Word and look at the numbers.** Triple-click one item of a numbered list, press
+  Ctrl+Shift+H, and make sure Word is not set to show hidden text. Word's object model counted the hidden item (the item after
+  it kept its number), and the reader does the same. What the page shows on screen is not something the check can see.
+- [ ] **Put a question in a Word text box and import it.** `check:word-authored` does not write a text box, so how Word spells
+  one in a real file is read from memory of the format. Expected: the question is missing, and the file says so and quotes the
+  start of the box.
 
 ## Needs a person's eye
+
+- [ ] **Look at the review page.** `npm run assess -- review <a .docx or .txt file> --out review.html`, then open the page. It is
+  the first thing you can see, so it is the first thing to judge: is it the right information in the right order, and what would
+  you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank
+  if you have one. It was looked at in the browser pane at desktop width and at phone width; the dark colours were not looked at.
 
 - [ ] **Read three generated files as an instructor would.** Do they look like banks a person made? The checker cannot say. This
   is step 6 of "Doing a piece" in `docs/synthetic-bank-spec.md`, not done for pieces 2 to 6.
@@ -58,6 +71,14 @@ These change what the app does, and were made without asking. Each is one flag o
   is rare enough to prefer a refusal to a guess.
 - [ ] **A heading `Answer Key` followed by entries is a key; followed by questions it is the copy with the answers.** One lone
   line that looks like an entry, with nothing after it that does, is not enough to make a key.
+- [ ] **Hidden text is not read.** A note to self or an old answer that Word hides is left out, and the file says how much and
+  quotes the first. The other way (reading it as text) would put hidden notes in stems and old answers in keys without a
+  word, so this is the safe one; but a bank whose only key is hidden has no key to read, and is refused with the file naming
+  what was left out. Whether hidden text should ever be read, say by an option you set, is yours.
+- [ ] **Text in a text box is not read, only counted and quoted.** A question in one is missing from the bank, and the file
+  says so. Offering it as an orphan with its place was decided against until a real file holds a question in a box.
+- [ ] **The review page is written to the folder you run it from** (`<name>-review.html`) unless `--out` is given. Whether it
+  should open itself in the browser, or sit beside the document, is yours.
 - [ ] **The 13 openly licensed files** (CC BY 4.0) are kept on this machine only. Whether to commit them as fixtures, with
   attribution, so that the check runs from a clone. The page that shared them names no author.
 

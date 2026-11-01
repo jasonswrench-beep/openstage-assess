@@ -16,7 +16,9 @@ import { BANK_EXTENSION, PRODUCT_NAME, ENGINE_VERSION } from "../naming.ts";
 import { Bank } from "../bank/store.ts";
 import { standardTextImporter } from "../import/standard-text.ts";
 import { importerFor, runImporter } from "../import/registry.ts";
-import { verdictOf } from "../import/types.ts";
+import { linesToBlocks, verdictOf } from "../import/types.ts";
+import { docxToBlocks } from "../import/word.ts";
+import { reviewHtml } from "../report/review-html.ts";
 import { formatSummary, summarise } from "../harness/score.ts";
 import { runHarness, TARGET_SCORE } from "../harness/run.ts";
 import { validateQuestion } from "../model/schema.ts";
@@ -47,6 +49,12 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       --key-mark overrides that: off, bold, italic, underline, highlight,
       highlight:yellow, color, or color:FF0000. Put label: in front (label:bold)
       for a mark on the option letter alone, as some publishers use.
+
+  openassess review <file.txt|file.docx> [--out <review.html>] [--key-mark <mark>]
+      Read a file as import does and write one web page that shows each question
+      with its answer, its checks and the lines of the file it came from, then
+      the text no question used. Open the page in any browser. Nothing is
+      written to a bank and the file is not changed.
 
   openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}] [--out <folder>]
       Run the destination check for the question spreadsheet that OpenStage
@@ -213,6 +221,34 @@ async function cmdImport(args: string[]): Promise<number> {
     console.log(`\nWrote ${result.questions.length} question(s) to ${written}`);
   }
   return result.counts.failed > 0 ? 1 : 0;
+}
+
+async function cmdReview(args: string[]): Promise<number> {
+  const path = positional(args)[0];
+  if (!path) return fail("Name a file to review.");
+  const full = resolve(path);
+  const extension = extname(full).toLowerCase();
+  if (extension === ".doc") {
+    return fail("This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).");
+  }
+  const bytes = await readFile(full);
+  const importer = importerFor(full) ?? standardTextImporter;
+  const keyMark = arg(args, "key-mark");
+  const result = runImporter(importer, bytes, { file: basename(full), ...(keyMark ? { keyMark } : {}) });
+
+  // The lines as the importer saw them, so that a question's block numbers point at the same lines on the page. A list
+  // number Word supplies is shown in front of its line, as it was read.
+  const source =
+    extension === ".docx"
+      ? docxToBlocks(bytes).blocks.map((b) => `${b.listLabel ? `${b.listLabel} ` : ""}${b.text}`)
+      : linesToBlocks(Buffer.from(bytes).toString("utf8")).map((b) => b.text);
+
+  const out = resolve(arg(args, "out") ?? `${basename(full, extname(full))}-review.html`);
+  await writeFile(out, reviewHtml(result, source), "utf8");
+  const { counts } = result;
+  console.log(`${result.file}: ${result.questions.length} question(s), ${counts.parsed} parsed, ${counts.needsReview} need review, ${counts.failed} failed, ${counts.orphans} line(s) no question used.`);
+  console.log(`Wrote ${out}`);
+  return 0;
 }
 
 async function cmdExport(args: string[]): Promise<number> {
@@ -409,6 +445,8 @@ async function main(): Promise<number> {
       return cmdNew(args);
     case "import":
       return cmdImport(args);
+    case "review":
+      return cmdReview(args);
     case "export":
       return cmdExport(args);
     case "search":

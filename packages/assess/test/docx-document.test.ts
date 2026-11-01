@@ -159,7 +159,7 @@ describe("what is not read yet is marked and counted, never dropped without a wo
   test("text inside a text box is counted as text that was not read", () => {
     const { stats } = read(paragraph("<w:r><w:drawing><w:txbxContent><w:p><w:r><w:t>a whole question</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r>"));
     assert.equal(stats.pictures, 1);
-    assert.deepEqual(stats.unreadWithText, { "text inside a picture, shape or text box": 1 });
+    assert.deepEqual(stats.unreadWithText, { "a picture, shape or text box": 1 });
   });
 
   test("an equation leaves a marker, once for a block of them", () => {
