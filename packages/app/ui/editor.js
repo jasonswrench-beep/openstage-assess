@@ -466,7 +466,7 @@ export function createEditor(options) {
       h("span", { class: "meta", text: `Version ${question.version}` }),
       // A row of a spreadsheet is found by the number the spreadsheet shows, which the bank does not keep (only the import screen
       // has the rows in front of it), so a number here would be a line of nothing.
-      question.origin?.source && question.origin.profile === "spreadsheet" ? h("span", { class: "meta", text: "From your spreadsheet" }) : question.origin?.source ? h("span", { class: "meta", text: `From your file, line${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : "s"} ${question.origin.source.firstBlock + 1}${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : ` to ${question.origin.source.lastBlock + 1}`}` }) : null,
+      question.origin?.source && question.origin.profile === "spreadsheet" ? h("span", { class: "meta", text: "From your spreadsheet" }) : question.origin?.source && question.origin.profile === "pdf" ? h("span", { class: "meta", text: "From your PDF" }) : question.origin?.source ? h("span", { class: "meta", text: `From your file, line${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : "s"} ${question.origin.source.firstBlock + 1}${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : ` to ${question.origin.source.lastBlock + 1}`}` }) : null,
       question.media + question.math > 0 ? h("span", { class: "meta", text: `${question.media} picture(s) and ${question.math} equation(s), kept as they are` }) : null,
     );
   }

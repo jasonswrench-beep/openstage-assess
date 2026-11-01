@@ -60,7 +60,7 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       --out, write it as a Word file or a PDF. The student copy shows no answer.
       The key marks only what the bank records, and says when it records none.
 
-  openassess review <file.txt|file.docx> [--out <review.html>] [--key-mark <mark>]
+  openassess review <file> [--out <review.html>] [--key-mark <mark>]   (a .docx, .xlsx, .csv, .pdf, .txt, .aiken or .gift file)
       Read a file as import does and write one web page that shows each question
       with its answer, its checks and the lines of the file it came from, then
       the text no question used. Open the page in any browser. Nothing is
@@ -287,10 +287,12 @@ async function cmdReview(args: string[]): Promise<number> {
 
   // The lines as the importer saw them, so that a question's block numbers point at the same lines on the page. A list
   // number Word supplies is shown in front of its line, as it was read.
+  // A table's lines are its rows and a PDF's are its paragraphs, and the importer says so itself.
   const source =
-    extension === ".docx"
+    result.sourceLines ??
+    (extension === ".docx"
       ? docxToBlocks(bytes).blocks.map((b) => `${b.listLabel ? `${b.listLabel} ` : ""}${b.text}`)
-      : linesToBlocks(Buffer.from(bytes).toString("utf8")).map((b) => b.text);
+      : linesToBlocks(Buffer.from(bytes).toString("utf8")).map((b) => b.text));
 
   const out = resolve(arg(args, "out") ?? `${basename(full, extname(full))}-review.html`);
   await writeFile(out, reviewHtml(result, source), "utf8");

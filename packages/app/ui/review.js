@@ -193,6 +193,7 @@ export async function renderReview(host, params, shell) {
    * in what is listed here (a blank row or a sheet's name takes a place and no number).
    */
   const isTable = () => session.profile === "spreadsheet";
+  const isPdf = () => session.profile === "pdf";
   /** @param {number} i */
   function numberOf(i) {
     if (!isTable()) return String(i + 1);
@@ -213,7 +214,10 @@ export async function renderReview(host, params, shell) {
     const word = isTable() ? "row" : "line";
     const first = numberOf(at.firstBlock) || String(at.firstBlock + 1);
     const last = numberOf(at.lastBlock) || String(at.lastBlock + 1);
-    return h("details", { class: "source-panel", open: question.verdict !== "parsed" }, h("summary", { text: `From your ${isTable() ? "spreadsheet" : "file"}, ${word}${at.firstBlock === at.lastBlock ? "" : "s"} ${first}${at.firstBlock === at.lastBlock ? "" : ` to ${last}`}` }), h("div", { class: "src-lines" }, ...rows));
+    // A PDF's lines each say their page, and a page is what a person finds in the PDF.
+    const page = isPdf() ? /^\[p(\d+)\]/.exec(session.source[at.firstBlock] ?? "")?.[1] : undefined;
+    const where = page ? `page ${page}, ${word}${at.firstBlock === at.lastBlock ? "" : "s"} ${first}${at.firstBlock === at.lastBlock ? "" : ` to ${last}`}` : `${word}${at.firstBlock === at.lastBlock ? "" : "s"} ${first}${at.firstBlock === at.lastBlock ? "" : ` to ${last}`}`;
+    return h("details", { class: "source-panel", open: question.verdict !== "parsed" }, h("summary", { text: `From your ${isTable() ? "spreadsheet" : isPdf() ? "PDF" : "file"}, ${where}` }), h("div", { class: "src-lines" }, ...rows));
   }
 
   function renderText() {
