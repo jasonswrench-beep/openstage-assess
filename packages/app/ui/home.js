@@ -27,17 +27,6 @@ export async function renderHome(host, _params, shell) {
     }
   }
 
-  /** @param {string} id */
-  async function saveSample(id) {
-    try {
-      const saved = await post(`samples/${encodeURIComponent(id)}/save`);
-      shell.notify(`Saved as ${saved.name} in your Exports folder.`, "ok");
-      await post("reveal", { path: saved.path });
-    } catch (error) {
-      shell.notify(/** @type {Error} */ (error).message, "error");
-    }
-  }
-
   /** @param {File | undefined} file */
   async function bringIn(file) {
     if (!file) return;
@@ -86,7 +75,8 @@ export async function renderHome(host, _params, shell) {
         "div",
         { class: "card-actions" },
         s.template ? null : h("button", { type: "button", class: "primary", text: "Try it", on: { click: () => void trySample(s.id) } }),
-        h("button", { type: "button", text: s.template ? "Save a copy to fill in" : "Save a copy", on: { click: () => void saveSample(s.id) } }),
+        // A link to the sample's own file, so that the window asks where to put the copy like it does for an export.
+        h("a", { class: "button", href: `/files/samples/${encodeURIComponent(s.id)}`, text: s.template ? "Save a copy to fill in…" : "Save a copy…", attrs: { download: "" } }),
       ),
     ),
   );

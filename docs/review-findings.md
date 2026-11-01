@@ -513,6 +513,13 @@ tests, and both invisible to them:
   - Checked in the built window, by pressing the real link and finding the dialog among the shell's own windows: it opens titled
     "Save a copy" with the name filled in and "CSV file" as the type; closing it saves nothing and changes nothing in Downloads;
     pressing OK writes one new file at the chosen path, byte for byte the exported file. Not done by a hand on the dialog.
+  - The four sample buttons on the first screen had the same problem from the other side. Their Save a copy wrote the file
+    into the Exports folder without asking where, opened the folder, and left a numbered copy behind each time it was pressed
+    (`solar-system-test-bank 4`, `... with-problems 3`). Seen in a recording of the window. They are now links to
+    `/files/samples/<id>`, which serves the sample's own file by an id of the fixed list (never by a name), so the same dialog
+    asks where it goes and nothing is written into the library. The route that wrote the copy (`POST /api/samples/<id>/save`)
+    is gone. Checked in the built window the same way: the dialog opens with the sample's name and "DOCX file", closing it
+    saves nothing, and accepting it writes one file identical to the sample.
   - Two checks of this were first written carelessly: a script that pressed controls by their ids pressed file-list rows (ids
     "1" and "2" are not Save and Cancel in this dialog), and so overwrote two files in the Downloads folder of the person who
     was testing (`PDF TB 2 - Brightspace.csv` and `PDF TB 1 - Brightspace (2).csv`). Both were restored from identical copies

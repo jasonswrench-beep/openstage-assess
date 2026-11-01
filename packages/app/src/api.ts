@@ -6,8 +6,8 @@
  * are used, and a change to a bank is written before the answer says it was made.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { extname } from "node:path";
 
 import {
   BANK_EXTENSION,
@@ -34,7 +34,7 @@ import { blankInput, editFromInput, EDITABLE_TYPES, missingText, parseInput, que
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { destinationsRoute, exportRoute } from "./exports.ts";
 import { printRoute } from "./printing.ts";
-import { checkName, cleanName, freeFileName, insideLibrary, type Library } from "./library.ts";
+import { checkName, cleanName, insideLibrary, type Library } from "./library.ts";
 import { sampleById, samplePath, SAMPLES } from "./samples.ts";
 import { summarise, type Sessions } from "./sessions.ts";
 
@@ -156,7 +156,10 @@ function importBytes(ctx: Context, name: string, body: Buffer, keyMark: string |
   return ok(ctx.sessions.view(ctx.sessions.create(result, source)));
 }
 
-/** The samples: what there is, one of them made into an import, or one saved into the exports folder to be filled in. */
+/**
+ * The samples: what there is, and one of them made into an import. A copy to keep is not a route here: it is a download, at
+ * `/files/samples/<id>` on the server itself, so that the window can ask where to put it like it does for any file.
+ */
 async function samplesRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   const [, id, action] = req.segments;
   if (id === undefined) {
@@ -165,14 +168,7 @@ async function samplesRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse>
   }
   const sample = sampleById(id);
   if (!sample || req.method !== "POST") throw notFound("There is no such sample.");
-  const bytes = await readFile(samplePath(sample));
-  if (action === "import") return importBytes(ctx, sample.file, Buffer.from(bytes), null);
-  if (action === "save") {
-    const fileName = await freeFileName(ctx.library.exports, checkName(sample.file));
-    const path = join(ctx.library.exports, fileName);
-    await writeFile(path, bytes);
-    return ok({ name: fileName, path });
-  }
+  if (action === "import") return importBytes(ctx, sample.file, Buffer.from(await readFile(samplePath(sample))), null);
   throw notFound("There is no such page.");
 }
 

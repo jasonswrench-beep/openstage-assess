@@ -26,6 +26,7 @@ import { handleApi, type ApiRequest, type ApiResponse, type Context } from "./ap
 import { BankStore } from "./banks.ts";
 import { HttpError } from "./errors.ts";
 import { checkName, openLibrary } from "./library.ts";
+import { sampleById, samplePath } from "./samples.ts";
 import { Sessions } from "./sessions.ts";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "ui");
@@ -196,6 +197,22 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     }
   }
 
+  /**
+   * A sample file, to keep. It is asked for by an id of the fixed list and never by a name, so there is no path in the request to
+   * reach for, and nothing is written: the window is what asks where the copy goes, because this is a download like any other.
+   */
+  async function serveSample(res: ServerResponse, rawId: string): Promise<void> {
+    let id: string;
+    try {
+      id = decodeURIComponent(rawId);
+    } catch {
+      throw new HttpError(404, "There is no such sample.");
+    }
+    const sample = sampleById(id);
+    if (!sample) throw new HttpError(404, "There is no such sample.");
+    await sendFile(res, samplePath(sample), TYPES[extname(sample.file).toLowerCase()] ?? "application/octet-stream", sample.file);
+  }
+
   async function serveExport(res: ServerResponse, rawName: string): Promise<void> {
     const name = checkName(decodeURIComponent(rawName));
     const path = join(library.exports, name);
@@ -252,6 +269,11 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       const answer: ApiResponse = await handleApi(context, request);
       if (answer.file) await sendFile(res, answer.file.path, answer.file.type, answer.file.name);
       else sendJson(res, answer.status, answer.json ?? {});
+      return;
+    }
+
+    if (method === "GET" && url.pathname.startsWith("/files/samples/")) {
+      await serveSample(res, url.pathname.slice("/files/samples/".length));
       return;
     }
 
