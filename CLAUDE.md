@@ -7,7 +7,9 @@ tools, stands on its own, and is licensed Apache 2.0. The other tools do not
 depend on it and it does not depend on them.
 
 The build plan runs nine phases across four releases. Phase 1 is done. Phase 2
-is the Word import engine, planned in `docs/word-import-plan.md`.
+is the Word import engine, planned in `docs/word-import-plan.md`. Phase 3, the
+app, has its first version (`packages/app`): the import review and repair, the
+bank, export and print, as a local server shown in a browser or a Tauri window.
 `docs/design-plan.md` records what is intended and why: read it first. `docs/review-findings.md` is the list of known defects:
 read it before starting work, because it records what is already known to be
 broken and why two delivery fallbacks were deleted rather than repaired.
@@ -32,25 +34,55 @@ structural validity only.
 **No runtime dependencies.** The engine has none and should keep none. It runs
 on Node's native type stripping, so it installs by copying and works offline.
 Dev dependencies are the type checker only. If something seems to need a
-library, that is worth a conversation first.
+library, that is worth a conversation first. The app (`packages/app`) keeps the
+same rule: plain JavaScript modules, no framework, no build step. The one
+exception is the Tauri window in `packages/app/shell`, which is built with
+Rust crates and the Tauri command-line tool, is kept out of the npm workspaces,
+and is not needed to run OpenAssess (`Open OpenAssess.cmd` runs it in a browser
+with only Node installed).
 
 **Delivery settings are not part of a question.** Attempts, feedback timing,
 time limits and scoring weight belong to the course that uses the question, not
 to the item. `schema.ts` rejects them by name with an explanation.
 
+**The app is a local server, and a web page can reach 127.0.0.1 as easily as
+anything.** `packages/app/src/server.ts` answers only a request that names its
+own Host, carries the key it handed the window (an HttpOnly, SameSite=Strict
+cookie), and, if it changes anything, carries a header another page cannot add
+and no foreign Origin. Every name that comes from outside is checked before it
+is joined to a path, every file the app writes is under one folder, and the
+interface sets all text with `textContent`, never as markup (`server.test.ts`
+reads every script for `innerHTML`). Do not loosen any of it to make something
+easier to test.
+
+**The editor never writes back what the person did not change.** An edit keeps
+every field it was not given as stored, formatting and all; text that holds a
+picture or an equation is refused, not rewritten without it; a new answer row is
+not marked right, and a true or false question starts with neither chosen. A
+question made in the app is checked for its answer key before it is kept, or it
+would show as parsed with no answer.
+
+**A printed test shows no answer on the student copy and invents none on the
+key.** A question with no usable key is printed, and the key says in bold that no
+answer is recorded. A matching or ordering question is shown shuffled, never in
+the order of the key. What cannot be printed is said against the question.
+
 ## Commands
 
 ```
-npm test                       # 1172 tests, Node's own runner
-npm run typecheck              # strict, and it currently passes clean
+npm test                       # 1281 engine tests and 96 app tests, Node's own runner
+npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
+npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- perf         # the speed budget on a 500-question bank
-npm run assess -- export <bank>  # the destination check, and the Author/Scroll CSV with --out
+npm run assess -- export <bank> --to gift|moodle-xml   # the destination check; the Author/Scroll CSV is the default; --out writes it
+npm run assess -- print <bank> --out <folder>   # a student copy and an answer key, as Word or PDF
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
 npm run assess -- contract     # the read contract and consumer capabilities
 npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks
 npm run check:word-authored --workspace packages/assess   # has Word write sample documents and reads them
+npm run check:word-print --workspace packages/assess   # has Word open the printed tests and read back every paragraph
 npm run check:generated --workspace packages/assess -- check <folder> --piece N   # holds a generated bank to its plan
 ```
 
@@ -64,8 +96,15 @@ or lists are read: it has Word write the documents, so it is the only check that
 XML Word, and not our test writer, produced. `npm run update:word-authored` keeps what it
 writes in `fixtures/word-authored`, where `npm test` reads them on any machine.
 
-`Check OpenAssess.cmd` runs the first three together by double-click, which is
-how this gets verified on a Windows machine with nothing installed but Node.
+`check:word-print` is the fourth, and is run after any change to
+`print/docx.ts`: a printed test that Word will not open, or opens after offering to
+repair it, is a test that cannot be handed out. (The PDF is checked by taking it
+apart in `print.test.ts` and by opening it in a browser's own viewer, since no Word
+is involved.)
+
+`Check OpenAssess.cmd` runs the engine tests, the app tests, the accuracy gate
+and the speed check by double-click, which is how this gets verified on a
+Windows machine with nothing installed but Node. It needs no Word.
 
 ## The accuracy gate
 

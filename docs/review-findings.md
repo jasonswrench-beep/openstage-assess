@@ -482,6 +482,46 @@ Media is never garbage collected either.
   and bold; it does not yet write a text box or hidden text, so how Word spells a box, and what `mc:Fallback` holds in a real
   file, is read from memory of the format.
 
+### Found while building the app, the cheap formats, printing and the window (stage 6)
+
+Fixed while building, each with a test that fails when the fix is taken out (the fix was removed, the test run, and the
+file restored and compared byte for byte):
+
+- **Two saves at once corrupted a bank.** The second save read the file again after the first had started writing it. A
+  bank now has one queue for its writes (`BankStore`), and a save that was made from an older copy is refused.
+- **Ids made in the same millisecond did not sort in the order they were made.** Ids are now increasing within a
+  millisecond (`test/ids-order.test.ts`).
+- **A question made by hand showed as `parsed` with no key.** Its checks were never worked out. A new question has its
+  findings recomputed, and a half-written one (text, no key) is storable and shows its error.
+- **Emptying difficulty or an objective did not clear it.** The engine merges metadata, so the field was set to undefined.
+- **A key arriving in the address was answered with a redirect, and the redirect was turned away.** The window's first load
+  starts on another site, and a browser does not send a `SameSite=Strict` cookie on any hop of that. The key is now answered
+  with a page that moves on by itself, and the cookie stays Strict. The window found this; the browser pane could not.
+- **The content area drew a focus ring** when the app moved focus to it for a screen reader. The ring is off for that
+  element, and the controls inside keep theirs.
+- **The window's icon was a broken-image symbol, in every size.** The first set was made from a picture that had failed to
+  load. Found by extracting the icon from the built exe and looking at it; it is now made from `ui/icon.svg`.
+- **The window's log wrote the start-up line with the key in its address,** which its README said never happened. The key is
+  now left out of that line. The server's own requests were never logged with their query.
+
+Open:
+
+- **PDF output is Latin-1 only and untagged.** A character outside it prints as `?` and the print check says which. A PDF
+  with no tags is read poorly by a screen reader; the Word copy is the accessible one. Embedding a font is the repair, and
+  was not done because it needs a font file that can be shipped.
+- **A printed multiple response reads back as a single answer with two marked.** The importer then flags it, which is the
+  honest result of its rule. Printing a key in a form the importer reads as a multiple response is not worth bending the
+  importer for.
+- **Matching and ordering are shuffled on the student copy** by a seed taken from the question's id, so the same copy prints
+  again. The key shows the true order.
+- **The installer is not signed.** Windows will say the publisher is unknown. A certificate costs money and is the
+  publisher's decision.
+- **The window needs the Edge WebView2 runtime.** Windows 11 has it. Where it is missing the installer fetches Microsoft's
+  bootstrapper, which is an outside download that was not exercised here.
+- **Nothing here has been run on a clean machine**, only on the machine it was built on.
+- **The page was looked at in a browser pane and in the window, at desktop width.** Phone width, dark colours, a screen
+  reader and the keyboard alone were not looked at by a person.
+
 ### Found by a blind test on sixteen generated files that passed the checker (stage 4h), not yet fixed
 
 The first set written to the new brief and held to its plan by `npm run check:generated`: pieces 1 to 4, files

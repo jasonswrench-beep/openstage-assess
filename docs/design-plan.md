@@ -65,6 +65,21 @@ accounts and no live editing.
    writing items and never decides what goes on a test. Anything it drafts stays
    marked as a draft until a person approves it, and the model and source
    passage are recorded. Nothing requires it.
+8. **The app is a local server with a window around it.** Everything the app does
+   is done by `packages/app`: a Node server that listens on 127.0.0.1 only, serves
+   a vanilla JavaScript page (no framework, no build step, no runtime dependency)
+   and imports the engine by relative path. A browser can open it
+   (`Open OpenAssess.cmd`, which needs only Node). The native window
+   (`packages/app/shell`, Tauri) is a thin shell that starts that server, waits for
+   it to say where it is, and shows the page. It has no commands for the page to
+   call. It is outside the npm workspaces so that installing the repository never
+   fetches the Tauri tools. Reasons: the engine stays free of dependencies, the
+   same code is tested through a real HTTP client, and the window can be replaced
+   without touching the app. The server is built to be safe from other pages in the
+   same browser, not only from other computers (host check, a key held in a
+   cookie other sites are not sent, a header on every change, no outside script).
+   The installer carries its own copy of Node, so the person using it installs
+   nothing else.
 
 ## The rules that do not change
 
@@ -219,11 +234,19 @@ no question wrong and marked fine in any of them. After the stage 4h rules, run 
 files and on a second set that may be fitted to, the generated ones read 75 to 80 percent, still
 with no question wrong and marked fine; that is a second contact and says nothing about real banks.
 
-A first look at the preview and repair screen exists as a page. `openassess review <file>` writes one web page that shows
+`openassess review <file>` still writes one web page that shows
 each question as the importer built it, with its answer, its checks and the lines of the file it came from, then the text
 no question used and the warnings about the file. It has no script and no outside address, shows no answer the importer did
-not find, and changes nothing. It cannot repair anything and is not the desktop app; it is the first version of what the
-app's preview screen will show, built from the same result that screen will read.
+not find, and changes nothing.
+
+**The app exists** (`packages/app`; decision 8). Opening it, in a native window or a browser, shows the banks in the
+library folder and lets a person: make a bank or open one from a file; import a Word, Aiken, GIFT or text file and see
+what was read beside the lines it came from, then repair it (write the missing key, turn an orphan into a question,
+dismiss a warning, but never an error) before it is stored; browse a bank, search and filter it, edit, add, duplicate and
+retire questions, with the key never filled in for anyone; export to the OpenStage spreadsheet, Moodle XML or GIFT with
+the destination check shown first; and print a student copy and an answer key as Word and PDF. Cheap formats (Aiken and
+GIFT in, Moodle XML and GIFT out) and printing, items 3 and 4 below, are done. The window is built and starts, shows the
+home screen and stops its server when it is closed; the installer is unsigned.
 
 **Next, in this order.**
 
@@ -238,10 +261,11 @@ app's preview screen will show, built from the same result that screen will read
    definitions, and keep the formatting. Exit: a real publisher chapter imports
    at 95 percent or better, with every other question listed and linked to its
    source text.
-3. **Cheap formats:** Aiken and GIFT in, Moodle XML and GIFT out.
-4. **Printing:** Word and PDF with a student copy and a key.
+3. **Cheap formats:** Aiken and GIFT in, Moodle XML and GIFT out. Done.
+4. **Printing:** Word and PDF with a student copy and a key. Done.
 5. **The desktop app** (phase 3): bank browser, editor, import preview and repair,
-   export wizard.
+   export wizard. Done as described above, except that the 95 percent exit on three real
+   chapters of item 2 is still not met.
 
 **Milestones, as in the specification.**
 
