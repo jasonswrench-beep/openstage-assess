@@ -96,18 +96,24 @@ item says what has been run and what has not. Items are removed when done, with 
 
 ## QTI 1.2 package (Brightspace and Canvas)
 
-Built on 1 November 2026 from help pages and the QTI standard. Nothing here has been imported into Brightspace or Canvas. The
-package is held to a second reading of the standard and to a response processor that scores every possible answer (see
-`docs/design-plan.md`), which shows the package follows the standard and carries the key, and nothing about what either tool
-accepts. Use `QTI 1.2 package (Brightspace and Canvas)` in the app's export screen on a bank with one question of each type, and
-look at every question afterwards.
+Built on 1 November 2026 from help pages and the QTI standard. The package is held to a second reading of the standard and to a
+response processor that scores every possible answer (see `docs/design-plan.md`), which shows the package follows the standard
+and carries the key, and nothing about what either tool accepts. Use `QTI 1.2 package (Brightspace and Canvas)` in the app's
+export screen on a bank with one question of each type, and look at every question afterwards.
 
-- [ ] **Import it into Brightspace's Question Library** (Quizzes, Question Library, Import, then the zip). The first thing to
-  see is whether it imports at all: "no quizzes or sections can be found" is what Brightspace says when the structure is not
-  what it reads. If it does, the questions should be in a folder named for the file. Then open each one and check the type, the
-  right answer marked, the points, and the wording.
-- [ ] **Import it through the Quizzes tool as well** (Quizzes, Import). Say which of the two routes worked. If only one does, the
-  other should stop being offered in the export screen's note.
+**The first try, 1 November 2026, in Brightspace:** the person who tried it said the zip "just uploaded as a zip", and that the
+structure of the file may be at fault. Which screen they used was not said. The note in the app at the time sent them to the
+Quizzes tool's Import or the Question Library's Import. D2L's own Question Library article names a CSV file, not QTI, so the
+route was probably wrong; that is now corrected in the app. The package itself has not been shown to be at fault, and it has
+not been shown to be right.
+
+- [ ] **Retry it in Brightspace by the route the test-bank vendor documents for a QTI zip:** Course Admin, Import/Export/Copy Components,
+  Import Components, from a File, Start; choose the zip; Advanced Options; Continue after the pre-processing step; tick Quizzes;
+  in Import Options type the exact name of the zip in the Import file to box; Continue three times; then look in Quizzes. The
+  first thing to see is whether it makes a quiz at all. Copy any message it gives, word for word. "No quizzes or sections can be
+  found" would mean the structure is not what it reads, and that is the case in which I change the package.
+- [ ] **Try the Quizzes tool's own Import as well** (Quizzes, then its Import). A D2L staff reply says it reads QTI up to 1.2,
+  and D2L's help does not describe it. Say which route worked.
 - [ ] **A multiple answer question, a matching question, a short answer and an essay.** A multiple answer should have its right
   set marked and score nothing for any other set. A matching question is the least certain: it is written the way Canvas writes
   one (a response for each left side, each offering every right side), and Brightspace may read it differently or not at all.

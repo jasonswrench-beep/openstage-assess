@@ -71,7 +71,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: QTI12_ID,
     label: QTI12_LABEL,
-    blurb: "A QTI 1.2 zip that Brightspace's Quizzes and Question Library import, and Canvas's Import Course Content takes as a QTI .zip file. It holds multiple choice, multiple answer, true or false, short answer, matching and essay questions with their points, and the check says what each loses.",
+    blurb: "A QTI 1.2 zip for Brightspace's Import/Export/Copy Components (quizzes) and for Canvas's Import Course Content (QTI .zip file). It holds multiple choice, multiple answer, true or false, short answer, matching and essay questions with their points, and the check says what each loses.",
     run: exportQti12,
   },
   {

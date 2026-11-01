@@ -93,7 +93,7 @@ part of a question. `CLAUDE.md` explains each of these and the bugs behind them.
 | Destination | Format | Notes |
 | --- | --- | --- |
 | Moodle | Moodle XML, GIFT as an option | Moodle's own formats keep more than QTI does |
-| Brightspace | Question Library CSV (done, imported once); QTI 1.2 package for Quizzes and the Question Library (built, never imported); 2.x or 3.x subset for Course Import (to do) | See below |
+| Brightspace | Question Library CSV (done, imported once); QTI 1.2 package for Import/Export/Copy Components (built; one try stored the zip and made no questions, route not settled); 2.x or 3.x subset for Course Import (to do) | See below |
 | Canvas | QTI 1.2 package (built, never imported) | The same file as Brightspace's. Classic and New Quizzes behave differently, and only Classic is described by the guide that was read |
 | Blackboard | The Upload questions text file (built, never tried) | Works in Ultra and Original. Blackboard's pool package and its QTI import are not written |
 | Any other LMS | QTI 1.2, 2.1 or 3.0 | The user picks the version |
@@ -276,10 +276,14 @@ reader of the metadata alone agree. A fill in the blank with one blank arrives a
 and calculated questions are left out, because neither tool documents them in a QTI file; the ordering note points to the
 Brightspace CSV, which carries ordering. Feedback is not carried.
 
-What the help pages and staff replies say, none of it from a trial: the Quizzes tool takes a zip up to QTI 1.2 and reports "no
-quizzes or sections can be found" when the structure is not what it reads; importing a QTI zip into the Question Library puts
-the questions in a folder named for the file; Canvas takes it under Import Course Content as a QTI .zip file, with an option to
-make a question bank. The Canvas guide that could be read is for Classic Quizzes and dated 2021, it names no QTI version, and
+What the help pages and staff replies say: a D2L staff reply says the Quizzes tool takes a zip up to QTI 1.2 and reports "no
+quizzes or sections can be found" when the structure is not what it reads. D2L's own course import table (Course import and
+course conversion support) lists QTI 1.2.1 and IMS CP 1.1.2, 1.1.3 or 1.2 for the packages Import/Export/Copy Components reads,
+and the test-bank vendor gives the steps for a QTI zip there: Import Components, from a File, Advanced Options, tick Quizzes, and type the
+exact name of the zip in the Import file to box. D2L's help article for the Question Library (updated August 2026) names a CSV
+file, an existing collection and the Learning Object Repository, and does not name QTI. A staff post said a QTI zip imported
+there lands in a folder named for the file; that is the one claim here the help does not back, and the first try below did
+not bear it out. Canvas takes it under Import Course Content as a QTI .zip file, with an option to make a question bank. The Canvas guide that could be read is for Classic Quizzes and dated 2021, it names no QTI version, and
 Canvas's own community document (which another source says gives QTI 1.2 and 2.1) was not found at its address, so the versions
 rest on a secondary source. The example that a D2L staff member posted in the community thread turned out to be a Blackboard
 question pool (`questions.dat`, `.bb-package-info`), not QTI, so there was no known-good Brightspace QTI file to compare with.

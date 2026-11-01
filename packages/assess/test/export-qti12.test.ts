@@ -550,8 +550,11 @@ describe("the file and the check", () => {
 
   test("tells a person where to import it in Brightspace and in Canvas, and what the file cannot do", () => {
     const general = checkQti12([MC]).general.join(" ");
-    assert.match(general, /Brightspace: Quizzes, then Import, or Question Library, then Import/);
-    assert.match(general, /folder named for the file/);
+    assert.match(general, /Brightspace: Course Admin, Import\/Export\/Copy Components, Import Components, from a File/);
+    assert.match(general, /tick Quizzes/);
+    assert.match(general, /exact name of the zip in the Import file to box/);
+    assert.match(general, /Question Library names a CSV file, not QTI/);
+    assert.doesNotMatch(general, /Question Library, then Import/, "the Question Library's own help does not list QTI, so the note must not send a person there for it");
     assert.match(general, /Canvas: Settings, then Import Course Content, with the content type QTI \.zip file/);
     assert.match(general, /Create new question bank/);
     assert.match(general, /Images are not carried/);

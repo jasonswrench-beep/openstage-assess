@@ -627,7 +627,13 @@ a space, so only a hand-built plain-text field shows it), and a matching questio
   written to a QTI file, because neither Brightspace nor Canvas says it reads them from one. Feedback and the partial credit of a
   multiple answer question are not carried in this first version. Blackboard's file has no points, feedback, formatting or picture,
   and a numeric question is left out because the page does not say what its tolerance means.
-- **Open: nothing has been imported anywhere.** The QTI package is written from the standard, from the shapes Canvas is known to
+- **Open: one try, in Brightspace, and it made no questions.** The person who tried it said the zip "just uploaded as a zip" and that
+  the structure of the file may be at fault; they did not say which screen they used. My note had sent them to the Quizzes tool's
+  Import or the Question Library's Import, and D2L's own Question Library article (updated August 2026) names a CSV file, not
+  QTI, while the test-bank vendor documents Course Admin, Import/Export/Copy Components for a QTI zip. So the route was probably wrong, and
+  the note now gives the the test-bank vendor route. It is not settled that the package is right: D2L's course import table lists QTI 1.2.1
+  and IMS CP 1.1.2, 1.1.3 or 1.2, and that importer may want a package it recognises as one of the sources it names (the test-bank vendor,
+  Blackboard, Common Cartridge) and not a bare one. The QTI package is written from the standard, from the shapes Canvas is known to
   write (its `question_type` and `points_possible` metadata fields, one response for each left side of a matching question, a
   condition of every right label and none of the wrong ones), and from help pages. No Canvas-written package and no
   Brightspace-accepted QTI file was available to compare with: the example a D2L staff member posted in the community thread is a

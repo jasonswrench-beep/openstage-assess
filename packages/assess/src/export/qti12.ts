@@ -1,5 +1,6 @@
 /**
- * Export as a QTI 1.2 package: the format Brightspace's Quizzes tool and Question Library import, and Canvas's "QTI .zip file".
+ * Export as a QTI 1.2 package: the format Brightspace's Import/Export/Copy Components reads for quizzes (the route the test-bank vendor gives
+ * for its QTI files), and Canvas's "QTI .zip file". Brightspace's own help for the Question Library names a CSV file and not QTI.
  *
  * A QTI package is a zip with an imsmanifest.xml that names one resource, and the resource is a questestinterop file holding an
  * assessment, one section and an item for each question. The items follow the shapes that IMS describes for QTI 1.2 and that
@@ -253,7 +254,7 @@ export function exportQti12(questions: readonly Question[], options: Qti12Option
   const bytes = written.length > 0 ? zipSync([textEntry("imsmanifest.xml", manifest), textEntry("assessment.xml", assessment)]) : undefined;
 
   const general = [
-    "In Brightspace: Quizzes, then Import, or Question Library, then Import, and choose the zip file. In the Question Library the questions arrive in a folder named for the file. Course Import takes a subset of QTI 2.x and 3.x and is not what this file is for.",
+    "In Brightspace: Course Admin, Import/Export/Copy Components, Import Components, from a File. Choose the zip, open Advanced Options, tick Quizzes when it asks which components, and type the exact name of the zip in the Import file to box. These are the steps the test-bank vendor gives for its QTI files. D2L's help for the Question Library names a CSV file, not QTI, so use the Brightspace CSV for the library.",
     "In Canvas: Settings, then Import Course Content, with the content type QTI .zip file. Under the file, Create new question bank makes a question bank of the questions as well as a quiz. Canvas's guide for this is for Classic Quizzes.",
     "Neither tool lists which question types it reads from a QTI file, so a type that does not arrive says so when you import. The other questions still do.",
     "Difficulty, tags, objectives and history are not part of the file. Images are not carried.",
