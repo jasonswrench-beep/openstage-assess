@@ -187,6 +187,19 @@ export async function renderReview(host, params, shell) {
   }
 
   /** The lines of the file a question was read from, with a little around them, and the lines it used marked. */
+  /**
+   * What the number beside a source line is. A file is read in lines and says so. A spreadsheet is read in rows, and each line
+   * of it begins with the number of its row as the spreadsheet shows it, which is the number to give, and not the line's place
+   * in what is listed here (a blank row or a sheet's name takes a place and no number).
+   */
+  const isTable = () => session.profile === "spreadsheet";
+  /** @param {number} i */
+  function numberOf(i) {
+    if (!isTable()) return String(i + 1);
+    const row = /^Row (\d+):/.exec(session.source[i] ?? "");
+    return row ? row[1] : "";
+  }
+
   function sourcePanel(/** @type {any} */ question) {
     const at = question.origin?.source;
     if (!at || !session.source.length) return h("div");
@@ -195,9 +208,12 @@ export async function renderReview(host, params, shell) {
     const rows = [];
     for (let i = from; i <= to; i++) {
       const inside = i >= at.firstBlock && i <= at.lastBlock;
-      rows.push(h("div", { class: inside ? "src used" : "src" }, h("span", { class: "no", text: String(i + 1) }), h("span", { class: "tx", text: session.source[i] === "" ? " " : session.source[i] })));
+      rows.push(h("div", { class: inside ? "src used" : "src" }, h("span", { class: "no", text: numberOf(i) }), h("span", { class: "tx", text: session.source[i] === "" ? " " : session.source[i] })));
     }
-    return h("details", { class: "source-panel", open: question.verdict !== "parsed" }, h("summary", { text: `From your file, line${at.firstBlock === at.lastBlock ? "" : "s"} ${at.firstBlock + 1}${at.firstBlock === at.lastBlock ? "" : ` to ${at.lastBlock + 1}`}` }), h("div", { class: "src-lines" }, ...rows));
+    const word = isTable() ? "row" : "line";
+    const first = numberOf(at.firstBlock) || String(at.firstBlock + 1);
+    const last = numberOf(at.lastBlock) || String(at.lastBlock + 1);
+    return h("details", { class: "source-panel", open: question.verdict !== "parsed" }, h("summary", { text: `From your ${isTable() ? "spreadsheet" : "file"}, ${word}${at.firstBlock === at.lastBlock ? "" : "s"} ${first}${at.firstBlock === at.lastBlock ? "" : ` to ${last}`}` }), h("div", { class: "src-lines" }, ...rows));
   }
 
   function renderText() {
@@ -214,7 +230,7 @@ export async function renderReview(host, params, shell) {
           "div",
           { class: "orphan" },
           h("p", { class: "orphan-text", text: orphan.text }),
-          h("p", { class: "why", text: `${orphan.firstBlock === orphan.lastBlock ? `Line ${orphan.firstBlock + 1}` : `Lines ${orphan.firstBlock + 1} to ${orphan.lastBlock + 1}`}. ${orphan.reason}` }),
+          h("p", { class: "why", text: `${isTable() ? (orphan.firstBlock === orphan.lastBlock ? `Row ${numberOf(orphan.firstBlock)}` : `Rows ${numberOf(orphan.firstBlock)} to ${numberOf(orphan.lastBlock)}`) : orphan.firstBlock === orphan.lastBlock ? `Line ${orphan.firstBlock + 1}` : `Lines ${orphan.firstBlock + 1} to ${orphan.lastBlock + 1}`}. ${orphan.reason}` }),
           h("button", {
             type: "button",
             text: orphan.made ? "A question was made from this" : "Make a question from this text",

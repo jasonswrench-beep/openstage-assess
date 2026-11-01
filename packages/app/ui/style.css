@@ -112,6 +112,12 @@ input[type="checkbox"], input[type="radio"] { width: 1.1rem; height: 1.1rem; acc
 .card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .dropzone { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center; background: var(--card); max-width: 760px; margin: 0 auto 20px; }
 .dropzone.over { border-color: var(--accent); background: var(--note-bg); }
+.samples { max-width: 1100px; margin: 8px auto 20px; }
+.samples h2 { margin-bottom: 4px; }
+.samples > .sub { margin-bottom: 12px; }
+/* The buttons of every sample sit along the bottom of its card, whatever the length of what it says. */
+.samples .card { display: flex; flex-direction: column; }
+.samples .card-actions { margin-top: auto; padding-top: 10px; }
 .library { color: var(--muted); font-size: 0.9rem; text-align: center; }
 
 .panes { display: grid; grid-template-columns: minmax(250px, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }

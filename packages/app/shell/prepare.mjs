@@ -2,7 +2,7 @@
 // engine does, so there is nothing to build), and the Node that runs it, so that a computer needs nothing installed.
 //
 //   resources/app/package.json
-//   resources/app/packages/app/{package.json,src,ui}
+//   resources/app/packages/app/{package.json,src,ui,samples}
 //   resources/app/packages/assess/{package.json,src}
 //   resources/node/node.exe
 //
@@ -26,6 +26,7 @@ copy("package.json", "package.json");
 copy("packages/app/package.json", "packages/app/package.json");
 copy("packages/app/src", "packages/app/src");
 copy("packages/app/ui", "packages/app/ui");
+copy("packages/app/samples", "packages/app/samples");
 copy("packages/assess/package.json", "packages/assess/package.json");
 copy("packages/assess/src", "packages/assess/src");
 

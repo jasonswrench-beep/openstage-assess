@@ -46,6 +46,7 @@ const TYPES: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
   ".csv": "text/csv; charset=utf-8",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ".pdf": "application/pdf",
   ".xml": "application/xml; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",

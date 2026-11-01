@@ -13,8 +13,30 @@ import { clear, h, plural, when } from "./dom.js";
  * @param {{ notify: (message: string, kind?: "ok" | "error") => void, go: (hash: string) => void }} shell
  */
 export async function renderHome(host, _params, shell) {
-  const state = await get("state");
+  const [state, offered] = await Promise.all([get("state"), get("samples")]);
   clear(host);
+
+  /** @param {string} id */
+  async function trySample(id) {
+    try {
+      const session = await post(`samples/${encodeURIComponent(id)}/import`);
+      shell.notify(`Found ${plural(session.counts.total, "question", "questions")} in the sample.`, "ok");
+      shell.go(`#/import/${encodeURIComponent(session.id)}`);
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
+
+  /** @param {string} id */
+  async function saveSample(id) {
+    try {
+      const saved = await post(`samples/${encodeURIComponent(id)}/save`);
+      shell.notify(`Saved as ${saved.name} in your Exports folder.`, "ok");
+      await post("reveal", { path: saved.path });
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
 
   /** @param {File | undefined} file */
   async function bringIn(file) {
@@ -41,16 +63,32 @@ export async function renderHome(host, _params, shell) {
     }
   }
 
-  const fileInput = h("input", { type: "file", id: "import-file", accept: ".docx,.txt,.text,.aiken,.gift,.doc", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void bringIn(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
+  const fileInput = h("input", { type: "file", id: "import-file", accept: ".docx,.xlsx,.xlsm,.csv,.tsv,.txt,.text,.aiken,.gift,.doc,.xls,.pdf", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void bringIn(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
   const bankInput = h("input", { type: "file", id: "bank-file", accept: ".openassess", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void openBankFile(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
 
   const zone = h(
     "div",
     { class: "dropzone" },
     h("h2", { text: "Bring in questions from a file" }),
-    h("p", { text: "Drop a Word, text, Aiken or GIFT file here, or choose one. Your file is read and never changed. You see what was found, fix anything that needs it, and then save it into a bank." }),
+    h("p", { text: "Drop a Word, Excel, CSV, text, Aiken or GIFT file here, or choose one. Your file is read and never changed. You see what was found, fix anything that needs it, and then save it into a bank." }),
     h("label", { class: "button primary", for: "import-file", text: "Choose a file" }),
-    h("p", { class: "hint", text: "An older Word file (.doc) has to be saved as .docx in Word first." }),
+    h("p", { class: "hint", text: "An older Word (.doc) or Excel (.xls) file has to be saved in the newer form first. PDF files are not read yet." }),
+  );
+
+  const samples = /** @type {any[]} */ (offered.samples);
+  const sampleCards = samples.map((s) =>
+    h(
+      "article",
+      { class: "card" },
+      h("h3", { text: s.title }),
+      h("p", { class: "sub", text: s.description }),
+      h(
+        "div",
+        { class: "card-actions" },
+        s.template ? null : h("button", { type: "button", class: "primary", text: "Try it", on: { click: () => void trySample(s.id) } }),
+        h("button", { type: "button", text: s.template ? "Save a copy to fill in" : "Save a copy", on: { click: () => void saveSample(s.id) } }),
+      ),
+    ),
   );
   zone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -102,6 +140,7 @@ export async function renderHome(host, _params, shell) {
     bankInput,
     banks.length === 0 ? h("p", { class: "placeholder", text: "You have no banks yet. Make one, or bring in a file." }) : h("div", { class: "cards" }, ...cards),
     zone,
+    h("section", { class: "samples", attrs: { "aria-labelledby": "samples-heading" } }, h("h2", { id: "samples-heading", text: "No file to try? Use a sample" }), h("p", { class: "sub", text: "These are made up, about the planets. Trying one shows you what a bring-in looks like, and nothing is kept unless you save it into a bank." }), h("div", { class: "cards" }, ...sampleCards)),
     h(
       "p",
       { class: "library" },
