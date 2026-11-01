@@ -70,9 +70,9 @@ export async function renderHome(host, _params, shell) {
     "div",
     { class: "dropzone" },
     h("h2", { text: "Bring in questions from a file" }),
-    h("p", { text: "Drop a Word, Excel, CSV, text, Aiken or GIFT file here, or choose one. Your file is read and never changed. You see what was found, fix anything that needs it, and then save it into a bank." }),
+    h("p", { text: "Drop a Word, Excel, CSV, PDF, text, Aiken or GIFT file here, or choose one. Your file is read and never changed. You see what was found, fix anything that needs it, and then save it into a bank." }),
     h("label", { class: "button primary", for: "import-file", text: "Choose a file" }),
-    h("p", { class: "hint", text: "An older Word (.doc) or Excel (.xls) file has to be saved in the newer form first. PDF files are not read yet." }),
+    h("p", { class: "hint", text: "An older Word (.doc) or Excel (.xls) file has to be saved in the newer form first. A PDF is read from its text alone, so check its answers; a scan, which is a picture of a page, cannot be read." }),
   );
 
   const samples = /** @type {any[]} */ (offered.samples);

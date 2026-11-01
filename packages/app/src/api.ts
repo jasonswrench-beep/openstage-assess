@@ -122,9 +122,6 @@ function readInput(raw: Record<string, unknown>): EditorInput {
 const CANNOT_READ: Record<string, string> = {
   ".doc": "This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).",
   ".xls": "This is an older Excel file (.xls). In Excel, choose File, then Save As, and pick Excel Workbook (*.xlsx) or CSV UTF-8.",
-  ".pdf":
-    "OpenAssess does not read PDF files yet. A PDF holds text placed on pages, not questions and answers, so reading one means guessing which line belongs to which question, and a guessed answer key is worse than none. " +
-    "If the text in the PDF can be selected, open the PDF in Word, which turns it into a document you can edit, check it, save it as Word Document (*.docx), and bring that in.",
 };
 
 async function importFile(ctx: Context, req: ApiRequest): Promise<ApiResponse> {

@@ -10,6 +10,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { writeXlsx } from "../../assess/src/container/xlsx.ts";
+import { at, buildPdf } from "../../assess/test/support/pdf-builder.ts";
 import { SAMPLES, samplePath } from "../src/samples.ts";
 import { rawRequest, withApp, type Client } from "./support/app.ts";
 
@@ -174,17 +175,61 @@ describe("Excel and CSV files, brought in like any other", () => {
     });
   });
 
-  test("an old .xls and a PDF are refused with what to do, and nothing is made of them", async () => {
+  test("an old .xls is refused with what to do, and nothing is made of it", async () => {
     await withApp(async (client) => {
       const xls = await client.send("POST", "/api/import?name=old.xls", Buffer.from("x"));
       assert.equal(xls.status, 400);
       assert.match(String(xls.json["error"]), /Excel Workbook \(\*\.xlsx\) or CSV UTF-8/);
-      const pdf = await client.send("POST", "/api/import?name=bank.pdf", Buffer.from("%PDF-1.7 not read"));
-      assert.equal(pdf.status, 400);
-      assert.match(String(pdf.json["error"]), /does not read PDF files yet/);
-      assert.match(String(pdf.json["error"]), /open the PDF in Word/);
     });
   });
+});
+
+describe("PDF files, brought in like any other", () => {
+  const fonts = { F1: { kind: "simple" as const, base: "Helvetica", widths: Array.from({ length: 224 }, () => 500) } };
+  const bank = [at(36, 740, 12, "1. Which planet is closest to the Sun?"), at(36, 726, 12, "a. Venus"), at(36, 712, 12, "*b. Mercury"), at(36, 698, 12, "c. Earth"), at(36, 670, 12, "2. What holds the planets in orbit?"), at(36, 656, 12, "a. Friction"), at(36, 642, 12, "b. Gravity"), at(36, 628, 12, "Answer: b. Gravity")].join("");
+
+  test("a PDF is read into questions, each with its page, and says that it was read from the words alone", async () => {
+    await withApp(async (client) => {
+      const reply = await client.send<SessionView>("POST", "/api/import?name=bank.pdf", Buffer.from(buildPdf({ fonts, pages: [bank] })));
+      assert.equal(reply.status, 200, reply.text);
+      assert.deepEqual(reply.json.counts, { parsed: 2, needsReview: 0, failed: 0, orphans: 0, skipped: 0, total: 2 });
+      assert.equal(reply.json.source[0], "[p1] 1. Which planet is closest to the Sun?");
+      assert.match(reply.json.fileFindings.map((f) => f.message).join("\n"), /read from the words on the pages alone/);
+      const one = await client.get(`/api/sessions/${reply.json.id}/questions/0`);
+      assert.equal((one.json["question"] as { origin?: { profile?: string } }).origin?.profile, "pdf");
+    });
+  });
+
+  test("a PDF with no text in it (a scan) is refused, with the reason and what to do, and nothing is made of it", async () => {
+    await withApp(async (client) => {
+      const reply = await client.send("POST", "/api/import?name=scan.pdf", Buffer.from(buildPdf({ fonts, pages: ["0.5 g 100 100 200 200 re f\n"] })));
+      assert.equal(reply.status, 422);
+      assert.match(String(reply.json["error"]), /probably a scan/);
+      assert.match(String(reply.json["error"]), /original document/);
+    });
+  });
+
+  test("a protected PDF is refused, and a file named .pdf that is not one says so", async () => {
+    await withApp(async (client) => {
+      const locked = await client.send("POST", "/api/import?name=locked.pdf", Buffer.from(buildPdf({ fonts, pages: [bank], encrypted: true })));
+      assert.equal(locked.status, 422);
+      assert.match(String(locked.json["error"]), /protected/);
+      const fake = await client.send("POST", "/api/import?name=fake.pdf", Buffer.from("this is only some text"));
+      assert.equal(fake.status, 422);
+      assert.match(String(fake.json["error"]), /not a PDF/);
+    });
+  });
+
+  test("a PDF is found by what it begins with, whatever it is called", async () => {
+    await withApp(async (client) => {
+      const reply = await client.send<SessionView>("POST", "/api/import?name=bank.txt", Buffer.from(buildPdf({ fonts, pages: [bank] })));
+      assert.equal(reply.status, 200, reply.text);
+      assert.equal(reply.json.counts.total, 2);
+    });
+  });
+});
+
+describe("Excel and CSV files, once more", () => {
 
   test("an .xlsx file that is not one says so, in words, and is not read as text", async () => {
     await withApp(async (client) => {
