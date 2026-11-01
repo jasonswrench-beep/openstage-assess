@@ -10,9 +10,13 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
+  BLACKBOARD_UPLOAD_ID,
+  BLACKBOARD_UPLOAD_LABEL,
   D2L_CSV_ID,
   D2L_CSV_LABEL,
+  exportBlackboardUpload,
   exportD2lCsv,
+  exportQti12,
   exportGift,
   exportMoodleXml,
   exportOpenStageSpreadsheet,
@@ -22,6 +26,8 @@ import {
   MOODLE_XML_LABEL,
   OPENSTAGE_SPREADSHEET,
   OPENSTAGE_SPREADSHEET_LABEL,
+  QTI12_ID,
+  QTI12_LABEL,
   STATUSES,
   type ExportResult,
   type Question,
@@ -61,6 +67,18 @@ export const DESTINATIONS: Destination[] = [
     label: D2L_CSV_LABEL,
     blurb: "A CSV file for Brightspace's Question Library (Import, then Upload a File). It holds multiple choice, multiselect, true or false, short answer, matching, ordering and written response questions, and the check says what each loses.",
     run: exportD2lCsv,
+  },
+  {
+    id: QTI12_ID,
+    label: QTI12_LABEL,
+    blurb: "A QTI 1.2 zip that Brightspace's Quizzes and Question Library import, and Canvas's Import Course Content takes as a QTI .zip file. It holds multiple choice, multiple answer, true or false, short answer, matching and essay questions with their points, and the check says what each loses.",
+    run: exportQti12,
+  },
+  {
+    id: BLACKBOARD_UPLOAD_ID,
+    label: BLACKBOARD_UPLOAD_LABEL,
+    blurb: "A tab-delimited text file for Blackboard's Upload questions (Ultra and Original). It holds multiple choice, multiple answer, true or false, fill in the blank, matching, ordering and essay questions, without points or feedback, and the check says what each loses.",
+    run: exportBlackboardUpload,
   },
 ];
 
@@ -107,7 +125,7 @@ export async function exportRoute(ctx: Context, req: ApiRequest, rawName: string
   for (const file of result.files) {
     const fileName = await freeFileName(ctx.library.exports, checkName(file.name));
     const path = join(ctx.library.exports, fileName);
-    await writeFile(path, file.content, "utf8");
+    await writeFile(path, file.bytes ?? file.content, "utf8");
     written.push({ name: fileName, path, questions: file.questions });
   }
   return { status: 200, json: { report: result.report, written } };

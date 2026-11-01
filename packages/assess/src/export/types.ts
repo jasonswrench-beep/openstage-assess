@@ -51,7 +51,10 @@ export interface DestinationReport {
 
 export interface ExportedFile {
   name: string;
+  /** The text of the file. A file that is not text, such as a zip, has "" here and its bytes below. */
   content: string;
+  /** What to write when the file is not text. When it is there, it is the file and `content` is not used. */
+  bytes?: Uint8Array;
   /** How many questions are in this file. */
   questions: number;
 }

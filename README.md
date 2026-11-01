@@ -86,6 +86,18 @@ only and answers only to the window it opened.
   Brightspace's published description of the file, and one file of multiple choice, true or
   false and written response questions has been imported into a real Brightspace course and
   arrived as written. The other types have not yet been imported there.
+- A QTI 1.2 package out, for Brightspace's Quizzes and Question Library and for Canvas's Import
+  Course Content (QTI .zip file): multiple choice, multiple answer, true or false, short
+  answer, matching and essay, each with its points. Ordering, numeric, hotspot and calculated
+  questions are left out with the reason, and feedback and partial credit are not carried.
+  It is held to the structure of QTI 1.2 and to a response processor that scores every
+  possible answer, so the key is shown to travel; it has not been imported into Brightspace
+  or Canvas, and only an import can say whether either accepts it.
+- A Blackboard Upload questions file out: the tab-delimited text that Blackboard's Ultra and
+  Original courses read, for multiple choice, multiple answer, true or false, fill in the
+  blank, matching, ordering and essay. A short answer is written as a fill in the blank.
+  Points, feedback and formatting are not in the file and are said against each question.
+  It follows Blackboard's help pages and sample file, and has not been tried in Blackboard.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question
@@ -145,7 +157,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `new <bank> --title "..."` | Create an empty bank |
 | `import <file> [--out <bank>] [--details] [--key-mark <mark>]` | Read a `.txt`, `.docx`, `.xlsx`, `.csv`, `.pdf`, `.aiken` or `.gift` file and report the verdicts. `--key-mark` says what formatting means in a Word file: `off`, `bold`, `underline`, `highlight`, `color` and so on |
 | `review <file> [--out <page>] [--key-mark <mark>]` | Read a file as `import` does and write one web page showing each question with its answer, its checks and its lines of the file, then the text no question used. Nothing is written to a bank |
-| `export <bank> [--to <destination>] [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet (the default), Moodle XML (`moodle-xml`), GIFT (`gift`) or a Brightspace Question Library CSV (`d2l-csv`), and with `--out` write it |
+| `export <bank> [--to <destination>] [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet (the default), Moodle XML (`moodle-xml`), GIFT (`gift`) a Brightspace Question Library CSV (`d2l-csv`), a QTI 1.2 package for Brightspace and Canvas (`qti-1.2`) or a Blackboard upload file (`blackboard-upload`), and with `--out` write it |
 | `print <bank> [--kind student\|key\|both] [--format docx\|pdf] [--paper letter\|a4] [--out <folder>]` | Say what a printed student copy and answer key would hold, and with `--out` write them |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
@@ -164,13 +176,13 @@ packages/assess/        the engine, published as @openstage/assess
   src/import/           importers: the Standard Format, Word (docx/ is its XML and package reader), PDF (pdf/ is its
                         reader, from the file's objects to lines and paragraphs), Aiken, GIFT and
                         the question table (spreadsheet.ts, with table-csv.ts and table-xlsx.ts to read the file)
-  src/export/           exporters and the destination check: the spreadsheet, GIFT, Moodle XML and Brightspace CSV
+  src/export/           exporters and the destination check: the spreadsheet, GIFT, Moodle XML, Brightspace CSV, QTI 1.2 and Blackboard upload
   src/print/            a printed test: the layout, and the Word and PDF writers
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1474 tests, run by Node's own test runner
+  test/                 1544 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

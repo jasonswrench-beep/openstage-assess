@@ -87,8 +87,54 @@ item says what has been run and what has not. Items are removed when done, with 
   (it is one line in `d2l-csv.ts`).
 - [ ] **A question with bold in its wording.** It is written as HTML with `HTML` in the third cell, which the article shows for
   the question text only. Check that it arrives bold and not as visible tags.
-- [ ] **Try the QTI route too, if you have one in mind.** Brightspace's Quizzes tool takes QTI up to 1.2 and Course Import takes
-  a subset of 2.x and 3.x; neither exporter is built, and which one matters depends on how you move content.
+- [ ] **Course Import's QTI 2.x and 3.x subset is not built.** Brightspace's Quizzes tool takes QTI up to 1.2 (built, below) and
+  Course Import takes a subset of 2.x and 3.x. Which one matters depends on how you move content.
+
+## QTI 1.2 package (Brightspace and Canvas)
+
+Built on 1 November 2026 from help pages and the QTI standard. Nothing here has been imported into Brightspace or Canvas. The
+package is held to a second reading of the standard and to a response processor that scores every possible answer (see
+`docs/design-plan.md`), which shows the package follows the standard and carries the key, and nothing about what either tool
+accepts. Use `QTI 1.2 package (Brightspace and Canvas)` in the app's export screen on a bank with one question of each type, and
+look at every question afterwards.
+
+- [ ] **Import it into Brightspace's Question Library** (Quizzes, Question Library, Import, then the zip). The first thing to
+  see is whether it imports at all: "no quizzes or sections can be found" is what Brightspace says when the structure is not
+  what it reads. If it does, the questions should be in a folder named for the file. Then open each one and check the type, the
+  right answer marked, the points, and the wording.
+- [ ] **Import it through the Quizzes tool as well** (Quizzes, Import). Say which of the two routes worked. If only one does, the
+  other should stop being offered in the export screen's note.
+- [ ] **A multiple answer question, a matching question, a short answer and an essay.** A multiple answer should have its right
+  set marked and score nothing for any other set. A matching question is the least certain: it is written the way Canvas writes
+  one (a response for each left side, each offering every right side), and Brightspace may read it differently or not at all.
+  Look at where the spare answers went.
+- [ ] **Points of 2 and of half a point.** They are written into the metadata Canvas reads and into the score, as the same number.
+  See what Brightspace shows.
+- [ ] **A question with an accent, a quotation mark, an ampersand and a less-than sign.** All are escaped in the XML.
+- [ ] **A question with bold in its wording.** The question text is written as HTML and an answer is HTML only when it has
+  formatting. Check that bold arrives bold and not as visible tags.
+- [ ] **Import it into Canvas** (Settings, Import Course Content, content type QTI .zip file, and try Create new question bank).
+  The guide that was read is for Classic Quizzes. Say which types arrive and which do not, and whether New Quizzes took it.
+  If you have no Canvas course, say so and this stays open.
+
+## Blackboard
+
+Built on 1 November 2026 from Blackboard's help pages for Upload questions and the sample file they link to. Nothing here has
+been tried in Blackboard. Use `Blackboard, Upload questions (text file)` in the app's export screen.
+
+- [ ] **Upload the file in Ultra** (the plus sign in a test, Upload questions from file) **and in Original** (Upload Questions) if
+  you have both. Set the points first, or every question arrives worth zero. Look at each type, and which rows Blackboard
+  refuses and with what words.
+- [ ] **The ordering row in Ultra.** Blackboard's Ultra page lists eight types and ordering is not one of them. The check says an
+  Ultra course may refuse it; see whether it does.
+- [ ] **A short answer written as a fill in the blank.** Type each accepted answer, in the other case, and a wrong one, and see
+  what Blackboard marks right. If it does not behave like a short answer, the other choice is Blackboard's own short answer, which
+  is marked by hand and keeps only a sample answer.
+- [ ] **A question with a double quote at the start of the text, and one with an accent.** Blackboard does not say how a quote
+  is treated, and the file is written as UTF-8 with no byte order mark. Its own sample has a quote at the start of a question and
+  nothing around it.
+- [ ] **A numeric question.** It is left out because the page does not say what the tolerance means. If you know, or can try
+  one, say what the third field does.
 
 ## The app and its window
 
@@ -238,6 +284,19 @@ These change what the app does, and were made without asking. Each is one flag o
   said to arrive with Brightspace's default. Half a point is the usual case.
 - [ ] **A fill in the blank with one blank goes to Brightspace as a short answer;** one with several blanks is left out,
   because Brightspace's CSV cannot import a fill in the blanks question.
+
+- [ ] **The QTI package leaves out ordering, numeric, hotspot and calculated questions, and carries no feedback or partial
+  credit.** Neither Brightspace nor Canvas documents an ordering or numeric question in a QTI file, so none is written untried;
+  the ordering note points to the Brightspace CSV, which carries ordering. Feedback and partial credit are not written in this
+  first version: both are possible in QTI and neither is checked against either tool. Say if you want them.
+- [ ] **One QTI package serves Brightspace and Canvas.** They are two destinations in your mind and one file here. It is written
+  the way Canvas writes its own QTI 1.2, which Brightspace is said to import as well. If a tool wants something the other does
+  not, they split.
+- [ ] **Blackboard's file gives every question the same points,** the number typed when you upload. A question worth something
+  else is said to arrive with that number instead. A file of more than 250 questions is written as several files.
+- [ ] **A short answer goes to Blackboard as a fill in the blank,** because that is the Blackboard question that checks a typed
+  answer against a list. Blackboard's own short answer is marked by hand. A fill in the blank with several blanks is left out:
+  Blackboard's file for several blanks (FIB_PLUS) needs the blanks named in the text, which is not done.
 
 - [ ] **A person's own answer replaces only the importer's two errors about the file's key, and only when the answer changed and is
   usable.** You asked for the repair screen to stop keeping the error after a person chooses the answer; where the edges are is

@@ -788,7 +788,49 @@ describe("exporting", () => {
     await withApp(async (client) => {
       const reply = await client.get("/api/destinations");
       const ids = (reply.json["destinations"] as Array<{ id: string; label: string; blurb: string }>).map((d) => d.id);
-      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv"]);
+      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "blackboard-upload"]);
+    });
+  });
+
+  test("exports a bank as a QTI 1.2 package: a real zip, written and served as the bytes it is", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      const checked = (await client.post(`${bank}/export/check`, { destination: "qti-1.2" })).json["report"] as Report;
+      assert.equal(checked.total, 3);
+      assert.equal(checked.exported, 1, "the multiple choice");
+      assert.equal(checked.leftOut, 2, "the true or false with no answer, and the ordering a QTI file does not carry");
+      assert.deepEqual(readdirSync(join(home, "Exports")), []);
+
+      const written = await client.post(`${bank}/export`, { destination: "qti-1.2" });
+      assert.equal(written.status, 200, written.text);
+      const files = written.json["written"] as Array<{ name: string; questions: number }>;
+      assert.equal(files[0]?.name, "Quiz - QTI 1.2.zip");
+      assert.equal(files[0]?.questions, 1);
+      const onDisk = readFileSync(join(home, "Exports", "Quiz - QTI 1.2.zip"));
+      assert.equal(onDisk.subarray(0, 2).toString("latin1"), "PK", "bytes, not text: written as UTF-8 text a zip would be damaged");
+      const inside = unzipSync(new Uint8Array(onDisk));
+      assert.deepEqual([...inside.keys()].sort(), ["assessment.xml", "imsmanifest.xml"]);
+      const xml = Buffer.from(inside.get("assessment.xml") as Uint8Array).toString("utf8");
+      assert.match(xml, /What is two plus two\?/);
+      assert.doesNotMatch(xml, /cheese/);
+      const downloaded = await client.get("/files/Quiz%20-%20QTI%201.2.zip");
+      assert.equal(downloaded.status, 200);
+      assert.ok(Buffer.compare(downloaded.bytes, onDisk) === 0, "the download is the file, byte for byte");
+    });
+  });
+
+  test("exports a bank as Blackboard's upload file: tab-delimited rows, one for each question it can hold", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      const checked = (await client.post(`${bank}/export/check`, { destination: "blackboard-upload" })).json["report"] as Report;
+      assert.equal(checked.exported, 1, "the multiple choice");
+      assert.equal(checked.exportedWithLosses, 1, "the ordering, which Blackboard's help lists for the Original view and not for Ultra");
+      assert.equal(checked.leftOut, 1, "the true or false with no answer is not written with a guessed one");
+      const written = await client.post(`${bank}/export`, { destination: "blackboard-upload" });
+      assert.equal(written.status, 200, written.text);
+      assert.equal((written.json["written"] as Array<{ name: string }>)[0]?.name, "Quiz - Blackboard.txt");
+      const onDisk = readFileSync(join(home, "Exports", "Quiz - Blackboard.txt"), "utf8");
+      assert.equal(onDisk, "MC\tWhat is two plus two?\tThree\tincorrect\tFour\tcorrect\r\nORD\tPut these in order.\tFirst\tSecond\r\n");
     });
   });
 

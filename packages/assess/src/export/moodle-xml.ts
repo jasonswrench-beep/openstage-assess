@@ -19,7 +19,7 @@ import type { RichText } from "../model/richtext.ts";
 export const MOODLE_XML_ID = "moodle-xml";
 export const MOODLE_XML_LABEL = "Moodle XML";
 
-const escapeXml = (text: string): string =>
+export const escapeXml = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
 
 /** HTML inside CDATA, with the one sequence that would end it split in two. */

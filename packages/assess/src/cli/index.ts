@@ -29,6 +29,8 @@ import { localId } from "../model/ids.ts";
 import { formatReport } from "../export/types.ts";
 import { DESTINATION_ID, exportOpenStageSpreadsheet } from "../export/openstage-spreadsheet.ts";
 import { D2L_CSV_ID, exportD2lCsv } from "../export/d2l-csv.ts";
+import { BLACKBOARD_UPLOAD_ID, exportBlackboardUpload } from "../export/blackboard-upload.ts";
+import { exportQti12, QTI12_ID } from "../export/qti12.ts";
 import { exportGift, GIFT_ID } from "../export/gift.ts";
 import { exportMoodleXml, MOODLE_XML_ID } from "../export/moodle-xml.ts";
 import type { ExportResult } from "../export/types.ts";
@@ -67,11 +69,12 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       the text no question used. Open the page in any browser. Nothing is
       written to a bank and the file is not changed.
 
-  openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}|${GIFT_ID}|${MOODLE_XML_ID}|${D2L_CSV_ID}] [--out <folder>]
+  openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}|${GIFT_ID}|${MOODLE_XML_ID}|${D2L_CSV_ID}|${QTI12_ID}|${BLACKBOARD_UPLOAD_ID}] [--out <folder>]
       Run the destination check for a format: the question spreadsheet that
-      OpenStage Author and Scroll read (the default), GIFT, or Moodle XML. It
-      says what will arrive, what will be lost, what cannot go. With --out,
-      write the file or files into that folder.
+      OpenStage Author and Scroll read (the default), GIFT, Moodle XML,
+      Brightspace's CSV, a QTI 1.2 package (Brightspace and Canvas), or
+      Blackboard's upload file. It says what will arrive, what will be lost,
+      what cannot go. With --out, write the file or files into that folder.
 
   openassess search <bank${BANK_EXTENSION}> <words...>
       Search a bank.
@@ -309,6 +312,8 @@ const EXPORTERS: Record<string, (questions: Question[], options: { name: string 
   [GIFT_ID]: exportGift,
   [MOODLE_XML_ID]: exportMoodleXml,
   [D2L_CSV_ID]: exportD2lCsv,
+  [QTI12_ID]: exportQti12,
+  [BLACKBOARD_UPLOAD_ID]: exportBlackboardUpload,
 };
 
 async function cmdExport(args: string[]): Promise<number> {
@@ -335,7 +340,7 @@ async function cmdExport(args: string[]): Promise<number> {
   await mkdir(folder, { recursive: true });
   for (const file of result.files) {
     const target = join(folder, file.name);
-    await writeFile(target, file.content, "utf8");
+    await writeFile(target, file.bytes ?? file.content, "utf8");
     console.log(`\nWrote ${file.questions} question(s) to ${target}`);
   }
   return 0;

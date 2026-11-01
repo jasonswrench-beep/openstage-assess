@@ -93,8 +93,9 @@ part of a question. `CLAUDE.md` explains each of these and the bugs behind them.
 | Destination | Format | Notes |
 | --- | --- | --- |
 | Moodle | Moodle XML, GIFT as an option | Moodle's own formats keep more than QTI does |
-| Brightspace | Question Library CSV (done); QTI 1.2 for Quizzes and 2.x or 3.x for Course Import (to do) | See below |
-| Canvas, Blackboard | QTI package, tested per LMS | Classic and New Quizzes behave differently |
+| Brightspace | Question Library CSV (done, imported once); QTI 1.2 package for Quizzes and the Question Library (built, never imported); 2.x or 3.x subset for Course Import (to do) | See below |
+| Canvas | QTI 1.2 package (built, never imported) | The same file as Brightspace's. Classic and New Quizzes behave differently, and only Classic is described by the guide that was read |
+| Blackboard | The Upload questions text file (built, never tried) | Works in Ultra and Original. Blackboard's pool package and its QTI import are not written |
 | Any other LMS | QTI 1.2, 2.1 or 3.0 | The user picks the version |
 | OpenStage Author and Scroll | The question spreadsheet (CSV) | See below |
 | Paper | Word and PDF, student copy and answer key | Versions A and B from one seed |
@@ -253,9 +254,59 @@ matching, ordering, a question with formatting, accented letters and a multisele
 a second reading of the article, which shows the file follows the article and nothing about whether the article is complete.
 Brightspace's own blank template file was not available to compare with.
 
-**QTI, still to do.** Brightspace's Quizzes tool imports QTI up to 1.2 only; Course Import (Import/Export/Copy Components)
-takes a subset of QTI 2.x and 3.x, according to a D2L staff reply in April 2026. Two targets, then, and the matrix of what each
-accepts is built from sandbox imports, as M2 says.
+**Course Import, still to do.** Brightspace's Quizzes tool imports QTI up to 1.2 only; Course Import (Import/Export/Copy Components)
+takes a subset of QTI 2.x and 3.x, according to a D2L staff reply in April 2026. The QTI 1.2 package below is for the first of
+the two. The second is not built, and the matrix of what each accepts is built from sandbox imports, as M2 says.
+
+### QTI 1.2 package (Brightspace and Canvas)
+
+One package serves both (`src/export/qti12.ts`, destination `qti-1.2`). It is a zip of `imsmanifest.xml` (IMS content packaging
+1.1.2, one resource of type `imsqti_xmlv1p2`) and `assessment.xml` (a questestinterop file: one assessment, one section, an item
+for each question). The items take the shapes that IMS describes for QTI 1.2 and that Canvas writes itself. A multiple choice
+question is one response_lid with a render_choice and a condition that sets SCORE for the right label. A multiple answer
+question is the same with Multiple cardinality and a condition that is every right label and none of the wrong ones, so partial
+credit is not carried. A short answer has one condition for each accepted answer, with the case rule. A matching question has
+a response_lid for each left side offering every right side (a spare answer is a label no left side uses), and each right match
+adds a share of the points, the last share being what is left so that they add up to the points exactly. An essay can score
+nothing by itself and is marked by hand. Each item names its kind and its points in the qtimetadata Canvas reads
+(`question_type`, `points_possible`) and sets SCORE to the same number of points, so a reader of the conditions alone and a
+reader of the metadata alone agree. A fill in the blank with one blank arrives as a short answer. Ordering, numeric, hotspot
+and calculated questions are left out, because neither tool documents them in a QTI file; the ordering note points to the
+Brightspace CSV, which carries ordering. Feedback is not carried.
+
+What the help pages and staff replies say, none of it from a trial: the Quizzes tool takes a zip up to QTI 1.2 and reports "no
+quizzes or sections can be found" when the structure is not what it reads; importing a QTI zip into the Question Library puts
+the questions in a folder named for the file; Canvas takes it under Import Course Content as a QTI .zip file, with an option to
+make a question bank. The Canvas guide that could be read is for Classic Quizzes and dated 2021, it names no QTI version, and
+Canvas's own community document (which another source says gives QTI 1.2 and 2.1) was not found at its address, so the versions
+rest on a secondary source. The example that a D2L staff member posted in the community thread turned out to be a Blackboard
+question pool (`questions.dat`, `.bb-package-info`), not QTI, so there was no known-good Brightspace QTI file to compare with.
+
+What has been checked: every package is held to a second reading of the structure, written apart from the exporter, and to a
+small QTI 1.2 response processor that works out the score of every answer a student could give (every subset of a multiple
+answer question, every assignment of a matching one). The right answer must score the points and nothing else may, for every
+question of every fixture bank. That shows the package follows the standard and carries the key. It shows nothing about whether
+Brightspace or Canvas accepts it, which only an import can. Not one has been tried (`TESTING-TODO.md`).
+
+### Blackboard, the Upload questions file
+
+`src/export/blackboard-upload.ts`, destination `blackboard-upload`. Blackboard documents this file (the help page "Upload or
+Import Questions", with a sample file): tab-delimited text, one question to a row, no header row and no blank line, the type in
+the first field, and `correct`, `incorrect`, `true` and `false` in English. It is written for multiple choice (MC), multiple
+answer (MA), true or false (TF), fill in the blank (FIB), matching (MAT), ordering (ORD) and essay (ESS). A short answer is
+written as a fill in the blank, because that is the Blackboard question that checks a typed answer against a list, and
+Blackboard's own short answer (SR) is marked by hand. A numeric question is left out: the file takes a tolerance and the page
+does not say what it means. Points are one number typed at upload for every question, and the file has no feedback, formatting
+or picture, so each is said against the question. A bank of more than 250 questions is written as several files, because
+Blackboard recommends that size so the browser does not time out.
+
+Blackboard's help lists ordering for the Original course view and does not list it among the eight types of the Ultra page, so
+an ordering row says that Ultra may refuse it; the other rows still upload. Not stated by Blackboard and not tried: the
+encoding (the file is UTF-8 with no byte order mark and CRLF line endings), whether a double quote at the start of a field
+needs doubling (it is written as it is, as the sample file has it), and whether HTML is accepted (none is written). Two other
+Blackboard routes are not built. Its own pool package is the `.dat` format of D2L's example; it is not documented and Ultra
+reads only pools exported from Original. Its QTI import is Original only according to several university guides, and one
+Blackboard page mentions QTI 2.1, so the sources disagree.
 
 ## Ideas taken from the wider discussion
 
@@ -355,8 +406,8 @@ library folder and lets a person: make a bank or open one from a file; import a 
 what was read beside the lines it came from, then repair it (write the missing key, turn an orphan into a question,
 dismiss a warning, but never an error) before it is stored; browse a bank, search and filter it, edit, add, duplicate and
 retire questions, with the key never filled in for anyone; bring in a question table from Excel or CSV, or a PDF read from its text, as well as a Word,
-text, Aiken or GIFT file, or try one of four samples; export to the OpenStage spreadsheet, Moodle XML, GIFT or a Brightspace
-question library file with the destination check shown first; and print a student copy and an answer key as Word and PDF. Cheap formats (Aiken and
+text, Aiken or GIFT file, or try one of four samples; export to the OpenStage spreadsheet, Moodle XML, GIFT, a Brightspace
+question library file, a QTI 1.2 package (Brightspace and Canvas) or a Blackboard upload file with the destination check shown first; and print a student copy and an answer key as Word and PDF. Cheap formats (Aiken and
 GIFT in, Moodle XML and GIFT out) and printing, items 3 and 4 below, are done. The window is built and starts, shows the
 home screen and stops its server when it is closed; the installer is unsigned.
 
@@ -385,7 +436,9 @@ home screen and stops its server when it is closed; the installer is unsigned.
 - **M2, LMS exports.** QTI 1.2, 2.1 and 3.0, the per-LMS compatibility matrix
   built by importing every type into a sandbox course on each LMS, destination
   checks, and round-trip tests. The Brightspace question library CSV is done
-  and imported once into a real course for three of its seven types; the QTI exporters are not started.
+  and imported once into a real course for three of its seven types. A QTI 1.2 package (Brightspace and Canvas) and a
+  Blackboard upload file are built and tested against the standard and the help pages, and have not been imported anywhere;
+  QTI 2.1 and 3.0, and the 2.x or 3.x subset of Brightspace's Course Import, are not started.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
   pools, blueprints, versions, the item quality and accessibility checks (phase
   7), and the web quiz.
