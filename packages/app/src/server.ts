@@ -114,14 +114,25 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+/**
+ * What to run to show a file in its folder. Explorer wants the quotes inside its one argument, `/select,"C:\a b\c.csv"`. Node
+ * puts quotes around a whole argument that holds a space, `"/select,C:\a b\c.csv"`, which Explorer cannot read, so it opens
+ * the Documents folder instead and says nothing. A space is nearly always there ("Quiz - Brightspace.csv", a bank titled "PDF
+ * TB 2", a Windows user name with a space in it), so Show in folder rarely showed the file. On Windows the argument is therefore passed as written, and checked first: a name
+ * with a quote mark in it cannot be a Windows file name, and would end the argument early.
+ */
+export function revealCommand(path: string, platform: NodeJS.Platform = process.platform): { command: string; args: string[]; verbatim: boolean } {
+  if (platform === "win32") {
+    if (path.includes('"')) throw new HttpError(400, "That file name cannot be shown.");
+    return { command: "explorer.exe", args: [`/select,"${path}"`], verbatim: true };
+  }
+  if (platform === "darwin") return { command: "open", args: ["-R", path], verbatim: false };
+  return { command: "xdg-open", args: [dirname(path)], verbatim: false };
+}
+
 function defaultReveal(path: string): void {
-  const [command, args] =
-    process.platform === "win32"
-      ? ["explorer.exe", [`/select,${path}`]]
-      : process.platform === "darwin"
-        ? ["open", ["-R", path]]
-        : ["xdg-open", [dirname(path)]];
-  const child = spawn(command as string, args as string[], { detached: true, stdio: "ignore" });
+  const { command, args, verbatim } = revealCommand(path);
+  const child = spawn(command, args, { detached: true, stdio: "ignore", windowsVerbatimArguments: verbatim });
   child.on("error", () => undefined);
   child.unref();
 }
