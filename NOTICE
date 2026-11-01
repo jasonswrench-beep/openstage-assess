@@ -5,7 +5,16 @@ This product includes software developed by Jason S. Wrench as part of the
 OpenStage suite of free tools for higher education.
 
 The engine (@openstage/assess) has no third-party runtime dependencies. It
-uses only the Node.js standard library.
+uses only the Node.js standard library. The app (@openstage/app) has none
+either.
+
+The desktop window (packages/app/shell) is a Tauri shell. It is built with
+Tauri and the Rust crates Tauri depends on, which are released under the MIT
+and Apache 2.0 licences and others of the same kind, and it shows the app in
+the Microsoft Edge WebView2 runtime that Windows provides. The installer also
+carries a copy of Node.js (MIT licence), the program that runs the app, so that
+a computer needs nothing installed. None of this is part of the engine, which
+runs without it.
 
 The plain-text import profile reads the question layout documented in the
 test-bank vendor's user guide. That layout is a de facto convention used by many

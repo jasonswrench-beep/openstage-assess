@@ -6,10 +6,27 @@ without retyping a single question.
 
 One of the OpenStage suite of tools; it stands on its own. Apache 2.0.
 
-This repository is at **phase 1 of 9**. There is no desktop application yet, on
-purpose. Phases 1 and 2 build and prove the engine, because the parse-accuracy
-target is the whole product and it cannot be iterated on through a user
-interface.
+The engine came first, on purpose: the parse-accuracy target is the whole product, and it
+cannot be iterated on through a user interface. It is built and measured, and **there is
+now an app on top of it**: open a Word, text, Aiken or GIFT file, see what was found beside
+the lines it came from, repair what needs it, save it into a bank, write and edit questions,
+and export or print them. The Word importer's acceptance target (95 percent on three real
+chapters it was not fitted to) is not yet met, because no such chapters exist yet; see
+`docs/word-import-plan.md` and `TESTING-TODO.md`.
+
+## Running it
+
+**In a window.** The installer for the desktop window is built from `packages/app/shell`
+(see its README) and carries everything it needs, including Node.
+
+**In your browser, with only Node installed.** Double-click **Open OpenAssess.cmd**, or run
+
+```
+node --experimental-strip-types packages/app/src/main.ts --open
+```
+
+Your banks and exports are kept in `Documents/OpenAssess`. The app runs on your computer
+only and answers only to the window it opened.
 
 ## What works today
 
@@ -51,6 +68,20 @@ interface.
   Word 97-2003 `.doc` has to be saved as `.docx` first. Lists and formatting are checked against Word
   itself, and `fixtures/word-authored` holds documents that Word wrote
   (`docs/word-import-plan.md`).
+- The app (`packages/app`): a small local server that puts the engine behind a web
+  interface, shown in a browser or in a Tauri window. Screens for your banks, the
+  import review and repair, a bank (search, filters, writing and editing questions of
+  nine types), export, and print. It is plain JavaScript with no framework and no build
+  step, runs on 127.0.0.1 only, and is built to be safe from other pages in the same
+  browser: a key handed to the window once, a Host check, a header every change must
+  carry, and a policy that allows only its own scripts. See `docs/design-plan.md`.
+- Aiken and GIFT in; GIFT and Moodle XML out, each with the destination check that says
+  what will arrive, what will be lost and what cannot go. A `.txt` file is told apart
+  by what is in it.
+- Printing: a student copy and an answer key, as Word and PDF, written with no library.
+  The student copy shows no answer; the key shows only what the bank records and says
+  when it records none. Matching and ordering questions are shuffled for the student,
+  the same way every time.
 - A review page: `review <file>` writes one web page that shows each question as the
   importer built it, with its answer, its checks and the lines of the file it came from,
   then the text no question used. It has no script and no outside address, shows no
@@ -84,9 +115,10 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `info <bank>` | Manifest, counts by type and status, finding totals |
 | `validate <bank>` | Check every question against the model |
 | `new <bank> --title "..."` | Create an empty bank |
-| `import <file> [--out <bank>] [--details] [--key-mark <mark>]` | Read a `.txt` or `.docx` file and report the verdicts. `--key-mark` says what formatting means in a Word file: `off`, `bold`, `underline`, `highlight`, `color` and so on |
+| `import <file> [--out <bank>] [--details] [--key-mark <mark>]` | Read a `.txt`, `.docx`, `.aiken` or `.gift` file and report the verdicts. `--key-mark` says what formatting means in a Word file: `off`, `bold`, `underline`, `highlight`, `color` and so on |
 | `review <file> [--out <page>] [--key-mark <mark>]` | Read a `.txt` or `.docx` file as `import` does and write one web page showing each question with its answer, its checks and its lines of the file, then the text no question used. Nothing is written to a bank |
-| `export <bank> [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet, and with `--out` write it |
+| `export <bank> [--to <destination>] [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet (the default), Moodle XML (`moodle-xml`) or GIFT (`gift`), and with `--out` write it |
+| `print <bank> [--kind student\|key\|both] [--format docx\|pdf] [--paper letter\|a4] [--out <folder>]` | Say what a printed student copy and answer key would hold, and with `--out` write them |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
 | `perf [--count 500]` | Time open, search and save |
@@ -101,14 +133,20 @@ packages/assess/        the engine, published as @openstage/assess
   src/container/        the zip reader and writer, and the bank file layout
   src/bank/             opening, saving, changing and searching a bank
   src/quality/          item quality checks
-  src/import/           importers: the Standard Format, and Word (docx/ is its XML and package reader)
-  src/export/           exporters and the destination check
+  src/import/           importers: the Standard Format, Word (docx/ is its XML and package reader), Aiken and GIFT
+  src/export/           exporters and the destination check: the spreadsheet, GIFT and Moodle XML
+  src/print/            a printed test: the layout, and the Word and PDF writers
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1172 tests, run by Node's own test runner
-  test/tools/           a check that asks Word itself what its lists show
+  test/                 1281 tests, run by Node's own test runner
+  test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
+packages/app/           the app: a local server and its web interface, published as @openstage/app
+  src/                  the server, the routes, the editor's conversion to and from the engine's question
+  ui/                   the screens: plain JavaScript modules, no framework, no build step
+  test/                 96 tests
+  shell/                the Tauri window (kept out of the npm workspaces; see its README)
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word
 fixtures/publisher/         publisher chapters, never committed

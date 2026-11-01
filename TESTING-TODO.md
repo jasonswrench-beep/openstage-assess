@@ -42,9 +42,55 @@ item says what has been run and what has not. Items are removed when done, with 
 - [ ] **Three real chapters the rules were not fitted to.** The acceptance criterion for the Word importer is 95 percent on three
   real chapters. None exists yet: the real files are all fitted, and the generated ones say nothing about real banks.
 
+## The app and its window
+
+Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in
+the browser pane and in the built window at desktop width. None of it has been used by a person, and none of it has been
+run on a machine other than the one it was built on.
+
+- [ ] **Double-click `Open OpenAssess.cmd`, make a bank, import a real Word bank, repair a question, export, print.** The
+  whole loop as a person would walk it. Write down the first place you hesitate; that is where the screen is wrong.
+- [ ] **Run the window** (`packages/app/shell/src-tauri/target/release/openassess-shell.exe` after `npm run build:exe` in
+  `packages/app/shell`) and close it. Check Task Manager afterwards: there should be no `node.exe` left. It was checked
+  here by closing the window and listing processes; the force-quit case (End task on the window) was checked by killing it.
+- [ ] **Run the installer on a machine that is not this one**, if you want to hand the tool to anyone. It was built, and
+  its layout was started from a copy in a temporary folder; it was not installed, because installing changes your machine.
+  Expect Windows to say the publisher is unknown (the installer is unsigned) and, on a machine without the Edge WebView2
+  runtime, to fetch Microsoft's bootstrapper.
+- [ ] **Open the printed Word copies in Word and look.** `check:word-print` asks Word what the paragraphs, numbers and page
+  count are (4 documents, 148 paragraphs, no disagreement). It cannot say whether the page looks right: the spacing, the
+  writing lines, where a question breaks across a page.
+- [ ] **Open a printed PDF in the viewers you use** (a browser, a desktop PDF program, a phone). The PDF is written by hand with the
+  standard fonts and no tags, so a viewer that is stricter than the ones tried here may complain. Look for a character that
+  printed as `?`; the print screen lists those before you print.
+- [ ] **Look at the screens at phone width and in dark colours.** The browser pane was used at desktop width. The page has
+  dark colours and narrow layouts that nobody has looked at.
+- [ ] **Use the whole app with the keyboard only, and once with a screen reader.** Focus moves to the content when a screen
+  changes and every control is a real button or field, but that is the design, not a check.
+- [ ] **Import a Moodle XML or GIFT file you really use** (the exporters were checked by reading their own output back; no
+  Moodle was available, so neither file has been imported into one). `docs/design-plan.md` lists sandboxes as an open
+  question.
+- [ ] **Decide whether the installer should be signed.** A code-signing certificate costs money, so it was not bought.
+  Until it is, every other computer shows a warning on first run.
+
 ## Decisions that are mine until you say otherwise
 
 These change what the app does, and were made without asking. Each is one flag or one line to reverse.
+
+- [ ] **The window is Tauri around a local Node server, and the installer carries its own copy of Node** (about 90 MB).
+  You chose Tauri; carrying Node is mine, because the engine runs on Node's type stripping and there is no other way to
+  keep the rule of no runtime dependencies. The alternative is a smaller installer that asks the person to install Node.
+- [ ] **The library is `Documents/OpenAssess`** (banks, `Deleted`, `Exports`), or the folder named by `--home` or
+  `OPENASSESS_HOME`. A deleted bank is moved to `Deleted`, never removed. A deleted question cannot be got back from the
+  app, and it says so first.
+- [ ] **An error finding cannot be dismissed; a warning or a note can.** A question with an error is kept, shown, and
+  exported only with the destination check naming it.
+- [ ] **A retired question is left out of an export unless you ask for it.**
+- [ ] **A printed student copy shows no answer; the key shows only answers the bank records, and says "No answer is recorded
+  for this question." for the rest.** It never fills one in. Matching and ordering are shuffled on the student copy, the same
+  way every time for the same question.
+- [ ] **PDF uses the standard fonts and Latin-1 only.** A character outside it prints as `?` and is reported first.
+- [ ] **The app keeps at most 12 open imports at once**, and the oldest is dropped. Nothing is stored until you accept one.
 
 - [ ] **Types read from the answer are not flagged for review** (`True`/`False` alone with no options, `Accepted answers:`, a
   matching instruction with `left = right` lines). Each leaves an information note instead. The old rule flagged a type worked
