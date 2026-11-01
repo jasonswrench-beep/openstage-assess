@@ -8,12 +8,13 @@
 
 import { aikenImporter, looksLikeAiken } from "./aiken.ts";
 import { giftImporter, looksLikeGift } from "./gift.ts";
+import { looksLikePdf, pdfImporter } from "./pdf.ts";
 import { looksLikeQuestionTable, spreadsheetImporter } from "./spreadsheet.ts";
 import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult } from "./types.ts";
 import { wordImporter } from "./word.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, spreadsheetImporter];
+export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, spreadsheetImporter, pdfImporter];
 
 /** The importer that reads files with this name's extension, if there is one. */
 export function importerFor(file: string): Importer | undefined {
@@ -36,6 +37,8 @@ const SNIFF_BYTES = 400_000;
 export function importerForContent(file: string, bytes: Uint8Array): Importer {
   const named = importerFor(file);
   if (named && named !== standardTextImporter) return named;
+  // A PDF is told by what it begins with, whatever it was named.
+  if (looksLikePdf(bytes)) return pdfImporter;
   if (looksLikeQuestionTable(bytes)) return spreadsheetImporter;
   const text = Buffer.from(bytes.subarray(0, SNIFF_BYTES)).toString("utf8");
   if (looksLikeGift(text)) return giftImporter;

@@ -41,6 +41,8 @@ export { IMPORTERS, importerFor, importerForContent, runImporter } from "./impor
 export { aikenImporter, AIKEN_PROFILE_ID, looksLikeAiken } from "./import/aiken.ts";
 export { giftImporter, GIFT_PROFILE_ID, looksLikeGift, giftUnescape } from "./import/gift.ts";
 export { spreadsheetImporter, SPREADSHEET_PROFILE_ID, looksLikeQuestionTable } from "./import/spreadsheet.ts";
+export { pdfImporter, PDF_PROFILE_ID, looksLikePdf, pdfToBlocks } from "./import/pdf.ts";
+export { PdfError } from "./import/pdf/objects.ts";
 export { readXlsx } from "./import/table-xlsx.ts";
 export { readCsv } from "./import/table-csv.ts";
 export { TableError } from "./import/table.ts";
