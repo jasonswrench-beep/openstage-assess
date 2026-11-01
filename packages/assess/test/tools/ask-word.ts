@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-export type Question = "labels" | "format" | "text";
+export type Question = "labels" | "format" | "text" | "pages";
 
 /** The answers for each document, by name: one string for each paragraph. */
 export type Answers = Record<string, string[]>;

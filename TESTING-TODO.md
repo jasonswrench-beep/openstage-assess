@@ -120,8 +120,11 @@ run on a machine other than the one it was built on.
   Expect Windows to say the publisher is unknown (the installer is unsigned) and, on a machine without the Edge WebView2
   runtime, to fetch Microsoft's bootstrapper.
 - [ ] **Open the printed Word copies in Word and look.** `check:word-print` asks Word what the paragraphs, numbers and page
-  count are (4 documents, 148 paragraphs, no disagreement). It cannot say whether the page looks right: the spacing, the
-  writing lines, where a question breaks across a page.
+  count are (4 documents, 148 paragraphs, no disagreement), and what page each question of a long test starts and ends on (180
+  questions, none split across a page; before the fix Word split 20 of them). It cannot say whether the page looks right: the
+  spacing, the writing lines, how much white space is left at the foot of a page by moving a whole question to the next. A long
+  test is a page or so longer than it was, because a question that would have been split is moved whole. Look at one, and at
+  a question that is taller than a page (a long essay prompt), which is still broken where it must be.
 - [ ] **Open a printed PDF in the viewers you use** (a browser, a desktop PDF program, a phone). The PDF is written by hand with the
   standard fonts and no tags, so a viewer that is stricter than the ones tried here may complain. Look for a character that
   printed as `?`; the print screen lists those before you print.

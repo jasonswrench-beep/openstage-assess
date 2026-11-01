@@ -24,6 +24,7 @@ import { plainToRich, rich } from "../src/model/richtext.ts";
 import type { Question, QuestionBody, QuestionType } from "../src/model/question.ts";
 import { layoutTest, paragraphsOf, printOptions, printTest, shuffledFor, writeDocx, writePdf, type Block, type Para, type PrintDocument } from "../src/print/index.ts";
 import { PAPERS } from "../src/print/layout.ts";
+import { longTest, questionSpans } from "./support/long-test.ts";
 
 const AT = "2026-01-01T00:00:00.000Z";
 const opt = (id: string, text: string, correct = false) => ({ id, content: plainToRich(text), correct });
@@ -173,6 +174,71 @@ describe("the answer key", () => {
   });
 });
 
+describe("a question is kept on one page", () => {
+  // A question whose choices ran over a page break (A and B at the foot of one page, C and D at the head of the next) was seen in
+  // a printed test, and Word did it to 20 of 180 questions in a long one. Every part of a question but its last is tied to the
+  // part after it, so that Word and the PDF writer move the whole question to the next page, if it fits on one.
+  for (const kind of ["student", "key"] as const) {
+    test(`${kind}: every block of a question but the last is tied to the next, and the last is not`, () => {
+      const { blocks } = layoutTest(longTest(), opts(kind)).document;
+      const spans = questionSpans(blocks);
+      assert.equal(spans.length, 90);
+      for (const [start, end] of spans) {
+        const mine = blocks.slice(start, end);
+        // A block of writing lines cannot be tied (it has no such setting), and only ever ends a question.
+        const tied = mine.slice(0, -1).filter((b): b is Para => b.kind === "para");
+        assert.ok(tied.every((b) => b.keepNext === true), `the question at block ${start}: ${mine.map(lineOf).join(" / ")}`);
+        const last = mine.at(-1) as Block;
+        assert.ok(last.kind !== "para" || last.keepNext !== true, "the last block of a question is not tied to the next question");
+      }
+    });
+  }
+
+  test("every kind of question is tied from its wording to its last line, and the choices of a multiple choice one by one", () => {
+    const blocks = layoutTest([MC, MR, TF, FILL, SHORT, MATCH, ORDER, NUMERIC, ESSAY], opts("student")).document.blocks;
+    const spans = questionSpans(blocks);
+    assert.equal(spans.length, 9);
+    for (const [start, end] of spans) {
+      const mine = blocks.slice(start, end);
+      for (const block of mine.slice(0, -1)) if (block.kind === "para") assert.equal(block.keepNext, true, `${lineOf(block)} stays with what follows it`);
+      const last = mine.at(-1) as Block;
+      assert.ok(last.kind !== "para" || last.keepNext !== true, `${lineOf(last)} ends its question`);
+    }
+    // The multiple choice ones, by their words (they print in the order they are written, where matching and ordering are shuffled).
+    const word = (b: Block): string => (b.kind === "para" ? b.runs.map((r) => r.text).join("") : "");
+    const tied = (text: string): boolean | undefined => (blocks.find((b) => word(b) === text) as Para | undefined)?.keepNext;
+    for (const text of ["What is the capital of France?  (1 point)", "Berlin", "Paris"]) assert.equal(tied(text), true, text);
+    assert.notEqual(tied("Rome"), true, "the last choice is not tied to the next question");
+    for (const text of ["Which are primary colours?  (1 point)", "Select all that apply.", "Red", "Green"]) assert.equal(tied(text), true, text);
+    assert.notEqual(tied("Blue"), true);
+  });
+
+  test("a PDF never splits a question that would fit on a page, wherever the page ends", () => {
+    const base = layoutTest([MC], opts("student")).document;
+    const stemOf = (i: number): Para => ({ kind: "para", runs: [{ text: `STEM${i}` }], marker: `${i}.`, size: 11, indent: 28, before: 10, after: 3, keepNext: true });
+    const choice = (i: number, k: number, last: boolean): Para => ({ kind: "para", runs: [{ text: `CHOICE${i}${"ABCD"[k]}` }], marker: `${"ABCD"[k]}.`, size: 11, indent: 58, before: 0, after: 3, ...(last ? {} : { keepNext: true }) });
+    // Questions of four choices after some filler of every length, so that each place a page can end falls in each question.
+    for (let n = 0; n < 130; n++) {
+      const filler: Block[] = Array.from({ length: n }, (_, i) => ({ kind: "para", runs: [{ text: `FILLER${i}` }], size: 11, indent: 0, before: 0, after: 0 }));
+      const questions: Block[] = [1, 2, 3].flatMap((i) => [stemOf(i), ...[0, 1, 2, 3].map((k) => choice(i, k, k === 3))]);
+      const result = readPdf(writePdf({ ...base, blocks: [...filler, ...questions] }).bytes);
+      for (const i of [1, 2, 3]) {
+        const pages = new Set(["STEM", ...["A", "B", "C", "D"].map((l) => `CHOICE${i}${l}`)].map((t) => result.pages.findIndex((p) => p.includes(t === "STEM" ? `STEM${i}` : t))));
+        assert.equal(pages.size, 1, `question ${i} after ${n} lines is on pages ${[...pages].join(", ")}`);
+      }
+    }
+  });
+
+  test("a question taller than a page is still printed, whole, across the pages it needs", () => {
+    const base = layoutTest([MC], opts("student")).document;
+    const tall: Block[] = Array.from({ length: 120 }, (_, i) => ({ kind: "para", runs: [{ text: `TALL${i}` }], size: 11, indent: 28, before: 0, after: 0, ...(i < 119 ? { keepNext: true } : {}) }));
+    const result = readPdf(writePdf({ ...base, blocks: tall }).bytes);
+    assert.ok(result.pages.length >= 2, "it needed more than a page");
+    const drawn = result.pages.flat().filter((s) => /^TALL\d+$/.test(s));
+    assert.equal(drawn.length, 120, "every line was drawn, once");
+  });
+});
+
 describe("matching and ordering", () => {
   const rightsShown = (kind: "student" | "key" = "student"): string[] => {
     const doc = layoutTest([MATCH], opts(kind)).document;
@@ -302,6 +368,16 @@ describe("the Word file", () => {
     assert.equal(ind.attrs["w:left"], "560");
     assert.equal(ind.attrs["w:hanging"], "560");
     assert.ok(first(first(stem, "w:pPr") as XmlElement, "w:keepNext"), "a question stays with its first answer");
+  });
+
+  test("asks Word to keep what the layout keeps together: one keep-with-next for each paragraph the layout ties to the next", () => {
+    for (const kind of ["student", "key"] as const) {
+      const long = layoutTest(longTest(30), opts(kind)).document;
+      const xml = Buffer.from(unzipSync(writeDocx(long)).get("word/document.xml") ?? new Uint8Array()).toString("utf8");
+      const tied = long.blocks.filter((b) => b.kind === "para" && b.keepNext === true).length;
+      assert.ok(tied > 30 * 2, `${kind}: most of a question is tied, and not only its first line (${tied})`);
+      assert.equal(xml.match(/<w:keepNext\/>/g)?.length, tied, kind);
+    }
   });
 
   test("draws a line to write on as a tab with a leader, not a border that Word would merge", () => {

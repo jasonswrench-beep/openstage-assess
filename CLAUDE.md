@@ -90,7 +90,7 @@ the order of the key. What cannot be printed is said against the question.
 ## Commands
 
 ```
-npm test                       # 1449 engine tests and 117 app tests, Node's own runner
+npm test                       # 1455 engine tests and 117 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -103,7 +103,7 @@ npm run assess -- contract     # the read contract and consumer capabilities
 npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks
 npm run check:word-authored --workspace packages/assess   # has Word write sample documents and reads them
-npm run check:word-print --workspace packages/assess   # has Word open the printed tests and read back every paragraph
+npm run check:word-print --workspace packages/assess   # has Word open the printed tests, read back every paragraph, and say what page each question of a long test lands on
 npm run check:excel-authored --workspace packages/assess   # has Excel write a workbook and CSV and compares every cell with what Excel says
 npm run check:generated --workspace packages/assess -- check <folder> --piece N   # holds a generated bank to its plan
 ```
