@@ -38,6 +38,16 @@ import { checkName, cleanName, insideLibrary, type Library } from "./library.ts"
 import { sampleById, samplePath, SAMPLES } from "./samples.ts";
 import { summarise, type Sessions } from "./sessions.ts";
 
+/**
+ * What the file's key said that an edit replaced: the messages of the checks that were live and are now dismissed. An answer
+ * chosen by hand replaces them, and the person is told which, so that nothing the file said is dropped without a word.
+ */
+function replacedBy(before: Question, after: Question): string[] {
+  return liveFindings(before.findings)
+    .filter((f) => after.findings.some((g) => g.dismissed === true && g.code === f.code && g.message === f.message))
+    .map((f) => f.message);
+}
+
 /** Who changes are recorded as made by. Nobody's name is asked for or kept. */
 const BY = "you";
 
@@ -190,7 +200,7 @@ async function sessionRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse>
       if (typeof body["expectVersion"] === "number" && body["expectVersion"] !== question.version) {
         throw new HttpError(409, "This question was changed since you opened it. Open it again to see the change.");
       }
-      if (unchanged(question, input)) return ok({ question: toEditor(question), summary: summarise(question, at), flattened: [], counts: ctx.sessions.view(session)["counts"] });
+      if (unchanged(question, input)) return ok({ question: toEditor(question), summary: summarise(question, at), flattened: [], replaced: [], counts: ctx.sessions.view(session)["counts"] });
       const { edit, flattened } = editFromInput(question, input);
       const next = asBadRequest(() => {
         const edited = editQuestion(question, edit, { by: BY });
@@ -199,7 +209,7 @@ async function sessionRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse>
         return edited;
       });
       session.questions[at] = next;
-      return ok({ question: toEditor(next), summary: summarise(next, at), flattened, counts: ctx.sessions.view(session)["counts"] });
+      return ok({ question: toEditor(next), summary: summarise(next, at), flattened, replaced: replacedBy(question, next), counts: ctx.sessions.view(session)["counts"] });
     }
 
     if (action === "dismiss" && req.method === "POST") {
@@ -390,10 +400,10 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
         if (typeof body["expectVersion"] === "number" && body["expectVersion"] !== question.version) {
           throw new HttpError(409, "This question was changed since you opened it. Open it again to see the change.");
         }
-        if (unchanged(question, input)) return ok({ question: toEditor(question), summary: summarise(question, 0), flattened: [] });
+        if (unchanged(question, input)) return ok({ question: toEditor(question), summary: summarise(question, 0), flattened: [], replaced: [] });
         const { edit, flattened } = editFromInput(question, input);
         const next = await ctx.banks.change(name, (b) => asBadRequest(() => b.update(id, edit, { by: BY })));
-        return ok({ question: toEditor(next), summary: summarise(next, 0), flattened });
+        return ok({ question: toEditor(next), summary: summarise(next, 0), flattened, replaced: replacedBy(question, next) });
       }
 
       if (action === undefined && req.method === "DELETE") {

@@ -32,7 +32,7 @@ function inputOf(q) {
 /**
  * @param {{
  *   question: EditorQuestion,
- *   save: (input: any, version: number) => Promise<{ question: EditorQuestion, flattened?: string[] }>,
+ *   save: (input: any, version: number) => Promise<{ question: EditorQuestion, flattened?: string[], replaced?: string[] }>,
  *   dismiss: (payload: { code?: string, all?: boolean }) => Promise<{ question: EditorQuestion }>,
  *   saveLabel?: string,
  *   onChange?: (dirty: boolean) => void,
@@ -427,7 +427,9 @@ export function createEditor(options) {
       );
     }
     for (const f of dismissed) {
-      list.append(h("li", { class: "dismissed" }, h("span", { class: "sev", text: "Dismissed" }), h("span", { class: "msg", text: f.message })));
+      // An error cannot be dismissed from here, so one that is dismissed is one that the person's own answer replaced: what the
+      // file's key said is kept in the list, with its words, and says that it no longer applies.
+      list.append(h("li", { class: "dismissed" }, h("span", { class: "sev", text: f.severity === "error" ? "Replaced by your answer" : "Dismissed" }), h("span", { class: "msg", text: f.message })));
     }
     checksHost.append(list);
     if (notes.length > 1) checksHost.append(h("button", { type: "button", class: "small-button", text: "Mark all checks as checked", on: { click: () => dismiss({ all: true }) } }));
@@ -503,11 +505,10 @@ export function createEditor(options) {
       draft = inputOf(question);
       render();
       options.onSaved?.(question, result.flattened ?? []);
-      if (result.flattened && result.flattened.length > 0) {
-        options.notify(`Saved. The formatting in ${result.flattened.join(", ")} became plain text.`, "ok");
-      } else {
-        options.notify("Saved.", "ok");
-      }
+      const said = [];
+      if (result.flattened && result.flattened.length > 0) said.push(`The formatting in ${result.flattened.join(", ")} became plain text.`);
+      if (result.replaced && result.replaced.length > 0) said.push(`Your answer replaces what the file's key said (${result.replaced.length === 1 ? "listed" : `${result.replaced.length} are listed`} under Checks).`);
+      options.notify(said.length > 0 ? `Saved. ${said.join(" ")}` : "Saved.", "ok");
     } catch (error) {
       options.notify(/** @type {Error} */ (error).message, "error");
     } finally {

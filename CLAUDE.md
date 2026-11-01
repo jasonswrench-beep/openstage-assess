@@ -75,6 +75,13 @@ line such as `Answer: c. <the option>. <a reason with the word "a" in it>` marke
 Prose is never mined for letters. Where the letter and the words name different options it is an error that quotes both, and
 no answer is marked.
 
+**An answer chosen by hand replaces what the file's key said, and nothing else does.** An importer's errors about the key the
+file gave (`KeysDisagree`, `KeyLetterMissing`) stay on a question until a person changes the answer itself (`editQuestion`,
+`replaceFileKeyProblems`): then they are dismissed by that person, kept in the list with their words, and the save says so.
+A change of stem, title or wording does not replace them, a choice that is not a usable answer does not, and no other finding
+is touched. Do not widen it to any edit, or the error that says the file's key was not applied would vanish while the file's
+key is still the one in use.
+
 **The editor never writes back what the person did not change.** An edit keeps
 every field it was not given as stored, formatting and all; text that holds a
 picture or an equation is refused, not rewritten without it; a new answer row is
@@ -90,7 +97,7 @@ the order of the key. What cannot be printed is said against the question.
 ## Commands
 
 ```
-npm test                       # 1455 engine tests and 117 app tests, Node's own runner
+npm test                       # 1464 engine tests and 120 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

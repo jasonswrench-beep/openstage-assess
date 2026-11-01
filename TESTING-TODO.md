@@ -96,6 +96,11 @@ Everything below was run by tests (`npm test` in `packages/app`, 96 of them, thr
 the browser pane and in the built window at desktop width. None of it has been used by a person, and none of it has been
 run on a machine other than the one it was built on.
 
+- [ ] **Repair a question whose Answer line disagreed with its option, in the window, and tick the right answer.** The error about
+  the file's key should turn into "Replaced by your answer" (with its words), the other error should go, the question should
+  read Parsed, and the save should say that your answer replaces what the file's key said. Then put it into a bank with the
+  others: it should be kept as an ordinary question, and export. It was checked in a browser and by tests, and not in the
+  window. The rule's edges are under Decisions below.
 - [ ] **In the window, press Save a copy… on a sample on the first screen.** It should open the same Save dialog with the
   sample's own name (`solar-system-test-bank.docx` and so on) and nothing should be written into the Exports folder: before this
   the button wrote the file there without asking and opened the folder. Checked in the built window by a script (the dialog
@@ -231,6 +236,15 @@ These change what the app does, and were made without asking. Each is one flag o
   said to arrive with Brightspace's default. Half a point is the usual case.
 - [ ] **A fill in the blank with one blank goes to Brightspace as a short answer;** one with several blanks is left out,
   because Brightspace's CSV cannot import a fill in the blanks question.
+
+- [ ] **A person's own answer replaces only the importer's two errors about the file's key, and only when the answer changed and is
+  usable.** You asked for the repair screen to stop keeping the error after a person chooses the answer; where the edges are is
+  mine. Replaced: "the key names an option the question does not have" and "the letter and the words name different answers",
+  dismissed under the person's name and still listed, with the save saying so. Not replaced: anything when only the wording,
+  the title or a setting changed; anything when two answers are marked on a single-answer question; a question kept as an essay;
+  a placeholder option. The wider choices were turned down: replacing on any edit that leaves a usable key (it would hide an
+  error while the file's key is still the one in use), and treating a placeholder that has been written over as repaired (it is a
+  separate rule, and not seen yet). Each is one set or one condition in `quality/answer-key.ts`.
 
 ## Not in this repository
 

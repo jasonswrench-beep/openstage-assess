@@ -353,6 +353,72 @@ describe("importing and repairing", () => {
     });
   });
 
+  // Seen in a recording of the repair screen: the Answer line said "b. Verbally bullying" over an option that reads "Verbal
+  // bullying", so no answer was marked and the question was an error. A person marked B right and saved, and the question stayed
+  // Failed under the same error, which the screen says goes when the question is fixed. So both questions were left out.
+  const DISAGREES = "1. What type of bullying is easily observed?\na. Indirect bullying\nb. Verbal bullying\nc. Cyberbullying\nAnswer: b. Verbally bullying.\n\n2. What is two plus two?\na. Three\nb. Four\n*c. Five\n\n";
+
+  test("an answer chosen by hand replaces the error about the file's key, says so, and keeps what the file said", async () => {
+    await withApp(async (client) => {
+      const view = await importText(client, "bully.txt", DISAGREES);
+      assert.equal(view.counts.failed, 1);
+      const base = `/api/sessions/${view.id}/questions/0`;
+      const { question } = (await client.get(base)).json as { question: { version: number; body: { options: Array<{ correct: boolean }> }; findings: Array<{ code: string; severity: string; dismissed?: boolean; message: string }> } };
+      const said = question.findings.find((f) => f.code === "import.keys-disagree");
+      assert.ok(said && !said.dismissed, "the file's key is an error to begin with");
+
+      const input = JSON.parse(JSON.stringify(question));
+      input.body.options[1].correct = true;
+      const saved = await client.put(base, { input, expectVersion: question.version });
+      assert.equal(saved.status, 200, saved.text);
+      const after = saved.json as { summary: { verdict: string }; counts: SessionView["counts"]; replaced: string[]; question: { findings: Array<{ code: string; severity: string; dismissed?: boolean; message: string }> } };
+      assert.equal(after.summary.verdict, "parsed", "the question stops being a failure");
+      assert.equal(after.counts.failed, 0);
+      assert.deepEqual(after.replaced, [said.message], "and the person is told what their answer replaced");
+      const kept = after.question.findings.find((f) => f.code === "import.keys-disagree");
+      assert.equal(kept?.dismissed, true, "what the file said is kept in the list, dismissed");
+      assert.equal(kept?.severity, "error");
+      assert.equal(kept?.message, said.message);
+
+      // Saved with a title or a stem changed and nothing else, a question keeps what the file said.
+      const second = await client.put(`/api/sessions/${view.id}/questions/1`, { input: { ...JSON.parse(JSON.stringify((await client.get(`/api/sessions/${view.id}/questions/1`)).json["question"])), stem: "What is 2 + 2?" } });
+      assert.equal(second.status, 200, second.text);
+      assert.deepEqual((second.json as { replaced: string[] }).replaced, [], "nothing was replaced by a change of wording");
+    });
+  });
+
+  test("an edit that does not choose an answer leaves the error about the file's key, and the question still fails", async () => {
+    await withApp(async (client) => {
+      const view = await importText(client, "bully.txt", DISAGREES);
+      const base = `/api/sessions/${view.id}/questions/0`;
+      const { question } = (await client.get(base)).json as { question: { version: number; stem: string } };
+      const saved = await client.put(base, { input: { ...JSON.parse(JSON.stringify(question)), stem: "What type of bullying is easily seen?" }, expectVersion: question.version });
+      assert.equal(saved.status, 200, saved.text);
+      assert.equal((saved.json["summary"] as { verdict: string }).verdict, "failed");
+      assert.deepEqual(saved.json["replaced"], []);
+    });
+  });
+
+  test("in a bank as well: the answer chosen replaces the error that was stored with the question", async () => {
+    await withApp(async (client) => {
+      const view = await importText(client, "bully.txt", DISAGREES);
+      assert.equal((await client.post(`/api/sessions/${view.id}/save`, { title: "Bully" })).status, 200);
+      const list = (await client.get("/api/banks/Bully")).json as { questions: Array<{ id: string; verdict: string }> };
+      const failed = list.questions.find((q) => q.verdict === "failed") as { id: string };
+      assert.ok(failed, "a failed question was kept, flagged, as it has to be");
+      const url = `/api/banks/Bully/questions/${failed.id}`;
+      const { question } = (await client.get(url)).json as { question: { version: number; body: { options: Array<{ correct: boolean }> } } };
+      const input = JSON.parse(JSON.stringify(question));
+      input.body.options[1].correct = true;
+      const saved = await client.put(url, { input, expectVersion: question.version });
+      assert.equal(saved.status, 200, saved.text);
+      assert.equal((saved.json["summary"] as { verdict: string }).verdict, "parsed");
+      assert.equal((saved.json["replaced"] as string[]).length, 1);
+      // And it is what the bank now holds.
+      assert.equal(((await client.get(url)).json["question"] as { findings: Array<{ code: string; dismissed?: boolean }> }).findings.find((f) => f.code === "import.keys-disagree")?.dismissed, true);
+    });
+  });
+
   test("still fails a question whose answer is missing after its text was edited, and never wipes the checks", async () => {
     await withApp(async (client) => {
       const view = await importText(client);
