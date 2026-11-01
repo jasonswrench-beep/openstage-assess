@@ -523,6 +523,56 @@ function keyTexts(raw: RawQuestion): string[] {
   return texts;
 }
 
+/**
+ * An entry that is nothing but letters and the words True and False, apart by commas, "and" or spaces: a key, even with a letter in
+ * it that no option has ("B, Z"), which is then said and not read. Anything with a word of its own in it is prose.
+ */
+const KEY_SHAPED = /^(?:[a-z]|true|false)(?:(?:\s*(?:,|;|&|\/|\band\b)\s*|\s+)(?:[a-z]|true|false))*$/i;
+
+/** What an option says, in the plain lower case words that an Answer line is compared with. */
+function wordsOf(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[‘’“”]/g, "")
+    .replace(/[^a-z0-9À-ɏ]+/g, " ")
+    .trim();
+}
+
+/**
+ * An Answer line that says more than a letter, read only where it can be trusted. "c. Gravity. Gravity holds ..." names option c
+ * and says its words; the line is believed when the option the letter names is the option those words begin with (or, for a
+ * short line, when the words are the start of the option). "Gravity" alone is believed when exactly one option reads that
+ * way. A line whose letter and words name different options is not believed, and says so; and a line of prose is no key at all.
+ */
+function readKeyEntry(raw: RawQuestion, entry: string): { index?: number; mismatch?: { letter: string; said: string; option: string } } {
+  const text = entry.trim();
+  const optionWords = raw.options.map((o) => wordsOf(o.lines.join(" ")));
+  const lead = /^\(?([a-t])\s*[.)]\s*(.*)$/i.exec(text);
+  if (lead) {
+    const letter = (lead[1] as string).toLowerCase();
+    const hits = raw.options.flatMap((o, i) => (o.letter === letter ? [i] : []));
+    const said = wordsOf(lead[2] ?? "");
+    if (hits.length !== 1) return {};
+    const i = hits[0] as number;
+    const option = optionWords[i] as string;
+    if (said === "") return { index: i };
+    if (option !== "" && (said === option || said.startsWith(`${option} `) || option.startsWith(`${said} `))) return { index: i };
+    return { mismatch: { letter, said: (lead[2] ?? "").trim(), option: raw.options[i]?.lines.join(" ").trim() ?? "" } };
+  }
+  const whole = wordsOf(text);
+  if (whole !== "") {
+    const hits = optionWords.flatMap((w, i) => (w === whole ? [i] : []));
+    if (hits.length === 1) return { index: hits[0] as number };
+    // "True. Because ...": the word, then its reason.
+    const word = /^(true|false)\b/.exec(whole);
+    if (word) {
+      const only = optionWords.flatMap((w, i) => (w === word[1] ? [i] : []));
+      if (only.length === 1) return { index: only[0] as number };
+    }
+  }
+  return {};
+}
+
 interface ResolvedKey {
   /** Indexes into raw.options of the options the key marks correct. */
   correct: Set<number>;
@@ -536,6 +586,8 @@ interface ResolvedKey {
   source?: "asterisk" | "answer line" | "answers list" | "formatting";
   /** Another source named different options from the one that was used. */
   conflicts: string[];
+  /** An Answer line that began with an option's letter and went on to say words that are not that option's. */
+  mismatched: Array<{ letter: string; said: string; option: string }>;
 }
 
 /**
@@ -560,6 +612,7 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
     unresolved: [],
     shared: [],
     conflicts: [],
+    mismatched: [],
   });
 
   /** The options that a list of key values, such as "B, D" or "True", point at. */
@@ -568,6 +621,7 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
     const tokens: string[] = [];
     const unresolved: string[] = [];
     const shared: string[] = [];
+    const mismatched: ResolvedKey["mismatched"] = [];
     const where = (matches: (o: RawOption) => boolean): number[] =>
       raw.options.flatMap((o, i) => (matches(o) ? [i] : []));
     const settle = (hits: number[], name: string): void => {
@@ -576,6 +630,17 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
       else shared.push(name);
     };
     for (const entry of values) {
+      // Letters and the words True and False are read only from an entry that is nothing else. A longer entry is prose, and the
+      // single letters in prose (the article "a", a middle initial) are not option letters. It is read only by readKeyEntry,
+      // which needs the words to agree with the option that the letter names.
+      if (!KEY_SHAPED.test(entry.trim())) {
+        const read = readKeyEntry(raw, entry);
+        if (read.index !== undefined) {
+          correct.add(read.index);
+          tokens.push((raw.options[read.index] as RawOption).letter);
+        } else if (read.mismatch) mismatched.push(read.mismatch);
+        continue;
+      }
       for (const piece of entry.split(KEY_SPLIT)) {
         const value = piece.trim().toLowerCase();
         if (value.length === 0) continue;
@@ -587,7 +652,7 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
         }
       }
     }
-    return { correct, tokens, unresolved, shared, conflicts: [] };
+    return { correct, tokens, unresolved, shared, conflicts: [], mismatched };
   };
 
   // The ways a file can say which option is right, in the order they are trusted:
@@ -608,7 +673,7 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
   if (byFormat.length > 0) sources.push({ name: "formatting", key: pointed(byFormat) });
 
   const used = sources[0];
-  if (!used) return { correct: new Set(), tokens: [], unresolved: [], shared: [], conflicts: [] };
+  if (!used) return { correct: new Set(), tokens: [], unresolved: [], shared: [], conflicts: [], mismatched: [] };
 
   const letters = (key: ResolvedKey): string =>
     [...key.correct].sort((a, b) => a - b).map((i) => (raw.options[i] as RawOption).letter.toUpperCase()).join(", ");
@@ -914,6 +979,16 @@ function buildBody(
           ),
         );
       }
+      for (const m of key.mismatched) {
+        findings.push(
+          finding(
+            FindingCode.KeysDisagree,
+            "error",
+            `The Answer line says "${m.said}" after the letter ${m.letter.toUpperCase()}, but option ${m.letter.toUpperCase()} reads "${m.option}". The letter and the words name different answers, so no answer was marked from it.`,
+            { source, field: "body.options" },
+          ),
+        );
+      }
       for (const name of key.shared) {
         findings.push(
           finding(
@@ -990,7 +1065,11 @@ function layoutFindings(raw: RawQuestion, type: QuestionType, source: SourceRef)
       ? []
       : type === "matching"
         ? writtenKey
-        : writtenKey.filter((value) => !KEY_VALUE.test(value));
+        : writtenKey.filter((value) => {
+            if (KEY_VALUE.test(value)) return false;
+            const read = readKeyEntry(raw, value);
+            return read.index === undefined && read.mismatch === undefined;
+          });
   if (unusedKey.length > 0) {
     found.push(
       finding(
