@@ -137,6 +137,39 @@ lost by writing CSV.
   makes sense and the author can see where to put it back, and it is counted in
   the report.
 
+**Reading the same table in.** A list of questions kept in Excel is the other common way an instructor holds a bank, so
+the same columns are read back (`src/import/spreadsheet.ts`), from `.xlsx` as well as CSV and Unicode text. Author's
+documentation says an Excel file is not read, and asks for the table saved as CSV; this reads the workbook itself, with no
+library (`table-xlsx.ts` is a zip and XML reader built on the pieces the Word reader already had), so a person need not save a
+second copy first, and a CSV written for Author still works here. Differences from Author, each on purpose:
+
+- A row with a mistake is **kept**, with the mistake said, where Author leaves it out. An empty Correct cell, a letter that
+  names an empty answer, or a word that is not True or False leaves the question with no answer marked, and a message that
+  names the cell. Author's dialog says "row 9 was left out", and the question is not seen again; here it is on the repair
+  screen with its row beside it.
+- A line break inside a cell is kept. A `Category` or `Topic` column becomes a tag, and an `Explanation` column general
+  feedback. `Attempts` is a setting of the course, so it is not stored, and the file says it was not used.
+- An essay (`ES`) can be listed. Matching, ordering and the rest still cannot be written in a table.
+- Every sheet with a Question column is read, not only the first, hidden rows and sheets are read and counted, and a sheet
+  that was not read is named. A cell that holds an error, or a formula that was never calculated, is read as empty and
+  named: reading the error's text could put `#N/A` where a letter was expected.
+- A table with no names in its first row is read in the template's order only if it begins the way the template does, with a
+  type; any other layout is refused with a message. Author reads any such table in the template's order.
+
+The blank table, and a sample with two mistakes in it on purpose, are files the app offers on its first screen, made by
+`packages/app/tools/make-samples.ts`.
+
+**A PDF is not read, and the app says so.** A PDF holds text placed on pages. It carries no numbers, letters, lists or tables,
+so what the Word reader does (rebuild a list from Word's own numbering, read a bold run as a mark) has nothing to work on, and
+what is left is lines in an order that depends on how the page was laid out. Two columns can interleave, an `Answer:` line can
+attach to a question beside it, and a footer can land inside an option. The importer's one rule is that it never invents a
+key, and a reading order is where a PDF would invent one: a wrong answer that looks authored. A scanned PDF has no text at all
+and would need character recognition, which is a service or a model and so a dependency. The way in today is the one Word
+already offers: open the PDF in Word, which makes an editable document of any PDF that has selectable text, check it, save
+it as `.docx` and bring that in. What would change this: real PDFs from real banks to measure against (there are none yet), and
+a reader of the text layer that is held to the same accuracy gate as the Word reader, which marks every question it reads for
+review and reads no key from a font. That is a decision to make once there are files to measure.
+
 This is the first exporter, and it is built (`src/export/`, command `export`). It
 needs no library. It was checked against Author's own reader, which accepted
 every row it wrote, and the tests apply Author's documented rules so that they do
@@ -243,7 +276,8 @@ not find, and changes nothing.
 library folder and lets a person: make a bank or open one from a file; import a Word, Aiken, GIFT or text file and see
 what was read beside the lines it came from, then repair it (write the missing key, turn an orphan into a question,
 dismiss a warning, but never an error) before it is stored; browse a bank, search and filter it, edit, add, duplicate and
-retire questions, with the key never filled in for anyone; export to the OpenStage spreadsheet, Moodle XML or GIFT with
+retire questions, with the key never filled in for anyone; bring in a question table from Excel or CSV as well as a Word,
+text, Aiken or GIFT file, or try one of four samples; export to the OpenStage spreadsheet, Moodle XML or GIFT with
 the destination check shown first; and print a student copy and an answer key as Word and PDF. Cheap formats (Aiken and
 GIFT in, Moodle XML and GIFT out) and printing, items 3 and 4 below, are done. The window is built and starts, shows the
 home screen and stops its server when it is closed; the installer is unsigned.
@@ -291,6 +325,8 @@ No dates are set.
 - Does reading PDF scans justify a library (a PDF reader), given the rule of no
   runtime dependencies? Decide when answer-sheet scoring starts, and only if
   reading single-JPEG pages proves too narrow.
+- Should a PDF with selectable text be imported at all, as text with every question marked for review? See "A PDF is not
+  read" above. Not before real PDF banks exist to measure it on.
 - iPhone photos are HEIC by default. Reading them would need a decoder; the
   alternative is asking the teacher to save as JPG.
 - How do the nine original phases map onto the milestones above?

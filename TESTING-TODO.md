@@ -42,6 +42,24 @@ item says what has been run and what has not. Items are removed when done, with 
 - [ ] **Three real chapters the rules were not fitted to.** The acceptance criterion for the Word importer is 95 percent on three
   real chapters. None exists yet: the real files are all fitted, and the generated ones say nothing about real banks.
 
+## Excel, CSV and the samples
+
+- [ ] **Bring in your own Excel list of questions.** Use the columns of the blank table (Type, Question, A to H, Correct,
+  Points, feedback, Category), or just add a first row that names yours. The first thing to look at is the file's notes at the
+  top of the review: which columns were not used, which sheets were not read, how many rows were hidden. It reads a workbook
+  that Excel wrote correctly (`check:excel-authored`, run on 1 November 2026: 246 comparisons with what Excel says, none
+  differing) and has not read one of yours.
+- [ ] **Open the blank table and the Excel sample in Excel** (use Save a copy on the first screen) and look at them: the bold first row, the
+  drop-down on Type, the "How to fill it in" sheet. Excel opened them without repair when asked by the check, and nothing
+  can say how they look.
+- [ ] **Try a workbook from Google Sheets and one from LibreOffice** (File, Download, Microsoft Excel). Only Excel's own files
+  have been read; the others write the same format with their own habits.
+- [ ] **Read a CSV this writes in Author** and a CSV Author's template gives in OpenAssess. The second is tested (the template
+  reads here as five questions with their keys); the first needs Author running, and the exporter is unchanged.
+- [ ] **Decide about PDF.** Today a PDF is refused, with the way in through Word (`docs/design-plan.md`, "A PDF is not read").
+  If you have PDF banks that matter, put two or three in `fixtures/publisher/` with what they should read as, and the question
+  stops being a guess.
+
 ## The app and its window
 
 Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in
@@ -91,6 +109,21 @@ These change what the app does, and were made without asking. Each is one flag o
   way every time for the same question.
 - [ ] **PDF uses the standard fonts and Latin-1 only.** A character outside it prints as `?` and is reported first.
 - [ ] **The app keeps at most 12 open imports at once**, and the oldest is dropped. Nothing is stored until you accept one.
+- [ ] **A table is read by the names in its first row, and a table with none is read only if it starts with a question type.**
+  Author reads any table with no names in the template's order. Here a layout nobody has told it is refused, because a
+  guessed column puts one cell's words where a key goes.
+- [ ] **A row of a table with a mistake is kept, not left out.** Author leaves it out. Here it is on the repair screen with its
+  row beside it, marked with no answer.
+- [ ] **Hidden rows and hidden sheets in a workbook are read, and counted.** A filter hides rows without removing them, so a list
+  filtered to the questions you wanted comes in whole, with a note of how many were hidden. The other way (leaving them out)
+  would drop questions a person never sees, which is the thing this project does not do.
+- [ ] **A `Category` or `Topic` column becomes a tag, an `Explanation` or `Rationale` column becomes general feedback, and an
+  `Attempts` column is reported and not stored** (attempts are a setting of the course).
+- [ ] **An `ES` row is an essay, and a row whose Type is empty is worked out only where the row says what it is** (two answers
+  or more is multiple choice, no answers and True or False in Correct is true or false, anything else is an essay, flagged).
+- [ ] **A PDF is refused with a message, not read.** See above. The message says to open the PDF in Word and save it as `.docx`.
+- [ ] **The samples are about the planets, and are in the repository** (`packages/app/samples`, made by `tools/make-samples.ts`),
+  so they are offered on the first screen of any install. Saving one writes it to the Exports folder, never over a file.
 
 - [ ] **Types read from the answer are not flagged for review** (`True`/`False` alone with no options, `Accepted answers:`, a
   matching instruction with `left = right` lines). Each leaves an information note instead. The old rule flagged a type worked
