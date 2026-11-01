@@ -76,6 +76,10 @@ item says what has been run and what has not. Items are removed when done, with 
   the right answer marked on each multiple choice question, and a multiselect with its scoring, a short answer, a matching
   question, an ordering, a question with bold, and accented letters. Use `Brightspace (D2L) Question Library, CSV` in the app's
   export screen on a bank with one question of each type, and look at every question in the library afterwards.
+  A second file, the twelve question test bank made on 1 November 2026 (all seven types, with accents, bold, a half point and
+  a spare matching answer), was imported and the person who did it said it worked fine. Nobody wrote down what each question
+  looked like, so this stays open for the right answer on each question, a multiselect's scoring, bold, accents and the
+  matching question, until someone looks and says.
 - [ ] **Download Brightspace's own template CSV and put the two side by side.** The article gives the rows but its template file
   was not available here. Look at how many cells wide its rows are (these are three), whether it has a header or comment line,
   and whether its Points and Scoring rows sit where these do.
