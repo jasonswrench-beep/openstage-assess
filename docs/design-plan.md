@@ -159,16 +159,47 @@ second copy first, and a CSV written for Author still works here. Differences fr
 The blank table, and a sample with two mistakes in it on purpose, are files the app offers on its first screen, made by
 `packages/app/tools/make-samples.ts`.
 
-**A PDF is not read, and the app says so.** A PDF holds text placed on pages. It carries no numbers, letters, lists or tables,
-so what the Word reader does (rebuild a list from Word's own numbering, read a bold run as a mark) has nothing to work on, and
-what is left is lines in an order that depends on how the page was laid out. Two columns can interleave, an `Answer:` line can
-attach to a question beside it, and a footer can land inside an option. The importer's one rule is that it never invents a
-key, and a reading order is where a PDF would invent one: a wrong answer that looks authored. A scanned PDF has no text at all
-and would need character recognition, which is a service or a model and so a dependency. The way in today is the one Word
-already offers: open the PDF in Word, which makes an editable document of any PDF that has selectable text, check it, save
-it as `.docx` and bring that in. What would change this: real PDFs from real banks to measure against (there are none yet), and
-a reader of the text layer that is held to the same accuracy gate as the Word reader, which marks every question it reads for
-review and reads no key from a font. That is a decision to make once there are files to measure.
+**A PDF is read from its text, and says what that costs.** A PDF holds text placed on pages. It carries no numbers,
+letters, lists or styles, so what the Word reader does (rebuild a list from Word's own numbering, read a bold run as a mark) has
+nothing to work on. What it does have is where each piece of text stands, and that is enough to put the lines and paragraphs
+back (`src/import/pdf/`, no library: the file's objects and streams, the fonts' maps of their codes, the content of each page,
+then lines, then paragraphs), and then the same scanner reads it as it reads a Word file or a text file. The importer's one
+rule, that it never invents a key, is held by reading an answer only where it is written down: an asterisk, an `Answer:` line,
+an Answers list. Nothing is read from a font, because a bold option can be bold for a reason that is not a key.
+
+What was decided, and why:
+
+- **A line of an Answer entry is believed only where its letter and its words agree.** The first real PDFs wrote
+  `Answer: c.`, the words of the option, and a reason, and the scanner then took every single-letter word in the reason (the
+  article "a") for an option letter. That was a defect of the scanner and not of PDFs, and it is fixed in it: an entry that is
+  nothing but letters is a key; a longer one is read only if the letter and the option's words name the same option; if they
+  name different ones it is an error that quotes both and no answer is marked; and prose is never mined for letters.
+- **A page number and a running title are left out, and counted and quoted.** A line at the very top or bottom of a page is
+  one if it is only a page number, or if the same line (numbers aside) is at the edge of another page. A line that begins like a
+  question or an option is never one.
+- **A word broken at the end of a line keeps its hyphen**, with no space, unless the document spells the word whole elsewhere
+  and never hyphenated. A typesetter sets a break in a word and a hyphen that belongs to it the same way, so dropping hyphens
+  would turn "self-concept" into one word. A broken word is shown broken ("writ-ten"), where it can be seen and mended.
+- **A picture shows as `[Picture]` where it was drawn**, set apart from the text round it, and the file counts them. An
+  equation or a figure that the PDF holds as a picture is not text and cannot be, and a question that depends on one is found
+  by the marker.
+- **A page set in columns is said to be**, because its lines are read across; it is not read in columns.
+- **A PDF that is protected, or is a scan, is refused** with the reason and the way round (an unprotected copy, the original
+  document, or text recognition done in a PDF program), and a text file called .pdf says it is not one. Reading a scan would
+  need character recognition, which is a service or a model and so a dependency.
+- **The file always says it was read from a page.** Every PDF import carries a warning that there is no numbering or formatting
+  to read, that columns, tables, pictures and equations may have lost something, and that the answers most of all should be
+  checked against the PDF.
+
+What was measured. Five real banks, from one typesetting program (a page-layout program), in the private fixtures folder
+(`fixtures/publisher/pdf`, expected files written from the documents). The layout rules were written after looking at the first
+page of four of them, so the first run was not blind to layout, and only the scanner can be reported as measured before and
+after: with the scanner as it was, the five scored 50.6 percent (22.6 and 33.3 on two of them, 0 on one, 100 on two); with the
+answer-line rule, the doubled full stop of a typed question number ("13..") and the heading "True and False", 77.7 percent, 100
+on four of the five. The fifth begins with a lecture outline whose eight numbered items are read as eight essays, each flagged for
+review, which a score by position counts as every question after them wrong; its 28 real questions are read right. Two answers in
+one of the banks disagree with their own options in the document, and are declared failed in its expected file. All five come from
+one producer, so none of this says how a PDF from Word, a desktop PDF program or Google Docs will read.
 
 This is the first exporter, and it is built (`src/export/`, command `export`). It
 needs no library. It was checked against Author's own reader, which accepted
@@ -276,7 +307,7 @@ not find, and changes nothing.
 library folder and lets a person: make a bank or open one from a file; import a Word, Aiken, GIFT or text file and see
 what was read beside the lines it came from, then repair it (write the missing key, turn an orphan into a question,
 dismiss a warning, but never an error) before it is stored; browse a bank, search and filter it, edit, add, duplicate and
-retire questions, with the key never filled in for anyone; bring in a question table from Excel or CSV as well as a Word,
+retire questions, with the key never filled in for anyone; bring in a question table from Excel or CSV, or a PDF read from its text, as well as a Word,
 text, Aiken or GIFT file, or try one of four samples; export to the OpenStage spreadsheet, Moodle XML or GIFT with
 the destination check shown first; and print a student copy and an answer key as Word and PDF. Cheap formats (Aiken and
 GIFT in, Moodle XML and GIFT out) and printing, items 3 and 4 below, are done. The window is built and starts, shows the
@@ -325,8 +356,8 @@ No dates are set.
 - Does reading PDF scans justify a library (a PDF reader), given the rule of no
   runtime dependencies? Decide when answer-sheet scoring starts, and only if
   reading single-JPEG pages proves too narrow.
-- Should a PDF with selectable text be imported at all, as text with every question marked for review? See "A PDF is not
-  read" above. Not before real PDF banks exist to measure it on.
+- How do PDFs from other programs read (Word, a desktop PDF program, Google Docs, a publisher's own tools)? Only one typesetting program's have
+  been measured.
 - iPhone photos are HEIC by default. Reading them would need a decoder; the
   alternative is asking the teacher to save as JPG.
 - How do the nine original phases map onto the milestones above?

@@ -482,6 +482,60 @@ Media is never garbage collected either.
   and bold; it does not yet write a text box or hidden text, so how Word spells a box, and what `mc:Fallback` holds in a real
   file, is read from memory of the format.
 
+### Found by the first real PDF test banks (stage 8)
+
+Five PDFs from one typesetting program (a page-layout program), kept in the private fixtures folder. Fixed, each with a test that fails when
+the fix is taken out (47 deliberate breaks of the PDF reader, its paragraph rules and the answer-line reading, every one caught
+once the tests that were missing were written, on a baseline that passed):
+
+- **An `Answer:` line of prose marked an option from the words in it.** The scanner split an answer entry into words and took
+  every single-letter word for an option letter, so `Answer: c. <the option's words>. <a reason with the article "a" in it>`
+  marked option A. In one of the PDFs four of six such questions came out keyed A when the document said otherwise (two were
+  right by luck), each only warned about ("key text not used") and not failed, so a wrong key was applied and looked as if it
+  had been read. This was never a PDF problem: any bank whose Answer line carried a sentence could do it. It is fixed in the
+  scanner. An entry that is nothing but letters is a key as before (`B`, `B, D`, and `B, Z` still applies B and says Z was not
+  used); a longer one is read only where its letter and its words name the same option, or where its words are exactly one
+  option's; where they name different options it is an error that quotes both, and no answer is marked; and prose names
+  nothing. None of the 21 real Word files (1421 questions) changed. Two answers in one PDF disagree with their own options in
+  the document (the letter says one option and the words another), and are refused and said.
+- **A question number typed with two full stops (`13..`) was not a number.** Its options fell into the question before it, which
+  became a multiple response with eight options, flagged but wrong, and every question after it was off by one. It is the same
+  number now.
+- **The heading "True and False" was text no question claimed.** "True or False" and "True / False" were headings.
+- **The command-line `review` showed a table's or a PDF's bytes as its source lines.** It shows the importer's own lines now.
+  (The table half of this was found in passing, from stage 7.)
+- **Found by reading the pages and fixed in the reader**, not by the scanner: a running title and a page number are not text of a
+  question and are left out, counted and quoted; a line-end hyphen cannot be told from a real one by looking, so it is kept
+  unless the document spells the word whole elsewhere ("self-concept" had come out as one word); a subscript is part of its line;
+  a wrapped line in a list set at one and a half line spacing is still the paragraph above; a stem has more room above its first
+  option than two options have between them, and that is not a blank line; a picture is set apart and marked, and had stuck to
+  the end of an option.
+
+Open:
+
+- **A numbered outline before the questions becomes questions.** The first PDF begins with a lecture outline whose eight numbered
+  items have no options and no type, so each is read as an essay, flagged for review ("the file did not say what kind of
+  question this is"), and shifts every question after it, so that it scores 0 percent by position although its 28 real
+  questions are right. A rule that told an outline from a list of essay prompts would have to guess, and numbered essay prompts
+  with no heading are common. The pdf-publisher test holds exactly this state so that it cannot get worse unseen.
+- **Columns are read across, and the file says so only when long text stands on both sides of a wide gap on several lines.** A
+  two-column page of short lines would not be told.
+- **A table in a PDF is its lines of text**, with a tab where there is a wide gap, so a table of questions or a matching
+  exercise laid out as a grid reads as text and not as pairs. The one rating scale in these banks read as a line.
+- **A picture, an equation drawn as a shape, and a Greek letter set in a font whose text map is missing** are not text. A picture
+  is marked. The others are not seen: the first question of one PDF reads "(1, 2, 3, 4." where its sentence has four named
+  groups, because the file's own text has no such characters, and nothing in the file says they were meant to be there.
+- **Answer text matching is strict.** An answer that spells the option's words another way ("Speaking" for "Spoken") is refused
+  and said. It could be matched loosely and would then sometimes be a guess.
+- **Only a page-layout program's PDFs have been read.** A PDF from Word's own export, a desktop PDF program, Google Docs, a scanner with text recognition or
+  a publisher's tools sets its text another way (one piece for each word, text in reverse, text in a form drawn page by page), and
+  none has been seen. The reader handles what the five and the test builder have: simple and composite fonts with a text map,
+  an encoding with changes, packed objects and a stream for the table of objects, compressed streams with predictors, the
+  old-style table, and a damaged table by searching. It does not handle: LZW-compressed streams, a protected file (refused even
+  where the password is empty), text that is turned, CJK fonts with their own code maps, or tagged-PDF structure, which would give
+  the reading order directly.
+- **A scan (a picture of a page) is refused.** Reading it needs character recognition, which is a service or a model.
+
 ### Found while building the question table importer (stage 7)
 
 Fixed while building, each by a test that fails when the fix is taken out. 47 deliberate breaks of the importer and its
