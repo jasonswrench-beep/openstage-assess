@@ -80,7 +80,9 @@ file gave (`KeysDisagree`, `KeyLetterMissing`) stay on a question until a person
 `replaceFileKeyProblems`): then they are dismissed by that person, kept in the list with their words, and the save says so.
 A change of stem, title or wording does not replace them, a choice that is not a usable answer does not, and no other finding
 is touched. Do not widen it to any edit, or the error that says the file's key was not applied would vanish while the file's
-key is still the one in use.
+key is still the one in use. The same goes for placeholders (`quality/placeholders.ts`): the importer's errors about an option
+it had to fill with `(missing)` go only when the words are written in where the placeholder was, one option at a time, and
+they are dismissed and kept like the others.
 
 **The editor never writes back what the person did not change.** An edit keeps
 every field it was not given as stored, formatting and all; text that holds a
@@ -97,7 +99,7 @@ the order of the key. What cannot be printed is said against the question.
 ## Commands
 
 ```
-npm test                       # 1464 engine tests and 120 app tests, Node's own runner
+npm test                       # 1474 engine tests and 121 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

@@ -371,10 +371,10 @@ describe("importing and repairing", () => {
       input.body.options[1].correct = true;
       const saved = await client.put(base, { input, expectVersion: question.version });
       assert.equal(saved.status, 200, saved.text);
-      const after = saved.json as { summary: { verdict: string }; counts: SessionView["counts"]; replaced: string[]; question: { findings: Array<{ code: string; severity: string; dismissed?: boolean; message: string }> } };
+      const after = saved.json as { summary: { verdict: string }; counts: SessionView["counts"]; replaced: Array<{ code: string; message: string }>; question: { findings: Array<{ code: string; severity: string; dismissed?: boolean; message: string }> } };
       assert.equal(after.summary.verdict, "parsed", "the question stops being a failure");
       assert.equal(after.counts.failed, 0);
-      assert.deepEqual(after.replaced, [said.message], "and the person is told what their answer replaced");
+      assert.deepEqual(after.replaced, [{ code: "import.keys-disagree", message: said.message }], "and the person is told what their answer replaced");
       const kept = after.question.findings.find((f) => f.code === "import.keys-disagree");
       assert.equal(kept?.dismissed, true, "what the file said is kept in the list, dismissed");
       assert.equal(kept?.severity, "error");
@@ -384,6 +384,36 @@ describe("importing and repairing", () => {
       const second = await client.put(`/api/sessions/${view.id}/questions/1`, { input: { ...JSON.parse(JSON.stringify((await client.get(`/api/sessions/${view.id}/questions/1`)).json["question"])), stem: "What is 2 + 2?" } });
       assert.equal(second.status, 200, second.text);
       assert.deepEqual((second.json as { replaced: string[] }).replaced, [], "nothing was replaced by a change of wording");
+    });
+  });
+
+  // The same for words: an option with a letter and no text is kept as "(missing)" beside an error, and writing the words in
+  // left the error where it was, so the question stayed Failed after it was repaired.
+  test("words written where a placeholder was replace the error about it, say so, and keep what it said", async () => {
+    await withApp(async (client) => {
+      const view = await importText(client, "blank.txt", "1) Which of these is a chair?\n*a. Chair\nb.  \nc. Desk\n\n2) Which is a fruit?\na. Chair\n*b. Apple\n\n");
+      assert.equal(view.counts.failed, 1);
+      const base = `/api/sessions/${view.id}/questions/0`;
+      const { question } = (await client.get(base)).json as { question: { version: number; body: { options: Array<{ text: string }> }; findings: Array<{ code: string; message: string; dismissed?: boolean }> } };
+      assert.equal(question.body.options[1]?.text, "(missing)");
+      const said = question.findings.find((f) => f.code === "import.empty-option");
+      assert.ok(said && !said.dismissed);
+
+      // Typing the placeholder in again is not writing the words.
+      const same = JSON.parse(JSON.stringify(question));
+      same.body.options[2].text = "Stool";
+      const stillMissing = await client.put(base, { input: same, expectVersion: question.version });
+      assert.deepEqual(stillMissing.json["replaced"], []);
+      assert.equal((stillMissing.json["summary"] as { verdict: string }).verdict, "failed", "a placeholder is still there");
+
+      const input = JSON.parse(JSON.stringify(stillMissing.json["question"]));
+      input.body.options[1].text = "Table";
+      const saved = await client.put(base, { input, expectVersion: (stillMissing.json["summary"] as { version: number }).version });
+      assert.equal(saved.status, 200, saved.text);
+      assert.equal((saved.json["summary"] as { verdict: string }).verdict, "parsed", "the question stops being a failure");
+      assert.deepEqual(saved.json["replaced"], [{ code: "import.empty-option", message: said.message }]);
+      const kept = (saved.json["question"] as { findings: Array<{ code: string; dismissed?: boolean }> }).findings.find((f) => f.code === "import.empty-option");
+      assert.equal(kept?.dismissed, true, "what the importer said is kept in the list, dismissed");
     });
   });
 
@@ -413,7 +443,7 @@ describe("importing and repairing", () => {
       const saved = await client.put(url, { input, expectVersion: question.version });
       assert.equal(saved.status, 200, saved.text);
       assert.equal((saved.json["summary"] as { verdict: string }).verdict, "parsed");
-      assert.equal((saved.json["replaced"] as string[]).length, 1);
+      assert.equal((saved.json["replaced"] as unknown[]).length, 1);
       // And it is what the bank now holds.
       assert.equal(((await client.get(url)).json["question"] as { findings: Array<{ code: string; dismissed?: boolean }> }).findings.find((f) => f.code === "import.keys-disagree")?.dismissed, true);
     });

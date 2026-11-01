@@ -546,9 +546,25 @@ tests, and both invisible to them:
   Seen on the screen in a browser (an import with the same fault: two errors before; after ticking B, one listed as replaced,
   the other gone, the question Parsed and the toast as above), and by 13 deliberate breaks of the rule, every one caught
   (the first run missed one, a check that case is not an answer, which hid behind the usable-answer test and now has its own).
-  **Still open, same class:** a placeholder option that a person has since replaced with real words keeps its error, so such a
-  question stays unusable after it is repaired. It is not touched here because telling that a placeholder was replaced needs a
-  rule of its own (the placeholder's own text is `(missing)`), and it has not been seen in a recording.
+  **The same class, since fixed (below):** a placeholder option that a person had replaced with real words kept its error.
+- **Fixed: a placeholder option that was written over kept its error.** When a file has an option with a letter and no words, a
+  question with one option, or a question with none, the importer keeps the question, writes `(missing)` where the words should
+  be, and raises an error (`EmptyOption`, `TooFewOptions`, `NoOptions`). Writing the words in left the error, so the question
+  stayed Failed and not usable (`hasUsableKey` reads those errors) after it was repaired. Not seen in a recording: found by
+  reading, and reproduced by a test that failed before the change. The rule (`quality/placeholders.ts`, called by `editQuestion`
+  beside the answer rule) replaces an error when what it says is no longer so:
+  - "Option C has no text" goes when that option, found by the place it had, has words or is gone, so a question with two
+    placeholders keeps the other's error until it is written too;
+  - "only one option" and "no options" go when there are two or more options and none is a placeholder;
+  - a placeholder typed in again, left as it was, or replaced by spaces keeps all of them, and so does one option left after the
+    placeholder is taken away. It reads the question as it is, so an error that went stale in a bank before this rule goes at
+    the next edit of that question.
+  Nothing is deleted and nothing else is touched: the errors are dismissed by whoever wrote the words and listed on the screen as
+  "Fixed by your words", with what they said; the history entry says so; the save says "The words you wrote replace the
+  placeholder". Seen on the screen in a browser, and by 13 deliberate breaks, every one caught (the first run missed one, that
+  one option left after the placeholder is taken away must keep its error, which has its own test now). A matching question
+  with fewer than two pairs is a placeholder of another kind and is not covered: its error is raised as `NoAnswerKey`, which an
+  edit re-derives from the body and so drops while the placeholder pairs are still there. Not seen in a recording; open.
 - **Fixed: a printed question could be split across a page.** In a recording of a printed student copy opened in Word, question 6
   ended page 1 with its choices A and B and went on with C and D at the head of page 2. The layout tied only a question's wording
   to its first choice (`keepNext`), and the choices after the first were free to be separated, in Word and in the PDF. Measured with

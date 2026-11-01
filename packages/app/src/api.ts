@@ -39,13 +39,14 @@ import { sampleById, samplePath, SAMPLES } from "./samples.ts";
 import { summarise, type Sessions } from "./sessions.ts";
 
 /**
- * What the file's key said that an edit replaced: the messages of the checks that were live and are now dismissed. An answer
- * chosen by hand replaces them, and the person is told which, so that nothing the file said is dropped without a word.
+ * What an edit replaced: the checks that were live and are now dismissed, with their codes. An answer chosen by hand replaces what
+ * the file's key said, and words written where a placeholder was replace what was said about that, and the person is told which,
+ * so that nothing the file said is dropped without a word.
  */
-function replacedBy(before: Question, after: Question): string[] {
+function replacedBy(before: Question, after: Question): Array<{ code: string; message: string }> {
   return liveFindings(before.findings)
     .filter((f) => after.findings.some((g) => g.dismissed === true && g.code === f.code && g.message === f.message))
-    .map((f) => f.message);
+    .map((f) => ({ code: f.code, message: f.message }));
 }
 
 /** Who changes are recorded as made by. Nobody's name is asked for or kept. */

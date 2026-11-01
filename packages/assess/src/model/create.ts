@@ -9,6 +9,7 @@
 import { newQuestionId } from "./ids.ts";
 import type { Finding } from "./findings.ts";
 import { checkAnswerKey, replaceFileKeyProblems } from "../quality/answer-key.ts";
+import { replacePlaceholderProblems } from "../quality/placeholders.ts";
 import { collectRefs, plainToRich, richTextToPlain, sanitizeDeep, type RichText } from "./richtext.ts";
 import {
   MAX_TITLE_LENGTH,
@@ -150,13 +151,18 @@ export function editQuestion(question: Question, rawEdit: QuestionEdit, opts: Ed
 
   if (!substantive) return next;
   const recomputed = withRecomputedFindings(next, question.findings);
-  // An answer chosen here replaces what the file's key said, and the history says so.
-  const { question: settled, replaced } = replaceFileKeyProblems(question, recomputed, by, at);
-  if (replaced.length === 0) return settled;
-  const entries = settled.history.slice();
+  // An answer chosen here replaces what the file's key said, and words written where the importer had to put a placeholder
+  // replace what it said about that, and the history says so.
+  const keyed = replaceFileKeyProblems(question, recomputed, by, at);
+  const written = replacePlaceholderProblems(question, keyed.question, by, at);
+  const said: string[] = [];
+  if (keyed.replaced.length > 0) said.push(`the answer was chosen, so what the file's key said no longer applies (${keyed.replaced.map((f) => f.code).join(", ")})`);
+  if (written.replaced.length > 0) said.push(`the missing words were written, so the placeholder no longer applies (${written.replaced.map((f) => f.code).join(", ")})`);
+  if (said.length === 0) return written.question;
+  const entries = written.question.history.slice();
   const last = entries.pop();
-  if (last) entries.push({ ...last, change: `${last.change}; the answer was chosen, so what the file's key said no longer applies (${replaced.map((f) => f.code).join(", ")})` });
-  return { ...settled, history: entries };
+  if (last) entries.push({ ...last, change: `${last.change}; ${said.join("; ")}` });
+  return { ...written.question, history: entries };
 }
 
 /** The finding codes this engine can re-derive from a question on its own. */
