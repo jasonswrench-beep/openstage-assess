@@ -11,6 +11,12 @@ tools, and the engine and the app keep their rule of no third-party runtime depe
 window is the one place that has them, and it is not needed to use OpenAssess: the browser
 version runs with only Node installed (`Open OpenAssess.cmd`).
 
+One thing the page cannot do for itself is ask where to save a file: the page's own save dialog
+(`showSaveFilePicker`) is offered by the window and never opens. So the shell answers a download
+of one of the app's own files, `/files/...` on its own server, with the system's Save dialog
+(the `rfd` crate, on Windows). The page has no command for this: the shell shows the dialog when
+the window starts a download, which is the one place a person asks for a file to be saved.
+
 ## What it needs to build
 
 - Node.js (the same one the app runs on; a copy of it is carried inside the installer)
@@ -40,7 +46,8 @@ set was made from a picture that had failed to load and was a broken-image symbo
 
 Set `OPENASSESS_SHELL_LOG` to a file name before starting the window, and every line the server
 prints, with one line for each request it answers, is appended to that file. The keys never appear
-in it: a request is logged without its query.
+in it: a request is logged without its query. A download is logged too: that one was asked for, the
+place that was chosen for it, or that the Save dialog was closed.
 
 The installer is not signed, so Windows will say that it does not know the publisher the first
 time it is run. That is a decision for the person who publishes it (a signing certificate costs

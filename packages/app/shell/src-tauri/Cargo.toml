@@ -13,6 +13,11 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 
+# The system's Save dialog, for a file the window is asked to download. Nothing in the page can call it: the shell shows it
+# when the window starts a download, which is the one place a person asks for a file to be saved.
+[target.'cfg(windows)'.dependencies]
+rfd = { version = "0.16", default-features = false }
+
 [profile.release]
 panic = "abort"
 codegen-units = 1
