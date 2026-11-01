@@ -378,6 +378,25 @@ would have fixed, so this came first. Six things changed, each described below:
   What is left in the generated sets is mostly a question with no options and an answer in words and no blank, which is an
   essay or a short answer and is flagged because the file does not say which, and a question with two bold options and no type
   line, which is a multiple response and flagged because it may be a slip.
+- Stage 5, the rest: hidden text, and text in boxes. Text that Word hides (`w:vanish`, set on a run, by a character style or
+  by a paragraph style) is not read. It is not on the page a person reads, and an old answer or a note to self left hidden
+  must not turn up in a stem, an option or a key. Hidden is a toggle like bold, so a hidden paragraph style under a hidden
+  character style shows the text again. A paragraph whose text and mark are both hidden is not a line at all, because Word
+  joins it to the next one, and it still takes its number in a list, which Word was asked and did (the item after it was
+  numbered as if it were there); in a table cell it is kept as a blank line, since the end of a cell joins to nothing. The
+  file says how many paragraphs had hidden text left out and quotes the first, with how to bring it back, and says
+  separately how many paragraph marks are hidden. Asked of Word: `check:word-formatting` now holds 14 paragraphs of hidden
+  text reached by direct formatting, character styles, paragraph styles, styles based on them, and the document defaults,
+  and the reader and Word agree on all of them (155 documents, no disagreement); `check:word` holds a hidden item in a list.
+  Text in a text box, shape or picture is still not read, as the design said: it is counted, quoted once, and the message
+  says that a question in one is in no question and no orphan. Where Word writes a box twice, in `mc:Choice` and again in
+  `mc:Fallback`, it is counted once and quoted from the newer copy. 19 new tests (1172 in all with the review page's) and 15
+  deliberate breaks, all caught.
+  Not modelled: a hidden paragraph mark that still has text, which Word joins to the next paragraph and the reader keeps as a
+  line of its own (the file says so, and `check:word` leaves the case out, since Word then counts one paragraph fewer than the
+  file holds); and document defaults that hide text met by a character style that hides as well, where Word is not the plain
+  toggle ("paragraph style off, character style on" shows, "defaults on, character style on" hides). No file sets hidden text
+  in its defaults.
 - Thirty-two deliberate breaks of the numbering code and the code that finds and
   joins its labels: all caught by a test in the last round. Four survived an earlier
   round (an override read as once per instance and not once per level, and three in
@@ -390,7 +409,7 @@ would have fixed, so this came first. Six things changed, each described below:
   of a paragraph is not a blank line.
 - Tracked changes, hyperlinks, fields and content controls are read now, not at
   stage 5, because the walker had to decide what to do with them to read a
-  paragraph at all. Text boxes, alternate content and hidden text are still stage 5.
+  paragraph at all. Hidden text is left out, and text in boxes is counted and quoted, not read (stage 5, above).
 - A picture or shape leaves `[picture]` in the text and an equation leaves
   `[equation]`, and the file reports a count. Until stages 6 and 7 a question that
   holds a marker can still come out `parsed`, because the report is for the file
@@ -710,8 +729,8 @@ stays a flagged guess: an essay with no answer, a choice question with two stars
   before it are read and the question is flagged), and a wrong answer to go with the pairs.
 
 **Not built yet:** a key in a table by shading, matching questions as a table of another shape
-(two columns, no numbers), a question that spreads over several rows of a grid, text boxes and
-alternate content (rest of stage 5), pictures with their bytes and alt text (stage 6), equations
+(two columns, no numbers), a question that spreads over several rows of a grid, a question that
+stands in a text box (counted and quoted, not read), pictures with their bytes and alt text (stage 6), equations
 (stage 7), the answers of a test kept in a second file (the 2002 exam's answers are in
 a second file), and the rest of stage 8: real chapters written by other people than the two sources so
 far. The dialect pack is still the thing most wanted. The first real file taught more in one

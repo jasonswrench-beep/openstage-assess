@@ -16,7 +16,7 @@
  */
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
-import { documentToBlocks, type DocumentStats } from "./docx/document.ts";
+import { documentToBlocks, OBJECT_TEXT, type DocumentStats } from "./docx/document.ts";
 import { readFormatting } from "./docx/formatting.ts";
 import { readNumbering } from "./docx/numbering.ts";
 import { DocxError, openDocx, type DocxLimits, type DocxPackage } from "./docx/package.ts";
@@ -146,7 +146,37 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
     );
   }
   for (const [name, count] of Object.entries(stats.unreadWithText)) {
-    found.push(finding(FindingCode.UnreadContent, "warn", `Text in ${name} was not read (${plural(count, "place", "places")}).`));
+    const sample = stats.unreadSamples[name];
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `Text in ${name} was not read (${plural(count, "place", "places")})${sample ? `, for example "${sample}"` : ""}.` +
+          // A question that lives in a text box is in no question and no orphan: say so, so that it is looked for.
+          (name === OBJECT_TEXT ? " A question that stands in one is not among the questions, and is not among the text left over either." : ""),
+      ),
+    );
+  }
+  if (stats.hiddenText > 0) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `Hidden text was left out of ${plural(stats.hiddenText, "paragraph", "paragraphs")}${stats.hiddenSample ? `, for example "${stats.hiddenSample}"` : ""}. ` +
+          `Word does not show hidden text unless asked to, so it is not read as part of a question or as an answer. ` +
+          `If it holds one, show it in Word (select it, open Font, and untick Hidden) and import again.`,
+      ),
+    );
+  }
+  if (stats.hiddenMarks > 0) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `${plural(stats.hiddenMarks, "paragraph mark is", "paragraph marks are")} hidden. Word joins such a paragraph to the one after it when hidden text is not shown. ` +
+          `One with no text left to show was left out; one that still has text is read as it stands, as a paragraph of its own.`,
+      ),
+    );
   }
   if (stats.comments > 0) {
     found.push(

@@ -26,9 +26,9 @@ try {
       for ($i = 1; $i -le $count; $i++) {
         $paragraph = $doc.Paragraphs.Item($i)
         if ($What -eq 'format') {
-          # The text of the paragraph without its mark, as bold|italic|underline|colour|highlight.
+          # The text of the paragraph without its mark, as bold|italic|underline|colour|highlight|hidden.
           $range = $doc.Range($paragraph.Range.Start, [Math]::Max($paragraph.Range.Start, $paragraph.Range.End - 1))
-          $labels.Add(("{0}|{1}|{2}|{3}|{4}" -f $range.Font.Bold, $range.Font.Italic, $range.Font.Underline, $range.Font.Color, $range.HighlightColorIndex))
+          $labels.Add(("{0}|{1}|{2}|{3}|{4}|{5}" -f $range.Font.Bold, $range.Font.Italic, $range.Font.Underline, $range.Font.Color, $range.HighlightColorIndex, $range.Font.Hidden))
         } else {
           $labels.Add([string]$paragraph.Range.ListFormat.ListString)
         }

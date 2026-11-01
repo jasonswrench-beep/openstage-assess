@@ -19,6 +19,8 @@
  *    another style level has already turned it on turns it back off, so a bold
  *    paragraph style with a bold character style on top is not bold. Within one
  *    chain of styles that are based on each other, the nearest wins as usual.
+ *  - Hidden text is a toggle property too, and is asked for apart (`hidden`), since text that
+ *    Word does not show is not read.
  *  - Underline, highlight and colour have no toggle: the nearest level wins. The
  *    one exception is a highlight in a character style, which Word ignores.
  *  - "none" for an underline or a highlight, and "auto" for a colour, mean there
@@ -40,6 +42,8 @@ interface Said {
   highlight?: string | null;
   /** A colour, or null when the style says automatic. */
   color?: string | null;
+  /** Hidden text. Not part of a run's look: asked for apart, by `Formatting.hidden`. */
+  hidden?: boolean;
 }
 
 interface StyleFormatting {
@@ -54,6 +58,12 @@ export interface Formatting {
    * paragraph it is in (if the paragraph names one).
    */
   run(runProperties: XmlElement | undefined, paragraphStyle: string | undefined): RunFormat;
+  /**
+   * Whether Word hides the text of a run, or a paragraph mark, as it would with "show hidden text" off. Hidden is
+   * a toggle property like bold, so a hidden paragraph style under a hidden character style shows the text again.
+   * Apart from `run` because a hidden run is not read at all, and so has no look to keep.
+   */
+  hidden(runProperties: XmlElement | undefined, paragraphStyle: string | undefined): boolean;
 }
 
 /** A toggle property: present means on, unless its value says otherwise. */
@@ -72,6 +82,8 @@ function said(properties: XmlElement | undefined): Said {
   if (bold !== undefined) out.bold = bold;
   const italic = toggle(properties, "w:i");
   if (italic !== undefined) out.italic = italic;
+  const hidden = toggle(properties, "w:vanish");
+  if (hidden !== undefined) out.hidden = hidden;
 
   const underline = first(properties, "w:u");
   if (underline) out.underline = (underline.attrs["w:val"] ?? "single").toLowerCase() !== "none";
@@ -149,7 +161,7 @@ export function readFormatting(styles: XmlElement | undefined): Formatting {
 
     // A toggle: the paragraph level (with the document's defaults beneath it)
     // and the character level each give a value, and they are combined by XOR.
-    const toggled = (name: "bold" | "italic"): boolean => {
+    const toggled = (name: "bold" | "italic" | "hidden"): boolean => {
       const atParagraph = nearest(paragraph, name) ?? defaults[name] ?? false;
       const atCharacter = nearest(character, name) ?? false;
       return atParagraph !== atCharacter;
@@ -162,6 +174,7 @@ export function readFormatting(styles: XmlElement | undefined): Formatting {
     const result: Said = {
       bold: toggled("bold"),
       italic: toggled("italic"),
+      hidden: toggled("hidden"),
       underline: settle(nearest(both, "underline"), defaults.underline, false),
       // Word takes a highlight from a paragraph style or from the run itself, and
       // ignores one in a character style, whatever it says. Checked against Word.
@@ -191,6 +204,11 @@ export function readFormatting(styles: XmlElement | undefined): Formatting {
       if (highlight) format.highlight = highlight;
       if (color) format.color = color;
       return format;
+    },
+
+    hidden(runProperties, paragraphStyle) {
+      const characterStyle = runProperties ? first(runProperties, "w:rStyle")?.attrs["w:val"] : undefined;
+      return said(runProperties).hidden ?? stylesGive(paragraphStyle, characterStyle).hidden ?? false;
     },
   };
 }
