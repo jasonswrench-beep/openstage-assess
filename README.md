@@ -85,7 +85,10 @@ only and answers only to the window it opened.
   answer, a rubric, pictures) is said against the question. It has been checked against
   Brightspace's published description of the file, and one file of multiple choice, true or
   false and written response questions has been imported into a real Brightspace course and
-  arrived as written. The other types have not yet been imported there.
+  arrived as written. A second file with all seven types (a twelve question test bank) was
+  imported later and the person who did it said it worked fine; no record was kept of each
+  question, so the right answer on each, a multiselect's scoring and the formatting have
+  not been looked at one by one.
 - A QTI 1.2 package out, for Brightspace's Quizzes and Question Library and for Canvas's Import
   Course Content (QTI .zip file): multiple choice, multiple answer, true or false, short
   answer, matching and essay, each with its points. Ordering, numeric, hotspot and calculated

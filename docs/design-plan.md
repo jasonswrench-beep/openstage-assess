@@ -249,8 +249,10 @@ course (Question Library, Import, Upload a File, then a quiz built from it): 13 
 response questions arrived as 28 questions of those types, each worth 1 point, with their text, and the one true or false that
 was opened in Brightspace's editor had the answer the source document gives (False). That was seen in a recording, so it says
 nothing about the right answer on each multiple choice question, which the preview does not show. Multiselect, short answer,
-matching, ordering, a question with formatting, accented letters and a multiselect's scoring have not been imported
-(`TESTING-TODO.md` lists what a person with a course should try). The tests read the file back through the CSV reader and hold every question of every fixture bank to
+matching, ordering, a question with formatting, accented letters and a multiselect's scoring were not in that file. A second file
+with all seven types (a twelve question test bank, made the same day) was then imported and the person who did it said it worked
+fine; no record was kept of each question, so the right answer on each, a multiselect's scoring and the formatting are still
+unseen (`TESTING-TODO.md` lists what a person with a course should try). The tests read the file back through the CSV reader and hold every question of every fixture bank to
 a second reading of the article, which shows the file follows the article and nothing about whether the article is complete.
 Brightspace's own blank template file was not available to compare with.
 
@@ -436,7 +438,8 @@ home screen and stops its server when it is closed; the installer is unsigned.
 - **M2, LMS exports.** QTI 1.2, 2.1 and 3.0, the per-LMS compatibility matrix
   built by importing every type into a sandbox course on each LMS, destination
   checks, and round-trip tests. The Brightspace question library CSV is done
-  and imported once into a real course for three of its seven types. A QTI 1.2 package (Brightspace and Canvas) and a
+  and imported twice into a real course: once seen for three of its seven types, and once with all seven, reported to have
+  worked fine without a record of each question. A QTI 1.2 package (Brightspace and Canvas) and a
   Blackboard upload file are built and tested against the standard and the help pages, and have not been imported anywhere;
   QTI 2.1 and 3.0, and the 2.x or 3.x subset of Brightspace's Course Import, are not started.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
