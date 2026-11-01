@@ -107,11 +107,13 @@ Quizzes tool's Import or the Question Library's Import. D2L's own Question Libra
 route was probably wrong; that is now corrected in the app. The package itself has not been shown to be at fault, and it has
 not been shown to be right.
 
-- [ ] **Retry it in Brightspace by the route the test-bank vendor documents for a QTI zip:** Course Admin, Import/Export/Copy Components,
-  Import Components, from a File, Start; choose the zip; Advanced Options; Continue after the pre-processing step; tick Quizzes;
-  in Import Options type the exact name of the zip in the Import file to box; Continue three times; then look in Quizzes. The
-  first thing to see is whether it makes a quiz at all. Copy any message it gives, word for word. "No quizzes or sections can be
-  found" would mean the structure is not what it reads, and that is the case in which I change the package.
+**The second try, the same day, by the Course Admin route the test-bank vendor documents:** "It still does not like the format". No message
+was recorded. That makes two tries not accepted, so the bare QTI zip is now the less likely of the two Brightspace packages to
+work, and the Common Cartridge package (next section) was built for that reason.
+
+- [ ] **If you try the QTI zip again, copy any message Brightspace gives, word for word.** Neither try recorded one, and "No
+  quizzes or sections can be found" would say something different from "not a recognised package". It is still the file to try in
+  Canvas (Settings, Import Course Content, QTI .zip file), where the Common Cartridge file has not been tried either.
 - [ ] **Try the Quizzes tool's own Import as well** (Quizzes, then its Import). A D2L staff reply says it reads QTI up to 1.2,
   and D2L's help does not describe it. Say which route worked.
 - [ ] **A multiple answer question, a matching question, a short answer and an essay.** A multiple answer should have its right
@@ -126,6 +128,26 @@ not been shown to be right.
 - [ ] **Import it into Canvas** (Settings, Import Course Content, content type QTI .zip file, and try Create new question bank).
   The guide that was read is for Classic Quizzes. Say which types arrive and which do not, and whether New Quizzes took it.
   If you have no Canvas course, say so and this stays open.
+
+## Common Cartridge package (Brightspace)
+
+Built on 1 November 2026 after the QTI zip was not accepted twice, in the form that a tool which builds Brightspace quizzes writes
+(Brightspacosaurus 0.35.0, source read that day), and held to a second reading of the format and a response processor, as the QTI
+zip is. Nothing here has been imported anywhere. Use `Common Cartridge 1.3 package (Brightspace)` in the app's export screen, or
+the file in `Downloads\OpenAssess LMS test`.
+
+- [ ] **Import it into Brightspace:** Course tools, Import/Export/Copy Components, Import Components, from a course package, Start;
+  drag in the `.imscc` file; Import All Components; wait for the green checks. Then look in Quizzes (and in Content, where a topic
+  for it should also appear). Say whether it made a quiz, how many questions it holds (ten of the twelve in the test bank: matching
+  and ordering cannot go in this format), and copy any message word for word. Importing twice makes two quizzes; delete the first.
+- [ ] **Open each question.** The right answer marked, the points (a weighting, so 2, 0.5 and 1), the bold, the accents and the
+  quotation marks. The true or false and the essay follow the format's description and were not seen in a package Brightspace took,
+  so those two are the ones to look at first.
+- [ ] **How the short answer and the fill in the blank arrive.** Both are written as Common Cartridge's fill in the blank, and what
+  Brightspace makes of that is its to say. Type each accepted answer, in the other case, and a wrong one.
+- [ ] **The attempts.** The quiz is made with no limit on attempts, since the format asks for a number. Check what Brightspace shows.
+- [ ] **Import it into Canvas, too, if you have a course** (Import Course Content, content type Common Cartridge 1.x Package).
+  Not tried, and the Canvas guide that was read does not cover it.
 
 ## Blackboard
 

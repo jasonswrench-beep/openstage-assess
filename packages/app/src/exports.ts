@@ -12,9 +12,12 @@ import { join } from "node:path";
 import {
   BLACKBOARD_UPLOAD_ID,
   BLACKBOARD_UPLOAD_LABEL,
+  COMMON_CARTRIDGE_ID,
+  COMMON_CARTRIDGE_LABEL,
   D2L_CSV_ID,
   D2L_CSV_LABEL,
   exportBlackboardUpload,
+  exportCommonCartridge,
   exportD2lCsv,
   exportQti12,
   exportGift,
@@ -73,6 +76,12 @@ export const DESTINATIONS: Destination[] = [
     label: QTI12_LABEL,
     blurb: "A QTI 1.2 zip for Brightspace's Import/Export/Copy Components (quizzes) and for Canvas's Import Course Content (QTI .zip file). It holds multiple choice, multiple answer, true or false, short answer, matching and essay questions with their points, and the check says what each loses.",
     run: exportQti12,
+  },
+  {
+    id: COMMON_CARTRIDGE_ID,
+    label: COMMON_CARTRIDGE_LABEL,
+    blurb: "A Common Cartridge package (.imscc) for Brightspace's Import/Export/Copy Components, in the form a tool that builds Brightspace quizzes writes. It holds multiple choice, multiple answer, true or false, short answer and essay questions with their points, and the check says what each loses and which cannot go.",
+    run: exportCommonCartridge,
   },
   {
     id: BLACKBOARD_UPLOAD_ID,
