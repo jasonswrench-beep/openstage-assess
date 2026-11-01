@@ -10,6 +10,9 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
+  D2L_CSV_ID,
+  D2L_CSV_LABEL,
+  exportD2lCsv,
   exportGift,
   exportMoodleXml,
   exportOpenStageSpreadsheet,
@@ -52,6 +55,12 @@ export const DESTINATIONS: Destination[] = [
     label: GIFT_LABEL,
     blurb: "A plain-text format that Moodle and several other tools read. It holds less than Moodle XML, and the check says what.",
     run: exportGift,
+  },
+  {
+    id: D2L_CSV_ID,
+    label: D2L_CSV_LABEL,
+    blurb: "A CSV file for Brightspace's Question Library (Import, then Upload a File). It holds multiple choice, multiselect, true or false, short answer, matching, ordering and written response questions, and the check says what each loses.",
+    run: exportD2lCsv,
   },
 ];
 

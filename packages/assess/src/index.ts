@@ -60,6 +60,8 @@ export type { SpreadsheetOptions } from "./export/openstage-spreadsheet.ts";
 export { exportGift, checkGift, giftEscape, GIFT_ID, GIFT_LABEL } from "./export/gift.ts";
 export type { GiftOptions } from "./export/gift.ts";
 export { exportMoodleXml, checkMoodleXml, MOODLE_XML_ID, MOODLE_XML_LABEL } from "./export/moodle-xml.ts";
+export { exportD2lCsv, checkD2lCsv, D2L_CSV_ID, D2L_CSV_LABEL } from "./export/d2l-csv.ts";
+export type { D2lCsvOptions } from "./export/d2l-csv.ts";
 export type { MoodleXmlOptions } from "./export/moodle-xml.ts";
 
 // Printing

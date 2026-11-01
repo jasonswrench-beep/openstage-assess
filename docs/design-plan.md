@@ -93,7 +93,8 @@ part of a question. `CLAUDE.md` explains each of these and the bugs behind them.
 | Destination | Format | Notes |
 | --- | --- | --- |
 | Moodle | Moodle XML, GIFT as an option | Moodle's own formats keep more than QTI does |
-| Canvas, Brightspace, Blackboard | QTI package, tested per LMS | Classic and New Quizzes behave differently |
+| Brightspace | Question Library CSV (done); QTI 1.2 for Quizzes and 2.x or 3.x for Course Import (to do) | See below |
+| Canvas, Blackboard | QTI package, tested per LMS | Classic and New Quizzes behave differently |
 | Any other LMS | QTI 1.2, 2.1 or 3.0 | The user picks the version |
 | OpenStage Author and Scroll | The question spreadsheet (CSV) | See below |
 | Paper | Word and PDF, student copy and answer key | Versions A and B from one seed |
@@ -210,6 +211,47 @@ entry per question, saying it arrived as written, arrived with something lost, o
 was left out and why. A question with no usable key is left out, never exported
 and never given a guessed one.
 
+### Brightspace (D2L)
+
+Brightspace imports questions into its Question Library from a CSV file, and from QTI. The CSV is built (`src/export/d2l-csv.ts`,
+destination `d2l-csv`), because it is the route Brightspace documents most fully, takes seven types, and needs nothing but a
+text file. QTI for Brightspace is not built; see the end of this section. What Brightspace's own article says, and what was
+decided from it:
+
+- **Rows, not columns.** The first cell of a row is a keyword and the rest hold its values: `NewQuestion,MC`, then
+  `QuestionText`, `Points`, and the rows of the type (`Option,100,text`). Every row here is written three cells wide, as the
+  article's examples are, so a row with nothing to say in its third cell ends in a comma.
+- **Types it can import:** written response, short answer, matching, multiple choice, true or false, multiselect and ordering.
+  **Types the CSV cannot import:** fill in the blanks, arithmetic, significant figures and multiple short answer. So a numeric
+  question, a question with several blanks, a hot spot and a calculated question are left out, each with the reason. A
+  fill in the blank with one blank is written as a short answer and says so, because the file cannot say where in the text the
+  blank is.
+- **A right answer is 100 for a multiple choice and 1 for a multiselect.** The article gives the two different values, which is
+  the kind of thing that would pass a quick look and import wrongly, so a test of the file reads the article's rules
+  separately from the exporter. A multiselect's partial credit is its `Scoring` row (`RightMinusWrong`, or `All or nothing`).
+- **True or false has two rows,** `TRUE` and `FALSE`, one worth 100 and the other 0. A question with neither chosen is left
+  out and never written as false.
+- **An ordering's items are written in the right order,** with the text in the second cell. A matching question is `Choice,n`
+  and `Match,n` rows; a spare answer belongs to no choice, so it is said to be lost.
+- **HTML only where the article shows it:** the question text takes HTML when the third cell says `HTML`, and a stem with
+  formatting is written that way. Options, items and feedback are plain text, with the loss said, because the article documents
+  the flag only for the question text.
+- **Left out of the file because the article does not document them:** difficulty, tags, `Answer Key`, `Initial Text`, images,
+  per-answer feedback and the feedback for a right and a wrong answer. Points must be a whole number from 1 to 100; any other
+  value is said to be lost and the question arrives with Brightspace's own default. A title is written only when someone wrote
+  one; the title an untitled question is given is the start of its text, which Brightspace shows anyway.
+- **No byte order mark,** CRLF line ends, and a first row that is a `//` comment with no comma in it, so that it is never
+  quoted. The CSV cannot place questions in a section; the check says to move them afterwards.
+
+**What has not been checked.** No Brightspace course has imported a file this wrote (`TESTING-TODO.md` lists what a person
+with a course should try). The tests read the file back through the CSV reader and hold every question of every fixture bank to
+a second reading of the article, which shows the file follows the article and nothing about whether the article is complete.
+Brightspace's own blank template file was not available to compare with.
+
+**QTI, still to do.** Brightspace's Quizzes tool imports QTI up to 1.2 only; Course Import (Import/Export/Copy Components)
+takes a subset of QTI 2.x and 3.x, according to a D2L staff reply in April 2026. Two targets, then, and the matrix of what each
+accepts is built from sandbox imports, as M2 says.
+
 ## Ideas taken from the wider discussion
 
 The long discussion described a full assessment platform. Most of it is out of
@@ -308,8 +350,8 @@ library folder and lets a person: make a bank or open one from a file; import a 
 what was read beside the lines it came from, then repair it (write the missing key, turn an orphan into a question,
 dismiss a warning, but never an error) before it is stored; browse a bank, search and filter it, edit, add, duplicate and
 retire questions, with the key never filled in for anyone; bring in a question table from Excel or CSV, or a PDF read from its text, as well as a Word,
-text, Aiken or GIFT file, or try one of four samples; export to the OpenStage spreadsheet, Moodle XML or GIFT with
-the destination check shown first; and print a student copy and an answer key as Word and PDF. Cheap formats (Aiken and
+text, Aiken or GIFT file, or try one of four samples; export to the OpenStage spreadsheet, Moodle XML, GIFT or a Brightspace
+question library file with the destination check shown first; and print a student copy and an answer key as Word and PDF. Cheap formats (Aiken and
 GIFT in, Moodle XML and GIFT out) and printing, items 3 and 4 below, are done. The window is built and starts, shows the
 home screen and stops its server when it is closed; the installer is unsigned.
 
@@ -337,7 +379,8 @@ home screen and stops its server when it is closed; the installer is unsigned.
 - **M1, import and print.** Items 1 to 5 above.
 - **M2, LMS exports.** QTI 1.2, 2.1 and 3.0, the per-LMS compatibility matrix
   built by importing every type into a sandbox course on each LMS, destination
-  checks, and round-trip tests.
+  checks, and round-trip tests. The Brightspace question library CSV is done
+  and unchecked against a real course; the QTI exporters are not started.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
   pools, blueprints, versions, the item quality and accessibility checks (phase
   7), and the web quiz.
