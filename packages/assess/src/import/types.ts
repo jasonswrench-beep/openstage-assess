@@ -79,6 +79,12 @@ export interface ImportResult {
   counts: ImportCounts;
   /** Problems with the file as a whole rather than with one question. */
   fileFindings: Finding[];
+  /**
+   * For a format whose blocks are not the lines of the file (a spreadsheet's are its rows), the lines that a question's
+   * source blocks point at, as they are to be shown beside it. Absent for the others, whose blocks are read from the file
+   * by whoever shows them.
+   */
+  sourceLines?: string[];
 }
 
 export interface ImportOptions {
