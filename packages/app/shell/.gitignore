@@ -1,0 +1,6 @@
+node_modules/
+# The page the window shows while it starts is source, though the repository ignores other dist folders.
+!dist/
+src-tauri/target/
+src-tauri/resources/
+src-tauri/gen/
