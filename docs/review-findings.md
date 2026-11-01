@@ -627,7 +627,17 @@ a space, so only a hand-built plain-text field shows it), and a matching questio
   written to a QTI file, because neither Brightspace nor Canvas says it reads them from one. Feedback and the partial credit of a
   multiple answer question are not carried in this first version. Blackboard's file has no points, feedback, formatting or picture,
   and a numeric question is left out because the page does not say what its tolerance means.
-- **Open: one try, in Brightspace, and it made no questions.** The person who tried it said the zip "just uploaded as a zip" and that
+- **Decided, after the second try: a Common Cartridge package, in the form a Brightspace quiz tool writes.** The QTI zip was tried
+  a second time by the Course Admin route the test-bank vendor documents and "still does not like the format" (no message recorded). D2L's
+  course import table names Common Cartridge 1.0 to 1.3 with QTI 1.2.1 as a source its importer reads, and Brightspacosaurus 0.35.0,
+  which builds Brightspace courses and was published days before, writes quizzes as a Common Cartridge 1.3 package in the QTI
+  profile and says to import them with Import Components, from a course package. `src/export/common-cartridge.ts` follows its
+  shape (`test/export-common-cartridge.test.ts`, 29 tests, and one more in the app's route tests; 31 deliberate breaks, 30 caught
+  at once and one, the order of answers when some are fixed, caught after an assertion that it had been missing). The tool's source was read
+  in the browser on 1 November 2026, as data. The profile has no matching, ordering, numeric, hotspot or calculated question, so
+  those are left out with where they can go. A short answer is written as a fill in the blank. True or false and essay follow the
+  profile's description and were not in that tool's output, so they are the least certain. The package has not been imported.
+- **Open: the QTI zip was tried twice in Brightspace and did not make questions.** The person who tried it said the zip "just uploaded as a zip" and that
   the structure of the file may be at fault; they did not say which screen they used. My note had sent them to the Quizzes tool's
   Import or the Question Library's Import, and D2L's own Question Library article (updated August 2026) names a CSV file, not
   QTI, while the test-bank vendor documents Course Admin, Import/Export/Copy Components for a QTI zip. So the route was probably wrong, and

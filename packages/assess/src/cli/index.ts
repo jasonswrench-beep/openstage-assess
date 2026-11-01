@@ -31,6 +31,7 @@ import { DESTINATION_ID, exportOpenStageSpreadsheet } from "../export/openstage-
 import { D2L_CSV_ID, exportD2lCsv } from "../export/d2l-csv.ts";
 import { BLACKBOARD_UPLOAD_ID, exportBlackboardUpload } from "../export/blackboard-upload.ts";
 import { exportQti12, QTI12_ID } from "../export/qti12.ts";
+import { COMMON_CARTRIDGE_ID, exportCommonCartridge } from "../export/common-cartridge.ts";
 import { exportGift, GIFT_ID } from "../export/gift.ts";
 import { exportMoodleXml, MOODLE_XML_ID } from "../export/moodle-xml.ts";
 import type { ExportResult } from "../export/types.ts";
@@ -69,11 +70,11 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       the text no question used. Open the page in any browser. Nothing is
       written to a bank and the file is not changed.
 
-  openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}|${GIFT_ID}|${MOODLE_XML_ID}|${D2L_CSV_ID}|${QTI12_ID}|${BLACKBOARD_UPLOAD_ID}] [--out <folder>]
+  openassess export <bank${BANK_EXTENSION}> [--to ${DESTINATION_ID}|${GIFT_ID}|${MOODLE_XML_ID}|${D2L_CSV_ID}|${QTI12_ID}|${COMMON_CARTRIDGE_ID}|${BLACKBOARD_UPLOAD_ID}] [--out <folder>]
       Run the destination check for a format: the question spreadsheet that
       OpenStage Author and Scroll read (the default), GIFT, Moodle XML,
-      Brightspace's CSV, a QTI 1.2 package (Brightspace and Canvas), or
-      Blackboard's upload file. It says what will arrive, what will be lost,
+      Brightspace's CSV, a QTI 1.2 package (Brightspace and Canvas), a
+      Common Cartridge package (Brightspace), or Blackboard's upload file. It says what will arrive, what will be lost,
       what cannot go. With --out, write the file or files into that folder.
 
   openassess search <bank${BANK_EXTENSION}> <words...>
@@ -313,6 +314,7 @@ const EXPORTERS: Record<string, (questions: Question[], options: { name: string 
   [MOODLE_XML_ID]: exportMoodleXml,
   [D2L_CSV_ID]: exportD2lCsv,
   [QTI12_ID]: exportQti12,
+  [COMMON_CARTRIDGE_ID]: exportCommonCartridge,
   [BLACKBOARD_UPLOAD_ID]: exportBlackboardUpload,
 };
 

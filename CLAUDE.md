@@ -99,13 +99,13 @@ the order of the key. What cannot be printed is said against the question.
 ## Commands
 
 ```
-npm test                       # 1544 engine tests and 123 app tests, Node's own runner
+npm test                       # 1573 engine tests and 124 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine
 npm run assess -- perf         # the speed budget on a 500-question bank
-npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|blackboard-upload   # the destination check; the Author/Scroll CSV is the default; --out writes it
+npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|common-cartridge|blackboard-upload   # the destination check; the Author/Scroll CSV is the default; --out writes it
 npm run assess -- print <bank> --out <folder>   # a student copy and an answer key, as Word or PDF
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
 npm run assess -- contract     # the read contract and consumer capabilities

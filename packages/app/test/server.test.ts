@@ -788,7 +788,7 @@ describe("exporting", () => {
     await withApp(async (client) => {
       const reply = await client.get("/api/destinations");
       const ids = (reply.json["destinations"] as Array<{ id: string; label: string; blurb: string }>).map((d) => d.id);
-      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "blackboard-upload"]);
+      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "common-cartridge", "blackboard-upload"]);
     });
   });
 
@@ -814,6 +814,28 @@ describe("exporting", () => {
       assert.match(xml, /What is two plus two\?/);
       assert.doesNotMatch(xml, /cheese/);
       const downloaded = await client.get("/files/Quiz%20-%20QTI%201.2.zip");
+      assert.equal(downloaded.status, 200);
+      assert.ok(Buffer.compare(downloaded.bytes, onDisk) === 0, "the download is the file, byte for byte");
+    });
+  });
+
+  test("exports a bank as a Common Cartridge package: a real zip, written and served as the bytes it is", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      const checked = (await client.post(`${bank}/export/check`, { destination: "common-cartridge" })).json["report"] as Report;
+      assert.equal(checked.exported, 1, "the multiple choice");
+      assert.equal(checked.leftOut, 2, "the true or false with no answer, and the ordering Common Cartridge's profile does not hold");
+      assert.deepEqual(readdirSync(join(home, "Exports")), []);
+
+      const written = await client.post(`${bank}/export`, { destination: "common-cartridge" });
+      assert.equal(written.status, 200, written.text);
+      assert.equal((written.json["written"] as Array<{ name: string }>)[0]?.name, "Quiz - Common Cartridge.imscc");
+      const onDisk = readFileSync(join(home, "Exports", "Quiz - Common Cartridge.imscc"));
+      assert.equal(onDisk.subarray(0, 2).toString("latin1"), "PK");
+      const inside = unzipSync(new Uint8Array(onDisk));
+      assert.deepEqual([...inside.keys()].sort(), ["imsmanifest.xml", "quiz/qti-assessment.xml"]);
+      assert.match(Buffer.from(inside.get("quiz/qti-assessment.xml") as Uint8Array).toString("utf8"), /What is two plus two\?/);
+      const downloaded = await client.get("/files/Quiz%20-%20Common%20Cartridge.imscc");
       assert.equal(downloaded.status, 200);
       assert.ok(Buffer.compare(downloaded.bytes, onDisk) === 0, "the download is the file, byte for byte");
     });

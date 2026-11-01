@@ -93,7 +93,7 @@ part of a question. `CLAUDE.md` explains each of these and the bugs behind them.
 | Destination | Format | Notes |
 | --- | --- | --- |
 | Moodle | Moodle XML, GIFT as an option | Moodle's own formats keep more than QTI does |
-| Brightspace | Question Library CSV (done, imported once); QTI 1.2 package for Import/Export/Copy Components (built; one try stored the zip and made no questions, route not settled); 2.x or 3.x subset for Course Import (to do) | See below |
+| Brightspace | Question Library CSV (done, imported twice); Common Cartridge 1.3 package (built, in the form a Brightspace quiz tool writes, never imported); QTI 1.2 zip (built, tried twice, not accepted); 2.x or 3.x subset for Course Import (to do) | See below |
 | Canvas | QTI 1.2 package (built, never imported) | The same file as Brightspace's. Classic and New Quizzes behave differently, and only Classic is described by the guide that was read |
 | Blackboard | The Upload questions text file (built, never tried) | Works in Ultra and Original. Blackboard's pool package and its QTI import are not written |
 | Any other LMS | QTI 1.2, 2.1 or 3.0 | The user picks the version |
@@ -292,7 +292,33 @@ What has been checked: every package is held to a second reading of the structur
 small QTI 1.2 response processor that works out the score of every answer a student could give (every subset of a multiple
 answer question, every assignment of a matching one). The right answer must score the points and nothing else may, for every
 question of every fixture bank. That shows the package follows the standard and carries the key. It shows nothing about whether
-Brightspace or Canvas accepts it, which only an import can. Not one has been tried (`TESTING-TODO.md`).
+Brightspace or Canvas accepts it, which only an import can. In Brightspace it has been tried twice and not accepted: the first
+time it "just uploaded as a zip" (the screen was not said, and the note then pointed at the Question Library, which D2L's help
+does not give for QTI), and the second time, by the Course Admin route the test-bank vendor documents, it "still does not like the format"
+(no message was recorded). Canvas has not been tried (`TESTING-TODO.md`).
+
+### Common Cartridge 1.3 package (Brightspace)
+
+`src/export/common-cartridge.ts`, destination `common-cartridge`, written as `<name> - Common Cartridge.imscc`. It exists because
+the bare QTI zip was not accepted, and because D2L's own course import table names Common Cartridge 1.0 to 1.3, with QTI 1.2.1,
+as a source its importer reads, and a bare QTI package is none of the sources it names. A maintained tool for building Brightspace
+courses (Brightspacosaurus 0.35.0, whose source was read on 1 November 2026) writes quizzes this way and says to import them with
+Course tools, Import/Export/Copy Components, Import Components, from a course package, Import All Components. This follows its
+shape. The manifest is in the Common Cartridge 1.3 namespace with the schema `IMS Common Cartridge` 1.3.0 and a title, an
+organization lists the quiz, and one resource of type `imsqti_xmlv1p2/imscc_xmlv1p3/assessment` points at
+`quiz/qti-assessment.xml`. That file is QTI 1.2 in the Common Cartridge profile: the assessment has `cc_profile` `cc.exam.v0p1`,
+`qmd_assessmenttype` Examination and `cc_maxattempts` unlimited (the format asks for a number, and attempts are the course's, so
+the quiz is made with no limit and the check says so); each item has a `cc_profile` and a `cc_weighting` (its points); SCORE runs
+0 to 100 and a right answer sets it to 100.
+
+The profile holds multiple choice, multiple answer, true or false, fill in the blank and essay, so a short answer is written as a
+fill in the blank, a fill in the blank with one blank keeps one answer box, and matching, ordering, numeric, hotspot and
+calculated questions are left out, each with where it can go (the QTI zip carries matching, the Brightspace CSV carries matching
+and ordering). Feedback and partial credit are not carried. What is known: the multiple choice, multiple answer and fill in the
+blank shapes are what that tool writes, and it says its packages import. True or false and essay follow the profile's description
+and were not seen in a package Brightspace took. The package is held to a second reading of all of this and to the response
+processor, with the right answer scoring 100 and nothing else scoring, for every question of every fixture bank. It has not been
+imported into Brightspace or Canvas.
 
 ### Blackboard, the Upload questions file
 

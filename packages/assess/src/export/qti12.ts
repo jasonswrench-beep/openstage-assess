@@ -39,10 +39,10 @@ const CP_SCHEMA = "http://www.imsglobal.org/xsd/imscp_v1p1.xsd";
 export const QTI12_RESOURCE_TYPE = "imsqti_xmlv1p2";
 
 /** Whitespace of any kind as one space. */
-const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
+export const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
 
 /** A number as it is written in the file: no exponent, no trailing zeros. */
-const num = (value: number): string => String(Math.round(value * 100000) / 100000);
+export const num = (value: number): string => String(Math.round(value * 100000) / 100000);
 
 interface Planned {
   item: ReportItem;
@@ -50,7 +50,7 @@ interface Planned {
 }
 
 /** Text that is plain text, or markup that holds nothing a plain label cannot. */
-const needsMarkup = (text: RichText): boolean => text.format === "rich" && (FORMATTING.test(text.content) || /<oa-(media|math)\b/i.test(text.content));
+export const needsMarkup = (text: RichText): boolean => text.format === "rich" && (FORMATTING.test(text.content) || /<oa-(media|math)\b/i.test(text.content));
 
 function plan(question: Question, position: number): Planned {
   const base = { position, questionId: question.id, title: question.title };

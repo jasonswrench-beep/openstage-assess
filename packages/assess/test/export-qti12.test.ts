@@ -21,13 +21,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { unzipSync } from "../src/container/zip.ts";
 import { checkQti12, exportQti12, QTI12_ID } from "../src/export/qti12.ts";
 import { importerForContent, runImporter } from "../src/import/registry.ts";
 import { allText, elements, first, parseXml, type XmlElement } from "../src/import/docx/xml.ts";
 import { createQuestion } from "../src/model/create.ts";
 import { plainToRich, rich, richTextToPlain } from "../src/model/richtext.ts";
 import type { Question, QuestionBody, QuestionType } from "../src/model/question.ts";
+import { attr, descend, grade, itemsOf, labelsOf, mattext, pointsOf, readPackage, subsets, type Answers, type Pack } from "./support/qti-reader.ts";
 
 const AT = "2026-01-01T00:00:00.000Z";
 const opt = (id: string, text: string, correct = false, feedback?: string) => ({ id, content: plainToRich(text), correct, ...(feedback ? { feedback: plainToRich(feedback) } : {}) });
@@ -47,44 +47,11 @@ const ESS = make("essay", {}, "Discuss.");
 // Reading a package
 // ---------------------------------------------------------------------------
 
-interface Pack {
-  files: Map<string, Uint8Array>;
-  manifest: XmlElement;
-  doc: XmlElement;
-  text: (name: string) => string;
-}
-
 function unpack(questions: Question[], name = "Test"): Pack {
-  const result = exportQti12(questions, { name });
-  const file = result.files[0];
-  assert.ok(file?.bytes, "a package has bytes");
-  const files = unzipSync(file.bytes);
-  const text = (n: string): string => Buffer.from(files.get(n) ?? new Uint8Array()).toString("utf8");
-  return { files, manifest: parseXml(text("imsmanifest.xml")), doc: parseXml(text("assessment.xml")), text };
+  return readPackage(exportQti12(questions, { name }).files[0]?.bytes, "assessment.xml");
 }
 
-const descend = (el: XmlElement, name: string): XmlElement[] => {
-  const found: XmlElement[] = [];
-  const walk = (e: XmlElement): void => {
-    for (const c of elements(e)) {
-      if (c.name === name) found.push(c);
-      walk(c);
-    }
-  };
-  walk(el);
-  return found;
-};
-const itemsOf = (pack: Pack): XmlElement[] => descend(pack.doc, "item");
-const attr = (el: XmlElement, name: string): string => el.attrs[name] ?? "";
 const itemOf = (question: Question) => checkQti12([question]).items[0] as NonNullable<ReturnType<typeof checkQti12>["items"][0]>;
-
-/** The text of a mattext, as a person reads it: html with its tags taken out. */
-function mattext(el: XmlElement): { type: string; text: string; raw: string } {
-  const m = descend(el, "mattext")[0] as XmlElement;
-  const raw = allText(m);
-  const type = attr(m, "texttype");
-  return { type, raw, text: type === "text/html" ? raw.replace(/<[^>]+>/g, " ").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim() : raw };
-}
 
 const KINDS = ["multiple_choice_question", "multiple_answers_question", "true_false_question", "short_answer_question", "matching_question", "essay_question"];
 const NCNAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
@@ -199,53 +166,6 @@ function itemProblems(item: XmlElement, idents: Set<string>): string[] {
   }
   return problems;
 }
-
-// ---------------------------------------------------------------------------
-// A QTI 1.2 response processor, for the answers a student could give
-// ---------------------------------------------------------------------------
-
-/** What a student chose: for a response_lid the labels, for a response_str the typed words. */
-type Answers = Record<string, string[]>;
-
-function holds(node: XmlElement, answers: Answers): boolean {
-  switch (node.name) {
-    case "varequal": {
-      const given = answers[attr(node, "respident")] ?? [];
-      const want = allText(node).trim();
-      if (attr(node, "case") === "Yes") return given.includes(want);
-      return given.some((g) => g.trim().toLowerCase() === want.toLowerCase());
-    }
-    case "and":
-      return elements(node).every((c) => holds(c, answers));
-    case "or":
-      return elements(node).some((c) => holds(c, answers));
-    case "not":
-      return !holds(elements(node)[0] as XmlElement, answers);
-    case "other":
-      return true;
-    default:
-      throw new Error(`a condition this grader does not know: ${node.name}`);
-  }
-}
-
-/** The score of a set of answers: conditions in order, stopping at the first met unless it says to continue. */
-function grade(item: XmlElement, answers: Answers): number {
-  const processing = first(item, "resprocessing") as XmlElement;
-  let score = Number(attr(descend(processing, "decvar")[0] as XmlElement, "defaultval") || 0);
-  for (const c of elements(processing, "respcondition")) {
-    if (!elements(first(c, "conditionvar") as XmlElement).every((n) => holds(n, answers))) continue;
-    for (const sv of elements(c, "setvar")) score = attr(sv, "action") === "Add" ? score + Number(allText(sv)) : Number(allText(sv));
-    if (attr(c, "continue") !== "Yes") break;
-  }
-  return Math.round(score * 100000) / 100000;
-}
-
-const pointsOf = (item: XmlElement): number => Number(attr(descend(item, "decvar")[0] as XmlElement, "maxvalue"));
-const labelsOf = (item: XmlElement, respident?: string): Array<{ ident: string; text: string }> => {
-  const lid = elements(first(item, "presentation") as XmlElement, "response_lid").find((l) => respident === undefined || attr(l, "ident") === respident) as XmlElement;
-  return elements(first(lid, "render_choice") as XmlElement, "response_label").map((l) => ({ ident: attr(l, "ident"), text: mattext(l).text }));
-};
-const subsets = <T,>(xs: T[]): T[][] => xs.reduce<T[][]>((acc, x) => acc.concat(acc.map((s) => [...s, x])), [[]]);
 
 describe("the package", () => {
   test("is a zip with a manifest at the root that names one resource, and the file it names", () => {
@@ -596,9 +516,7 @@ describe("the command line", () => {
       const bytes = new Uint8Array(readFileSync(join(out, name as string)));
       assert.equal(bytes[0], 0x50, "a zip begins with PK");
       assert.equal(bytes[1], 0x4b);
-      const files = unzipSync(bytes);
-      const text = (n: string): string => Buffer.from(files.get(n) ?? new Uint8Array()).toString("utf8");
-      assert.deepEqual(specProblems({ files, manifest: parseXml(text("imsmanifest.xml")), doc: parseXml(text("assessment.xml")), text }), []);
+      assert.deepEqual(specProblems(readPackage(bytes, "assessment.xml")), []);
     } finally {
       rmSync(folder, { recursive: true, force: true });
     }
@@ -678,12 +596,7 @@ describe("a package against the format's own description", () => {
   });
 });
 
-function unpackFile(bytes: Uint8Array): Pack {
-  const files = unzipSync(bytes);
-  const text = (n: string): string => Buffer.from(files.get(n) ?? new Uint8Array()).toString("utf8");
-  return { files, manifest: parseXml(text("imsmanifest.xml")), doc: parseXml(text("assessment.xml")), text };
-}
-
+const unpackFile = (bytes: Uint8Array): Pack => readPackage(bytes, "assessment.xml");
 /**
  * For every question that was written: the key the bank holds, found in the package by the words of the answers and not by the
  * exporter's idents, is exactly what scores the points, and nothing else among the single answers does.
