@@ -8,11 +8,12 @@
 
 import { aikenImporter, looksLikeAiken } from "./aiken.ts";
 import { giftImporter, looksLikeGift } from "./gift.ts";
+import { looksLikeQuestionTable, spreadsheetImporter } from "./spreadsheet.ts";
 import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult } from "./types.ts";
 import { wordImporter } from "./word.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter];
+export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, spreadsheetImporter];
 
 /** The importer that reads files with this name's extension, if there is one. */
 export function importerFor(file: string): Importer | undefined {
@@ -29,11 +30,13 @@ const SNIFF_BYTES = 400_000;
  * The importer for a file, from its name and then, for a plain text file, from what is in it. A file called .txt may be the
  * Standard Format, Aiken or GIFT, and each is told by its shape: GIFT has answers in braces, Aiken has unnumbered questions
  * with an ANSWER line, and anything else is the Standard Format, which is what a .txt file was always read as. A name that
- * names a format (.docx, .aiken, .gift) is believed.
+ * names a format (.docx, .aiken, .gift, .xlsx, .csv) is believed. A text file whose first row names a Question column and the
+ * answers is a question table, which is what a spreadsheet's "Unicode Text" is.
  */
 export function importerForContent(file: string, bytes: Uint8Array): Importer {
   const named = importerFor(file);
   if (named && named !== standardTextImporter) return named;
+  if (looksLikeQuestionTable(bytes)) return spreadsheetImporter;
   const text = Buffer.from(bytes.subarray(0, SNIFF_BYTES)).toString("utf8");
   if (looksLikeGift(text)) return giftImporter;
   if (looksLikeAiken(text)) return aikenImporter;

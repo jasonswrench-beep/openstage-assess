@@ -40,6 +40,11 @@ export { DocxError, openDocx } from "./import/docx/package.ts";
 export { IMPORTERS, importerFor, importerForContent, runImporter } from "./import/registry.ts";
 export { aikenImporter, AIKEN_PROFILE_ID, looksLikeAiken } from "./import/aiken.ts";
 export { giftImporter, GIFT_PROFILE_ID, looksLikeGift, giftUnescape } from "./import/gift.ts";
+export { spreadsheetImporter, SPREADSHEET_PROFILE_ID, looksLikeQuestionTable } from "./import/spreadsheet.ts";
+export { readXlsx } from "./import/table-xlsx.ts";
+export { readCsv } from "./import/table-csv.ts";
+export { TableError } from "./import/table.ts";
+export type { TableFile, TableSheet, TableRow } from "./import/table.ts";
 
 // Export
 export * from "./export/types.ts";

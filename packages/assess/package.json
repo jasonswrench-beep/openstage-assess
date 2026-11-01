@@ -34,7 +34,8 @@
     "check:word-authored": "node --experimental-strip-types --no-warnings test/tools/word-authored-check.ts",
     "check:generated": "node --experimental-strip-types --no-warnings test/tools/generated-bank-check.ts",
     "update:word-authored": "node --experimental-strip-types --no-warnings test/tools/word-authored-check.ts --update-fixtures",
-    "check:word-print": "node --experimental-strip-types --no-warnings test/tools/word-print-check.ts"
+    "check:word-print": "node --experimental-strip-types --no-warnings test/tools/word-print-check.ts",
+    "check:excel-authored": "node --experimental-strip-types --no-warnings test/tools/excel-authored-check.ts"
   },
   "dependencies": {},
   "devDependencies": {
