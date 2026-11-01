@@ -43,6 +43,7 @@ const ROUTES = [
   [/^#\/?$/, "./home.js", "renderHome"],
   [/^#\/import\/([^/]+)$/, "./review.js", "renderReview"],
   [/^#\/bank\/([^/]+)$/, "./bank.js", "renderBank"],
+  [/^#\/export\/([^/]+)$/, "./export.js", "renderExport"],
 ];
 
 async function show() {

@@ -6,13 +6,13 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
 import { Bank } from "../src/engine.ts";
-import { rawRequest, withApp, type Client } from "./support/app.ts";
+import { chunkedPost, liarPost, rawRequest, withApp, type Client } from "./support/app.ts";
 
 const FIXTURES = fileURLToPath(new URL("../../../fixtures/standard-format/", import.meta.url));
 
@@ -135,6 +135,31 @@ describe("who is let in", () => {
     await withApp(async (client) => {
       const reply = await client.send("POST", "/api/banks", Buffer.alloc(5 * 1024 * 1024, 120), { "content-type": "application/json" });
       assert.equal(reply.status, 413);
+    });
+  });
+
+  test("a request that does not say how large it is is stopped by counting what arrives", async () => {
+    await withApp(async (client) => {
+      const headers = { host: `127.0.0.1:${client.server.port}`, cookie: client.cookie, "x-openassess": "1", "content-type": "application/json" };
+      assert.equal(await chunkedPost(client.server.port, "/api/banks", headers, 6), 413);
+    });
+  });
+
+  test("a request that says it is enormous is refused at once, without waiting for the rest", async () => {
+    await withApp(async (client) => {
+      const headers = { host: `127.0.0.1:${client.server.port}`, cookie: client.cookie, "x-openassess": "1", "content-type": "application/json" };
+      assert.equal(await liarPost(client.server.port, "/api/banks", headers), 413);
+    });
+  });
+
+  test("answers on this computer only: a connection by any other address of the machine is refused", async () => {
+    const { networkInterfaces } = await import("node:os");
+    const outside = Object.values(networkInterfaces())
+      .flat()
+      .find((i) => i && i.family === "IPv4" && !i.internal);
+    if (!outside) return; // a machine with no other address has nothing to try
+    await withApp(async (client) => {
+      await assert.rejects(fetch(`http://${outside.address}:${client.server.port}/`, { signal: AbortSignal.timeout(3000) }), "the server is not listening there");
     });
   });
 
@@ -310,6 +335,27 @@ describe("importing and repairing", () => {
       assert.equal(after.summary.version, question.version + 1);
       assert.equal(after.counts.failed, 0);
       assert.equal(after.counts.parsed, 2);
+    });
+  });
+
+  test("still fails a question whose answer is missing after its text was edited, and never wipes the checks", async () => {
+    await withApp(async (client) => {
+      const view = await importText(client);
+      const base = `/api/sessions/${view.id}/questions/1`;
+      const { question } = (await client.get(base)).json as { question: { version: number; stem: string } };
+      const input = { ...JSON.parse(JSON.stringify(question)), stem: "What is the capital city of Spain?" };
+      const saved = await client.put(base, { input, expectVersion: question.version });
+      assert.equal(saved.status, 200, saved.text);
+      assert.equal((saved.json["summary"] as { verdict: string }).verdict, "failed", "no answer was marked, so it is still a failure");
+      assert.ok(((saved.json["question"] as { findings: Array<{ severity: string }> }).findings).some((f) => f.severity === "error"));
+    });
+  });
+
+  test("lets go of the oldest import when a dozen more are open", async () => {
+    await withApp(async (client) => {
+      const first = await importText(client, "first.txt");
+      for (let n = 0; n < 12; n++) await importText(client, `later-${n}.txt`);
+      assert.equal((await client.get(`/api/sessions/${first.id}`)).status, 404, "the first is gone");
     });
   });
 
@@ -508,6 +554,18 @@ describe("a bank", () => {
     });
   });
 
+  test("refuses a change to a question that moved on, in a bank as well as in an import", async () => {
+    await withApp(async (client) => {
+      const base = await bankWith(client);
+      const input = { ...(await blank(client, "shortAnswer")), stem: "Name the capital of France.", body: { accepted: ["Paris"], caseSensitive: false } };
+      const { id, version } = (await client.post(`${base}/questions`, { input })).json["question"] as { id: string; version: number };
+      assert.equal((await client.put(`${base}/questions/${id}`, { input: { ...input, points: 2 }, expectVersion: version })).status, 200);
+      const stale = await client.put(`${base}/questions/${id}`, { input: { ...input, points: 3 }, expectVersion: version });
+      assert.equal(stale.status, 409);
+      assert.equal(((await client.get(`${base}/questions/${id}`)).json["question"] as { points: number }).points, 2, "the stale change did not land");
+    });
+  });
+
   test("lists, searches and filters", async () => {
     await withApp(async (client) => {
       const base = await bankWith(client);
@@ -585,6 +643,143 @@ describe("a bank", () => {
       assert.equal(reply.text, "a,b\r\n");
       assert.match(reply.headers.get("content-disposition") ?? "", /^attachment; filename\*=UTF-8''Quiz%20one\.csv$/);
       assert.match(reply.headers.get("content-type") ?? "", /^text\/csv/);
+    });
+  });
+});
+
+describe("exporting", () => {
+  interface Report {
+    total: number;
+    exported: number;
+    exportedWithLosses: number;
+    leftOut: number;
+    files: string[];
+    items: Array<{ outcome: string; notes: string[] }>;
+  }
+  const blank = async (client: Client, type: string): Promise<Record<string, unknown>> => (await client.get(`/api/blank?type=${type}`)).json["input"] as Record<string, unknown>;
+
+  /** A bank with a question that can go anywhere, one with no answer, and one that only some formats hold. */
+  async function seeded(client: Client, title = "Quiz"): Promise<string> {
+    await client.post("/api/banks", { title });
+    const base = `/api/banks/${encodeURIComponent(title)}/questions`;
+    const add = async (type: string, stem: string, b: unknown, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> => {
+      const reply = await client.post(base, { input: { ...(await blank(client, type)), stem, body: b, ...extra } });
+      assert.equal(reply.status, 200, reply.text);
+      return reply.json["question"] as Record<string, unknown>;
+    };
+    await add("multipleChoice", "What is two plus two?", { shuffle: true, options: [{ text: "Three", correct: false, feedback: "" }, { text: "Four", correct: true, feedback: "" }] });
+    await add("trueFalse", "The Moon is made of cheese.", { correct: null });
+    await add("ordering", "Put these in order.", { items: [{ text: "First" }, { text: "Second" }] });
+    return `/api/banks/${encodeURIComponent(title)}`;
+  }
+
+  test("lists the places a bank can be exported to", async () => {
+    await withApp(async (client) => {
+      const reply = await client.get("/api/destinations");
+      const ids = (reply.json["destinations"] as Array<{ id: string; label: string; blurb: string }>).map((d) => d.id);
+      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift"]);
+    });
+  });
+
+  test("checks what would happen to each question and writes nothing", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      const checked = await client.post(`${bank}/export/check`, { destination: "gift" });
+      assert.equal(checked.status, 200, checked.text);
+      const report = checked.json["report"] as Report;
+      assert.equal(report.total, 3);
+      assert.equal(report.exported, 1);
+      assert.equal(report.leftOut, 2, "the one with no answer, and the ordering GIFT cannot hold");
+      assert.deepEqual(readdirSync(join(home, "Exports")), []);
+    });
+  });
+
+  test("writes the file the check described, into the exports folder, and serves it for download", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      const written = await client.post(`${bank}/export`, { destination: "openstage-spreadsheet" });
+      assert.equal(written.status, 200, written.text);
+      const files = written.json["written"] as Array<{ name: string; path: string; questions: number }>;
+      assert.equal(files.length, 1);
+      assert.equal(files[0]?.name, "Quiz.csv");
+      assert.equal(files[0]?.path, join(home, "Exports", "Quiz.csv"));
+      assert.equal(files[0]?.questions, 1);
+      const onDisk = readFileSync(join(home, "Exports", "Quiz.csv"), "utf8");
+      assert.ok(onDisk.startsWith("﻿Type,Question"), "with the byte order mark Excel needs");
+      assert.match(onDisk, /What is two plus two\?/);
+      assert.doesNotMatch(onDisk, /cheese/, "the question with no answer was not written");
+      const downloaded = await client.get("/files/Quiz.csv");
+      assert.equal(downloaded.status, 200);
+      assert.equal(downloaded.text, onDisk);
+      assert.equal((await client.post("/api/reveal", { path: files[0]?.path })).status, 200, "and it can be shown in its folder");
+    });
+  });
+
+  test("never writes over an earlier export", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      await client.post(`${bank}/export`, { destination: "moodle-xml" });
+      writeFileSync(join(home, "Exports", "Quiz.xml"), "an earlier one that was changed by hand");
+      const second = await client.post(`${bank}/export`, { destination: "moodle-xml" });
+      assert.equal((second.json["written"] as Array<{ name: string }>)[0]?.name, "Quiz 2.xml");
+      assert.equal(readFileSync(join(home, "Exports", "Quiz.xml"), "utf8"), "an earlier one that was changed by hand");
+      const third = await client.post(`${bank}/export`, { destination: "moodle-xml" });
+      assert.equal((third.json["written"] as Array<{ name: string }>)[0]?.name, "Quiz 3.xml");
+    });
+  });
+
+  test("leaves out retired questions unless they are asked for", async () => {
+    await withApp(async (client) => {
+      const bank = await seeded(client);
+      const list = (await client.get(bank)).json as { questions: Array<{ id: string; title: string }> };
+      const keyed = list.questions.find((q) => /two plus two/.test(q.title)) as { id: string };
+      const { question } = (await client.get(`${bank}/questions/${keyed.id}`)).json as { question: { version: number; metadata: Record<string, unknown> } };
+      const input = JSON.parse(JSON.stringify(question));
+      input.metadata.status = "retired";
+      assert.equal((await client.put(`${bank}/questions/${keyed.id}`, { input, expectVersion: question.version })).status, 200);
+
+      const byDefault = (await client.post(`${bank}/export/check`, { destination: "gift" })).json["report"] as Report;
+      assert.equal(byDefault.total, 2, "the retired question is not counted");
+      const asked = (await client.post(`${bank}/export/check`, { destination: "gift", statuses: ["draft", "retired"] })).json["report"] as Report;
+      assert.equal(asked.total, 3);
+      const only = (await client.post(`${bank}/export/check`, { destination: "gift", statuses: ["retired"] })).json["report"] as Report;
+      assert.equal(only.total, 1);
+      assert.equal(only.exported, 1);
+    });
+  });
+
+  test("says so when nothing can be exported, and writes no file", async () => {
+    await withApp(async (client, home) => {
+      await client.post("/api/banks", { title: "Empty" });
+      const checked = (await client.post("/api/banks/Empty/export/check", { destination: "gift" })).json["report"] as Report;
+      assert.equal(checked.total, 0);
+      assert.deepEqual(checked.files, []);
+      const written = await client.post("/api/banks/Empty/export", { destination: "gift" });
+      assert.deepEqual(written.json["written"], []);
+      assert.deepEqual(readdirSync(join(home, "Exports")), []);
+    });
+  });
+
+  test("refuses a destination or a status it does not know, and a bank that is not there", async () => {
+    await withApp(async (client) => {
+      const bank = await seeded(client);
+      assert.equal((await client.post(`${bank}/export/check`, { destination: "word-document" })).status, 400);
+      assert.equal((await client.post(`${bank}/export/check`, {})).status, 400);
+      assert.equal((await client.post(`${bank}/export/check`, { destination: "gift", statuses: ["published"] })).status, 400);
+      assert.equal((await client.post(`${bank}/export/check`, { destination: "gift", statuses: "draft" })).status, 400);
+      assert.equal((await client.post("/api/banks/Nowhere/export/check", { destination: "gift" })).status, 404);
+      assert.equal((await client.get(`${bank}/export`)).status, 404, "an export is asked for, not fetched");
+    });
+  });
+
+  test("names the file for a bank whose title is not a name Windows allows", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client, "Quiz");
+      await client.put(bank, { title: "CON" });
+      const written = await client.post(`${bank}/export`, { destination: "gift" });
+      assert.equal(written.status, 200, written.text);
+      assert.deepEqual(readdirSync(join(home, "Exports")), ["Questions.txt"]);
+      assert.equal((written.json["written"] as Array<{ name: string }>)[0]?.name, "Questions.txt");
     });
   });
 });

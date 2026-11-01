@@ -371,6 +371,13 @@ describe("GIFT out", () => {
     assert.match(file, /Explain why the sky is blue\. \{\}/);
   });
 
+  test("writes a title only when someone wrote one, not the one every question is given from its text", () => {
+    assert.match(file, /::Capital:: What is the capital of France\?/, "the title that was written");
+    assert.match(file, /\nThe Sun is a star\. \{/, "an untitled question is only its text");
+    assert.doesNotMatch(file, /::The Sun is a star\.::/);
+    assert.doesNotMatch(file, /::Explain why the sky is blue\.::/);
+  });
+
   test("escapes what GIFT gives a meaning to, so a stem cannot turn into an answer", () => {
     assert.equal(giftEscape("a=b~c#d{e}f:g\\h\ni"), "a\\=b\\~c\\#d\\{e\\}f\\:g\\\\h\\ni");
     const q = make("shortAnswer", { caseSensitive: false, accepted: ["x = y"] }, "Solve {x} = 2 + 2 ~ now: what is x?");

@@ -31,6 +31,7 @@ import {
 import type { BankStore } from "./banks.ts";
 import { blankInput, editFromInput, EDITABLE_TYPES, missingText, parseInput, questionFromInput, toEditor, type EditorInput } from "./editor.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
+import { destinationsRoute, exportRoute } from "./exports.ts";
 import { checkName, cleanName, insideLibrary, type Library } from "./library.ts";
 import { summarise, type Sessions } from "./sessions.ts";
 
@@ -329,6 +330,10 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
     }
   }
 
+  if (what === "export" && req.method === "POST" && (id === "check" || id === undefined)) {
+    return exportRoute(ctx, req, name, id === "check" ? "check" : "write");
+  }
+
   if (what === "questions") {
     if (id === undefined && req.method === "POST") {
       const input = readInput(jsonBody(req));
@@ -419,6 +424,7 @@ export async function handleApi(ctx: Context, req: ApiRequest): Promise<ApiRespo
     }
     return ok({ input: blankInput(type as QuestionType) });
   }
+  if (first === "destinations" && req.method === "GET") return destinationsRoute();
   if (first === "banks") return bankRoute(ctx, req);
   if (first === "import" && req.method === "POST") return importFile(ctx, req);
   if (first === "sessions") return sessionRoute(ctx, req);

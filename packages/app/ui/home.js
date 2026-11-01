@@ -78,6 +78,7 @@ export async function renderHome(host, _params, shell) {
             "div",
             { class: "card-actions" },
             h("a", { class: "button", href: `#/bank/${encodeURIComponent(b.name)}`, text: "Open" }),
+            h("a", { class: "button", href: `#/export/${encodeURIComponent(b.name)}`, text: "Export" }),
           ),
     ),
   );
