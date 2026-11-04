@@ -483,8 +483,8 @@ No dates are set.
 
 ## Open questions
 
-- Which LMS sandboxes can be had? SUNY New Paltz is the first, Excelsior a
-  second, and Moodle runs locally for free.
+- Which LMS sandboxes can be had? A Brightspace course is the first, a second
+  is still to be found, and Moodle runs locally for free.
 - Which publisher test banks can be used as fixtures without rights problems?
   The author's own ancillary banks are the safest start.
 - Does reading PDF scans justify a library (a PDF reader), given the rule of no
