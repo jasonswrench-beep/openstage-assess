@@ -222,11 +222,12 @@ the validator refuses them with an explanation. That boundary is what lets one
 bank serve an LMS export, a printed test and a spreadsheet for OpenStage Author
 and OpenStage Scroll without being rewritten for each.
 
-## Before publishing
+## Licence
 
-The `LICENSE` file is a stub. Paste the official Apache License 2.0 text into
-it from <https://www.apache.org/licenses/LICENSE-2.0.txt>. The copyright line
-and boilerplate already in the file are correct and should be kept.
+OpenAssess is licensed under the Apache License, Version 2.0. `LICENSE` holds the
+official text, taken from <https://www.apache.org/licenses/LICENSE-2.0.txt>, with
+the copyright line and notice after it. `NOTICE` names what the project includes
+and what it does not.
 
 ## Not affiliated with the test-bank vendor
 
