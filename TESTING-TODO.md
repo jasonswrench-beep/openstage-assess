@@ -6,8 +6,11 @@ item says what has been run and what has not. Items are removed when done, with 
 
 ## Needs Word, on a Windows machine
 
-- [ ] **Run `Check OpenAssess.cmd` by double-click, start to finish.** Its test line has been run through `cmd.exe` and runs all
-  the tests, but the whole file has not been run: the accuracy step, the speed step and the pause at the end.
+- [ ] **Run `Check OpenAssess.cmd` by double-click, once, and look at the window.** The whole file was run through `cmd.exe` on
+  5 November 2026 with a key press piped in for the pause at the end: all five steps ran and it said "Everything passed" (2135
+  engine tests, 191 app tests, the accuracy gate, the answer sheet gate, the speed check), and a test (`check-cmd.test.ts`) holds
+  it to naming every test file. What is left is only what a double-click adds: the window opening, staying open at the end, and
+  how it reads on screen.
 - [ ] **Open a few of the generated documents in Word and look.** The checker reads the XML, and only Word can say what Word
   shows. Worth opening: `c-06` (Word's own numbering), `c-11` (bullets and `(Correct)`), `c-16` (highlight), `c-21` (bullets
   and underline), `c-10` (font colour). They are in the session's scratch folder under `generated/` and in the zips you sent.
