@@ -23,16 +23,41 @@ const STOP_WORDS = new Set([
   "their", "then", "there", "these", "they", "this", "to", "was", "will", "with",
 ]);
 
+/** Letters that do not come apart into a letter and a mark, folded by hand to what a person types without them. */
+const FOLDED: Record<string, string> = { "ß": "ss", "æ": "ae", "œ": "oe", "ø": "o", "đ": "d", "ł": "l", "ð": "d", "þ": "th", "ı": "i" };
+
+/**
+ * The text as it is searched: lower case, with accents taken off. A person searching for "nucleo" means "núcleo", and one
+ * searching for "für" means "für", and the index used to hold neither, because it split on anything that was not a to z, so
+ * "für" came out as two single letters that were both dropped and "núcleo" as two words. Both sides, the question and the search,
+ * are folded the same way, so either spelling finds either.
+ */
+export function fold(text: string): string {
+  return (
+    text
+      .normalize("NFD")
+      // Only the combining marks that sit on Latin, Greek and Cyrillic letters (U+0300 to U+036F). The marks of other scripts, such
+      // as the vowel signs of Hindi, are part of the word and stay; and the text goes back to NFC so that Korean is whole again.
+      .replace(/[̀-ͯ]+/g, "")
+      .normalize("NFC")
+      .toLowerCase()
+      .replace(/[ßæœøđłðþı]/g, (c) => FOLDED[c] ?? c)
+  );
+}
+
+/** A letter that is a whole word on its own in the scripts that are written without spaces. */
+const ONE_CHARACTER_WORD = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]$/u;
+
 /**
  * Single letters are dropped, single digits are kept. People search a bank for
  * "chapter 5" and "question 3" all the time, and a tokenizer that throws away
  * one-character tokens wholesale makes both of those silently return nothing.
+ * A single character of Chinese, Japanese or Korean is a word, so it is kept.
  */
 export function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => (t.length > 1 || /^[0-9]$/.test(t)) && !STOP_WORDS.has(t));
+  return fold(text)
+    .split(/[^\p{L}\p{M}\p{N}]+/u)
+    .filter((t) => (t.length > 1 || /^\p{N}$/u.test(t) || ONE_CHARACTER_WORD.test(t)) && !STOP_WORDS.has(t));
 }
 
 /** Everything about a question that free text should match. */
@@ -86,13 +111,19 @@ export function searchableText(question: Question): string {
 export class SearchIndex {
   /** token -> question ids */
   private readonly tokens = new Map<string, Set<string>>();
+  /**
+   * question id -> its tokens. Taking a question out used to walk every token in the index, so building one was quadratic: 4,000
+   * questions took 4.7 seconds. With this it takes only the question's own tokens.
+   */
+  private readonly byQuestion = new Map<string, string[]>();
   /** Sorted token list, for prefix matching on the last word typed. */
   private sorted: string[] = [];
   private dirty = false;
 
   add(question: Question): void {
     this.remove(question.id);
-    for (const token of new Set(tokenize(searchableText(question)))) {
+    const own = [...new Set(tokenize(searchableText(question)))];
+    for (const token of own) {
       let bucket = this.tokens.get(token);
       if (!bucket) {
         bucket = new Set();
@@ -100,14 +131,25 @@ export class SearchIndex {
       }
       bucket.add(question.id);
     }
+    this.byQuestion.set(question.id, own);
     this.dirty = true;
   }
 
   remove(id: string): void {
-    for (const [token, bucket] of this.tokens) {
-      if (bucket.delete(id) && bucket.size === 0) this.tokens.delete(token);
+    for (const token of this.byQuestion.get(id) ?? []) {
+      const bucket = this.tokens.get(token);
+      if (bucket?.delete(id) && bucket.size === 0) this.tokens.delete(token);
     }
+    this.byQuestion.delete(id);
     this.dirty = true;
+  }
+
+  /** Forget everything, so that an index built again holds only what is added to it. */
+  clear(): void {
+    this.tokens.clear();
+    this.byQuestion.clear();
+    this.sorted = [];
+    this.dirty = false;
   }
 
   private ensureSorted(): void {

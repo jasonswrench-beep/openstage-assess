@@ -362,7 +362,15 @@ Both fallback bugs above lived inside those casts and would have been compile
 errors under a union keyed on `type`. This is the single highest-leverage
 refactor available and it gets harder the more code accumulates.
 
-### 5. Search does not scale and ignores accents
+### 5. Search does not scale and ignores accents (fixed on 5 November 2026)
+
+**Fixed.** `SearchIndex` keeps the tokens of each question, so taking one out costs its own words and not the whole index (16,000
+questions build in about a fifth of a second; the old index took about 6 seconds), and `rebuildIndex()` clears first. Text is
+folded before it is split (`fold` in `bank/search.ts`): accents come off Latin, Greek and Cyrillic letters, ß, æ, œ, ø and a few
+others are written as a person types them, and words are split on anything that is not a letter, a mark or a number in any script,
+so "núcleo" and "nucleo" find each other, "für" is one word, and a single character of Chinese, Japanese or Korean is kept as the
+word it is. The marks of other scripts (the vowel signs of Hindi) are part of the word and stay. `search-fold.test.ts` holds it.
+The original note follows, for the record.
 
 `SearchIndex.add` calls `remove` first, and `remove` iterates every bucket in
 the whole token map, so index build is quadratic: 500 questions 112 ms, 2,000
