@@ -250,3 +250,55 @@ describe("taking a folder away", () => {
     });
   });
 });
+
+describe("saving an import into a folder", () => {
+  const TEXT = "1. Which is a fruit?\n*a. Apple\nb. Carrot\n\n2. Which is a colour?\na. Sad\n*b. Red\n\n";
+  const imported = async (client: Client): Promise<string> => {
+    const reply = await client.send<Json>("POST", "/api/import?name=chapter.txt", new TextEncoder().encode(TEXT));
+    assert.equal(reply.status, 200, reply.text);
+    return reply.json["id"];
+  };
+
+  test("puts the questions in a folder of that name, made if there is none and found if there is", async () => {
+    await withApp(async (client) => {
+      const first = await client.post<Json>(`/api/sessions/${await imported(client)}/save`, { title: "Chapters", folder: "  Chapter 3 " });
+      assert.equal(first.status, 200, first.text);
+      assert.equal(first.json["folder"], "Chapter 3");
+      assert.equal(first.json["added"], 2);
+      let bank = await listed(client, "/api/banks/Chapters");
+      assert.deepEqual(bank["folders"].map((f: Json) => [f["name"], f["own"]]), [["Chapter 3", 2]]);
+      assert.equal(bank["unfiled"], 0);
+      // A second file into the same folder (the case does not matter) makes no second folder.
+      const second = await client.post<Json>(`/api/sessions/${await imported(client)}/save`, { bank: "Chapters", folder: "chapter 3" });
+      assert.equal(second.status, 200, second.text);
+      bank = await listed(client, "/api/banks/Chapters");
+      assert.deepEqual(bank["folders"].map((f: Json) => [f["name"], f["own"]]), [["Chapter 3", 4]]);
+    });
+  });
+
+  test("with no folder asked for, puts them in none, as before", async () => {
+    await withApp(async (client) => {
+      for (const folder of [undefined, "", "   ", null]) {
+        const title = `Plain ${String(folder).trim() || "x"} ${Math.random().toString(36).slice(2, 6)}`;
+        const saved = await client.post<Json>(`/api/sessions/${await imported(client)}/save`, folder === undefined ? { title } : { title, folder });
+        assert.equal(saved.status, 200, saved.text);
+        assert.equal(saved.json["folder"], null);
+        const bank = await listed(client, `/api/banks/${encodeURIComponent(saved.json["bank"])}`);
+        assert.deepEqual([bank["folders"], bank["unfiled"]], [[], 2]);
+      }
+    });
+  });
+
+  test("a name that cannot be used is refused before a bank is made, so none is left behind", async () => {
+    await withApp(async (client) => {
+      const id = await imported(client);
+      for (const folder of ["x".repeat(81), 5, {}, ["a"]]) {
+        const refused = await client.post<Json>(`/api/sessions/${id}/save`, { title: "Never", folder });
+        assert.equal(refused.status, 400, JSON.stringify(folder).slice(0, 20));
+      }
+      assert.equal((await client.get("/api/banks/Never")).status, 404, "no bank was made");
+      const saved = await client.post(`/api/sessions/${id}/save`, { title: "Now" });
+      assert.equal(saved.status, 200, "and the import can still be saved: a refusal did not use it up");
+    });
+  });
+});

@@ -29,6 +29,7 @@ import {
   matchesFacets,
   QUALITY_CODES,
   QUESTION_TYPES,
+  cleanFolderName,
   runImporter,
   validateQuestion,
   verdictOf,
@@ -298,14 +299,21 @@ async function saveSession(ctx: Context, session: ReturnType<Sessions["get"]>, b
   const title = typeof body["title"] === "string" ? body["title"].trim() : "";
   if (!existing && title === "") throw badRequest("Say which bank to save into, or give a title for a new one.");
 
+  // A folder to put the questions in, by name: found if the bank has one of that name at the top, made if not. The name is checked
+  // before a bank is made, so that a name that cannot be used does not leave an empty bank behind.
+  if (body["folder"] !== undefined && body["folder"] !== null && typeof body["folder"] !== "string") throw badRequest("The folder has to be a name.");
+  const rawFolder = typeof body["folder"] === "string" && body["folder"].trim() !== "" ? body["folder"] : undefined;
+  const folderName = rawFolder === undefined ? undefined : asBadRequest(() => cleanFolderName(rawFolder));
+
   const name = existing ?? (await ctx.banks.create(title));
   const chosen = session.questions.flatMap((q, i) => (session.skipped[i] ? [] : [[i, q] as const]));
   const notSaved: Array<{ index: number; title: string; reason: string }> = [];
   let added = 0;
   await ctx.banks.change(name, (bank) => {
+    const folderId = folderName === undefined ? undefined : bank.ensureFolder(folderName).id;
     for (const [i, q] of chosen) {
       try {
-        bank.add(q);
+        bank.add(q, { folderId });
         added++;
       } catch (error) {
         notSaved.push({ index: i, title: q.title, reason: (error as Error).message });
@@ -314,7 +322,7 @@ async function saveSession(ctx: Context, session: ReturnType<Sessions["get"]>, b
   });
   session.savedTo = { bank: name, added };
   const left = session.orphans.filter((o) => !o.made).length;
-  return ok({ bank: name, added, skipped: session.skipped.filter(Boolean).length, notSaved, orphansLeft: left });
+  return ok({ bank: name, added, folder: folderName ?? null, skipped: session.skipped.filter(Boolean).length, notSaved, orphansLeft: left });
 }
 
 // ---------------------------------------------------------------------------
