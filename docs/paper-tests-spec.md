@@ -304,6 +304,17 @@ Real-sheet testing is not a phase of code. It runs beside Phases 2 to 5 and stay
 - The key ends with a strip, ten answers to a line: `3-AC` is question 3 with A and C right, a dash alone is a question a sheet cannot carry, and a question mark is one with no usable key.
 - Writing the tests found two faults in the record's validator before anything used it: a version's order that repeated a question and left another out was accepted, and a record with a damaged question made the reader throw. Both are fixed and tested.
 
+Phase 1 is built (4 November 2026): `sheets/geometry.ts`, `sheets/code.ts`, `sheets/plan.ts` and `sheets/print.ts`. Decisions made while building it:
+
+- The sheet is a PDF only, at 100 percent, written by a small writer of its own (Helvetica, nothing embedded), because Word cannot promise where a shape lands. Every position is in millimetres in `geometry.ts`, the one source the printer and the reader both use.
+- Standard is A to E, 100 to a page in four columns of 25. Wide is A to H, 50 to a page in two columns of 25. Large print is 7 mm bubbles, A to E, and holds 51 to a page in three columns of 17, because 50 does not divide into columns. A test takes at most 8 pages, from the 3 bits of the code that say how many. There is no wide sheet in large print.
+- The code strip is 48 squares of 3 mm: a start square, the layout (1 standard and large, 2 wide), the paper, the test's 20-bit fingerprint, the page and number of pages, the version (0 on a sheet shared by every version) and a CRC-12. Three strips are pinned in the tests, with the check bits worked out again from the definition, so a sheet already in a classroom keeps reading in later versions of the program.
+- A test of several versions shares one sheet with bubbles for A to D, or has one sheet per version with the version in its code and named on it. A place has the most bubbles any version needs. It is labelled T and F only when it is true or false in every version; otherwise its bubbles are lettered, and the sheet says that A is True and B is False.
+- A question a sheet cannot carry (an essay, one with fewer than two answers, one with more than eight) keeps its number and has no bubbles. A question with no usable key still has them: it is read and never scored. The sheet says to answer in the booklet when any version has such a question, because with shuffled questions an essay can stand where another version has a choice question.
+- The name box is printed unless it is left off. Under the code strip, in words, is `Test 0F3C5   Sheet 1 of 2` (and the version), so a loose sheet can be put back with its test. One mark to copy and three not to make are drawn and never read.
+- Writing the tests and looking at the printed sheets found three faults before anything used them: the last row of a large print sheet ran into the line printed under the grid (the rows are now 10 mm apart and a test holds the grid clear of the line), the note about the booklet was missing from a shuffled test, and the plan's notes spoke of version A only.
+- Checked by breaking 80 rules of the code, geometry, plan and printer one at a time and running the tests: seven survived at first, each was given a test, and every break is now caught.
+
 Phase 0 is the one piece of M3 this needs. Phases 1 and 2 can run side by side once the geometry file exists, because the printer and the reader both build on it. No dates are set, as in the design plan.
 
 ## Open questions
