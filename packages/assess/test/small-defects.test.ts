@@ -226,6 +226,68 @@ describe("a bank that opens with a different number of questions than it says", 
   });
 });
 
+describe("a bank whose folder file is damaged", () => {
+  const withFolders = (): Bank => {
+    const bank = Bank.createEmpty("Folders");
+    const question = bank.add(createQuestion({ type: "essay", stem: plainToRich("A question in a folder"), body: {} }));
+    bank.moveToFolder(question.id, bank.addFolder("Chapter 1").id);
+    return bank;
+  };
+  const damage = (bytes: string, extra: Record<string, string> = {}) => {
+    const files = unzipSync(withFolders().toBytes());
+    files.set("folders.json", new Uint8Array(Buffer.from(bytes)));
+    for (const [name, text] of Object.entries(extra)) files.set(name, new Uint8Array(Buffer.from(text)));
+    return Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
+  };
+
+  test("opens, with its questions, instead of refusing the whole bank because one file is not JSON", () => {
+    const { bank, report } = damage("{ broken");
+    assert.equal(bank.questions.size, 1);
+    assert.deepEqual(bank.folders.root, []);
+    assert.equal(report.invalid.length, 1);
+    assert.equal(report.invalid[0]?.id, "folders.json");
+    assert.match(report.invalid[0]?.issues[0]?.message ?? "", /not valid JSON.*The bank was opened with no folders, and this file is kept as folders\.damaged\.json\.$/);
+  });
+
+  test("says so when the file is JSON of the wrong shape, which used to be replaced by an empty tree without a word", () => {
+    const { report } = damage('{"root": 5, "filters": []}');
+    assert.equal(report.invalid.length, 1);
+    assert.match(report.invalid[0]?.issues[0]?.message ?? "", /^the folders are not in the shape a bank keeps them\. The bank was opened with no folders/);
+  });
+
+  test("keeps the damaged file, byte for byte, through a save, beside a good folder file", () => {
+    for (const text of ["{ broken", '{"root": 5, "filters": []}', "[]"]) {
+      const { bank } = damage(text);
+      const saved = unzipSync(bank.toBytes());
+      assert.equal(Buffer.from(saved.get("folders.damaged.json") as Uint8Array).toString("utf8"), text, text);
+      const again = Bank.fromBytes(bank.toBytes());
+      assert.deepEqual(again.report.invalid, [], "the folder file it wrote is a good one");
+      assert.deepEqual(again.report.unknownFiles, ["folders.damaged.json"], "and the damaged one is still there, named");
+    }
+  });
+
+  test("does not write over an earlier damaged file", () => {
+    const { bank, report } = damage("{ second", { "folders.damaged.json": "{ first" });
+    assert.match(report.invalid[0]?.issues[0]?.message ?? "", /kept as folders\.damaged-2\.json\.$/);
+    const saved = unzipSync(bank.toBytes());
+    assert.equal(Buffer.from(saved.get("folders.damaged.json") as Uint8Array).toString("utf8"), "{ first");
+    assert.equal(Buffer.from(saved.get("folders.damaged-2.json") as Uint8Array).toString("utf8"), "{ second");
+  });
+
+  test("a good folder tree is read as it was, and a bank with no folder file at all has nothing to report", () => {
+    const good = Bank.fromBytes(withFolders().toBytes());
+    assert.equal(good.bank.folders.root[0]?.name, "Chapter 1");
+    assert.equal(good.bank.folders.root[0]?.questionIds.length, 1);
+    assert.deepEqual(good.report.invalid, []);
+    const files = unzipSync(withFolders().toBytes());
+    files.delete("folders.json");
+    const none = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
+    assert.deepEqual(none.report.invalid, []);
+    assert.equal(none.bank.questions.size, 1);
+    assert.equal(unzipSync(none.bank.toBytes()).has("folders.damaged.json"), false);
+  });
+});
+
 describe("openassess validate and info on a bank that lost a file", () => {
   const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
   const run = (...args: string[]) => {
