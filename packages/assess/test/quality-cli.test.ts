@@ -21,8 +21,10 @@ const run = (...args: string[]) => {
   return { code: r.status, out: r.stdout, err: r.stderr };
 };
 
+// Brought in by an import, so that no notes were made when it went into the bank: a question written in the app has them from the
+// start, and this is about what the command does for one that does not.
 const choice = (stem: string, options: string[]) =>
-  createQuestion({ type: "multipleChoice", stem: plainToRich(stem), title: stem.slice(0, 30), body: { shuffle: true, options: options.map((text, i) => ({ id: `o${i}`, content: plainToRich(text.replace(/\*$/, "")), correct: text.endsWith("*") })) } as never });
+  createQuestion({ type: "multipleChoice", origin: { kind: "import" }, stem: plainToRich(stem), title: stem.slice(0, 30), body: { shuffle: true, options: options.map((text, i) => ({ id: `o${i}`, content: plainToRich(text.replace(/\*$/, "")), correct: text.endsWith("*") })) } as never });
 
 describe("openassess check", () => {
   let dir = "";

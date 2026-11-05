@@ -225,6 +225,15 @@ describe("a stem that ends in a or an", () => {
     assert.equal(cue("It is a", ["Hippo*", "Dog", "Apple"]), false, "Hippo starts with h, so no verdict on any");
   });
 
+  test("is silent for an acronym, a letter on its own, and a letter joined to a word, which are read by name", () => {
+    for (const odd of ["MRI", "RNA", "DNA test", "X-ray", "x-ray", "A", "b", "a"]) assert.equal(cue("It is an", [odd, "Dog*", "Apple"]), false, odd);
+    assert.equal(cue("The slope is a", ["a*", "b", "c", "x"]), false, "a variable named a");
+    assert.equal(cue("The slope is a", ["MRI*", "Dog", "Cat"]), false);
+    // A word that is only capitalised is still a word.
+    assert.ok(cue("It is a", ["Orange*", "Dog", "Cat"]));
+    assert.ok(cue("It is an", ["Apple*", "Dog", "Egg"]));
+  });
+
   test("a single option, or only placeholders, says nothing", () => {
     assert.equal(cue("It is a", ["Apple*", "(missing)"]), false);
   });
@@ -241,6 +250,18 @@ describe("options that read the same", () => {
   test("two groups are both named", () => {
     const found = checkItemQuality(mc("Pick.", ["Paris*", "Rome", "Paris", "Rome"])).find((f) => f.code === FindingCode.DuplicateOption);
     assert.match(found?.message ?? "", /option A and option C; option B and option D/);
+  });
+
+  test("options that differ in a sign, an operator, a currency or a vowel mark are not copies", () => {
+    const sets = [["+2*", "-2", "+1", "-1"], ["x > 3*", "x < 3", "x >= 3", "x <= 3"], ["<*", ">", "="], ["$5*", "€5", "£5"], ["किताब*", "कुताब", "कीताब", "केताब"], ["2*", "-2", "+2"]];
+    for (const options of sets) assert.equal(flagged(mc("Pick.", options), FindingCode.DuplicateOption), false, options.join(" | "));
+  });
+
+  test("the same text in two Unicode forms, or with only the stop at the end different, is a copy", () => {
+    assert.ok(flagged(mc("Pick.", ["café*", "café"]), FindingCode.DuplicateOption), "composed and decomposed");
+    assert.ok(flagged(mc("Pick.", ["Paris*", "Paris."]), FindingCode.DuplicateOption));
+    assert.ok(flagged(mc("Pick.", ["\"Paris\"*", "Paris"]), FindingCode.DuplicateOption), "with quotes");
+    assert.ok(flagged(mc("Pick.", ["x > 3*", "X  >  3"]), FindingCode.DuplicateOption), "with spacing and case");
   });
 
   test("two placeholders are not a pair of copies", () => {
@@ -423,9 +444,29 @@ describe("in a bank", () => {
     assert.deepEqual(fixed.findings, []);
   });
 
+  test("a question written in a bank has its notes as it goes in, and one brought in by an import has none until the bank is checked", () => {
+    const bank = Bank.createEmpty("Quality");
+    const written = bank.add(mc("Which is not a fruit?", ["Apple", "Carrot*", "All of the above"]));
+    assert.deepEqual(written.findings.map((f) => f.code).sort(), [FindingCode.AllOrNoneOfTheAbove, FindingCode.NegativeStemNotEmphasised]);
+    assert.equal(bank.get(written.id)?.findings.length, 2);
+    const imported = bank.add({ ...mc("Which is not a vegetable?", ["Apple*", "Carrot", "All of the above"]), origin: { kind: "import" } });
+    assert.deepEqual(imported.findings, [], "an import's findings are about what the importer guessed, and notes are not mixed in");
+    assert.equal(bank.checkQuality().changed, 1, "the check makes the notes of the imported one, and the written one is as it was");
+    assert.equal(bank.get(imported.id)?.findings.length, 2);
+  });
+
+  test("a note dismissed on a question that was written in the bank stays dismissed through a check", () => {
+    const bank = Bank.createEmpty("Quality");
+    const first = bank.add(mc("Which is not a fruit?", ["Apple", "Carrot*", "All of the above"]));
+    const dismissed = { ...first, findings: first.findings.map((f) => ({ ...f, dismissed: true, dismissedBy: "jason" })) };
+    bank.questions.set(first.id, dismissed);
+    assert.equal(bank.checkQuality().changed, 0);
+    assert.ok(bank.get(first.id)?.findings.every((f) => f.dismissed === true));
+  });
+
   test("checking a bank writes the notes without editing: the version, the history and the status stay", () => {
     const bank = Bank.createEmpty("Quality");
-    const added = bank.add(mc("Which is not a fruit?", ["Apple", "Carrot*", "All of the above"]));
+    const added = bank.add({ ...mc("Which is not a fruit?", ["Apple", "Carrot*", "All of the above"]), origin: { kind: "import" } });
     const run = bank.checkQuality("jason");
     assert.equal(run.checked, 1);
     assert.equal(run.changed, 1);
@@ -465,7 +506,7 @@ describe("in a bank", () => {
 
   test("a note on a retired question is still kept up to date", () => {
     const bank = Bank.createEmpty("Quality");
-    const q = bank.add({ ...mc("Which is not a fruit?", ["Apple", "Carrot*"]), metadata: { tags: [], status: "retired" } });
+    const q = bank.add({ ...mc("Which is not a fruit?", ["Apple", "Carrot*"]), metadata: { tags: [], status: "retired" }, origin: { kind: "import" } });
     assert.equal(bank.checkQuality().changed, 1);
     assert.equal(bank.get(q.id)?.findings.length, 1);
   });

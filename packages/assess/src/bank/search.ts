@@ -55,9 +55,19 @@ const ONE_CHARACTER_WORD = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakan
  * A single character of Chinese, Japanese or Korean is a word, so it is kept.
  */
 export function tokenize(text: string): string[] {
+  return words(text).filter(isIndexed);
+}
+
+/** Every word of a text, folded, with nothing left out: the stop words and the single letters too. */
+function words(text: string): string[] {
   return fold(text)
     .split(/[^\p{L}\p{M}\p{N}]+/u)
-    .filter((t) => (t.length > 1 || /^\p{N}$/u.test(t) || ONE_CHARACTER_WORD.test(t)) && !STOP_WORDS.has(t));
+    .filter((t) => t !== "");
+}
+
+/** What goes in the index: not a stop word, not a single letter (but a single digit, or a single character of Chinese, Japanese or Korean). */
+function isIndexed(t: string): boolean {
+  return (t.length > 1 || /^\p{N}$/u.test(t) || ONE_CHARACTER_WORD.test(t)) && !STOP_WORDS.has(t);
 }
 
 /** Everything about a question that free text should match. */
@@ -182,7 +192,23 @@ export class SearchIndex {
    * narrow as a person types rather than vanishing between keystrokes.
    */
   search(text: string): Set<string> {
-    const words = tokenize(text);
+    // The word being typed is kept whatever it is. A stop word or a single letter is not in the index, so it would be dropped from
+    // the search, and "at" found nothing while "ato" found "atom" (and "in" found nothing while "ins" found "insulin"): the results
+    // vanished and came back between two keystrokes. As the last word it is only a prefix, which is what it is while it is typed.
+    // A stop word or a short one before the last is still left out, since a word that is not in the index can match nothing.
+    const typed = words(text);
+    const last = typed.length - 1;
+    const before = typed.slice(0, last).filter(isIndexed);
+    const end = typed[last];
+    if (end === undefined) return new Set();
+    if (isIndexed(end) || before.length === 0) return this.find([...before, end]);
+    // A stop word that ends a search that has other words ("capital of"): it narrows nothing, which is what a stop word means, and
+    // the results stay as they were for "capital" until the next word is begun. Alone ("at"), it is all there is to go on, so it is
+    // searched for by what it begins.
+    return this.find(before);
+  }
+
+  private find(words: string[]): Set<string> {
     if (words.length === 0) return new Set();
     let result: Set<string> | undefined;
     words.forEach((word, i) => {

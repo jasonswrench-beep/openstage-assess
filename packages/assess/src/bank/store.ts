@@ -50,7 +50,12 @@ import { SearchIndex, matchesQuery } from "./search.ts";
 
 export interface OpenReport {
   /** Questions that failed validation, with their issues. Never silently dropped. */
-  invalid: Array<{ id: string; issues: Issue[] }>;
+  invalid: Array<{
+    id: string;
+    issues: Issue[];
+    /** True when the thing was read and is in the bank, and only something about its file was wrong (its name). */
+    loaded?: boolean;
+  }>;
   /** Files inside the container the engine did not recognise. */
   unknownFiles: string[];
   migrationNotes: string[];
@@ -231,23 +236,29 @@ export class Bank {
         // parse is skipped and reported.
         const text = Buffer.from(data).toString("utf8");
         const entries: HistoryEntry[] = [];
-        let damaged = 0;
+        const damagedLines: string[] = [];
         for (const line of text.split("\n")) {
           if (line.trim().length === 0) continue;
           try {
             entries.push(JSON.parse(line) as HistoryEntry);
           } catch {
-            damaged++;
+            damagedLines.push(line);
           }
         }
         bank.history = entries;
-        if (damaged > 0) {
+        if (damagedLines.length > 0) {
+          // Kept as they were, in a file of their own: the log is written back from the lines that could be read, so a line left
+          // out here was deleted by the next save.
+          let n = 1;
+          let keptAs = "history.damaged.jsonl";
+          while (files.has(keptAs) || bank.passthrough.has(keptAs)) keptAs = `history.damaged-${++n}.jsonl`;
+          bank.passthrough.set(keptAs, new Uint8Array(Buffer.from(damagedLines.join("\n") + "\n", "utf8")));
           invalid.push({
             id: HISTORY_PATH,
             issues: [
               {
                 path: HISTORY_PATH,
-                message: `${damaged} history line(s) were unreadable and were skipped. The questions are unaffected.`,
+                message: `${damagedLines.length} history line(s) were unreadable. They are kept as ${keptAs}. The questions are unaffected.`,
               },
             ],
           });
@@ -296,8 +307,11 @@ export class Bank {
           continue;
         }
         if (question.id !== id) {
+          // The question was read and is in the bank; only its file name was wrong, and a save writes it under its own id. It is
+          // in the report so that it is said, and marked `loaded` so that it is not counted with the files that could not be read.
           invalid.push({
             id: question.id,
+            loaded: true,
             issues: [
               {
                 path: name,
@@ -435,16 +449,23 @@ export class Bank {
       const lines = this.history.map((h) => JSON.stringify(h)).join("\n") + "\n";
       entries.push({ name: HISTORY_PATH, data: new Uint8Array(Buffer.from(lines, "utf8")) });
     }
-    // Passthrough goes last, and anything whose path a live question already
-    // claimed is dropped here rather than written. Writing both produced a zip
-    // with two entries of one name, and on the next open the passthrough copy
-    // won, so a kept-but-unreadable file quietly replaced the author's real
-    // question. The reader now refuses duplicate names outright.
+    // Passthrough goes last. A kept file whose path a live file already claimed cannot be written there: both together made a zip
+    // with two entries of one name, and on the next open the passthrough copy won, so a kept-but-unreadable file quietly replaced
+    // the author's real question (the reader now refuses duplicate names outright). It used to be dropped here instead, which lost
+    // it: a "conflicted copy" of a question that carried the same id as another was reported as kept and then deleted by the next
+    // save, and so was a damaged file whose name was the path of a question that loaded from another file. It is written under a
+    // free name beside where it was (`.kept`, then `.kept-2`), which is not a path anything reads as a question, so it stays as it
+    // is the next time the bank is opened.
     const taken = new Set(entries.map((e) => e.name));
     for (const [name, data] of this.passthrough) {
-      if (taken.has(name)) continue;
-      taken.add(name);
-      entries.push({ name, data, store: shouldStore(name) });
+      let keep = name;
+      if (taken.has(keep)) {
+        let n = 1;
+        keep = `${name}.kept`;
+        while (taken.has(keep) || this.passthrough.has(keep)) keep = `${name}.kept-${++n}`;
+      }
+      taken.add(keep);
+      entries.push({ name: keep, data, store: shouldStore(keep) });
     }
 
     // Given a time to save at, every file in the zip is stamped with it. Left alone they are stamped with the clock, and two saves
@@ -568,11 +589,15 @@ export class Bank {
     if (options.folderId && !this.allFolders().some((f) => f.id === options.folderId)) {
       throw new Error(`No folder with the id ${options.folderId} is in this bank.`);
     }
-    this.questions.set(question.id, question);
-    this.index.add(question);
-    if (options.folderId) this.moveToFolder(question.id, options.folderId);
-    this.note(`added ${question.id}`, question.history.at(-1)?.by ?? "unknown");
-    return question;
+    // A question written here has its notes about writing made fresh as it goes in, as one that is edited does, so that Has notes
+    // does not miss a question that was added and not yet touched. One brought in by an import does not: an import's findings are
+    // about what the importer had to guess, and notes about style are not mixed in with them until the bank is checked.
+    const stored = question.origin?.kind === "import" ? question : withFreshQuality(question);
+    this.questions.set(stored.id, stored);
+    this.index.add(stored);
+    if (options.folderId) this.moveToFolder(stored.id, options.folderId);
+    this.note(`added ${stored.id}`, stored.history.at(-1)?.by ?? "unknown");
+    return stored;
   }
 
   get(id: string): Question | undefined {

@@ -23,7 +23,7 @@ import { standardTextImporter } from "../src/import/standard-text.ts";
 import { wordImporter } from "../src/import/word.ts";
 import { checkReferences, createQuestion } from "../src/model/create.ts";
 import { FindingCode } from "../src/model/findings.ts";
-import { isEmptyRichText, plainToRich, rich, richTextFields } from "../src/model/richtext.ts";
+import { isEmptyRichText, plainToRich, rich, richTextFields, richTextToPlain } from "../src/model/richtext.ts";
 
 describe("an equation is not nothing", () => {
   test("a stem that is only an equation or only a picture is not empty, and no text and no reference is", () => {
@@ -223,6 +223,88 @@ describe("a bank that opens with a different number of questions than it says", 
     assert.equal(opened.report.invalid.length, 2);
     const saved = unzipSync(opened.bank.toBytes());
     for (const name of [first, second] as string[]) assert.ok(saved.has(name), `${name} was dropped by the save`);
+  });
+});
+
+describe("a kept file whose name is a path something else now uses", () => {
+  const text = (bytes: Uint8Array | undefined): string => Buffer.from(bytes as Uint8Array).toString("utf8");
+  const zipOf = (files: Map<string, Uint8Array>): Uint8Array => zipSync([...files].map(([name, data]) => ({ name, data })));
+
+  test("a conflicted copy with the same id is written beside the question, not dropped by the save", () => {
+    const bank = Bank.createEmpty("Conflict");
+    const original = bank.add(createQuestion({ type: "essay", stem: plainToRich("The stem as first written"), body: {} }));
+    const files = unzipSync(bank.toBytes());
+    const path = `questions/${original.id}.json`;
+    const originalBytes = files.get(path) as Uint8Array;
+    // The copy a sync tool makes: the same question, edited, with another file name, listed before the original.
+    const edited = { ...original, stem: plainToRich("The stem as edited in the copy") };
+    const reordered = new Map<string, Uint8Array>([[`questions/${original.id} (conflicted copy).json`, new Uint8Array(Buffer.from(JSON.stringify(edited)))]]);
+    for (const [name, data] of files) reordered.set(name, data);
+
+    const opened = Bank.fromBytes(zipOf(reordered));
+    assert.equal(richTextToPlain(opened.bank.get(original.id)!.stem), "The stem as edited in the copy", "the copy came first and is the one that loaded");
+    assert.ok(opened.report.invalid.some((e) => /already uses the id/.test(e.issues[0]?.message ?? "")), "and the original is said to be kept");
+
+    const saved = unzipSync(opened.bank.toBytes());
+    assert.ok(saved.has(path), "the loaded question is written at its own path");
+    const kept = [...saved].filter(([name]) => name.startsWith(path) && name !== path);
+    assert.equal(kept.length, 1, "and the original is there, under a name beside it");
+    assert.equal(text(kept[0]?.[1]), text(originalBytes), "byte for byte");
+
+    // Opened and saved again, it is still there, and nothing is reported as a collision any more.
+    const again = Bank.fromBytes(opened.bank.toBytes());
+    assert.deepEqual(again.report.invalid, []);
+    assert.deepEqual(again.report.unknownFiles, [`${path}.kept`], "the kept original is an unknown file now, named, and kept");
+    const twice = unzipSync(again.bank.toBytes());
+    assert.equal(text(twice.get(`${path}.kept`)), text(originalBytes), "and it is the same again after another save");
+  });
+
+  test("a damaged file named for the path of a question that loaded from another file is kept too", () => {
+    const bank = Bank.createEmpty("Collide");
+    const a = bank.add(createQuestion({ type: "essay", stem: plainToRich("First question"), body: {} }));
+    const b = bank.add(createQuestion({ type: "essay", stem: plainToRich("Second question"), body: {} }));
+    const files = unzipSync(bank.toBytes());
+    // b's file now says it is a; a's file is damaged. The damaged file is named for the path b's question will be written to.
+    const bFile = JSON.parse(text(files.get(`questions/${b.id}.json`)));
+    files.set(`questions/${b.id}.json`, new Uint8Array(Buffer.from(JSON.stringify({ ...bFile, id: a.id }))));
+    files.set(`questions/${a.id}.json`, new Uint8Array(Buffer.from("{ damaged")));
+    const opened = Bank.fromBytes(zipOf(files));
+    assert.ok(opened.report.invalid.length >= 1);
+    const saved = unzipSync(opened.bank.toBytes());
+    const survivors = [...saved].filter(([, data]) => text(data) === "{ damaged");
+    assert.equal(survivors.length, 1, "the damaged file survived the save");
+  });
+
+  test("a name that is already taken for the kept file gets the next one", () => {
+    const bank = Bank.createEmpty("Names");
+    const q = bank.add(createQuestion({ type: "essay", stem: plainToRich("One question"), body: {} }));
+    const files = unzipSync(bank.toBytes());
+    const path = `questions/${q.id}.json`;
+    const opened = Bank.fromBytes(zipOf(files));
+    const kept = (opened.bank as unknown as { passthrough: Map<string, Uint8Array> }).passthrough;
+    kept.set(path, new Uint8Array(Buffer.from("kept one")));
+    kept.set(`${path}.kept`, new Uint8Array(Buffer.from("already here")));
+    const saved = unzipSync(opened.bank.toBytes());
+    assert.equal(text(saved.get(`${path}.kept`)), "already here");
+    assert.equal(text(saved.get(`${path}.kept-2`)), "kept one");
+  });
+});
+
+describe("history lines that cannot be read", () => {
+  test("are kept in a file of their own through a save, and reported with where", () => {
+    const bank = Bank.createEmpty("History");
+    bank.add(createQuestion({ type: "essay", stem: plainToRich("A question"), body: {} }));
+    const files = unzipSync(bank.toBytes());
+    const log = Buffer.from(files.get("history.jsonl") as Uint8Array).toString("utf8");
+    files.set("history.jsonl", new Uint8Array(Buffer.from(`${log}{ half a line\nnot json either\n`)));
+    const opened = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
+    const entry = opened.report.invalid.find((e) => e.id === "history.jsonl");
+    assert.match(entry?.issues[0]?.message ?? "", /^2 history line\(s\) were unreadable\. They are kept as history\.damaged\.jsonl\./);
+    const saved = unzipSync(opened.bank.toBytes());
+    assert.equal(Buffer.from(saved.get("history.damaged.jsonl") as Uint8Array).toString("utf8"), "{ half a line\nnot json either\n");
+    assert.equal(Buffer.from(saved.get("history.jsonl") as Uint8Array).toString("utf8").includes("half a line"), false, "the log itself holds only what could be read");
+    const again = Bank.fromBytes(opened.bank.toBytes());
+    assert.deepEqual(again.report.invalid, [], "and the log it wrote is a good one");
   });
 });
 

@@ -356,6 +356,8 @@ export async function renderSheets(host, params, shell) {
 
   function renderMake() {
     clear(makeHost);
+    // The search box is made new each time, empty; the word it held last time must not go on narrowing a list nobody can see it for.
+    filter = "";
     const name = h("input", { type: "text", id: "make-name", value: bank.title, autocomplete: "off", spellcheck: true });
     const versions = h("select", { id: "make-versions" }, ...[1, 2, 3, 4].map((n) => h("option", { value: String(n), text: n === 1 ? "One version" : `${n} versions` })));
     const order = h("select", { id: "make-order" }, h("option", { value: "kept", text: "Keep the questions where they are; reorder the answers" }), h("option", { value: "shuffled", text: "Shuffle the questions as well as the answers" }));

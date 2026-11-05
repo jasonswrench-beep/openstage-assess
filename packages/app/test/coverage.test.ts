@@ -170,3 +170,20 @@ describe("the grid", () => {
     });
   });
 });
+
+describe("opening a cell of the grid", () => {
+  test("hideRetired=1 leaves the retired out of the list, as the grid does, and without it they are there", async () => {
+    await withApp(async (client) => {
+      const { base, ids } = await bankWith(client, "Cells", METAS);
+      const idsOf = async (query: string): Promise<string[]> => ((await client.get<Json>(`${base}?${query}`)).json["questions"] as Json[]).map((q) => q["id"]).sort();
+      // Objective Define holds three questions, and one of them is retired; the grid counts the two that are not.
+      assert.deepEqual(await idsOf("objective=Define"), [ids[0], ids[1], ids[4]].sort());
+      assert.deepEqual(await idsOf("objective=Define&hideRetired=1"), [ids[0], ids[1]].sort());
+      assert.deepEqual(await idsOf("hideRetired=0&objective=Define"), [ids[0], ids[1], ids[4]].sort(), "only 1 asks for it");
+      const grid = (await client.get<Json>(`${base}/coverage?rows=objective&cols=bloom`)).json;
+      const define = grid["rowLabels"].indexOf("Define");
+      assert.equal((grid["cells"][define] as number[]).reduce((a, b) => a + b, 0), 2, "the grid and the narrowed list agree");
+      assert.equal((await client.get<Json>(`${base}?objective=Define&hideRetired=1`)).json["total"], 5, "the total is the bank's, not the list's");
+    });
+  });
+});

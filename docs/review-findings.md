@@ -375,6 +375,33 @@ same") saves twice and compares, and failed now and then (once in the run throug
 before). `Bank.toBytes({ at })` now stamps every file with `at`, and a
 test holds the clock still and moves it to prove it.
 
+### Found by reading the quality checks, search and bank code once more (5 November 2026)
+
+A review of the day's work, each one run before it was fixed.
+
+**Data kept, not dropped.** A file kept because it could not be read (`passthrough`) is written back under its own name, but when a
+live file had taken that name the kept file was dropped, and so was a damaged line of the history (`history.jsonl`). Both are now
+written under a free name beside where they were (`.kept`, `.kept-2`; `history.damaged.jsonl`), which nothing reads as a question,
+so they stay as they are on every later open. A question file named for one id but holding another was reported as a file that
+could not be read although it was loaded; it is marked `loaded` and the bank screen does not count it with the unreadable ones.
+
+**Notes that spoke wrongly.** Two options that were the same apart from a symbol, a mark or a case were not called the same, and
+two that were different words in a script with no capital letters were. Option text is now compared as written (`normalForm`: NFC,
+case, spaces, the quotes and stops round it), words are split by `wordTokens` (a minus sign and a symbol stay), and two questions
+whose numbers or symbols differ, with repeats counted, are not called alike. The a/an note no longer speaks about a single letter
+or an acronym, whose first sound depends on how it is said. A question added from the app is written with its notes; one from an
+import is not (the import gate counts findings, so a note there would move it).
+
+**Search.** The last word typed was dropped when it was a stop word or one letter, so "in" found everything; a stop word at the end
+of a longer search is still left out, but the last word of a short one is kept.
+
+**The app.** A bank titled "open" could not be written to (its name was taken for the route that brings a file in); the route now
+needs a POST with nothing after the name. A cell of the coverage grid opened a list that included the retired questions the grid
+does not count (`hideRetired=1`). A running check could replace the pane an unsaved edit was in; the results now wait. A kind of
+question the editor cannot write (a hotspot, opened from a cell) and a value no question has any more both showed as "All" or
+"Any" with the list still narrowed to them. The Make a test search box was empty after a test was made but its word still hid
+questions.
+
 ---
 
 ## Open, and roughly in the order I would take them

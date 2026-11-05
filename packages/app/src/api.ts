@@ -365,7 +365,10 @@ function listQuestions(questions: Question[], query: URLSearchParams): Question[
   const status = query.get("status");
   const check = query.get("check");
   const narrowed = facetFilters(query);
+  // Retired questions are left out when asked: a cell of the coverage grid does not count them, so the list it opens must not show them.
+  const hideRetired = query.get("hideRetired") === "1";
   return questions.filter((q) => {
+    if (hideRetired && q.metadata.status === "retired") return false;
     if (type && q.type !== type) return false;
     if (status && q.metadata.status !== status) return false;
     if (!matchesFacets(q, narrowed)) return false;
@@ -393,7 +396,9 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   }
 
   // Opening a bank file from somewhere else is the one route here where the name is not already a bank's name.
-  if (rawName === "open" && req.method === "POST") {
+  // Only the address with nothing after it: a bank called "open" has routes of its own (/banks/open/questions), and a bank that was
+  // given that name could not be written to, because every one of them was taken for opening a file.
+  if (rawName === "open" && what === undefined && req.method === "POST") {
     if (req.body.length === 0) throw badRequest("That file is empty.");
     const fileName = req.query.get("name") ?? "Imported bank.openassess";
     const adopted = await ctx.banks.adopt(new Uint8Array(req.body), cleanName(fileName.replace(/\.openassess$/i, "")));

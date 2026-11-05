@@ -108,6 +108,39 @@ describe("searching a bank", () => {
     assert.equal(b.search("desoxy").length, 1);
   });
 
+  test("the word being typed is found by what it begins, even when it is a stop word or one letter, so results do not vanish between keystrokes", () => {
+    const b = Bank.createEmpty("Typing");
+    b.add(essay("An atom is the smallest unit of an element."));
+    b.add(essay("Insulin is made in the pancreas."));
+    b.add(essay("The capital of France is Paris, and its office is old."));
+    b.add(essay("Cells divide by mitosis."));
+    assert.equal(b.search("ato").length, 1);
+    assert.equal(b.search("at").length, 1, "at is a stop word, and begins atom");
+    assert.equal(b.search("a").length >= 1, true, "a single letter begins words");
+    assert.equal(b.search("in").length, 1, "in begins insulin");
+    assert.equal(b.search("ins").length, 1);
+    assert.equal(b.search("the").length, 0, "no word here begins with it, and the is not in the index");
+    assert.equal(b.search("cells at").length, 1, "after another word a stop word narrows nothing, so it is the cells that are found");
+  });
+
+  test("a stop word that ends a search that has other words narrows nothing, until the next word is begun", () => {
+    const b = Bank.createEmpty("Ends");
+    b.add(essay("The capital of France is Paris and its office is old."));
+    b.add(essay("The capital of Spain is Madrid."));
+    assert.equal(b.search("capital").length, 2);
+    assert.equal(b.search("capital of").length, 2, "of is a stop word, and office begins with it: the results do not drop to the one that has it");
+    assert.equal(b.search("capital in").length, 2);
+    assert.equal(b.search("capital of fr").length, 1, "and when the next word is begun they narrow");
+    assert.equal(b.search("capital offi").length, 1);
+  });
+
+  test("a stop word or a letter before the last word is still left out", () => {
+    const b = Bank.createEmpty("Middle");
+    b.add(essay("The capital of France is Paris."));
+    assert.equal(b.search("capital of france").length, 1);
+    assert.equal(b.search("the capital of fra").length, 1);
+  });
+
   test("an English search still means what it did", () => {
     const b = bank();
     assert.equal(b.search("nucleus").length, 1);
