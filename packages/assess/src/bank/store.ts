@@ -651,6 +651,8 @@ export class Bank {
   // -------------------------------------------------------------------------
 
   rebuildIndex(): void {
+    // Cleared first: a question taken out of the map by hand would otherwise stay findable.
+    this.index.clear();
     for (const question of this.questions.values()) this.index.add(question);
     this.folderOf = folderIndex(this.folders.root);
   }
