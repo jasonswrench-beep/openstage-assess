@@ -192,6 +192,8 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.5); }
 .export .counts li { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
 .export .counts b { display: block; font-size: 1.3rem; line-height: 1.1; }
 .facets { display: contents; }
+.pick-for-me { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.pick-for-me input[type="number"] { width: 5.5em; }
 .coverage-choices { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 12px; }
 .field.inline { display: flex; align-items: center; gap: 6px; }
 .coverage .scroll { overflow-x: auto; }

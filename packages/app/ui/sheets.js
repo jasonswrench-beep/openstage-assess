@@ -410,6 +410,60 @@ export async function renderSheets(host, params, shell) {
       count();
     }
 
+    // Pick for me: some number of the questions that have a chapter, an objective and so on, chosen at random and added to the ones
+    // chosen. Pressed again with another value, it builds a test chapter by chapter. The person still sees every question and can
+    // take any out.
+    const PICK_AXES = [["objective", "objective"], ["chapter", "chapter"], ["section", "section"], ["tag", "tag"], ["bloom", "Bloom level"], ["difficulty", "difficulty"], ["type", "kind of question"]];
+    const pickCount = h("input", { type: "number", id: "pick-count", value: "5", attrs: { min: "1", max: "1000", inputmode: "numeric" } });
+    const pickAxis = h("select", { id: "pick-axis" }, ...PICK_AXES.map(([axis, name]) => h("option", { value: axis, text: name })));
+    const pickValue = h("select", { id: "pick-value" });
+    const pickNote = h("p", { class: "sub", attrs: { "aria-live": "polite" } });
+    const valuesOf = (/** @type {string} */ axis) => /** @type {Array<{ value: string, count: number }>} */ (bank.facets?.[axis] ?? []);
+    function fillValues() {
+      clear(pickValue);
+      const choices = valuesOf(pickAxis.value);
+      if (choices.length === 0) put(pickValue, h("option", { value: "", text: "No values" }));
+      for (const c of choices) put(pickValue, h("option", { value: c.value, text: c.value === "(none)" ? "Not set" : pickAxis.value === "type" ? /** @type {any} */ (TYPE_NAMES)[c.value] ?? c.value : c.value }));
+    }
+    pickAxis.addEventListener("change", fillValues);
+    fillValues();
+    const pickGo = h("button", { type: "button", text: "Choose them" });
+    pickGo.addEventListener("click", async () => {
+      if (pickValue.value === "") {
+        pickNote.textContent = "There is nothing to pick from: no question has a value for that.";
+        return;
+      }
+      pickGo.disabled = true;
+      try {
+        const result = await post(`${base}/pick`, { axis: pickAxis.value, value: pickValue.value, count: Number(pickCount.value), chosen: [...chosen] });
+        for (const id of result.ids) chosen.add(id);
+        fill();
+        const left = result.left;
+        const why = [
+          left.noKey > 0 ? `${plural(left.noKey, "had no usable answer key", "had no usable answer key")}` : "",
+          left.alike > 0 ? `${plural(left.alike, "was a copy of a question already chosen", "were copies of questions already chosen")}` : "",
+          left.chosen > 0 ? `${left.chosen} ${left.chosen === 1 ? "was" : "were"} already chosen` : "",
+          left.retired > 0 ? `${left.retired} ${left.retired === 1 ? "was" : "were"} retired` : "",
+        ].filter(Boolean);
+        pickNote.textContent = `${result.ids.length === 0 ? "None chosen" : `Chose ${plural(result.ids.length, "question", "questions")}`}${result.ids.length < result.wanted ? ` of the ${result.wanted} asked for (${plural(result.candidates, "question was", "questions were")} free to pick)` : ""}.${why.length > 0 ? ` Left out: ${why.join("; ")}.` : ""}`;
+      } catch (error) {
+        tell(error);
+      } finally {
+        pickGo.disabled = false;
+      }
+    });
+    const pickRow = h(
+      "div",
+      { class: "pick-for-me", attrs: { role: "group", "aria-label": "Pick questions for me" } },
+      h("label", { for: "pick-count", text: "Pick" }),
+      pickCount,
+      h("label", { for: "pick-axis", text: "questions at random, by" }),
+      pickAxis,
+      h("label", { for: "pick-value", text: "being" }),
+      pickValue,
+      pickGo,
+    );
+
     const all = h("button", { type: "button", text: "Choose all shown", on: { click: () => { for (const q of visible()) chosen.add(q.id); fill(); } } });
     const none = h("button", { type: "button", text: "Choose none", on: { click: () => { chosen.clear(); fill(); } } });
     const go = h("button", { type: "button", class: "primary", text: "Make the test", disabled: true });
@@ -439,6 +493,8 @@ export async function renderSheets(host, params, shell) {
         h("p", { class: "sub", text: "Choose the questions. The test keeps a copy of each as it is now, so changing the bank later never changes a test already given. A question a bubble cannot carry (an essay, a short answer) keeps its number and is answered in the booklet." }),
         h("div", { class: "grid" }, h("div", { class: "field" }, h("label", { for: "make-name", class: "field-label", text: "Name of the test" }), name), h("div", { class: "field small" }, h("label", { for: "make-versions", class: "field-label", text: "Versions" }), versions)),
         orderField,
+        pickRow,
+        pickNote,
         h("div", { class: "pick-tools" }, search, all, none, h("div", { class: "check" }, retired, h("label", { for: "make-retired", text: "Include retired questions" }))),
         list,
         summary,

@@ -156,6 +156,11 @@ only and answers only to the window it opened.
   not yet tagged, retired questions are left out, and a question with several tags is counted under each. Each count in the app
   is a button that narrows the list to those questions. A bank's list can also be narrowed to one chapter, objective, section,
   tag, Bloom level, difficulty or status, whichever the bank has values for.
+- Pick for me, on the Make a test screen of the Answer sheets area: choose some number of the questions that have a chapter, an
+  objective, a tag, a Bloom level and so on, at random, and add them to the ones already chosen; pressed again with another value it
+  builds a test chapter by chapter, and every question stays visible and can be taken out. It does not pick a retired question, one
+  already chosen, one with no usable answer key, or a copy of (or one very much alike to) a question already in the test, and it
+  says how many of each it left out, so a short answer is never a mystery.
 - Check quality (the "Check quality" button on a bank, or `assess check <bank>`): notes about the
   writing and the accessibility of each question, never warnings, so a note cannot change whether
   a question counts as read or what an export holds back. They name an option that depends on the

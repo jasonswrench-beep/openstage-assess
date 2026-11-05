@@ -6,15 +6,19 @@
  * check of a printed blank copy (Check my printing) writes nothing.
  */
 
+import { randomBytes } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
   checkPrinting,
+  COVERAGE_AXES,
   createTest,
   keyOf,
   MAX_VERSIONS,
+  MOST_PICKED,
   openScans,
+  pickQuestions,
   planSheet,
   pointsOf,
   printTestPaper,
@@ -202,9 +206,27 @@ async function checkPrintingRoute(req: ApiRequest, record: TestRecord): Promise<
   return ok({ ok: check.ok, found: check.found, problems: check.problems, ...(check.refusal ? { cause: check.refusal.cause } : {}) });
 }
 
-/** /api/sheets/:bank/tests... */
+/**
+ * Some of the bank's questions that have a value (this chapter, this tag), chosen at random, for a test being made. Nothing is kept:
+ * the questions are put to the person, who still chooses what goes in. The answer says what was left out and why, so a short
+ * answer is never a mystery.
+ */
+async function pickRoute(ctx: Context, req: ApiRequest, bankName: string): Promise<ApiResponse> {
+  const input = jsonObject(req);
+  onlyFields(input, ["axis", "value", "count", "chosen"], "The request");
+  const axis = oneOf(input["axis"], COVERAGE_AXES, "what to pick by");
+  const value = text(input["value"], "The value to pick", 200, true) as string;
+  const count = whole(input["count"], "How many to pick", 1, MOST_PICKED);
+  const chosen = input["chosen"] === undefined ? [] : idList(input["chosen"]);
+  const bank = await ctx.banks.open(bankName);
+  const seed = randomBytes(6).toString("hex");
+  return ok({ ...pickQuestions(bank.sortedQuestions(), { axis, value, count, chosen, seed }), seed });
+}
+
+/** /api/sheets/:bank/tests... and /api/sheets/:bank/pick */
 export async function sheetsRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   const [, rawBank, what, id, action] = req.segments;
+  if (rawBank !== undefined && what === "pick" && id === undefined && req.method === "POST") return pickRoute(ctx, req, checkName(rawBank));
   if (rawBank === undefined || what !== "tests") throw notFound("There is no such page.");
   const bankName = checkName(rawBank);
 

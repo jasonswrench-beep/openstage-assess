@@ -69,6 +69,8 @@ export type { OpenReport, BankStats, QualityRun } from "./bank/store.ts";
 export { SearchIndex, fold, tokenize, searchableText, matchesQuery } from "./bank/search.ts";
 export { COVERAGE_AXES, NONE as COVERAGE_NONE, coverage, facets, isCoverageAxis, matchesFacets, valuesOn } from "./bank/coverage.ts";
 export type { CoverageAxis, CoverageGrid, CoverageOptions, Facet } from "./bank/coverage.ts";
+export { MOST_PICKED, pickQuestions } from "./bank/pick.ts";
+export type { PickOptions, PickResult } from "./bank/pick.ts";
 
 // Quality
 export * from "./quality/answer-key.ts";

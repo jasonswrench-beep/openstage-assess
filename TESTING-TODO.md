@@ -249,6 +249,10 @@ Everything a program can check is in `coverage.test.ts` (engine and app). What i
   above nothing is a button whose name says what it shows ("2 questions: Chapter 2, easy. Show them."), and focus moves to the
   heading when the grid opens. Looked at in the built-in browser at desktop and phone width (the table scrolls inside its own box
   at phone width), not with a screen reader.
+- [ ] **Use Pick for me to build a real test.** On Make a test, pick five from one chapter, then five from the next, and look at
+  what it chose and what it says it left out. It is random and does not keep a blueprint; if you want a stored recipe ("5 from
+  each chapter, at most 2 hard") that is a feature to decide on. It leaves out a question with no usable answer key, which a person
+  can still choose by hand, and a copy of a question already in the test (the same words, or 0.85 alike with the same numbers).
 - [ ] **Look at the narrowing selects on a bank with a lot of tags.** A select is made for each of objective, chapter, section,
   tag, Bloom level, difficulty and status that the bank has values for, so a bank with hundreds of tags has a long list in one
   select. If that is too long, a search box in place of the select for tags is the likely change.
