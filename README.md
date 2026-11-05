@@ -1,5 +1,7 @@
 # OpenAssess
 
+[Roadmap & Feature Requests](https://app.productbridge.io/widget/784db895-cb64-45f4-9bde-4645df4aa083?tab=roadmap)
+
 A free desktop tool for writing, importing, organizing and exporting assessment
 questions, so an instructor can turn a Word test bank into an LMS-ready quiz
 without retyping a single question.
