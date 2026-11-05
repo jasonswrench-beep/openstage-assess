@@ -37,6 +37,10 @@ import { exportMoodleXml, MOODLE_XML_ID } from "../export/moodle-xml.ts";
 import type { ExportResult } from "../export/types.ts";
 import { printOptions, printTest } from "../print/index.ts";
 import type { Question } from "../model/question.ts";
+import { formatGate, runSheetGate } from "../sheets/gate.ts";
+import { readPng } from "../sheets/image.ts";
+import { SheetReader } from "../sheets/read.ts";
+import { checkPrinting } from "../sheets/check-print.ts";
 
 const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
 
@@ -83,6 +87,19 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess score [fixtures directory] [--details]
       Run the accuracy harness. Exits non-zero below ${(TARGET_SCORE * 100).toFixed(0)} percent.
 
+  openassess sheets gate [--sheets 60] [--seed gate-1] [--only synthetic|damaged]
+      The accuracy gate for the answer sheet reader. Sheets with known answers are
+      drawn, filled in like a student's, damaged like a scan or a photograph, and read.
+      An answer read wrong without a flag fails it. Exit code 1 on failure.
+
+  openassess sheets read <bank${BANK_EXTENSION}> <picture.png> [--test <id or name>] [--json]
+      Read one page of a scanned answer sheet against a test in the bank: its version,
+      each question's answer, and every question that needs a person to look.
+
+  openassess sheets check <bank${BANK_EXTENSION}> <picture.png> [--test <id or name>]
+      Check my printing: read a scan of a blank printed copy of the sheet, and say
+      whether the printer, the paper and the scanner are doing what the reading needs.
+
   openassess perf [--count 500]
       Build a bank of N questions and time open, search and save.
 
@@ -105,7 +122,7 @@ function positional(args: string[]): string[] {
     const value = args[i] as string;
     if (value.startsWith("--")) {
       // Flags that take a value consume the next item.
-      if (["out", "title", "count", "profile", "to", "key-mark"].includes(value.slice(2))) i++;
+      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test"].includes(value.slice(2))) i++;
       continue;
     }
     out.push(value);
@@ -472,6 +489,79 @@ async function cmdPerf(args: string[]): Promise<number> {
   return [saved, opened, searched].every((ms) => ms < budget) ? 0 : 1;
 }
 
+/** The test a command is about: named with --test, or the only one the bank has. */
+function pickTest(bank: Bank, args: string[]): { test: ReturnType<Bank["listTests"]>[number] } | { error: string } {
+  const tests = bank.listTests();
+  const want = arg(args, "test");
+  if (want) {
+    const found = tests.find((t) => t.id === want) ?? tests.find((t) => t.name === want);
+    return found ? { test: found } : { error: `This bank has no test "${want}". Its tests are: ${tests.map((t) => `${t.name} (${t.id})`).join(", ") || "none"}.` };
+  }
+  if (tests.length === 1) return { test: tests[0] as (typeof tests)[number] };
+  return { error: tests.length === 0 ? "This bank has no assembled test, so there is no answer sheet to read." : `This bank has ${tests.length} tests. Name one with --test: ${tests.map((t) => `${t.name} (${t.id})`).join(", ")}.` };
+}
+
+async function loadPicture(path: string): Promise<{ image: Extract<ReturnType<typeof readPng>, { ok: true }> } | { error: string }> {
+  const bytes = new Uint8Array(await readFile(resolve(path)));
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return { error: "This is a JPEG. The app opens JPEG pictures with the window's own decoder; from the command line, save the scan as a PNG." };
+  if (bytes[0] === 0x25 && bytes[1] === 0x50) return { error: "This is a PDF. The app opens scanned PDFs; from the command line, save the page as a PNG." };
+  const png = readPng(bytes);
+  return png.ok ? { image: png } : { error: png.reason };
+}
+
+async function cmdSheets(args: string[]): Promise<number> {
+  const [sub, ...rest] = args;
+  if (sub === "gate") {
+    const only = arg(rest, "only");
+    if (only !== undefined && only !== "synthetic" && only !== "damaged") return fail(`Unknown corpus "${only}". The corpora are synthetic and damaged.`);
+    const sheets = Number(arg(rest, "sheets") ?? 60);
+    if (!Number.isInteger(sheets) || sheets < 1) return fail("--sheets is a whole number of sheets for each corpus.");
+    const report = runSheetGate({ sheets, seed: arg(rest, "seed") ?? "gate-1", only });
+    console.log(formatGate(report));
+    return report.passed ? 0 : 1;
+  }
+  if (sub === "read" || sub === "check") {
+    const [bankPath, picturePath] = positional(rest);
+    if (!bankPath || !picturePath) return fail(`Name a bank file and a picture: sheets ${sub} <bank> <picture.png>.`);
+    const { bank } = await Bank.open(resolve(bankPath));
+    const chosen = pickTest(bank, rest);
+    if ("error" in chosen) return fail(chosen.error);
+    const loaded = await loadPicture(picturePath);
+    if ("error" in loaded) {
+      console.error(loaded.error);
+      return 1;
+    }
+    const reader = new SheetReader(chosen.test);
+    if (sub === "check") {
+      const check = checkPrinting(reader, loaded.image.image, { dpi: loaded.image.dpi });
+      for (const line of check.found) console.log(line);
+      if (check.ok) console.log("\nThe printing is fine: a blank copy reads as blank, and the sheet is the size it was made.");
+      else for (const problem of check.problems) console.log(`\nProblem: ${problem}`);
+      return check.ok ? 0 : 1;
+    }
+    const result = reader.read(loaded.image.image);
+    if (has(rest, "json")) {
+      console.log(JSON.stringify(result, null, 2));
+      return result.ok ? 0 : 1;
+    }
+    if (!result.ok) {
+      console.log(`This page was not read (${result.cause}): ${result.reason}`);
+      return 1;
+    }
+    const counts = { answered: 0, blank: 0, flagged: 0, notOnSheet: 0 };
+    for (const q of result.questions) counts[q.status]++;
+    const hex = result.code.test.toString(16).toUpperCase().padStart(5, "0");
+    console.log(`Test ${hex}, sheet ${result.code.page} of ${result.code.pages}. Version: ${result.version === undefined ? "not settled" : String.fromCharCode(64 + result.version)}${result.versionSource === "bubble" ? " (the bubble the student filled)" : ""}.`);
+    console.log(`Read at about ${Math.round(result.quality.dpi)} dots to the inch. ${counts.answered} answered, ${counts.blank} blank, ${counts.flagged} flagged${counts.notOnSheet ? `, ${counts.notOnSheet} not on the sheet` : ""}.`);
+    for (const note of result.notes) console.log(`Note: ${note}`);
+    for (const q of result.questions) if (q.status === "answered") console.log(`  ${String(q.number).padStart(3)}. ${q.marked.map((p) => String.fromCharCode(65 + p)).join("")}`);
+    for (const flag of result.flags.slice(0, 40)) console.log(`  ${flag.question === undefined ? "Sheet" : `Question ${flag.question}`} (${flag.kind}): ${flag.reason}`);
+    if (result.flags.length > 40) console.log(`  and ${result.flags.length - 40} more flags`);
+    return 0;
+  }
+  return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, read and check.` : "Say which sheets command: gate, read or check.");
+}
+
 function cmdContract(): number {
   console.log(`Read contract ${READ_CONTRACT_VERSION}`);
   console.log(`Operations: openBank, listQuestions, getQuestion, resolveLink, supportedTypes, toDeliveryPayload\n`);
@@ -523,6 +613,8 @@ async function main(): Promise<number> {
       return cmdSearch(args);
     case "score":
       return cmdScore(args);
+    case "sheets":
+      return cmdSheets(args);
     case "perf":
       return cmdPerf(args);
     case "contract":

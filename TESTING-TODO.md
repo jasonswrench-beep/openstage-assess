@@ -182,7 +182,22 @@ in the tests and in `assess sheets gate`.
   office light. The expected answers come from the volunteer's list, never from the reader. Tune thresholds on half and report on the
   other half. The targets are in the spec's success criteria.
 - [ ] **Print the sheet on the department printer and photocopy it.** Check my printing should read a scan of one blank photocopy:
-  corner marks, code strip, no blank bubble read as filled, and the scale within 2 percent.
+  corner marks, code strip, no blank bubble read as filled, and the scale within 2 percent. (`assess sheets check <bank> <picture.png>`
+  does this on a PNG now; it says the printed size only when the picture says how many dots to the inch it was scanned at.)
+- [ ] **Set the lines for a filled bubble and an empty one on real pencil.** They are provisional: 0.5 and 0.1 (0.06 for a question with
+  several answers), chosen on drawn sheets where a firm mark reads 0.65 to 0.85 and a hurried scribble 0.4 to 0.6. Real graphite on a
+  real scanner may read lighter, and then firm marks will be flagged more than they should be. Fill in sheets with a #2 pencil, a
+  ballpoint and a felt pen, lightly and firmly, and look at the fills in `assess sheets read <bank> <picture.png> --json`.
+- [ ] **A black and white scan of pencil marks.** The reader knows a black and white picture when it sees one (hardly any grey) and reads
+  no question with several answers from it, because pale pencil can vanish and a smudge can come out solid, and no program can tell
+  which. Scan the real sheets in black and white and see how much of a class this flags. If instructors scan in black and white by
+  habit, the flag is a nuisance and a fax decoder is not the point: the point is to tell them to scan in grey.
+- [ ] **Look at what a photograph does that the drawn photographs do not.** Lens distortion, a curled page, a shadow of the phone, a
+  creased corner. The drawn ones lean and are lit from one side but are flat and sharp over the page, and a curled page can put a
+  row more than a millimetre from where the corner marks say, which flags that row ("registration") and does not read it.
+- [ ] **The 5 percent and 1 percent targets are for real paper.** On drawn sheets 0 of 1,600 pages gave an answer read wrong without a
+  flag, and firm marks on clean scans were flagged 0 times in 100. That says the rules hold. It does not say how many answers a real
+  class will have flagged; only the real-sheet corpus does.
 
 ## The app and its window
 
