@@ -294,6 +294,16 @@ Six phases, each finished only when its gate passes; Phase 1 is already useful t
 
 Real-sheet testing is not a phase of code. It runs beside Phases 2 to 5 and stays open in `TESTING-TODO.md` until volunteers have filled in real sheets and they have been scanned on the department copier, a flatbed and two phones; thresholds are tuned on half of them and reported on the other half.
 
+**Built so far.** Phase 0 is built (4 November 2026): `model/test.ts`, `quality/test-key.ts`, a `tests/` folder in the bank, and booklets and keys for every version (`printVersions`). Decisions made while building it:
+
+- Version A is the test as it was assembled. Versions B to D are made from the stored seed: the answers of each question are put in another order (never the order they came in), and the questions too when the test says to shuffle them, within their sections.
+- A test of one version is printed with no version, since there is nothing to tell apart.
+- The fingerprint is 20 bits from the test id, the seed, the number of versions and the question ids, and a record whose fingerprint does not match what it holds is refused.
+- A test in a bank that cannot be read is kept as it was, reported, and written back unchanged, like a question.
+- The version is in the booklet's title and in a running header at the top of every page (a Word header part, and a line at the top of each PDF page), and a line tells the student which bubble to fill in. The Word header was checked against Word itself.
+- The key ends with a strip, ten answers to a line: `3-AC` is question 3 with A and C right, a dash alone is a question a sheet cannot carry, and a question mark is one with no usable key.
+- Writing the tests found two faults in the record's validator before anything used it: a version's order that repeated a question and left another out was accepted, and a record with a damaged question made the reader throw. Both are fixed and tested.
+
 Phase 0 is the one piece of M3 this needs. Phases 1 and 2 can run side by side once the geometry file exists, because the printer and the reader both build on it. No dates are set, as in the design plan.
 
 ## Open questions

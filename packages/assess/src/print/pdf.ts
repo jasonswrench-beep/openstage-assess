@@ -61,6 +61,13 @@ function charWidth(code: number, font: FontKey): number {
   return 556;
 }
 
+/** How wide a text of printable ASCII is, in points, at a size in one of the two Helvetica faces. For placing text in other drawings, such as the answer sheet. */
+export function measureText(text: string, size: number, font: "regular" | "bold" = "regular"): number {
+  let units = 0;
+  for (const ch of text) units += charWidth(Math.min(ch.charCodeAt(0), 255), font);
+  return (units * size) / 1000;
+}
+
 /** The character codes of a text in Windows Latin-1, and the characters that could not be drawn. */
 function encode(text: string, replaced: Map<string, number>): number[] {
   const codes: number[] = [];
@@ -283,6 +290,12 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
     p.ops.push(`BT /${RESOURCE.regular} ${size} Tf 1 0 0 1 ${num(paper.margin)} ${num(baseline)} Tm ${pdfString(shown)} Tj ET`);
     p.ops.push(`BT /${RESOURCE.regular} ${size} Tf 1 0 0 1 ${num(paper.margin + textWidth - rightWidth)} ${num(baseline)} Tm ${pdfString(right)} Tj ET`);
   });
+
+  // The header, when the test has several versions: the version at the top of every page, so a loose page can be put back with its own.
+  if (doc.header) {
+    const text = encode(doc.header, replaced);
+    for (const p of pages) p.ops.push(`BT /${RESOURCE.bold} 9 Tf 1 0 0 1 ${num(paper.margin)} ${num(paper.height - paper.margin / 2)} Tm ${pdfString(text)} Tj ET`);
+  }
 
   // The objects.
   const parts: Buffer[] = [];

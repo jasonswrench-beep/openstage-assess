@@ -18,7 +18,8 @@
 import { hasUsableKey } from "../quality/answer-key.ts";
 import type { DestinationReport, ReportItem } from "../export/types.ts";
 import { buildReport, hasText, plural, TYPE_NAMES } from "../export/text.ts";
-import { type Question } from "../model/question.ts";
+import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
+import { shuffledFor } from "../model/random.ts";
 import { type RichText } from "../model/richtext.ts";
 
 export const PRINT_ID = "print";
@@ -76,6 +77,8 @@ export interface PrintDocument {
   blocks: Block[];
   /** Printed at the left of the foot of every page, with the page number at the right. */
   footer: string;
+  /** Printed at the left of the top of every page: the version of a test that has several. */
+  header?: string;
   kind: "student" | "key";
 }
 
@@ -92,6 +95,12 @@ export interface PrintOptions {
   /** On the key only: feedback written for a question, under its answer. */
   includeFeedback: boolean;
   fontSize: number;
+  /** The version this copy is of, for a test with several: in the title, and at the top of every page. */
+  versionLabel?: string;
+  /** On the student copy: says to fill in the version's bubble and to mark the answers on the answer sheet. */
+  answerOnSheet?: boolean;
+  /** On the key: the right letters in one line, in the order of the sheet, for scoring by hand. */
+  keyStrip?: boolean;
 }
 
 export const DEFAULT_OPTIONS: Omit<PrintOptions, "title"> = {
@@ -106,38 +115,8 @@ export const DEFAULT_OPTIONS: Omit<PrintOptions, "title"> = {
   fontSize: 11,
 };
 
-// ---------------------------------------------------------------------------
-// A shuffle that is the same every time for the same question
-// ---------------------------------------------------------------------------
-
-function seed(text: string): () => number {
-  let h = 1779033703 ^ text.length;
-  for (let i = 0; i < text.length; i++) {
-    h = Math.imul(h ^ text.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  let a = (Math.imul(h ^ (h >>> 16), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** The same items in another order, the same other order each time for the same id, and never the order they came in. */
-export function shuffledFor<T>(items: readonly T[], id: string): T[] {
-  const out = [...items];
-  const random = seed(id);
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j] as T, out[i] as T];
-  }
-  // A shuffle that came out as it went in would show the key, so it is turned by one place.
-  if (out.length > 1 && out.every((item, i) => item === items[i])) out.push(out.shift() as T);
-  return out;
-}
+// The shuffle that is the same every time for the same question now lives in model/random.ts, because test versions need it too.
+export { shuffledFor };
 
 // ---------------------------------------------------------------------------
 // Rich text as paragraphs
@@ -469,6 +448,17 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
   return { blocks: out, notes };
 }
 
+/**
+ * The right answer of a question as the letters a student would mark, for the one-line strip on a key. A dash is a question a
+ * bubble sheet cannot carry, and a question mark is one with no usable key: nothing is guessed to fill either.
+ */
+function stripAnswer(question: Question): string {
+  if (!isChoice(question) && !isMultipleResponse(question) && !isTrueFalse(question)) return "-";
+  if (!hasUsableKey(question)) return "?";
+  if (isTrueFalse(question)) return question.body.correct ? "A" : "B";
+  return question.body.options.flatMap((o, i) => (o.correct ? [String.fromCharCode(65 + (i % 26))] : [])).join("");
+}
+
 // ---------------------------------------------------------------------------
 // The whole test
 // ---------------------------------------------------------------------------
@@ -489,6 +479,7 @@ export function layoutTest(questions: readonly Question[], options: PrintOptions
 
   let number = 0;
   let total = 0;
+  const strip: string[] = [];
   questions.forEach((question, i) => {
     const base = { position: i + 1, questionId: question.id, title: question.title };
     const built = buildQuestion(question, number + 1, options);
@@ -498,11 +489,14 @@ export function layoutTest(questions: readonly Question[], options: PrintOptions
     }
     number++;
     total += question.points;
+    if (key) strip.push(`${number}-${stripAnswer(question)}`);
     body.push(...built.blocks);
     items.push({ ...base, outcome: built.notes.length > 0 ? "exportedWithLosses" : "exported", notes: built.notes });
   });
 
-  blocks.push({ kind: "para", runs: [{ text: key ? `${options.title}  ·  Answer key` : options.title }], size: size + 7, bold: true, align: "left", indent: 0, before: 0, after: 6, rule: true });
+  const version = options.versionLabel && options.versionLabel.trim() !== "" ? options.versionLabel.trim() : undefined;
+  const heading = [options.title, ...(version ? [`Version ${version}`] : []), ...(key ? ["Answer key"] : [])].join("  ·  ");
+  blocks.push({ kind: "para", runs: [{ text: heading }], size: size + 7, bold: true, align: "left", indent: 0, before: 0, after: 6, rule: true });
   const fields: string[] = [];
   if (!key && options.nameLine) fields.push("Name: ______________________________");
   if (!key && options.dateLine) fields.push("Date: ________________");
@@ -511,15 +505,30 @@ export function layoutTest(questions: readonly Question[], options: PrintOptions
     for (const line of options.instructions.trim().split(/\n{2,}/)) blocks.push({ kind: "para", runs: [{ text: line.trim(), italic: true }], size, indent: 0, before: 0, after: 4 });
   }
   if (options.showPoints && number > 0) blocks.push({ kind: "para", runs: [{ text: `${plural(number, "question", "questions")}, ${total} ${total === 1 ? "point" : "points"} in all.` }], size: size - 1, indent: 0, before: 2, after: 4 });
+  if (!key && options.answerOnSheet) {
+    const text = version
+      ? `Fill in bubble ${version} for your version at the top of your answer sheet, and mark your answers on the sheet, not on this booklet.`
+      : "Mark your answers on your answer sheet, not on this booklet.";
+    blocks.push({ kind: "para", runs: [{ text, bold: true }], size, indent: 0, before: 2, after: 4 });
+  }
   blocks.push(...body);
+  if (key && options.keyStrip && strip.length > 0) {
+    blocks.push({ kind: "para", runs: [{ text: "Answers in order, for scoring by hand" }], size, bold: true, indent: 0, before: 14, after: 3, keepNext: true });
+    // Ten to a line, so that a line can be held against a sheet. A dash on its own is a question a sheet cannot carry, and a question mark is one with no answer recorded.
+    for (let at = 0; at < strip.length; at += 10) {
+      blocks.push({ kind: "para", runs: [{ text: strip.slice(at, at + 10).join("   "), mono: true }], size: size - 1, indent: 0, before: 0, after: 2 });
+    }
+  }
 
   const general = [
-    "The questions are printed in the order the bank lists them, numbered from 1. Answers to a matching or an ordering question are shown to students in a shuffled order that is the same every time.",
+    version
+      ? `This is Version ${version}. The questions are numbered from 1 in the order this version prints them.`
+      : "The questions are printed in the order the bank lists them, numbered from 1. Answers to a matching or an ordering question are shown to students in a shuffled order that is the same every time.",
     key ? "The answer key marks only what the bank records as the answer." : "The student copy shows no answer.",
   ];
   const report = buildReport(PRINT_ID, PRINT_LABEL, questions.length, items, [], general);
   return {
-    document: { title: options.title, paper, fontSize: size, blocks, footer: options.title, kind: options.kind },
+    document: { title: options.title, paper, fontSize: size, blocks, footer: options.title, ...(version ? { header: `Version ${version}` } : {}), kind: options.kind },
     report,
   };
 }

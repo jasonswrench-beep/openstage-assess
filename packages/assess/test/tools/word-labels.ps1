@@ -43,7 +43,11 @@ try {
           $labels.Add([string]$paragraph.Range.ListFormat.ListString)
         }
       }
-      if ($What -eq 'text') { $labels.Add("PAGES:" + $doc.ComputeStatistics(2)) }
+      if ($What -eq 'text') {
+        # The running header of the first section as Word holds it: empty when the document has none.
+        $labels.Add("HEADER:" + ([string]$doc.Sections.Item(1).Headers.Item(1).Range.Text).TrimEnd([char]13, [char]7))
+        $labels.Add("PAGES:" + $doc.ComputeStatistics(2))
+      }
       $result[$f.BaseName] = $labels.ToArray()
       $doc.Close($false)
     } catch {

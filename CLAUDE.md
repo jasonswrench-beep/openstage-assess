@@ -100,10 +100,19 @@ key.** A question with no usable key is printed, and the key says in bold that n
 answer is recorded. A matching or ordering question is shown shuffled, never in
 the order of the key. What cannot be printed is said against the question.
 
+**An assembled test holds a copy of its questions, and its versions come from its stored seed.**
+`model/test.ts`: the record freezes every question as it was used, so editing the bank never
+changes a test already given; versions B to D are made from the seed and kept, never made again
+from chance; true or false is never reordered; a question whose answers depend on their place
+keeps them in order, with the reason. A letter on any version maps back to the bank's own answer
+through the record (`answerAt`, `letterFor`), and the key of a version is read from the record's
+copies (`quality/test-key.ts`), never from the bank. A record that does not hold together is
+refused, and a damaged one in a bank is kept as it was and reported, never dropped.
+
 ## Commands
 
 ```
-npm test                       # 1573 engine tests and 124 app tests, Node's own runner
+npm test                       # 1618 engine tests and 124 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

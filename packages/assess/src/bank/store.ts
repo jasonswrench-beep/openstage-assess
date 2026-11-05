@@ -18,9 +18,12 @@ import {
   MANIFEST_PATH,
   isMediaPath,
   isQuestionPath,
+  isTestPath,
   questionIdFromPath,
   questionPath,
   shouldStore,
+  testIdFromPath,
+  testPath,
 } from "../container/layout.ts";
 import {
   emptyFolderFile,
@@ -36,6 +39,7 @@ import { migrateManifest, migrateQuestion, needsMigration } from "../model/migra
 import { validateQuestion, type Issue } from "../model/schema.ts";
 import { editQuestion, type EditOptions, type QuestionEdit } from "../model/create.ts";
 import type { HistoryEntry, Question } from "../model/question.ts";
+import { validateTest, type TestRecord } from "../model/test.ts";
 import { SearchIndex, matchesQuery } from "./search.ts";
 
 export interface OpenReport {
@@ -75,6 +79,8 @@ export class Bank {
   manifest: BankManifest;
   readonly questions = new Map<string, Question>();
   readonly media = new Map<string, Uint8Array>();
+  /** Assembled tests, each holding a copy of its questions as they were used. */
+  readonly tests = new Map<string, TestRecord>();
   folders: FolderFile;
   history: HistoryEntry[] = [];
   /** Files the engine did not write and does not understand, carried through untouched. */
@@ -225,6 +231,33 @@ export class Bank {
         continue;
       }
 
+      if (isTestPath(name)) {
+        // A test that cannot be read is kept exactly as it was and reported, like a question: it may be the only copy of
+        // what was given to a class.
+        const id = testIdFromPath(name);
+        let raw: unknown;
+        try {
+          raw = JSON.parse(Buffer.from(data).toString("utf8"));
+        } catch (err) {
+          invalid.push({ id, issues: [{ path: name, message: `not valid JSON: ${(err as Error).message}` }] });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        const checked = validateTest(raw);
+        if (!checked.ok) {
+          invalid.push({ id, issues: checked.issues.map((i) => ({ ...i, path: `${name}${i.path ? `: ${i.path}` : ""}` })) });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        if (bank.tests.has(checked.test.id)) {
+          invalid.push({ id: checked.test.id, issues: [{ path: name, message: `another file in this bank already holds the test ${checked.test.id}, so this copy was not loaded` }] });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        bank.tests.set(checked.test.id, checked.test);
+        continue;
+      }
+
       if (isMediaPath(name)) {
         bank.media.set(name, data);
         continue;
@@ -274,6 +307,9 @@ export class Bank {
     for (const question of this.sortedQuestions()) {
       entries.push(jsonEntry(questionPath(question.id), question));
     }
+    for (const test of this.listTests()) {
+      entries.push(jsonEntry(testPath(test.id), test));
+    }
     for (const [name, data] of this.media) {
       entries.push({ name, data, store: shouldStore(name) });
     }
@@ -309,6 +345,34 @@ export class Bank {
     await rename(temp, target);
     this.path = target;
     return target;
+  }
+
+  // -------------------------------------------------------------------------
+  // Tests
+  // -------------------------------------------------------------------------
+
+  /** Keeps an assembled test in this bank. A record that does not hold together is refused, and so is a second one with the same id. */
+  addTest(record: TestRecord): TestRecord {
+    const checked = validateTest(record);
+    if (!checked.ok) {
+      throw new Error(`Refusing to add a test that does not hold together:\n` + checked.issues.map((i) => `  ${i.path || "<root>"}: ${i.message}`).join("\n"));
+    }
+    if (this.tests.has(record.id)) throw new Error(`This bank already holds a test with the id ${record.id}.`);
+    this.tests.set(record.id, record);
+    return record;
+  }
+
+  getTest(id: string): TestRecord | undefined {
+    return this.tests.get(id);
+  }
+
+  /** The tests, oldest first. */
+  listTests(): TestRecord[] {
+    return [...this.tests.values()].sort((a, b) => (a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1));
+  }
+
+  removeTest(id: string): boolean {
+    return this.tests.delete(id);
   }
 
   // -------------------------------------------------------------------------
