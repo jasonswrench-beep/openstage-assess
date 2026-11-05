@@ -5,6 +5,7 @@
  *   questions/q_*.json   one file per question
  *   folders.json         the folder tree and saved filters
  *   tests/*.json         assembled tests, blueprints and version seeds
+ *   statistics/*.json    the class-level figures of a test given to a class, one file for each (never a response)
  *   media/*              images and attachments
  *   profiles/*.json      import profiles saved into this bank
  *   history.jsonl        append-only change log, one JSON object per line
@@ -21,6 +22,7 @@ export const QUESTIONS_DIR = "questions/";
 export const MEDIA_DIR = "media/";
 export const TESTS_DIR = "tests/";
 export const PROFILES_DIR = "profiles/";
+export const STATISTICS_DIR = "statistics/";
 
 export function questionPath(id: string): string {
   return `${QUESTIONS_DIR}${id}.json`;
@@ -41,6 +43,18 @@ export function isTestPath(name: string): boolean {
 
 export function testIdFromPath(name: string): string {
   return name.slice(TESTS_DIR.length, name.length - ".json".length);
+}
+
+export function administrationPath(id: string): string {
+  return `${STATISTICS_DIR}${id}.json`;
+}
+
+export function isAdministrationPath(name: string): boolean {
+  return name.startsWith(STATISTICS_DIR) && name.endsWith(".json");
+}
+
+export function administrationIdFromPath(name: string): string {
+  return name.slice(STATISTICS_DIR.length, name.length - ".json".length);
 }
 
 export function isQuestionPath(name: string): boolean {

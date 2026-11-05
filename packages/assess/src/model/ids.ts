@@ -62,7 +62,7 @@ export function newUlid(now: number = Date.now()): string {
   return encodeTime(now) + nextDigits(now).map((d) => ALPHABET[d]).join("");
 }
 
-export type IdPrefix = "q" | "bank" | "m" | "e" | "o" | "f" | "t" | "flt";
+export type IdPrefix = "q" | "bank" | "m" | "e" | "o" | "f" | "t" | "flt" | "adm";
 
 export function newId(prefix: IdPrefix, now?: number): string {
   return `${prefix}_${newUlid(now)}`;
@@ -75,6 +75,8 @@ export const newMathId = (now?: number) => newId("e", now);
 export const newFolderId = (now?: number) => newId("f", now);
 export const newTestId = (now?: number) => newId("t", now);
 export const newFilterId = (now?: number) => newId("flt", now);
+/** An administration: one test given to one class, whose figures a bank keeps. */
+export const newAdministrationId = (now?: number) => newId("adm", now);
 
 /**
  * Option, blank, pair and item ids are local to one question, so they are
@@ -85,7 +87,7 @@ export function localId(prefix: string, index: number): string {
   return `${prefix}${index + 1}`;
 }
 
-const ID_PATTERN = /^(q|bank|m|e|o|f|t|flt)_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$/;
+const ID_PATTERN = /^(q|bank|m|e|o|f|t|flt|adm)_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$/;
 
 export function isId(value: unknown, prefix?: IdPrefix): value is string {
   if (typeof value !== "string" || !ID_PATTERN.test(value)) return false;

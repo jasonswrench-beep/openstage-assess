@@ -6,12 +6,13 @@
 import { describe, test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Bank } from "../src/bank/store.ts";
+import { unzipSync } from "../src/container/zip.ts";
 import { writePng, type GreyImage } from "../src/sheets/image.ts";
 import { drawn, mixed, solid } from "./support/sheet-fixtures.ts";
 import { scanPdf } from "./support/pdf-scan.ts";
@@ -168,5 +169,70 @@ describe("openassess sheets", () => {
     assert.match(run("wiggle").err, /Unknown sheets command "wiggle"/);
     assert.match(run().err, /Say which sheets command/);
     assert.match(run("read").err, /Name a bank file and a picture/);
+  });
+});
+
+describe("openassess sheets score", () => {
+  const record = mixed(12, { versions: 1 });
+  const d = drawn(record, { dpi: 100 });
+  let dir = "";
+  const bankPath = (): string => join(dir, "quiz.openassess");
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "openassess-score-"));
+    const bank = Bank.createEmpty("Quiz", { at: "2026-01-01T00:00:00.000Z" });
+    bank.addTest(record);
+    await bank.save(bankPath());
+    // three students; the questions of the test are, by number: a true or false, then choice questions of 5, 4, 5 answers and on
+    const sheets = [[0, 1, 2], [1, 1, 0], [0, 0, 0]].map((p) => d.render({ answers: { 1: [{ place: p[0] as number, mark: { kind: "solid" } }], 2: [{ place: p[1] as number, mark: { kind: "solid" } }], 3: [{ place: p[2] as number, mark: { kind: "solid" } }] } }));
+    mkdirSync(join(dir, "scans"));
+    sheets.forEach((image, i) => writeFileSync(join(dir, "scans", `s${i + 1}.png`), writePng(image, { dpi: 100 })));
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  test("scores a folder of scans against the key, shows each sheet and the statistics, and says what is not settled", () => {
+    const r = run("score", bankPath(), join(dir, "scans"));
+    assert.equal(r.code, 1, "the rows left blank are not settled until someone confirms them: " + r.out);
+    assert.match(r.out, /^Scored 3 sheets for "Quiz"\./m);
+    assert.match(r.out, /Sheet {3}1 {2}A .*questions? not settled/);
+    const accepted = run("score", bankPath(), join(dir, "scans"), "--accept-blanks");
+    assert.equal(accepted.code, 0, accepted.out);
+    assert.match(accepted.out, /Sheet {3}1 {2}A .*complete/);
+    assert.match(accepted.out, /Note: Only 3 sheets: fewer than 30/);
+  });
+
+  test("scores complete sheets, writes the scores file, the workbook, the CSV and the item analysis, and keeps the class figures in the bank only when told to", async () => {
+    // every question answered, so that nothing is left undecided
+    const full = record.questions.length;
+    const answers = (shift: number): Record<number, Array<{ place: number; mark: { kind: "solid" } }>> => Object.fromEntries(Array.from({ length: full }, (_x, i) => [i + 1, [{ place: (i + shift) % 2, mark: { kind: "solid" as const } }]]));
+    const folder = join(dir, "complete");
+    mkdirSync(folder);
+    [0, 1, 0, 1].forEach((shift, i) => writeFileSync(join(folder, `c${i}.png`), writePng(d.render({ answers: { ...answers(shift), 4: [], 6: [{ place: i, mark: { kind: "solid" } }] } }), { dpi: 100 })));
+    const out = join(dir, "results");
+    const r = run("score", bankPath(), folder, "--accept-blanks", "--out", out, "--date", "2026-11-04");
+    assert.match(r.out, /^Scored 4 sheets for "Quiz"\./m);
+    const names = readdirSync(out).sort();
+    assert.deepEqual(names, ["Quiz - Item analysis 2026-11-04.html", "Quiz - Scores 2026-11-04.csv", "Quiz - Scores 2026-11-04.openassess-scores", "Quiz - Scores 2026-11-04.xlsx"]);
+    const scoresFile = join(out, "Quiz - Scores 2026-11-04.openassess-scores");
+    // scoring again from the saved file, with an adjustment, needs no scans
+    const again = run("rescore", bankPath(), scoresFile, "--drop", "1", "--credit", "2");
+    assert.match(again.out, /^Scored 4 sheets for "Quiz"\./m);
+    assert.match(again.out, /Adjustment: question 1: Dropped from the total/);
+    assert.match(again.out, /Adjustment: question 2: Everyone has credit/);
+    // the figures stay out of the bank unless asked for
+    assert.equal((await Bank.open(bankPath())).bank.administrations.size, 0);
+    const saved = run("rescore", bankPath(), scoresFile, "--save-statistics", "--date", "2026-11-04");
+    assert.match(saved.out, /The class-level figures were kept in .*quiz\.openassess\. No response, name or file name is in them\./);
+    const kept = (await Bank.open(bankPath())).bank;
+    assert.equal(kept.administrations.size, 1);
+    assert.equal(kept.statisticsFor(record.questions[1]?.id as string)[0]?.item.sheets, 4);
+    const text = [...unzipSync(new Uint8Array(readFileSync(bankPath()))).entries()].filter(([n]) => n.startsWith("statistics/")).map(([, b]) => Buffer.from(b).toString("utf8")).join("");
+    assert.ok(!/\.png|fills|fingerprint/.test(text), "the bank holds figures, and no sheet");
+  });
+
+  test("says what is wrong with an adjustment or a file it was not given right", () => {
+    assert.match(run("score", bankPath(), join(dir, "scans"), "--drop", "99").err, /--drop 99 does not name a question of this test/);
+    assert.match(run("score", bankPath(), join(dir, "scans"), "--also-right", "1:Z").err, /--also-right 1:Z does not name a question/);
+    assert.match(run("score", bankPath()).err, /Name a bank file and the scans/);
+    assert.match(run("rescore", bankPath(), join(dir, "nothing.openassess-scores")).err ?? "", /ENOENT|no such file|cannot find/i);
   });
 });
