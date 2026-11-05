@@ -34,8 +34,11 @@ import { blankInput, editFromInput, EDITABLE_TYPES, missingText, parseInput, que
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { destinationsRoute, exportRoute } from "./exports.ts";
 import { printRoute } from "./printing.ts";
+import { scoresRoute, scoringRoute } from "./scoring-routes.ts";
+import { sheetsRoute } from "./sheets.ts";
 import { checkName, cleanName, insideLibrary, type Library } from "./library.ts";
 import { sampleById, samplePath, SAMPLES } from "./samples.ts";
+import type { ScoringSessions } from "./scoring.ts";
 import { summarise, type Sessions } from "./sessions.ts";
 
 /**
@@ -65,12 +68,16 @@ export interface ApiResponse {
   json?: unknown;
   /** A file under the library to send, by the path the server gave out. */
   file?: { path: string; name: string; type: string };
+  /** Bytes held in memory to send as they are: a piece of a picture for Review, which is never written to a file. */
+  bytes?: { data: Uint8Array; type: string };
 }
 
 export interface Context {
   library: Library;
   banks: BankStore;
   sessions: Sessions;
+  /** Answer sheets being scored. In memory, and gone when the app closes unless saved as a scores file. */
+  scoring: ScoringSessions;
   /** Shows a file in the folder it is in. Replaced in tests. */
   reveal: (path: string) => void | Promise<void>;
   /** Further routes, added by the export and print screens. */
@@ -473,6 +480,9 @@ export async function handleApi(ctx: Context, req: ApiRequest): Promise<ApiRespo
   if (first === "import" && req.method === "POST") return importFile(ctx, req);
   if (first === "samples") return samplesRoute(ctx, req);
   if (first === "sessions") return sessionRoute(ctx, req);
+  if (first === "sheets") return sheetsRoute(ctx, req);
+  if (first === "scoring") return scoringRoute(ctx, req);
+  if (first === "scores") return scoresRoute(ctx, req);
   if (first === "reveal" && req.method === "POST") {
     const body = jsonBody(req);
     const path = typeof body["path"] === "string" ? body["path"] : "";

@@ -136,6 +136,27 @@ describe("Check my printing", () => {
     assert.match(text, /printed circles show at 10\d percent/);
   });
 
+  test("is happy with a blank copy of a test with several versions, whose version bubbles are all empty, and says when one is not", () => {
+    // Found by the app: a blank copy of a two-version test was told that a version bubble read as marked or unclear, because the reader's
+    // words for a student's sheet with no version marked ("No version bubble is marked") were taken as a fault of the copy.
+    const several = mixed(30, { versions: 2 });
+    const sheet = drawn(several, { dpi: 200 });
+    const clean = checkPrinting(new SheetReader(several), sheet.render(), { dpi: 200 });
+    assert.equal(clean.ok, true, clean.problems.join(" | "));
+    const smudged = checkPrinting(new SheetReader(several), sheet.render({ versions: [{ version: 2, mark: { kind: "solid" } }] }), { dpi: 200 });
+    assert.equal(smudged.ok, false);
+    assert.match(smudged.problems.join(" "), /A version bubble reads as marked or unclear on a copy that should be blank/);
+    const faintly = checkPrinting(new SheetReader(several), sheet.render({ versions: [{ version: 1, mark: { kind: "light", darkness: 0.3 } }] }), { dpi: 200 });
+    assert.match(faintly.problems.join(" "), /A version bubble reads as marked or unclear/);
+  });
+
+  test("does not tell a picture at 150 dots to the inch, which measures a hair under, that 150 would be better", () => {
+    const at150 = checkPrinting(reader, drawn(record, { dpi: 150 }).render(), { dpi: 150 });
+    assert.equal(at150.ok, true, at150.problems.join(" | "));
+    const at149 = checkPrinting(reader, drawn(record, { dpi: 144 }).render(), { dpi: 144 });
+    assert.match(at149.problems.join(" "), /about 144 dots to the inch. It reads, but 150 or more is better/);
+  });
+
   test("says when the sheet was printed smaller than it was made, from the dots to the inch the picture gives", () => {
     // The same picture, said to have been scanned at 190 dots to the inch: the marks then measure 8.4 mm, a sheet printed at 105 percent.
     const big = checkPrinting(reader, blank, { dpi: 190 });
@@ -205,7 +226,9 @@ describe("Check my printing", () => {
     const own = checkPrinting(new SheetReader(many), drawn(many, { dpi: 150, version: 2 }).render(), { dpi: 150 });
     assert.match(own.found.join(" "), /for version B/);
     const shared = checkPrinting(new SheetReader(many), drawn(many, { dpi: 150 }).render(), { dpi: 150 });
-    assert.equal(shared.ok, false, "the shared sheet has version bubbles, and on a blank copy none is marked");
-    assert.match(shared.problems.join(" "), /No version bubble is marked/);
+    // This once expected the shared sheet to fail ("on a blank copy none is marked"). That was the defect: on a blank copy no version bubble
+    // is filled, which is what a blank copy is, and the words about a student's unmarked version were being said of a copy with nothing wrong.
+    assert.equal(shared.ok, true, shared.problems.join(" | "));
+    assert.doesNotMatch(shared.problems.join(" "), /version bubble/);
   });
 });

@@ -27,6 +27,7 @@ import { BankStore } from "./banks.ts";
 import { HttpError } from "./errors.ts";
 import { checkName, openLibrary } from "./library.ts";
 import { sampleById, samplePath } from "./samples.ts";
+import { ScoringSessions } from "./scoring.ts";
 import { Sessions } from "./sessions.ts";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "ui");
@@ -34,6 +35,8 @@ const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "ui");
 /** Most a request may carry. A Word file or a bank can be large; everything else is small. */
 const MAX_UPLOAD = 80 * 1024 * 1024;
 const MAX_JSON = 4 * 1024 * 1024;
+/** A page of a scan, as the window sends it: grey pixels, one byte each. A scan at 300 dots to the inch is about 8.4 million. */
+const MAX_PAGE = 17 * 1024 * 1024;
 
 const COOKIE = "oa_key";
 
@@ -86,6 +89,19 @@ export interface RunningServer {
   token: string;
   context: Context;
   close(): Promise<void>;
+}
+
+/**
+ * How much a request may carry, by what it is for. A file to read (a Word file, a bank, a scan, a scores file) can be large, a page of
+ * a scan as the window decodes it is a page's worth of pixels, and everything else is small.
+ */
+export function uploadLimit(segments: readonly string[]): number {
+  const [a, b, c] = segments;
+  if (a === "import" || (a === "banks" && b === "open")) return MAX_UPLOAD;
+  if (a === "scoring" && (b === "open" || c === "files")) return MAX_UPLOAD;
+  if (a === "scoring" && c === "pages") return MAX_PAGE;
+  if (a === "sheets" && segments[4] === "printing-check") return MAX_UPLOAD;
+  return MAX_JSON;
 }
 
 function sameText(a: string, b: string): boolean {
@@ -145,6 +161,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     library,
     banks: new BankStore(library),
     sessions: new Sessions(),
+    scoring: new ScoringSessions(),
     reveal: options.reveal ?? defaultReveal,
     ...(options.extra ? { extra: options.extra } : {}),
   };
@@ -263,11 +280,14 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
             throw new HttpError(400, "That address is not valid.");
           }
         });
-      const big = segments[0] === "import" || (segments[0] === "banks" && segments[1] === "open");
-      const body = method === "GET" || method === "DELETE" ? Buffer.alloc(0) : await readBody(req, big ? MAX_UPLOAD : MAX_JSON);
+      const body = method === "GET" || method === "DELETE" ? Buffer.alloc(0) : await readBody(req, uploadLimit(segments));
       const request: ApiRequest = { method, segments, query: url.searchParams, body };
       const answer: ApiResponse = await handleApi(context, request);
       if (answer.file) await sendFile(res, answer.file.path, answer.file.type, answer.file.name);
+      else if (answer.bytes) {
+        res.writeHead(200, headers({ "content-type": answer.bytes.type, "content-length": String(answer.bytes.data.length) }));
+        res.end(answer.bytes.data);
+      }
       else sendJson(res, answer.status, answer.json ?? {});
       return;
     }

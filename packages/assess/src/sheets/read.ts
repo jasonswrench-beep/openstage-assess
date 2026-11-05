@@ -98,7 +98,7 @@ function sheetCorners(paper: PaperName): Point[] {
   return ["topLeft", "topRight", "bottomRight", "bottomLeft"].map((c) => (marks.find((m) => m.corner === c) as { center: Point }).center);
 }
 
-function transformFor(paper: PaperName, found: FoundMarks): Homography | undefined {
+export function transformFor(paper: PaperName, found: FoundMarks): Homography | undefined {
   return homographyFrom(sheetCorners(paper), [found.topLeft, found.topRight, found.bottomRight, found.bottomLeft]);
 }
 

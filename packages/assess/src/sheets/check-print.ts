@@ -11,6 +11,7 @@ import { SheetReader, type SheetReading } from "./read.ts";
 import type { Refusal } from "./locate.ts";
 import type { GreyImage } from "./image.ts";
 import { MARK_SIZE } from "./geometry.ts";
+import { BLANK } from "./decide.ts";
 
 export interface PrintingCheck {
   ok: boolean;
@@ -55,8 +56,11 @@ export function checkPrinting(reader: SheetReader, image: GreyImage, options: Ch
 
   // A blank copy has nothing in its bubbles.
   const questions = read.questions;
-  if (read.version === undefined && read.flags.some((f) => f.kind === "version")) {
-    problems.push(`A version bubble reads as marked or unclear on a copy that should be blank (${read.flags.find((f) => f.kind === "version")?.reason}) Check that the copy is unmarked and the sheet is clean.`);
+  // A test of several versions prints a row of version bubbles, and on a blank copy none of them is filled: that is how a blank copy is, and the
+  // reader's own words for it ("No version bubble is marked") are about a student's sheet. What is wrong on a blank copy is a bubble that is not empty.
+  const dirtyVersion = (read.versionFills ?? []).filter((fill) => fill > BLANK);
+  if (dirtyVersion.length > 0) {
+    problems.push(`A version bubble reads as marked or unclear on a copy that should be blank (${read.flags.find((f) => f.kind === "version")?.reason ?? `fill ${dirtyVersion.map((v) => v.toFixed(2)).join(", ")}`}) Check that the copy is unmarked and the sheet is clean.`);
   }
   const marked = questions.filter((q) => q.status === "answered" || (q.status === "flagged" && q.kind !== "registration" && q.kind !== "bilevel"));
   const total = questions.filter((q) => q.status !== "notOnSheet").length;
@@ -73,7 +77,8 @@ export function checkPrinting(reader: SheetReader, image: GreyImage, options: Ch
   const share = read.quality.ring / read.quality.ringExpected;
   found.push(`The printed circles show at ${(share * 100).toFixed(0)} percent of the clearness a picture this sharp should show them at.`);
   if (share < 0.7) problems.push("The printed circles are fainter than they should be. Print the sheet darker (draft or toner saver off), or scan with the contrast not turned down.");
-  if (read.quality.dpi < 150) problems.push(`The picture is about ${Math.round(read.quality.dpi)} dots to the inch. It reads, but 150 or more is better, and filled sheets are read more surely at 200.`);
+  // Rounded the way it is said: a sheet at 150 dots to the inch measures 149.97 or 150.03, and must not be told that 150 would be better.
+  if (Math.round(read.quality.dpi) < 150) problems.push(`The picture is about ${Math.round(read.quality.dpi)} dots to the inch. It reads, but 150 or more is better, and filled sheets are read more surely at 200.`);
   if (read.quality.bilevel) problems.push("This is a black and white picture. A black and white scan loses pale pencil, and the reader will not read questions with several answers from one. Scan in grey for the most reliable reading.");
   if (read.quality.shiftMaxMm > 0.8) found.push(`The printing sits up to ${read.quality.shiftMaxMm.toFixed(1)} mm from where the corner marks put it, which the reader allows for.`);
   return { ok: problems.length === 0, found, problems, reading: read };
