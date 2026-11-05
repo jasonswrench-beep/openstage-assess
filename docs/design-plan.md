@@ -489,8 +489,10 @@ home screen and stops its server when it is closed; the installer is unsigned.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
   pools, blueprints, versions, the item quality and accessibility checks (phase
   7), and the web quiz. Done so far: versions (the test record), copies, and a first set of
-  item quality and accessibility notes (Check quality, below). Not done: folders and tags in the
-  app, the coverage grid, pools, blueprints, the web quiz, and from the original list of checks
+  item quality and accessibility notes (Check quality, below), and the coverage grid and narrowing a list by chapter, objective,
+  tag, Bloom level and so on (`bank/coverage.ts`, `assess coverage`, and the Coverage button; it counts what is there, puts a
+  question with nothing set under "(none)" so the gaps show, and leaves retired questions out). Not done: folders in the
+  app, pools, blueprints, the web quiz, and from the original list of checks
   the reading level, which would need a reading-level formula that is not misleading on technical
   words, and an equation that is a picture, which the import already reports.
 

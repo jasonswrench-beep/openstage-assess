@@ -207,6 +207,7 @@ npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|common-cart
 npm run assess -- print <bank> --out <folder>   # a student copy and an answer key, as Word or PDF
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
 npm run assess -- check <bank> [--save]   # notes on the writing of each question, copies, and where the right answers sit
+npm run assess -- coverage <bank> [--rows objective] [--cols bloom]   # what the bank covers: questions by objective, chapter, tag, Bloom level and so on
 npm run assess -- contract     # the read contract and consumer capabilities
 npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks

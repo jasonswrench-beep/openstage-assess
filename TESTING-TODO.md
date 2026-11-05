@@ -236,6 +236,23 @@ Planned in `docs/design-plan.md` (phase 7, first set). Everything a program can 
   longer than the longest wrong one; two questions are alike at 0.85 of their words; a spread is judged at 20 answers. All are
   named constants (`LONG_MATCHING_LIST`, `LONGEST_RATIO`, `LONGEST_MARGIN`, `ALIKE_AT`, `BALANCE_MIN_ANSWERS`), chosen to be quiet.
 
+## Coverage and narrowing a list
+
+Everything a program can check is in `coverage.test.ts` (engine and app). What is left needs a real bank and a person.
+
+- [ ] **Use Coverage on a bank whose questions have objectives, chapters and Bloom levels from a real course.** Do the grid and its
+  labels make sense when the values are your own words, and are the objectives in the order you expect? They are put in order by
+  name with numbers counted as numbers (1.2 before 1.10), which is right for "1.2 Explain" and may not be for objectives with no
+  numbers. Whether a question with nothing set should be counted under "Not set" or kept out of the grid is a choice (here it is
+  counted, so the gaps show); it is one place in `bank/coverage.ts`.
+- [ ] **Use the grid with a screen reader and with the keyboard alone.** It is a table with a caption and header cells, each count
+  above nothing is a button whose name says what it shows ("2 questions: Chapter 2, easy. Show them."), and focus moves to the
+  heading when the grid opens. Looked at in the built-in browser at desktop and phone width (the table scrolls inside its own box
+  at phone width), not with a screen reader.
+- [ ] **Look at the narrowing selects on a bank with a lot of tags.** A select is made for each of objective, chapter, section,
+  tag, Bloom level, difficulty and status that the bank has values for, so a bank with hundreds of tags has a long list in one
+  select. If that is too long, a search box in place of the select for tags is the likely change.
+
 ## The app and its window
 
 Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in
