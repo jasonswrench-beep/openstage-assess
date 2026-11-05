@@ -377,11 +377,18 @@ the accessible route, because some students cannot use a bubble sheet.
 2. Score from images. The first-class input is a folder of JPG or PNG files, one
    per sheet, from a scanner or a phone. These can be read directly by the
    desktop app. PDF is second, and only where each page holds a single embedded
-   JPEG, which is what most scanner and phone-scan apps produce. A PDF the
-   program cannot read says so and says what to do instead (save the pages as
-   JPG). Nothing is guessed.
-3. Phone photos taken at an angle or in poor light get a straightening step,
-   tested against real photos. This is the main technical risk.
+   image that the program can decode: a JPEG, which is what most scanner and
+   phone-scan apps produce, or an uncompressed or Flate one. A PDF the program
+   cannot read (fax compression, JBIG2, JPEG 2000, a page in strips or layers)
+   says so and says what to do instead (save the pages as JPG, or change the
+   scanner's setting). Nothing is guessed. Changed on 4 November 2026 from
+   "a single embedded JPEG", when the buildable plan was written.
+3. Straightening is part of reading from the start, because every sheet carries
+   four corner marks, and phone photos taken at an angle or in poor light are
+   tested against real photos. This is the main technical risk. Changed on
+   4 November 2026 from a last stage.
+
+The buildable plan, with its phases and gates, is `docs/paper-tests-spec.md`.
 
 **Never guess.** A blank answer, two marks, or a faint mark is flagged, with a
 picture of that part of the sheet beside it, for the teacher to settle with a
