@@ -233,19 +233,7 @@ Command line: `assess sheets print`, `assess sheets read`, `assess sheets score`
 
 ## Third-party code and licensing
 
-No outside code is copied into OpenAssess for this feature; two MIT-licensed projects supply ideas, and the GPL projects were read for their published descriptions only. If any MIT code is ever ported, its copyright notice goes into `NOTICE`, which MIT requires and Apache 2.0 allows.
-
-Where this list came from: the projects below, and the proposals to use a QR code, jsQR, OpenCV.js, pdf.js and an optional student ID grid, come from an earlier discussion on 4 November 2026, in which Jason asked for a do-it-yourself alternative to scantrons and open-source bubble sheet readers were surveyed. This spec departs from each of those proposals for the reasons given here and under Open questions: the no-dependency rule, and decision 4 of the design plan. The licence statements in the table come from that discussion's web research and have not been checked against each project's licence file. Check the file at the source before any code is ported.
-
-| Project | License | Taken | Not taken |
-| --- | --- | --- | --- |
-| [QuickGrade](https://github.com/dancockrell/quickgrade) | MIT | One photocopiable master with a machine code identifying test, version and page; a review queue built on crops of the real paper; changing the scoring after the fact with no rescan | Its QR code (our strip needs no library); its browser storage of student records |
-| [OMRChecker](https://github.com/Udayraj123/OMRChecker) | MIT (relicensed from GPL 3; only the current master is MIT) | A layout described as data; thresholds set per sheet from the sheet's own bubbles | Its Python code; its PDF reading through PyMuPDF, which is AGPL |
-| [Auto Multiple Choice](https://www.auto-multiple-choice.net/) | GPL 2 or later | Nothing but the general workflow | Any code |
-| [SDAPS](https://manpages.ubuntu.com/manpages/lunar/man1/sdaps.1.html) | GPL 3 | Nothing but the general workflow | Any code |
-| [FormScanner](https://sourceforge.net/projects/formscanner/) | GPL 3 | Nothing | Any code |
-| [OpenMCR](https://github.com/iansan5653/open-mcr) | GPL 3; its sheet is CC BY-NC-SA | Nothing | Its code and its sheet design |
-| [Moodle Offline Quiz](https://github.com/academic-moodle-cooperation/moodle-mod_offlinequiz) | GPL 3 or later | Versions as groups with their own question order; correcting unclear forms by hand | Any code |
+The feature uses a photocopiable master, machine-readable test identifiers, a review queue with cropped responses, configurable scoring, data-defined layouts, and thresholds calibrated from each sheet. The implementation uses original code. Verify compatibility and retain required notices before introducing third-party code.
 
 Libraries considered and held back for now, each a "conversation first" under the no-dependency rule: OpenCV.js (Apache 2.0, about 10 MB of WebAssembly), jsQR (Apache 2.0) and pdf.js (Apache 2.0). All three are compatible with Apache 2.0. pdf.js is the one most likely to be worth it, if copiers that save JBIG2 or layered PDFs turn out to be common (see Open questions). If it is ever added, it is loaded only for a PDF the engine cannot read itself, so everything else keeps working without it.
 
@@ -392,9 +380,5 @@ These were found by reading the spec against `docs/design-plan.md`, `CLAUDE.md` 
 ## Sources
 
 - [OpenAssess repository](https://github.com/jasonswrench-beep/openstage-assess): `docs/design-plan.md` (decisions 4, 5 and 8, Answer sheets, M5) and `CLAUDE.md` (the repository's rules), read on 4 November 2026
-- [OMRChecker LICENSE](https://github.com/Udayraj123/OMRChecker/blob/master/LICENSE), MIT, copyright 2024-present
-- [QuickGrade](https://github.com/dancockrell/quickgrade), MIT
-- [OpenMCR](https://github.com/iansan5653/open-mcr), GPL 3
-- [Moodle Offline Quiz](https://moodle.org/plugins/pluginversion.php?id=21621), GPL 3 or later
 - [jsQR](https://awesome.ecosyste.ms/projects/github.com%2Fcozmo%2FjsQR), Apache 2.0
 - The earlier discussion of 4 November 2026 (a chat, not linked), in which the projects above were surveyed

@@ -168,7 +168,7 @@ been tried in Blackboard. Use `Blackboard, Upload questions (text file)` in the 
 - [ ] **A numeric question.** It is left out because the page does not say what the tolerance means. If you know, or can try
   one, say what the third field does.
 
-## Answer sheets (the scantron part)
+## Answer sheets
 
 Planned in `docs/paper-tests-spec.md`. These are the parts that need people, paper and machines. Everything a program can check is
 in the tests and in `assess sheets gate`.
