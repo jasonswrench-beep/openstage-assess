@@ -210,10 +210,17 @@ export function zipSync(entries: readonly ZipEntry[]): Uint8Array {
 function findEocd(buf: Buffer): number {
   const minimum = 22;
   const start = Math.max(0, buf.length - (minimum + 0xffff));
+  let fallback = -1;
   for (let i = buf.length - minimum; i >= start; i--) {
-    if (buf.readUInt32LE(i) === EOCD_SIG) return i;
+    if (buf.readUInt32LE(i) !== EOCD_SIG) continue;
+    // A real record says in its own comment length how many bytes follow it, and that is all that is left of the file. A comment may
+    // hold the signature too (the reader once took the last one found, and read a fake record inside the comment); so the first
+    // candidate from the end that accounts for the whole end of the file is the one. A file with bytes after the record (some
+    // programs append them) has no such candidate, and the last signature found is used as before.
+    if (i + minimum + buf.readUInt16LE(i + 20) === buf.length) return i;
+    if (fallback === -1) fallback = i;
   }
-  return -1;
+  return fallback;
 }
 
 export interface UnzipOptions {
@@ -225,6 +232,12 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
   const buf = Buffer.from(input.buffer, input.byteOffset, input.byteLength);
   const eocdAt = findEocd(buf);
   if (eocdAt === -1) {
+    if (buf.length === 0) throw new Error("This file is empty.");
+    // A zip begins with a local file header. One that does, and has no end, was cut off: a download or a copy that did not finish, or
+    // a sync that stopped. That is a different thing to do something about than a file that was never a zip.
+    if (buf.length >= 4 && buf.readUInt32LE(0) === LOCAL_SIG) {
+      throw new Error("This file starts like a zip but its end is missing, so it was cut short (a copy or a download that did not finish?). Copy it again from where it came from.");
+    }
     throw new Error("This file is not a zip: no end-of-central-directory record was found.");
   }
 
