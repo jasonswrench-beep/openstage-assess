@@ -8,7 +8,8 @@
  * the harness runs in continuous integration.
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,7 +39,9 @@ import type { ExportResult } from "../export/types.ts";
 import { printOptions, printTest } from "../print/index.ts";
 import type { Question } from "../model/question.ts";
 import { formatGate, runSheetGate } from "../sheets/gate.ts";
-import { readPng } from "../sheets/image.ts";
+import { imageFingerprint } from "../sheets/image.ts";
+import { openScans } from "../sheets/intake.ts";
+import { assembleBatch, type BatchEntry } from "../sheets/batch.ts";
 import { SheetReader } from "../sheets/read.ts";
 import { checkPrinting } from "../sheets/check-print.ts";
 
@@ -92,11 +95,15 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       drawn, filled in like a student's, damaged like a scan or a photograph, and read.
       An answer read wrong without a flag fails it. Exit code 1 on failure.
 
-  openassess sheets read <bank${BANK_EXTENSION}> <picture.png> [--test <id or name>] [--json]
-      Read one page of a scanned answer sheet against a test in the bank: its version,
-      each question's answer, and every question that needs a person to look.
+  openassess sheets read <bank${BANK_EXTENSION}> <picture.png|scan.pdf|folder...> [--test <id or name>] [--json]
+      Read scanned answer sheets against a test in the bank. One picture is shown in
+      full: its version, each question's answer, and every question that needs a
+      person to look. Several (a scanned PDF, a folder) are put into sheets in the
+      order they came, and what is wrong with the batch is said: the same picture
+      twice, a page 2 with no page 1, pages in the wrong order. A PDF is read where
+      each page is one picture; the setting to change is said when it is not.
 
-  openassess sheets check <bank${BANK_EXTENSION}> <picture.png> [--test <id or name>]
+  openassess sheets check <bank${BANK_EXTENSION}> <picture.png|scan.pdf> [--test <id or name>]
       Check my printing: read a scan of a blank printed copy of the sheet, and say
       whether the printer, the paper and the scanner are doing what the reading needs.
 
@@ -501,12 +508,50 @@ function pickTest(bank: Bank, args: string[]): { test: ReturnType<Bank["listTest
   return { error: tests.length === 0 ? "This bank has no assembled test, so there is no answer sheet to read." : `This bank has ${tests.length} tests. Name one with --test: ${tests.map((t) => `${t.name} (${t.id})`).join(", ")}.` };
 }
 
-async function loadPicture(path: string): Promise<{ image: Extract<ReturnType<typeof readPng>, { ok: true }> } | { error: string }> {
-  const bytes = new Uint8Array(await readFile(resolve(path)));
-  if (bytes[0] === 0xff && bytes[1] === 0xd8) return { error: "This is a JPEG. The app opens JPEG pictures with the window's own decoder; from the command line, save the scan as a PNG." };
-  if (bytes[0] === 0x25 && bytes[1] === 0x50) return { error: "This is a PDF. The app opens scanned PDFs; from the command line, save the page as a PNG." };
-  const png = readPng(bytes);
-  return png.ok ? { image: png } : { error: png.reason };
+/** The files a command was given: a file is itself, and a folder is the scans in it, by name. */
+async function scanFiles(paths: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const p of paths) {
+    const full = resolve(p);
+    const info = await stat(full);
+    if (info.isDirectory()) {
+      const names = (await readdir(full)).filter((n) => /\.(png|pdf|jpe?g|webp|gif|bmp|tiff?|heic)$/i.test(n)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      for (const n of names) out.push(join(full, n));
+    } else out.push(full);
+  }
+  return out;
+}
+
+interface Opened {
+  entry: BatchEntry;
+  dpi?: number;
+}
+
+/** Every page of every file, read against a test, in the order given. A JPEG is left unread: the window decodes those. */
+async function readScans(reader: SheetReader, files: string[]): Promise<Opened[]> {
+  const out: Opened[] = [];
+  for (const file of files) {
+    const bytes = new Uint8Array(await readFile(file));
+    const opened = openScans(bytes);
+    const name = basename(file);
+    if (!opened.ok) {
+      out.push({ entry: { source: { file: name, page: 1 }, fingerprint: createHash("sha1").update(bytes).digest("hex"), result: { ok: false, cause: "quality", reason: opened.reason } } });
+      continue;
+    }
+    for (const page of opened.pages) {
+      const source = { file: name, page: page.page };
+      if (!page.result.ok) {
+        out.push({ entry: { source, fingerprint: createHash("sha1").update(bytes).update(String(page.page)).digest("hex"), result: { ok: false, cause: "quality", reason: page.result.reason } } });
+      } else if (page.result.source.kind === "window") {
+        const reason = `This ${page.result.source.format.toUpperCase()} is decoded by the app's window, which the command line does not have. Open it in the app, or save the scan as a PNG.`;
+        out.push({ entry: { source, fingerprint: createHash("sha1").update(page.result.source.bytes).digest("hex"), result: { ok: false, cause: "quality", reason } } });
+      } else {
+        const image = page.result.source.image;
+        out.push({ entry: { source, fingerprint: imageFingerprint(image), result: reader.read(image) }, ...(page.result.source.dpi !== undefined ? { dpi: page.result.source.dpi } : {}) });
+      }
+    }
+  }
+  return out;
 }
 
 async function cmdSheets(args: string[]): Promise<number> {
@@ -521,43 +566,91 @@ async function cmdSheets(args: string[]): Promise<number> {
     return report.passed ? 0 : 1;
   }
   if (sub === "read" || sub === "check") {
-    const [bankPath, picturePath] = positional(rest);
-    if (!bankPath || !picturePath) return fail(`Name a bank file and a picture: sheets ${sub} <bank> <picture.png>.`);
+    const [bankPath, ...scans] = positional(rest);
+    if (!bankPath || scans.length === 0) return fail(`Name a bank file and a picture: sheets ${sub} <bank> <picture.png|scan.pdf|folder>.`);
     const { bank } = await Bank.open(resolve(bankPath));
     const chosen = pickTest(bank, rest);
     if ("error" in chosen) return fail(chosen.error);
-    const loaded = await loadPicture(picturePath);
-    if ("error" in loaded) {
-      console.error(loaded.error);
-      return 1;
-    }
     const reader = new SheetReader(chosen.test);
+    const files = await scanFiles(scans);
+    if (files.length === 0) return fail("There are no scans in what was named: a picture is a PNG, JPG or PDF file.");
+    const opened = await readScans(reader, files);
+
     if (sub === "check") {
-      const check = checkPrinting(reader, loaded.image.image, { dpi: loaded.image.dpi });
+      // One blank copy: the first page given, read with the dots to the inch its file says, if it does.
+      const first = files[0] as string;
+      const one = openScans(new Uint8Array(await readFile(first)));
+      if (!one.ok) {
+        console.error(one.reason);
+        return 1;
+      }
+      const page = one.pages[0];
+      if (!page || !page.result.ok) {
+        console.error(page && !page.result.ok ? page.result.reason : "There is no picture to check.");
+        return 1;
+      }
+      if (page.result.source.kind !== "grey") {
+        console.error("This is a JPEG, which the app's window decodes. From the command line, save the scan as a PNG or a PDF with no JPEG compression.");
+        return 1;
+      }
+      const check = checkPrinting(reader, page.result.source.image, { dpi: page.result.source.dpi });
       for (const line of check.found) console.log(line);
       if (check.ok) console.log("\nThe printing is fine: a blank copy reads as blank, and the sheet is the size it was made.");
       else for (const problem of check.problems) console.log(`\nProblem: ${problem}`);
       return check.ok ? 0 : 1;
     }
-    const result = reader.read(loaded.image.image);
+
+    const results = opened.map((o) => o.entry);
+    const read = results.filter((r) => r.result.ok);
+    const pagesPerSheet = read.length > 0 ? (read[0]?.result as { code: { pages: number } }).code.pages : 1;
+    // One picture is shown in full. A class of them is shown a sheet at a time, with what is wrong with the batch.
+    if (results.length === 1) {
+      const result = (results[0] as BatchEntry).result;
+      if (has(rest, "json")) {
+        console.log(JSON.stringify(result, null, 2));
+        return result.ok ? 0 : 1;
+      }
+      if (!result.ok) {
+        console.log(`This page was not read (${result.cause}): ${result.reason}`);
+        return 1;
+      }
+      const counts = { answered: 0, blank: 0, flagged: 0, notOnSheet: 0 };
+      for (const q of result.questions) counts[q.status]++;
+      const hex = result.code.test.toString(16).toUpperCase().padStart(5, "0");
+      console.log(`Test ${hex}, sheet ${result.code.page} of ${result.code.pages}. Version: ${result.version === undefined ? "not settled" : String.fromCharCode(64 + result.version)}${result.versionSource === "bubble" ? " (the bubble the student filled)" : ""}.`);
+      console.log(`Read at about ${Math.round(result.quality.dpi)} dots to the inch. ${counts.answered} answered, ${counts.blank} blank, ${counts.flagged} flagged${counts.notOnSheet ? `, ${counts.notOnSheet} not on the sheet` : ""}.`);
+      for (const note of result.notes) console.log(`Note: ${note}`);
+      for (const q of result.questions) if (q.status === "answered") console.log(`  ${String(q.number).padStart(3)}. ${q.marked.map((p) => String.fromCharCode(65 + p)).join("")}`);
+      for (const flag of result.flags.slice(0, 40)) console.log(`  ${flag.question === undefined ? "Sheet" : `Question ${flag.question}`} (${flag.kind}): ${flag.reason}`);
+      if (result.flags.length > 40) console.log(`  and ${result.flags.length - 40} more flags`);
+      return 0;
+    }
+    const batch = assembleBatch(results, pagesPerSheet);
     if (has(rest, "json")) {
-      console.log(JSON.stringify(result, null, 2));
-      return result.ok ? 0 : 1;
+      console.log(JSON.stringify({ batch, entries: results }, null, 2));
+      return batch.flags.length === 0 && read.length === results.length ? 0 : 1;
     }
-    if (!result.ok) {
-      console.log(`This page was not read (${result.cause}): ${result.reason}`);
-      return 1;
+    console.log(`${results.length} page${results.length === 1 ? "" : "s"} read into ${batch.sheets.length} sheet${batch.sheets.length === 1 ? "" : "s"}; ${read.length} read, ${results.length - read.length} not read, ${batch.duplicates.length} duplicate${batch.duplicates.length === 1 ? "" : "s"}.`);
+    for (const sheet of batch.sheets) {
+      const pages = sheet.pages.filter((p): p is NonNullable<typeof p> => p !== undefined);
+      let answered = 0;
+      let blank = 0;
+      let flagged = 0;
+      for (const p of pages) {
+        const r = (results[p.entry] as BatchEntry).result;
+        if (!r.ok) continue;
+        for (const q of r.questions) {
+          if (q.status === "answered") answered++;
+          else if (q.status === "blank") blank++;
+          else if (q.status === "flagged") flagged++;
+        }
+        flagged += r.flags.filter((f) => f.kind === "version").length;
+      }
+      const where = pages.map((p) => `${(results[p.entry] as BatchEntry).source.file} p${(results[p.entry] as BatchEntry).source.page}`).join(", ");
+      console.log(`  Sheet ${sheet.number} (${where}): version ${sheet.version === undefined ? "not settled" : String.fromCharCode(64 + sheet.version)}, ${answered} answered, ${blank} blank, ${flagged} flagged`);
     }
-    const counts = { answered: 0, blank: 0, flagged: 0, notOnSheet: 0 };
-    for (const q of result.questions) counts[q.status]++;
-    const hex = result.code.test.toString(16).toUpperCase().padStart(5, "0");
-    console.log(`Test ${hex}, sheet ${result.code.page} of ${result.code.pages}. Version: ${result.version === undefined ? "not settled" : String.fromCharCode(64 + result.version)}${result.versionSource === "bubble" ? " (the bubble the student filled)" : ""}.`);
-    console.log(`Read at about ${Math.round(result.quality.dpi)} dots to the inch. ${counts.answered} answered, ${counts.blank} blank, ${counts.flagged} flagged${counts.notOnSheet ? `, ${counts.notOnSheet} not on the sheet` : ""}.`);
-    for (const note of result.notes) console.log(`Note: ${note}`);
-    for (const q of result.questions) if (q.status === "answered") console.log(`  ${String(q.number).padStart(3)}. ${q.marked.map((p) => String.fromCharCode(65 + p)).join("")}`);
-    for (const flag of result.flags.slice(0, 40)) console.log(`  ${flag.question === undefined ? "Sheet" : `Question ${flag.question}`} (${flag.kind}): ${flag.reason}`);
-    if (result.flags.length > 40) console.log(`  and ${result.flags.length - 40} more flags`);
-    return 0;
+    for (const flag of batch.flags) console.log(`  ${flag.sheet === undefined ? "Batch" : `Sheet ${flag.sheet}`} (${flag.kind}): ${flag.reason}`);
+    return batch.flags.length === 0 && read.length === results.length ? 0 : 1;
   }
   return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, read and check.` : "Say which sheets command: gate, read or check.");
 }
