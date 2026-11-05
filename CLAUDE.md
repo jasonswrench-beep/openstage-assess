@@ -109,10 +109,19 @@ through the record (`answerAt`, `letterFor`), and the key of a version is read f
 copies (`quality/test-key.ts`), never from the bank. A record that does not hold together is
 refused, and a damaged one in a bank is kept as it was and reported, never dropped.
 
+**An answer sheet is printed from one geometry file, and its code strip never changes meaning.**
+`sheets/geometry.ts` holds every position in millimetres, and the printer and the reader both
+build on it, so they cannot disagree about where a bubble is. A sheet printed once is in a
+classroom for a term: the squares of `sheets/code.ts` (layout, paper, test, page, version, check)
+are pinned in `sheet-code.test.ts`, and a change that makes a pinned strip come out differently
+is a change that stops printed sheets reading, which is never made quietly. A new arrangement
+gets a new layout number. A sheet carries no answer and no student detail, and it says in words
+which test and which sheet it is.
+
 ## Commands
 
 ```
-npm test                       # 1618 engine tests and 124 app tests, Node's own runner
+npm test                       # 1668 engine tests and 124 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

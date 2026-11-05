@@ -501,7 +501,7 @@ describe("printing every version", () => {
   const streams = (bytes: Uint8Array): string => {
     const text = Buffer.from(bytes).toString("latin1");
     const out: string[] = [];
-    for (const m of text.matchAll(/stream\r?\n/g)) {
+    for (const m of text.matchAll(/(?<!end)stream\r?\n/g)) {
       const start = (m.index as number) + m[0].length;
       const raw = Buffer.from(text.slice(start, text.indexOf("endstream", start)), "latin1");
       try {
