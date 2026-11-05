@@ -226,8 +226,8 @@ change, so what is saved is what comes back.
 
 ### The Standard Format is four dialects, and the importer read one
 
-The test-bank vendor's guides for the generic (IMS QTI), Canvas, Moodle, D2L and
-Blackboard personalities each describe the format a little differently. The
+The vendor guides for the generic (IMS QTI), Canvas, Moodle, D2L and
+Blackboard versions of the format each describe the format a little differently. The
 importer implemented the generic one, and testing the guides' own examples
 against it found five gaps:
 
@@ -411,10 +411,10 @@ Media is never garbage collected either.
   calculated. The D2L and Blackboard dialects document ordering, so it is refused
   by name rather than missing.
 
-### 8. Found while rewriting the scanner and reading the the test-bank vendor guides, not yet fixed
+### 8. Found while rewriting the scanner and reading the format's guides, not yet fixed
 
-- **The importer has no notion of dialect.** the test-bank vendor asks which LMS
-  "personality" a file is for. Here a lone `@` has to be guessed, and the guess
+- **The importer has no notion of dialect.** The format's guides tie a file
+  to the LMS it is for. Here a lone `@` has to be guessed, and the guess
   is only flagged. The Type codes are a usable signal: MR and S point to D2L or
   Moodle, FMB and ORD to D2L or Blackboard, JUM to Blackboard. Detecting the
   dialect from them, with a setting to override it, would settle the `@`
@@ -446,7 +446,7 @@ Media is never garbage collected either.
   so an RTF file is read as plain text and its control words come in as stray
   text. RTF is out of scope; the extension should go, and the Word importer's
   message for an RTF file ("save it as .docx") is the better answer.
-- **the test-bank vendor ignores everything after the answer list; this importer does not.**
+- **This importer reads on after the answer list, where a stricter reading would stop.**
   Deliberate, since a question after a mid-file key is more likely real than
   meant to be dropped. Recorded so nobody restores the stricter behaviour.
 - **For the Word engine.** The appendix recommends the Answers list "when using
@@ -642,7 +642,7 @@ a space, so only a hand-built plain-text field shows it), and a matching questio
   multiple answer question are not carried in this first version. Blackboard's file has no points, feedback, formatting or picture,
   and a numeric question is left out because the page does not say what its tolerance means.
 - **Decided, after the second try: a Common Cartridge package, in the form a Brightspace quiz tool writes.** The QTI zip was tried
-  a second time by the Course Admin route the test-bank vendor documents and "still does not like the format" (no message recorded). D2L's
+  a second time by the Course Admin route a commercial test-bank tool's guide documents and "still does not like the format" (no message recorded). D2L's
   course import table names Common Cartridge 1.0 to 1.3 with QTI 1.2.1 as a source its importer reads, and Brightspacosaurus 0.35.0,
   which builds Brightspace courses and was published days before, writes quizzes as a Common Cartridge 1.3 package in the QTI
   profile and says to import them with Import Components, from a course package. `src/export/common-cartridge.ts` follows its
@@ -654,10 +654,10 @@ a space, so only a hand-built plain-text field shows it), and a matching questio
 - **Open: the QTI zip was tried twice in Brightspace and did not make questions.** The person who tried it said the zip "just uploaded as a zip" and that
   the structure of the file may be at fault; they did not say which screen they used. My note had sent them to the Quizzes tool's
   Import or the Question Library's Import, and D2L's own Question Library article (updated August 2026) names a CSV file, not
-  QTI, while the test-bank vendor documents Course Admin, Import/Export/Copy Components for a QTI zip. So the route was probably wrong, and
-  the note now gives the the test-bank vendor route. It is not settled that the package is right: D2L's course import table lists QTI 1.2.1
-  and IMS CP 1.1.2, 1.1.3 or 1.2, and that importer may want a package it recognises as one of the sources it names (the test-bank vendor,
-  Blackboard, Common Cartridge) and not a bare one. The QTI package is written from the standard, from the shapes Canvas is known to
+  QTI, while a commercial test-bank tool's guide documents Course Admin, Import/Export/Copy Components for a QTI zip. So the route was probably wrong, and
+  the note now gives that route. It is not settled that the package is right: D2L's course import table lists QTI 1.2.1
+  and IMS CP 1.1.2, 1.1.3 or 1.2, and that importer may want a package it recognises as one of the sources it names (Blackboard,
+  Common Cartridge and others) and not a bare one. The QTI package is written from the standard, from the shapes Canvas is known to
   write (its `question_type` and `points_possible` metadata fields, one response for each left side of a matching question, a
   condition of every right label and none of the wrong ones), and from help pages. No Canvas-written package and no
   Brightspace-accepted QTI file was available to compare with: the example a D2L staff member posted in the community thread is a
@@ -673,7 +673,7 @@ a space, so only a hand-built plain-text field shows it), and a matching questio
 
 ### Found by the first real PDF test banks (stage 8)
 
-Five PDFs from one typesetting program (a page-layout program), kept in the private fixtures folder. Fixed, each with a test that fails when
+Five PDFs from one typesetting program, kept in the private fixtures folder. Fixed, each with a test that fails when
 the fix is taken out (47 deliberate breaks of the PDF reader, its paragraph rules and the answer-line reading, every one caught
 once the tests that were missing were written, on a baseline that passed):
 
@@ -716,7 +716,7 @@ Open:
   groups, because the file's own text has no such characters, and nothing in the file says they were meant to be there.
 - **Answer text matching is strict.** An answer that spells the option's words another way ("Speaking" for "Spoken") is refused
   and said. It could be matched loosely and would then sometimes be a guess.
-- **Only a page-layout program's PDFs have been read.** A PDF from Word's own export, a desktop PDF program, Google Docs, a scanner with text recognition or
+- **Only one typesetting program's PDFs have been read.** A PDF from Word's own export, a desktop PDF program, Google Docs, a scanner with text recognition or
   a publisher's tools sets its text another way (one piece for each word, text in reverse, text in a form drawn page by page), and
   none has been seen. The reader handles what the five and the test builder have: simple and composite fonts with a text map,
   an encoding with changes, packed objects and a stream for the table of objects, compressed streams with predictors, the
@@ -811,7 +811,7 @@ Open:
 
 The first set written to the new brief and held to its plan by `npm run check:generated`: pieces 1 to 4, files
 c-01 to c-16, sixteen files in sixteen layouts. Piece 1 came in one zip and passed after four stems in its answer
-files were fixed in a copy; pieces 2 to 4 came in another, from Copilot, and passed at first sight except one repeated
+files were fixed in a copy; pieces 2 to 4 came in another, from a second AI assistant, and passed at first sight except one repeated
 matching instruction (c-15), which made the repeat check ask for the same stem and the same items and not the stem
 alone. The importer was run on them once, with no rule changed since stage 4g (`6dccbe3`). It read **47 of 232
 questions, 20.3 percent.** The first number is the honest one. What it shows:
@@ -870,7 +870,7 @@ questions, 20.3 percent.** The first number is the honest one. What it shows:
 - **A second version of pieces 5 and 6 arrived the same way**, in `c_files_pieces_1_to_6.zip`, which also held pieces
   1, 3 and 4 again, byte for byte the files already held (twelve of its twenty files; it had no piece 2). The eight
   new files passed after five stems were repaired in a copy, the same two kinds of mistake. With the safety fix in
-  place, the importer read 33 of its 116 questions (28.4 percent) against 31 of 116 (26.7 percent) for Copilot's
+  place, the importer read 33 of its 116 questions (28.4 percent) against 31 of 116 (26.7 percent) for the second assistant's
   version of the same eight, and layout by layout the two agree again: `1.` with `A)` and a key table, `1)` with
   several options to a paragraph, and Word's numbering with `a.` and a star each read 9 to 14 questions right in
   both, and `Q1.`, `Question 1:`, `(1)`, no numbers and `4.1` read none in both. The checker had a fault that this
@@ -1317,7 +1317,7 @@ duplicate numbering, options containing `=`, or any non-ASCII content. Fixtures
 rewrite, the new corpus scored 68.2 percent (06, 07, 08, 92 and 94 fail), so
 the gaps were real and the fixtures catch what they were written for. The
 rewrite scores 100 percent. Fixtures 12, 13, 95 and 96 add the dialect
-differences from the the test-bank vendor guides: `Type: MR`, `Type: S` with repeated
+differences from the format's guides: `Type: MR`, `Type: S` with repeated
 answer numbers, the types that are refused by name, and a lone `@` after the
 stem.
 

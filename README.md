@@ -38,8 +38,8 @@ only and answers only to the window it opened.
   filters, history, an in-memory search index.
 - A read API for other programs (`src/read/`). Nothing depends on it and it may
   be removed; see `docs/design-plan.md`.
-- Profile one of the importer: the standard test-bank text format, read from plain
-  text.
+- Profile one of the importer: the standard test-bank text format (the
+  plain-text layout many publisher test banks follow), read from plain text.
 - The Word importer, so far: a `.docx` is read into the same blocks the text
   importer uses, so a question in a Word file goes through the same scanner,
   builder and accuracy gate. Question numbers and option letters can be typed or
@@ -275,8 +275,8 @@ finding. A question half-written in the editor has to be saveable, and a
 question imported from a file with no key has to be storable so it can be shown
 beside its source text and repaired.
 
-**Nothing is guessed.** Where a file gives no answer key, the test-bank vendor silently
-selects option A. This flags the question and guesses nothing. Text no question
+**Nothing is guessed.** Where a file gives no answer key, the question is
+flagged and nothing is guessed. Text no question
 claimed becomes a reported orphan rather than being discarded.
 
 **Delivery settings are not part of a question.** Attempts, time limits,
@@ -292,9 +292,9 @@ official text, taken from <https://www.apache.org/licenses/LICENSE-2.0.txt>, wit
 the copyright line and notice after it. `NOTICE` names what the project includes
 and what it does not.
 
-## Not affiliated with the test-bank vendor
+## The plain-text format
 
-The plain-text import profile reads a question layout documented in the
-test-bank vendor's user guide, which many publisher test banks already follow. No
-the test-bank vendor code, text or data is included here. the test-bank vendor is a registered
-trademark of its owner
+The plain-text import profile reads the standard test-bank text format, a de
+facto convention that many publisher test banks already follow. No third-party
+code, text or data is included here, and OpenAssess is not affiliated with or
+endorsed by any other software vendor.

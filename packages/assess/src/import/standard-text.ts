@@ -1,11 +1,9 @@
 /**
  * Profile one: the standard test-bank text format, read from plain text.
  *
- * The format documented in the appendix of the test-bank vendor's manual is the
- * closest thing this field has to a shared plain-text convention, and a very
- * large number of publisher test banks are already written to it. Supporting
- * it is the cheapest path to a high parse rate, and it is also what gives a
- * the test-bank vendor user a reason to try OpenAssess.
+ * This plain-text layout is the closest thing this field has to a shared
+ * convention, and a very large number of publisher test banks are already
+ * written to it. Supporting it is the cheapest path to a high parse rate.
  *
  * What this reads:
  *
@@ -26,11 +24,9 @@
  * Reading the lines into questions is `standard-text-scan.ts`. This file turns
  * what the scanner found into the question model.
  *
- * Two behaviours in the the test-bank vendor specification are defects, and are fixed
- * rather than copied. When no correct answer is marked, the test-bank vendor silently
- * selects option A; here the question is flagged and nothing is guessed. And
- * titles truncate at 20 characters on import while the editor allows 64; here
- * the full 64 are used and a word boundary is respected.
+ * Two choices here are deliberate. When no correct answer is marked, the
+ * question is flagged and nothing is guessed. And a title taken from the stem
+ * uses the full 64 characters and respects a word boundary.
  */
 
 import { finding, FindingCode, type Finding, type SourceRef } from "../model/findings.ts";
@@ -466,7 +462,7 @@ function guessType(raw: RawQuestion): TypeReading {
   if (raw.options.length === 0) return { type: "essay", inferred: true };
 
   // True or false, and only when True comes first. If False appears first the
-  // the test-bank vendor specification says it is a multiple choice question, and banks
+  // format's documentation says it is a multiple choice question, and banks
   // rely on that. This is the documented convention rather than a guess, so it
   // is not flagged.
   if (raw.options.length === 2) {
@@ -1003,8 +999,8 @@ function buildBody(
 
       const markedCorrect = built.options.filter((o) => o.correct).length;
       if (markedCorrect === 0) {
-        // the test-bank vendor silently picks option A here. That is the defect; this
-        // flags the question and guesses nothing.
+        // No option is marked correct. This flags the question and guesses
+        // nothing.
         findings.push(
           finding(
             FindingCode.NoAnswerKey,
@@ -1347,7 +1343,7 @@ function hasAnyKey(q: RawQuestion): boolean {
 
 export const standardTextImporter: Importer = {
   id: PROFILE_ID,
-  label: "standard test-bank text format (plain text)",
+  label: "Standard test-bank format (plain text)",
   extensions: [".txt", ".rtf", ".md"],
 
   parse(input: string | SourceBlock[], options: ImportOptions = {}): ImportResult {

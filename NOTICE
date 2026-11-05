@@ -16,8 +16,8 @@ carries a copy of Node.js (MIT licence), the program that runs the app, so that
 a computer needs nothing installed. None of this is part of the engine, which
 runs without it.
 
-The plain-text import profile reads the question layout documented in the
-test-bank vendor's user guide. That layout is a de facto convention used by many
-publisher test banks. No the test-bank vendor code, text or data is included in this
-project, and this project is not affiliated with or endorsed by its owner
-the test-bank vendor is a registered trademark of its owner
+The plain-text import profile reads the standard test-bank text format: the
+plain-text question layout that many publisher test banks follow, a de facto
+convention rather than a published standard. No third-party code, text or data
+is included in this project, and this project is not affiliated with or
+endorsed by any other software vendor.

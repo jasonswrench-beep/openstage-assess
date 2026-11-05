@@ -323,16 +323,15 @@ export function optionsOf(q: Question): Option[] {
   return [];
 }
 
-/** Titles cap at 64 characters, the same ceiling the test-bank vendor uses. */
+/** Titles cap at 64 characters. */
 export const MAX_TITLE_LENGTH = 64;
 
 /** The most a single question may be worth. The schema refuses more; an importer must not emit more. */
 export const MAX_POINTS = 1000;
 
 /**
- * A title derived from the stem when the source gave none. the test-bank vendor truncates
- * at 20 characters on import while allowing 64 in the editor, which quietly
- * destroys information; this uses the full 64 and breaks on a word boundary.
+ * A title derived from the stem when the source gave none. It uses the full 64
+ * characters and breaks on a word boundary, so no information is quietly lost.
  */
 export function titleFromStem(stemPlain: string): string {
   const flat = stemPlain.replace(/\s+/g, " ").trim();

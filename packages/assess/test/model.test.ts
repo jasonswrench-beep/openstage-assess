@@ -161,6 +161,11 @@ describe("the question envelope", () => {
     question.metadata.custom = { MSC: "Conceptual" };
     assert.equal(validateQuestion(question).ok, true);
   });
+
+  test("an import profile id an older version wrote still validates, so a bank saved then still opens", () => {
+    const question = { ...multipleChoice(), origin: { kind: "import", profile: "an-older-profile-id", at: "2026-01-01T00:00:00.000Z" } };
+    assert.equal(validateQuestion(question).ok, true);
+  });
 });
 
 describe("editing rules", () => {

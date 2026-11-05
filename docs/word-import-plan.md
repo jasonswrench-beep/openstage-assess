@@ -878,7 +878,7 @@ renders each fixture as a `.docx` in several styles, and every rendering must sc
 exactly as the text version does. That gives hundreds of checked questions with no
 new hand labelling. The styles:
 
-1. Typed labels: the numbers and letters are text, as the test-bank vendor's own handout asks.
+1. Typed labels: the numbers and letters are text, as the format's own guidance asks.
 2. Word auto-numbering: the questions are a numbered list and the options are a
    lettered list that restarts for each question.
 3. Mixed: typed question numbers with auto-lettered options.

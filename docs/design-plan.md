@@ -1,7 +1,7 @@
 # OpenAssess design plan
 
 Written on 27 October 2026, after reading the product specification (25
-October), the test-bank vendor's guides, a long discussion with two AI assistants
+October), the vendor guides for the standard test-bank text format, a long discussion with two AI assistants
 about what an assessment tool could be, and a working session on what is
 realistic for one person to build. It records what was decided and why, so that
 the next session does not have to rediscover it.
@@ -55,8 +55,9 @@ accounts and no live editing.
    requires. See "Answer sheets" below.
 5. **Other companies' brand names stay out of the product.** A feature is called
    "answer sheets", not by the name of an existing product. A format is named
-   only where it must be, to say what the program can read ("reads the
-   standard test-bank text format"), with the non-affiliation notice in `NOTICE`.
+   generically wherever it can be ("reads the standard test-bank text
+   format"), and only a file format or an LMS is named where the program must
+   say what it reads or writes, with the non-affiliation notice in `NOTICE`.
 6. **The Standard Format is four dialects.** The generic, Canvas, Moodle, D2L and
    Blackboard guides differ in small, real ways, recorded in the findings. The
    importer reads the generic one and the common additions, and refuses the types
@@ -193,7 +194,7 @@ What was decided, and why:
   to read, that columns, tables, pictures and equations may have lost something, and that the answers most of all should be
   checked against the PDF.
 
-What was measured. Five real banks, from one typesetting program (a page-layout program), in the private fixtures folder
+What was measured. Five real banks, from one typesetting program, in the private fixtures folder
 (`fixtures/publisher/pdf`, expected files written from the documents). The layout rules were written after looking at the first
 page of four of them, so the first run was not blind to layout, and only the scanner can be reported as measured before and
 after: with the scanner as it was, the five scored 50.6 percent (22.6 and 33.3 on two of them, 0 on one, 100 on two); with the
@@ -279,7 +280,7 @@ Brightspace CSV, which carries ordering. Feedback is not carried.
 What the help pages and staff replies say: a D2L staff reply says the Quizzes tool takes a zip up to QTI 1.2 and reports "no
 quizzes or sections can be found" when the structure is not what it reads. D2L's own course import table (Course import and
 course conversion support) lists QTI 1.2.1 and IMS CP 1.1.2, 1.1.3 or 1.2 for the packages Import/Export/Copy Components reads,
-and the test-bank vendor gives the steps for a QTI zip there: Import Components, from a File, Advanced Options, tick Quizzes, and type the
+and a commercial test-bank tool's guide gives the steps for a QTI zip there: Import Components, from a File, Advanced Options, tick Quizzes, and type the
 exact name of the zip in the Import file to box. D2L's help article for the Question Library (updated August 2026) names a CSV
 file, an existing collection and the Learning Object Repository, and does not name QTI. A staff post said a QTI zip imported
 there lands in a folder named for the file; that is the one claim here the help does not back, and the first try below did
@@ -294,7 +295,7 @@ answer question, every assignment of a matching one). The right answer must scor
 question of every fixture bank. That shows the package follows the standard and carries the key. It shows nothing about whether
 Brightspace or Canvas accepts it, which only an import can. In Brightspace it has been tried twice and not accepted: the first
 time it "just uploaded as a zip" (the screen was not said, and the note then pointed at the Question Library, which D2L's help
-does not give for QTI), and the second time, by the Course Admin route the test-bank vendor documents, it "still does not like the format"
+does not give for QTI), and the second time, by the Course Admin route that guide documents, it "still does not like the format"
 (no message was recorded). Canvas has not been tried (`TESTING-TODO.md`).
 
 ### Common Cartridge 1.3 package (Brightspace)
@@ -462,9 +463,9 @@ home screen and stops its server when it is closed; the installer is unsigned.
    The first complete loop from file in to file out. Done on 27 October 2026.
 2. **The Word import engine** (phase 2; the plan is `docs/word-import-plan.md`).
    This is the feature that earns users,
-   so it gets the most engineering. the test-bank vendor asks authors to strip headers,
-   lists, tabs, indents and all bold and italic, because it cannot read Word's
-   structure. Word's automatic numbering is not in the text at all, so the
+   so it gets the most engineering. The usual guidance for the format asks
+   authors to strip headers, lists, tabs, indents and all bold and italic,
+   because a plain-text reader cannot see Word's structure. Word's automatic numbering is not in the text at all, so the
    engine has to rebuild question numbers and option letters from Word's list
    definitions, and keep the formatting. Exit: a real publisher chapter imports
    at 95 percent or better, with every other question listed and linked to its

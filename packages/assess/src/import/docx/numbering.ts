@@ -5,8 +5,8 @@
  * at display time from three places: the paragraph's list (and level), the
  * definition of that list in numbering.xml, and how many paragraphs of the list
  * came before it. A test bank written with Word's list buttons is a document whose
- * question numbers and option letters live only there, and the the test-bank vendor guides
- * themselves tell authors to give an Answers list for that reason. Reading them is
+ * question numbers and option letters live only there, and the format's own guides
+ * tell authors to give an Answers list for that reason. Reading them is
  * what lets a Word bank import without retyping, and getting one wrong is worse than
  * failing to read it: an Answers list matches a key to a question by its number, so
  * a number that is off by one points a key at the wrong question without a word.
