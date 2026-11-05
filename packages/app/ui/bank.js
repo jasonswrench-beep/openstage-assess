@@ -12,6 +12,18 @@ import { clear, EDITABLE_TYPES, h, plural, TYPE_NAMES, when } from "./dom.js";
 import { createEditor } from "./editor.js";
 import { arrowKeys, questionRow } from "./list.js";
 
+/** What each kind of note is about, in the words the screen uses. */
+const NOTE_NAMES = {
+  "quality.all-or-none-of-the-above": "An option that depends on the others (all of the above, none of the above)",
+  "quality.longest-option-correct": "The right answer is much the longest",
+  "quality.negative-stem-not-emphasised": "NOT, EXCEPT or LEAST not set apart",
+  "quality.grammatical-cue": "The grammar gives the answer away",
+  "quality.duplicate-option": "Two options read the same",
+  "a11y.alt-text-gives-answer": "A picture's description gives the answer",
+  "a11y.colour-only-meaning": "A picture and a colour",
+  "a11y.long-matching-list": "A long matching list",
+};
+
 /**
  * @param {HTMLElement} host
  * @param {{ name: string }} params
@@ -74,6 +86,7 @@ export async function renderBank(host, params, shell) {
         h("button", { type: "button", text: "Print…", on: { click: () => shell.go(`#/print/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", text: "Export…", on: { click: () => shell.go(`#/export/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", text: "Answer sheets…", on: { click: () => shell.go(`#/sheets/${encodeURIComponent(params.name)}`) } }),
+        h("button", { type: "button", text: "Check quality", on: { click: () => void checkQuality() } }),
         h("button", { type: "button", class: "danger", text: "Remove…", on: { click: () => void remove() } }),
       ),
     );
@@ -94,7 +107,7 @@ export async function renderBank(host, params, shell) {
       type = kinds.value;
       await reload();
     });
-    const checks = h("select", { attrs: { "aria-label": "Checks" } }, ...[["", "Any checks"], ["problems", "Needs attention"], ["errors", "Failed"], ["clean", "Parsed cleanly"]].map(([v, text]) => h("option", { value: v, text, selected: v === check })));
+    const checks = h("select", { attrs: { "aria-label": "Checks" } }, ...[["", "Any checks"], ["problems", "Needs attention"], ["errors", "Failed"], ["clean", "Parsed cleanly"], ["notes", "Has notes"]].map(([v, text]) => h("option", { value: v, text, selected: v === check })));
     checks.addEventListener("change", async () => {
       check = checks.value;
       await reload();
@@ -173,6 +186,76 @@ export async function renderBank(host, params, shell) {
       ],
     });
     detail.append(editor.element);
+  }
+
+  /**
+   * Check the whole bank for notes about its writing and accessibility, and show what was found in the pane where a question
+   * would be. The notes themselves are on the questions, in the editor, where they can be dismissed one at a time.
+   */
+  async function checkQuality() {
+    if (!(await canLeave())) return;
+    try {
+      const result = await post(`${base}/quality`);
+      selected = null;
+      // The results are about the whole bank, and name questions by their place in it, so the list is the whole bank.
+      query = "";
+      type = "";
+      check = "";
+      renderTools();
+      await reload();
+      showQuality(result);
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
+
+  /** @param {any} result */
+  function showQuality(result) {
+    hold();
+    const kinds = Object.entries(result.notes).sort((a, b) => /** @type {number} */ (b[1]) - /** @type {number} */ (a[1]));
+    const total = kinds.reduce((sum, [, n]) => sum + /** @type {number} */ (n), 0);
+    const heading = h("h2", { text: "Quality notes", attrs: { tabindex: "-1" } });
+    const panel = h("section", { class: "card quality" }, heading);
+    panel.append(
+      h("p", { class: "sub", text: `Checked ${plural(result.checked, "question", "questions")}. ${total === 0 ? "No question has a note." : `${plural(total, "note", "notes")} on ${plural(result.questions.length, "question", "questions")}.`}` }),
+    );
+
+    if (kinds.length > 0) {
+      const list = h("ul", { class: "quality-kinds" });
+      for (const [code, count] of kinds) list.append(h("li", { text: `${NOTE_NAMES[/** @type {keyof typeof NOTE_NAMES} */ (code)] ?? code}: ${count}` }));
+      panel.append(
+        list,
+        h("div", { class: "card-actions" }, h("button", { type: "button", text: "Show the questions with notes", on: { click: () => void showNotes() } })),
+      );
+    }
+
+    if (result.duplicates.length > 0) {
+      panel.append(h("h3", { text: "The same question more than once" }));
+      for (const group of result.duplicates) {
+        // Copies have the same title, so each is named by its place in the list, which is the number on its row.
+        const links = group.questionIds.map(
+          /** @param {string} id @param {number} i */ (id, i) => {
+            const place = bank.questions.findIndex(/** @param {any} q */ (q) => q.id === id);
+            return h("button", { type: "button", class: "small-button", text: `${place >= 0 ? `Question ${place + 1}: ` : ""}${group.titles[i] || "Untitled question"}`, on: { click: () => void select(id) } });
+          },
+        );
+        panel.append(h("p", { text: group.message }), h("div", { class: "card-actions" }, ...links));
+      }
+    }
+
+    if (result.keyBalance.length > 0) {
+      panel.append(h("h3", { text: "Where the right answers sit" }), h("ul", { class: "quality-kinds" }, ...result.keyBalance.map(/** @param {any} note */ (note) => h("li", { text: note.message }))));
+    }
+
+    panel.append(h("p", { class: "hint", text: "These are notes, not faults. Open a question to see its notes and dismiss any you meant. Checking changed nothing else about the questions." }));
+    detail.append(panel);
+    heading.focus();
+  }
+
+  async function showNotes() {
+    check = "notes";
+    renderTools();
+    await reload();
   }
 
   /** @param {string} kind */

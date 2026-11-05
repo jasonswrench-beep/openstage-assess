@@ -76,13 +76,18 @@ const DEPENDS_ON_PLACE: RegExp[] = [
   /^\s*[A-H]\s+(?:and|or)\s+[A-H]\s*\.?\s*$/,
 ];
 
+/** True for the words of an option that only makes sense beside the others: "All of the above", "Both A and B". */
+export function dependsOnPlace(text: string): boolean {
+  return DEPENDS_ON_PLACE.some((pattern) => pattern.test(text));
+}
+
 /** Why a question keeps its answers in order, or undefined when they may be shuffled. */
 export function keepsOrder(question: Question): string | undefined {
   if (!isChoice(question) && !isMultipleResponse(question)) return undefined;
   if (!question.body.shuffle) return "the question is marked to keep its answers in order";
   const options = question.body.options;
   if (options.some((o) => o.fixedPosition)) return "an answer is fixed in place, so the answers keep their order";
-  if (options.some((o) => DEPENDS_ON_PLACE.some((pattern) => pattern.test(richTextToPlain(o.content))))) {
+  if (options.some((o) => dependsOnPlace(richTextToPlain(o.content)))) {
     return "an answer depends on its place (such as None of the above, or Both A and B), so the answers keep their order";
   }
   return undefined;

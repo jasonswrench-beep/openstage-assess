@@ -22,10 +22,13 @@ import {
   liveFindings,
   linesToBlocks,
   newQuestionId,
+  QUALITY_CODES,
   QUESTION_TYPES,
   runImporter,
   validateQuestion,
   verdictOf,
+  type Bank,
+  type QualityRun,
   type Question,
   type QuestionType,
 } from "./engine.ts";
@@ -311,6 +314,26 @@ async function saveSession(ctx: Context, session: ReturnType<Sessions["get"]>, b
 // Banks
 // ---------------------------------------------------------------------------
 
+/** The notes about writing and accessibility a question has that nobody has dismissed. */
+function liveNotes(q: Question) {
+  return q.findings.filter((f) => !f.dismissed && QUALITY_CODES.has(f.code));
+}
+
+/**
+ * What checking a bank for quality found, as the screen shows it. The notes were written to the questions by the check itself; what
+ * looks across questions (copies, where the right answers sit) was worked out just now and is not kept anywhere.
+ */
+function qualityView(bank: Bank, run: QualityRun) {
+  return {
+    checked: run.checked,
+    changed: run.changed,
+    notes: run.notes,
+    questions: run.questions.map(({ id, title }) => ({ id, title, notes: liveNotes(bank.get(id) as Question).map((f) => ({ code: f.code, message: f.message })) })),
+    duplicates: run.report.duplicates.map(({ kind, questionIds, titles, message }) => ({ kind, questionIds, titles, message })),
+    keyBalance: run.report.keyBalance.map(({ scope, label, message }) => ({ scope, label, message })),
+  };
+}
+
 function listQuestions(questions: Question[], query: URLSearchParams): Question[] {
   const type = query.get("type");
   const status = query.get("status");
@@ -318,6 +341,7 @@ function listQuestions(questions: Question[], query: URLSearchParams): Question[
   return questions.filter((q) => {
     if (type && q.type !== type) return false;
     if (status && q.metadata.status !== status) return false;
+    if (check === "notes") return liveNotes(q).length > 0;
     if (check) {
       const verdict = verdictOf(q);
       if (check === "problems" && verdict === "parsed") return false;
@@ -363,7 +387,7 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
         modified: bank.manifest.modified,
         stats: bank.stats(),
         total: all.length,
-        questions: shown.map((q) => summarise(q, all.indexOf(q))),
+        questions: shown.map((q) => ({ ...summarise(q, all.indexOf(q)), notes: liveNotes(q).length })),
       });
     }
     if (req.method === "PUT") {
@@ -383,6 +407,12 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
 
   if (what === "print" && req.method === "POST" && (id === "check" || id === undefined)) {
     return printRoute(ctx, req, name, id === "check" ? "check" : "write");
+  }
+
+  // Check quality: the notes are written to the questions (not as an edit: no version, no history entry on a question, no change of
+  // status), and what is across the bank is worked out and sent, not kept.
+  if (what === "quality" && id === undefined && req.method === "POST") {
+    return ok(await ctx.banks.change(name, (b) => qualityView(b, b.checkQuality(BY))));
   }
 
   if (what === "questions") {

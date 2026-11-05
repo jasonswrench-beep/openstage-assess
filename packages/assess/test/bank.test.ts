@@ -91,6 +91,23 @@ describe("a bank", () => {
     assert.ok(reopened.history.length >= 2);
   });
 
+  test("saved twice at the same time, comes out the same, whatever the clock does between", (t) => {
+    // Every file in the zip is stamped, to two seconds, with a time. Stamped with the clock they differ when it ticks between two
+    // saves, which made a test that saves twice and compares fail now and then. With a time given they are stamped with it.
+    t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-06-15T10:00:00").getTime() });
+    const bank = Bank.createEmpty("Test bank", { at: "2026-01-01T00:00:00.000Z" });
+    bank.add(question(1));
+    const first = Buffer.from(bank.toBytes({ at: "2026-02-03T04:05:06.000Z" }));
+    t.mock.timers.tick(5000);
+    const second = Buffer.from(bank.toBytes({ at: "2026-02-03T04:05:06.000Z" }));
+    assert.deepEqual(second, first);
+    // And with no time given the files are stamped with the clock, as before.
+    const clockA = Buffer.from(bank.toBytes());
+    t.mock.timers.tick(5000);
+    const clockB = Buffer.from(bank.toBytes());
+    assert.notDeepEqual(clockB, clockA);
+  });
+
   test("refuses to add a question that does not satisfy the model", () => {
     const bank = Bank.createEmpty("Test bank");
     const broken = { ...question(1), points: -5 };

@@ -9,9 +9,11 @@
  * beside its source text and repaired, which is the whole point of the repair
  * preview.
  *
- * The rest of the quality and accessibility checks arrive in phase 7. This one
- * is here in phase 1 because the importer needs it and because it is the check
- * that catches the mistake that actually reaches students.
+ * The notes about writing and accessibility are in `items.ts` and `bank.ts`.
+ * This check is here in phase 1 because the importer needs it and because it is
+ * the check that catches the mistake that actually reaches students. It is the
+ * only one of them that raises an error: the others are notes, and never move a
+ * question's verdict.
  */
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";

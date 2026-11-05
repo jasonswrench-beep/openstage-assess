@@ -7,7 +7,7 @@ import { badge, h, TYPE_NAMES } from "./dom.js";
 
 /**
  * @typedef {{ index?: number, id: string, title: string, type: string, snippet: string, verdict: "parsed" | "needsReview" | "failed",
- *   status?: string, skipped?: boolean, errors?: number, warnings?: number }} Summary
+ *   status?: string, skipped?: boolean, errors?: number, warnings?: number, notes?: number }} Summary
  */
 
 /**
@@ -28,7 +28,7 @@ export function questionRow(options) {
     h(
       "span",
       { class: "qmain" },
-      h("span", { class: "qtop" }, badge(summary.verdict), h("span", { class: "type", text: /** @type {any} */ (TYPE_NAMES)[summary.type] ?? summary.type }), summary.skipped ? h("span", { class: "tag", text: "Left out" }) : null, summary.status && summary.status !== "draft" ? h("span", { class: "tag", text: summary.status }) : null),
+      h("span", { class: "qtop" }, badge(summary.verdict), h("span", { class: "type", text: /** @type {any} */ (TYPE_NAMES)[summary.type] ?? summary.type }), summary.skipped ? h("span", { class: "tag", text: "Left out" }) : null, summary.status && summary.status !== "draft" ? h("span", { class: "tag", text: summary.status }) : null, summary.notes ? h("span", { class: "tag", text: summary.notes === 1 ? "1 note" : `${summary.notes} notes` }) : null),
       h("span", { class: "peek", text: summary.snippet || summary.title }),
     ),
   );

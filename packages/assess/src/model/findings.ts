@@ -105,6 +105,7 @@ export const FindingCode = {
   LongestOptionCorrect: "quality.longest-option-correct",
   NegativeStemNotEmphasised: "quality.negative-stem-not-emphasised",
   GrammaticalCue: "quality.grammatical-cue",
+  DuplicateOption: "quality.duplicate-option",
   DuplicateQuestion: "quality.duplicate-question",
   NearDuplicateQuestion: "quality.near-duplicate-question",
   KeyImbalance: "quality.key-imbalance",

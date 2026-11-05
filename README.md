@@ -150,6 +150,19 @@ only and answers only to the window it opened.
   guessed. No picture of a sheet is kept: only a small cut-out of each row a person has to look at,
   in memory, and a scores file you save holds readings and decisions and no name, file name or
   picture. The same paper can be made from the command line with `assess sheets print`.
+- Check quality (the "Check quality" button on a bank, or `assess check <bank>`): notes about the
+  writing and the accessibility of each question, never warnings, so a note cannot change whether
+  a question counts as read or what an export holds back. They name an option that depends on the
+  others ("all of the above", "both A and B"), a right answer that is much the longest, NOT or EXCEPT
+  or LEAST in a stem with nothing to set it apart, a stem ending "a" or "an" that rules out some
+  options by grammar, two options that read the same, a picture whose description gives the answer,
+  a picture with a colour word, and a long matching list. Across the bank it reports the same
+  question twice (or nearly: a few words changed) and a letter that holds more of the right answers
+  than chance would, for the questions that keep their option order and for each version of a test.
+  A check that depends on which option is right says nothing about a question with no key, and
+  looking is not editing: the notes are written without changing a question's version, history or
+  status. A note can be dismissed and stays dismissed. The thresholds are judgements, kept in named
+  constants, and are for a person to change on real questions.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question
@@ -217,6 +230,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `sheets check <bank> <picture.png> [--test <id>]` | Check my printing: read a scan of a blank printed copy and say whether the printing is fine |
 | `sheets score <bank> <scans...> [--test <id>] [--accept-blanks] [--drop N] [--credit N] [--points N:P] [--also-right N:L] [--out <folder>] [--save-statistics]` | Score scanned sheets against the test's own key, with adjustments and item statistics; `--out` writes the scores file, workbook, CSV and item analysis; the bank keeps class figures only with `--save-statistics` |
 | `sheets rescore <bank> <file.openassess-scores>` | Score again from a saved scores file, with no rescan |
+| `check <bank> [--save]` | Notes about the writing and accessibility of each question, and across the bank the same question twice and right answers that sit in one place too often; nothing is changed unless `--save`, which writes only the notes |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
 | `perf [--count 500]` | Time open, search and save |
@@ -240,7 +254,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1912 tests, run by Node's own test runner
+  test/                 2001 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

@@ -45,6 +45,17 @@ Rust crates and the Tauri command-line tool, is kept out of the npm workspaces,
 and is not needed to run OpenAssess (`Open OpenAssess.cmd` runs it in a browser
 with only Node installed).
 
+**Item quality and accessibility checks are notes, and say nothing when unsure.** `quality/items.ts` (one question) and
+`quality/bank.ts` (copies, and how the right answers are spread) raise `info` findings only. A warning makes a question "needs
+review" and an error makes it "failed", and those are what the import gate counts and what an export holds back, so advice about
+writing must never move either. They run when a question is saved into a bank (`Bank.update`) and when a person asks to check the
+whole bank (`Bank.checkQuality`, `assess check`, Check quality in the app), and not at import, where a finding means the importer had
+to guess. A rule that depends on which option is right is skipped for a question with no usable key, so none of them can guess one.
+Looking is not editing: a check writes the notes and leaves the version, history and status alone. What looks across questions is
+worked out each time and never stored, because a note about two questions goes stale when either changes (the same fault that
+once left findings unrefreshed). A dismissal survives the next check. The lines (1.5 times and 20 characters, 8 pairs, 0.85 alike,
+20 answers) are judgements in named constants; change them on a bank of real questions, never to make a test pass.
+
 **Delivery settings are not part of a question.** Attempts, feedback timing,
 time limits and scoring weight belong to the course that uses the question, not
 to the item. `schema.ts` rejects them by name with an explanation.
@@ -180,7 +191,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 1912 engine tests and 157 app tests, Node's own runner
+npm test                       # 2001 engine tests and 166 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -195,6 +206,7 @@ npm run assess -- perf         # the speed budget on a 500-question bank
 npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|common-cartridge|blackboard-upload   # the destination check; the Author/Scroll CSV is the default; --out writes it
 npm run assess -- print <bank> --out <folder>   # a student copy and an answer key, as Word or PDF
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
+npm run assess -- check <bank> [--save]   # notes on the writing of each question, copies, and where the right answers sit
 npm run assess -- contract     # the read contract and consumer capabilities
 npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks

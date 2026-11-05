@@ -307,6 +307,20 @@ or the rule against joining a label to an option, switched off, the gate falls f
 100 to 96.8 percent. A stem is left alone, since a stem line with a colon is far more
 often prose.
 
+### Two checks that could pass without checking
+
+Found on 5 November 2026, while adding the item quality checks, and fixed there.
+
+`Check OpenAssess.cmd` listed `sheet-paper.test.ts` and `zip-names.test.ts` with no space between their two quoted names, so the
+shell read them as one argument and the zip name test was not run by the double-click check, whatever `npm test` said. The space
+is there now, and the line was run through `cmd.exe` to see that every file in it runs.
+
+A bank saved twice with the same `at` was not byte for byte the same: the files in the zip were stamped with the clock, not with
+`at`, so two saves a tick of the two-second zip clock apart differed. One test ("saves a test under tests/ and opens it again the
+same") saves twice and compares, and failed now and then (once in the run through `cmd.exe` that found it, passing in the runs
+before). `Bank.toBytes({ at })` now stamps every file with `at`, and a
+test holds the clock still and moves it to prove it.
+
 ---
 
 ## Open, and roughly in the order I would take them
