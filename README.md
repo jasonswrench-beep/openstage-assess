@@ -150,6 +150,10 @@ only and answers only to the window it opened.
   guessed. No picture of a sheet is kept: only a small cut-out of each row a person has to look at,
   in memory, and a scores file you save holds readings and decisions and no name, file name or
   picture. The same paper can be made from the command line with `assess sheets print`.
+- A bank that opens with something wrong says so. A file in it that cannot be read (a question damaged by a sync that did not
+  finish) is kept exactly as it was, even through a save, and the bank screen says how many files could not be read, which, and
+  why; a bank that opens with fewer questions than it says it held (a file lost in a sync or a merge) is told so, with the
+  numbers. `validate` fails on it and `info` says it.
 - Coverage (the "Coverage" button on a bank, or `assess coverage <bank> [--rows objective] [--cols bloom]`): how many
   questions a bank has for each objective, chapter, section, tag, Bloom level, difficulty, kind or status, and any two of them
   against each other as a grid, with totals. A question with nothing set is counted under "Not set" so the grid shows how much is

@@ -236,6 +236,14 @@ Planned in `docs/design-plan.md` (phase 7, first set). Everything a program can 
   longer than the longest wrong one; two questions are alike at 0.85 of their words; a spread is judged at 20 answers. All are
   named constants (`LONG_MATCHING_LIST`, `LONGEST_RATIO`, `LONGEST_MARGIN`, `ALIKE_AT`, `BALANCE_MIN_ANSWERS`), chosen to be quiet.
 
+## A bank that opens with something wrong
+
+- [ ] **Damage a bank in a shared folder the way a sync does, and open it.** Copy a bank, open it as a zip, empty one question file
+  (or delete one), and put it back in the library folder. The bank screen should say, in an amber box above the list, that it held
+  more questions than could be read and which file could not be read, and the damaged file should still be in the bank after you
+  change a question. Looked at in the built-in browser; the wording ("an earlier copy") assumes the person has one, which a person
+  with no backup does not.
+
 ## Coverage and narrowing a list
 
 Everything a program can check is in `coverage.test.ts` (engine and app). What is left needs a real bank and a person.

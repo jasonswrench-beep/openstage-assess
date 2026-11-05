@@ -18,6 +18,8 @@
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import { isChoice, isMultipleResponse, optionsOf, type Question } from "../model/question.ts";
+import type { RichText } from "../model/richtext.ts";
+import { isPlaceholderText, PLACEHOLDER_TEXT } from "./placeholders.ts";
 
 export function checkAnswerKey(question: Question): Finding[] {
   const found: Finding[] = [];
@@ -92,12 +94,22 @@ export function checkAnswerKey(question: Question): Finding[] {
   }
 
   if (question.type === "matching") {
-    const pairs = (question.body as { pairs: Array<{ left: unknown; right: string }> }).pairs;
+    const pairs = (question.body as { pairs: Array<{ left: RichText; right: string }> }).pairs;
     pairs.forEach((pair, i) => {
-      if (typeof pair.right !== "string" || pair.right.trim().length === 0) {
+      // The importer pads a matching question that has fewer than two pairs with the placeholder words, so that it can be stored
+      // and repaired. A pair that says "(missing)" is a pair with nothing in it: it was once read as a complete pair as soon as the
+      // question was edited, which cleared the importer's error and left the placeholder to be exported as if it were an answer.
+      if (typeof pair.right !== "string" || pair.right.trim().length === 0 || pair.right.trim() === PLACEHOLDER_TEXT) {
         found.push(
           finding(FindingCode.NoAnswerKey, "error", "This pair has no right-hand match.", {
             field: `body.pairs.${i}.right`,
+          }),
+        );
+      }
+      if (isPlaceholderText(pair.left)) {
+        found.push(
+          finding(FindingCode.NoAnswerKey, "error", "This pair has nothing on its left.", {
+            field: `body.pairs.${i}.left`,
           }),
         );
       }

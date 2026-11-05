@@ -14,7 +14,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BANK_EXTENSION, PRODUCT_NAME, ENGINE_VERSION } from "../naming.ts";
-import { Bank } from "../bank/store.ts";
+import { Bank, countMismatchMessage } from "../bank/store.ts";
 import { importerForContent, runImporter } from "../import/registry.ts";
 import { linesToBlocks, verdictOf } from "../import/types.ts";
 import { docxToBlocks } from "../import/word.ts";
@@ -222,6 +222,7 @@ async function cmdInfo(args: string[]): Promise<number> {
     console.log(`\n  ${report.invalid.length} question file(s) could not be read and were kept untouched:`);
     for (const entry of report.invalid) console.log(`    ${entry.id}`);
   }
+  if (report.countMismatch) console.log(`\n  ${countMismatchMessage(report.countMismatch)}`);
   if (report.migratedFrom !== undefined) {
     console.log(`\n  migrated from format version ${report.migratedFrom}`);
     for (const note of report.migrationNotes) console.log(`    ${note}`);
@@ -246,6 +247,10 @@ async function cmdValidate(args: string[]): Promise<number> {
     bad++;
     console.log(`${entry.id}  (unreadable)`);
     for (const issue of entry.issues) console.log(`    ${issue.path || "<root>"}: ${issue.message}`);
+  }
+  if (report.countMismatch) {
+    bad++;
+    console.log(`(the bank as a whole)\n    ${countMismatchMessage(report.countMismatch)}`);
   }
 
   if (bad === 0) {

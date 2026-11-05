@@ -65,6 +65,7 @@ export async function renderBank(host, params, shell) {
 
   clear(host);
   const head = h("div", { class: "page-head" });
+  const problemsHost = h("div", { attrs: { "aria-live": "polite" } });
   const tools = h("div", { class: "tools" });
   const facetBar = h("div", { class: "facets" });
   const clearButton = h("button", { type: "button", class: "small-button", text: "Clear filters", on: { click: () => void clearFilters() } });
@@ -72,7 +73,7 @@ export async function renderBank(host, params, shell) {
   let facetsKey = "";
   const list = h("ul", { class: "qlist", attrs: { "aria-label": "Questions" } });
   const detail = h("div", { class: "detail", attrs: { "aria-live": "polite" } });
-  host.append(head, tools, h("div", { class: "panes" }, h("div", { class: "pane-list" }, list), detail));
+  host.append(head, problemsHost, tools, h("div", { class: "panes" }, h("div", { class: "pane-list" }, list), detail));
   arrowKeys(list);
 
   async function canLeave() {
@@ -94,9 +95,26 @@ export async function renderBank(host, params, shell) {
     return true;
   }
 
+  /** What could not be read when the bank was opened, said plainly, with the files left as they were. Nothing when all was read. */
+  function renderProblems() {
+    clear(problemsHost);
+    const problems = bank.problems;
+    if (!problems || (problems.unreadable.length === 0 && !problems.count)) return;
+    const box = h("section", { class: "problem-box", attrs: { role: "note", "aria-label": "Problems reading this bank" } });
+    if (problems.count) box.append(h("p", { text: problems.count }));
+    if (problems.unreadable.length > 0) {
+      box.append(
+        h("p", { text: `${plural(problems.unreadable.length, "file in this bank could not be read, and is", "files in this bank could not be read, and are")} not in the list. ${problems.unreadable.length === 1 ? "It is" : "They are"} kept exactly as ${problems.unreadable.length === 1 ? "it was" : "they were"}, so nothing is lost; saving the bank does not change ${problems.unreadable.length === 1 ? "it" : "them"}.` }),
+        h("details", null, h("summary", { text: "Which files" }), h("ul", null, ...problems.unreadable.map(/** @param {{ id: string, message: string }} entry */ (entry) => h("li", { text: `${entry.id}: ${entry.message}` })))),
+      );
+    }
+    problemsHost.append(box);
+  }
+
   function renderHead() {
     clear(head);
     const stats = bank.stats;
+    renderProblems();
     head.append(
       h(
         "div",

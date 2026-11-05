@@ -64,7 +64,7 @@ export * from "./model/bank.ts";
 // Container and bank
 export * from "./container/zip.ts";
 export * from "./container/layout.ts";
-export { Bank } from "./bank/store.ts";
+export { Bank, countMismatchMessage } from "./bank/store.ts";
 export type { OpenReport, BankStats, QualityRun } from "./bank/store.ts";
 export { SearchIndex, fold, tokenize, searchableText, matchesQuery } from "./bank/search.ts";
 export { COVERAGE_AXES, NONE as COVERAGE_NONE, coverage, facets, isCoverageAxis, matchesFacets, valuesOn } from "./bank/coverage.ts";
