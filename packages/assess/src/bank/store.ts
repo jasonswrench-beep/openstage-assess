@@ -101,7 +101,25 @@ export interface QualityRun {
 function isUsableFolderFile(value: unknown): value is FolderFile {
   if (value === null || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  return Array.isArray(record["root"]) && Array.isArray(record["filters"]);
+  if (!Array.isArray(record["root"]) || !Array.isArray(record["filters"])) return false;
+  // Every folder has to be a folder all the way down. A tree whose root was a list but whose folders were not (no list of
+  // questions, a child that was not a list) passed the check above and then threw out of the walk that builds the index, so a bank
+  // with a folder file damaged in the middle would not open at all. The depth is bounded so that a file nested for no reason is
+  // not followed forever.
+  const folder = (node: unknown, depth: number): boolean => {
+    if (depth > 100 || node === null || typeof node !== "object") return false;
+    const n = node as Record<string, unknown>;
+    return (
+      typeof n["id"] === "string" &&
+      typeof n["name"] === "string" &&
+      Array.isArray(n["questionIds"]) &&
+      n["questionIds"].every((id) => typeof id === "string") &&
+      Array.isArray(n["children"]) &&
+      n["children"].every((child) => folder(child, depth + 1))
+    );
+  };
+  const filter = (f: unknown): boolean => f !== null && typeof f === "object" && typeof (f as Record<string, unknown>)["id"] === "string" && typeof (f as Record<string, unknown>)["name"] === "string";
+  return record["root"].every((node) => folder(node, 0)) && record["filters"].every(filter);
 }
 
 export class Bank {
@@ -157,7 +175,9 @@ export class Bank {
     }
     if (rawManifest["format"] !== BANK_FORMAT) {
       throw new Error(
-        `This file says it is "${String(rawManifest["format"])}", not an OpenAssess bank.`,
+        typeof rawManifest["format"] === "string"
+          ? `This file says it is "${rawManifest["format"]}", not an OpenAssess bank.`
+          : "This file's manifest does not say what kind of file it is, so it is not an OpenAssess bank, or it is damaged.",
       );
     }
 

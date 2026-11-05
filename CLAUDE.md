@@ -56,6 +56,15 @@ worked out each time and never stored, because a note about two questions goes s
 once left findings unrefreshed). A dismissal survives the next check. The lines (1.5 times and 20 characters, 8 pairs, 0.85 alike,
 20 answers) are judgements in named constants; change them on a bank of real questions, never to make a test pass.
 
+**A damaged file is read or refused in words, and what is damaged inside a bank is kept, reported and shown.** A file that cannot be
+read is refused with a message a person can act on, never a TypeError or "Cannot read properties of undefined"; `fuzz-import.test.ts`
+damages the repository's own files (Word, Excel, PDF, text, banks, scans of sheets) from a fixed seed and holds every one to that, and
+a run of about 60,000 more found two crashes in the bank reader (a folder tree damaged inside) that are fixed. A bank that opens with
+a part it cannot read (a question file that is not JSON, a folder file of the wrong shape, a lost file) opens with the rest, keeps the
+damaged file byte for byte through every save (`passthrough`; a damaged folder file is kept as `folders.damaged.json`), and says so:
+the engine in `OpenReport`, the app in the amber box on the bank screen. A branch of the bank reader that reports a file and does not
+keep it is a bug (two were found). Do not add a path that drops a file the reader could not understand.
+
 **Delivery settings are not part of a question.** Attempts, feedback timing,
 time limits and scoring weight belong to the course that uses the question, not
 to the item. `schema.ts` rejects them by name with an explanation.
@@ -191,7 +200,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2001 engine tests and 166 app tests, Node's own runner
+npm test                       # 2109 engine tests and 191 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
