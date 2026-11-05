@@ -126,3 +126,19 @@ describe("a bank that lost a question file", () => {
     });
   });
 });
+
+describe("a bank whose question file is named for another question", () => {
+  test("loads the question, and does not count it with the files that could not be read", async () => {
+    await withApp(async (client) => {
+      writeBank(client, "Renamed", (files, qs) => {
+        const first = qs[0] as string;
+        files.set("questions/not-its-own-name.json", files.get(first) as Uint8Array);
+        files.delete(first);
+      });
+      const reply = await client.get<Json>("/api/banks/Renamed");
+      assert.equal(reply.status, 200, reply.text);
+      assert.equal(reply.json["questions"].length, 3, "the question was read, so it is in the list");
+      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null }, "and the screen does not say a file could not be read");
+    });
+  });
+});

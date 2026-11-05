@@ -264,6 +264,11 @@ Everything a program can check is in `coverage.test.ts` (engine and app). What i
   what it chose and what it says it left out. It is random and does not keep a blueprint; if you want a stored recipe ("5 from
   each chapter, at most 2 hard") that is a feature to decide on. It leaves out a question with no usable answer key, which a person
   can still choose by hand, and a copy of a question already in the test (the same words, or 0.85 alike with the same numbers).
+- [ ] **Try the three states the window can be left in.** Open a cell of the grid on a bank with a retired question and see that
+  the list has the number the cell showed (the retired are left out), and that Clear filters brings them back. Start changing a
+  question, press Check quality, and see that the pane you are typing in is left alone and the notice says why. Narrow the list
+  to a chapter, change the last question of that chapter to another, and see that the select still says the chapter (with 0)
+  and not "Any chapter". These are in the window's script and are not reached by the server tests.
 - [ ] **Look at the narrowing selects on a bank with a lot of tags.** A select is made for each of objective, chapter, section,
   tag, Bloom level, difficulty and status that the bank has values for, so a bank with hundreds of tags has a long list in one
   select. If that is too long, a search box in place of the select for tags is the likely change.

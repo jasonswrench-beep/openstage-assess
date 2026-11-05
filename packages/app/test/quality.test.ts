@@ -40,7 +40,7 @@ describe("Check quality", () => {
       const run = await client.post<Json>(`${base}/quality`);
       assert.equal(run.status, 200, run.text);
       assert.equal(run.json["checked"], 2);
-      assert.equal(run.json["changed"], 1);
+      assert.equal(run.json["changed"], 0, "a question written in the app had its notes as it was added, so there is nothing new to write");
       assert.deepEqual(run.json["notes"], { "quality.all-or-none-of-the-above": 1, "quality.negative-stem-not-emphasised": 1 });
       assert.equal(run.json["questions"].length, 1);
       assert.equal(run.json["questions"][0].id, ids[0]);
@@ -86,7 +86,7 @@ describe("Check quality", () => {
     await withApp(async (client) => {
       const { base, ids } = await bankWith(client, "Notes", [NOTED, FINE]);
       const all = await client.get<Json>(base);
-      assert.deepEqual(all.json["questions"].map((q: Json) => q["notes"]), [0, 0], "before a check, none");
+      assert.deepEqual(all.json["questions"].map((q: Json) => q["notes"]), [2, 0], "a question written here has its notes from the start");
       await client.post(`${base}/quality`);
       const everything = await client.get<Json>(base);
       assert.deepEqual(everything.json["questions"].map((q: Json) => [q["id"], q["notes"]]).sort(), [[ids[0], 2], [ids[1], 0]].sort());
@@ -161,6 +161,26 @@ describe("Check quality", () => {
       assert.equal(bare.status, 403);
       const sneaky = await client.post("/api/banks/..%2f..%2fGuarded/quality");
       assert.ok(sneaky.status === 400 || sneaky.status === 404, `status ${sneaky.status}`);
+    });
+  });
+});
+
+describe("a bank whose title is a word the server uses", () => {
+  test("a bank titled open can be written to and checked, and a file can still be brought in", async () => {
+    await withApp(async (client) => {
+      const { base, ids } = await bankWith(client, "open", [NOTED, FINE]);
+      assert.equal(base, "/api/banks/open");
+      const run = await client.post<Json>(`${base}/quality`);
+      assert.equal(run.status, 200, run.text);
+      assert.equal(run.json["checked"], 2);
+      const added = await client.post<Json>(`${base}/questions`, { input: { ...(await blank(client, "essay")), stem: "Written into a bank titled open?" } });
+      assert.equal(added.status, 200, added.text);
+      assert.equal((await client.get<Json>(base)).json["total"], 3);
+      assert.equal((await client.del(`${base}/questions/${ids[1]}`)).status, 200);
+      // The name is also what a brought-in file is posted to, and that must not have stopped working.
+      const bytes = await Bank.createEmpty("Brought").toBytes();
+      const brought = await client.send<Json>("POST", "/api/banks/open?name=Brought.openassess", new Uint8Array(bytes));
+      assert.equal(brought.status, 200, brought.text);
     });
   });
 });

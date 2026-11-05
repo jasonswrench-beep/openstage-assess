@@ -47,9 +47,38 @@ export const LONGEST_MARGIN = 20;
 
 const COLOURS = ["red", "orange", "yellow", "green", "blue", "purple", "violet", "pink", "brown"];
 
-/** Words of a text, lower case, letters and digits only, for comparing two texts that differ in spacing or punctuation. */
+/**
+ * A text as it is compared with another for being the same: in one Unicode form, lower case, with runs of space made one, and without
+ * the quotes, brackets and marks that end a sentence or a phrase. Everything inside is kept, symbols and marks included.
+ *
+ * It used to keep only letters and digits, so options that differ in a sign or an operator read as the same ("+2" and "-2", "x > 3"
+ * and "x < 3", "$5" and "€5"), two questions whose right answers were "x > 3" and "x < 3" were called the same question, and the
+ * vowel signs of Hindi, which are marks, were taken for spaces so that four different words read as one. A difference is not made
+ * to disappear unless it is only spacing, case, or the stop at the end.
+ */
 export function normalForm(text: string): string {
-  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return text
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^["'“”‘’(\[]+/u, "")
+    .replace(/["'“”‘’)\].!?;:,]+$/u, "")
+    .trim();
+}
+
+/**
+ * The words of a text, for finding what is alike and for finding an answer written in a description: lower case, in one Unicode form,
+ * with what surrounds a word (a comma, a stop, a bracket) taken off. A sign that belongs to a number or a word stays: "-2" is not "2",
+ * and "c++" is not "c".
+ */
+export function wordTokens(text: string): string[] {
+  return text
+    .normalize("NFC")
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.replace(/^[^\p{L}\p{M}\p{N}\p{S}-]+/u, "").replace(/[^\p{L}\p{M}\p{N}\p{S}+#]+$/u, ""))
+    .filter((token) => token !== "");
 }
 
 function plain(value: RichText): string {
@@ -136,6 +165,11 @@ function negativeStem(question: Question): Finding | undefined {
 
 /** A vowel sound or a consonant sound, from the first letter, where the letter settles it. Undefined where it does not (an hour, a unit). */
 function soundOf(words: string): "vowel" | "consonant" | undefined {
+  // A letter that is read by its name and not as a word has the sound of its name, not of its place in the alphabet: an acronym (MRI,
+  // RNA: "an MRI", "an RNA"), a letter on its own (x, a: "a x" is not wrong, it is a variable), and a letter and a word joined by a
+  // hyphen (X-ray: "an X-ray"). None of them is judged.
+  const lead = /^[^\p{L}\p{N}]*(\p{L}[\p{L}\p{M}]*)/u.exec(words)?.[1];
+  if (lead !== undefined && (lead.length === 1 || /^\p{Lu}{2,}$/u.test(lead))) return undefined;
   // A number or a symbol first gives no letter here, and so no sound; so does a letter outside a to z.
   const letter = /^[^\p{L}\p{N}]*(\p{L})/u.exec(words)?.[1]?.toLowerCase();
   if (letter === undefined || !/^[a-z]$/.test(letter)) return undefined;
@@ -231,9 +265,9 @@ function altGivesAnswer(question: Question): Finding | undefined {
   const used = new Set(collectRefs(question.stem).media);
   const pictures = question.media.filter((m) => used.has(m.id));
   if (pictures.length === 0) return undefined;
-  const answers = answerWords(question).map(normalForm).filter((a) => a.length >= 4);
+  const answers = answerWords(question).map((a) => wordTokens(a).join(" ")).filter((a) => a.length >= 4);
   for (const picture of pictures) {
-    const described = ` ${normalForm(picture.alt)} `;
+    const described = ` ${wordTokens(picture.alt).join(" ")} `;
     const given = answers.find((a) => described.includes(` ${a} `));
     if (given === undefined) continue;
     return note(

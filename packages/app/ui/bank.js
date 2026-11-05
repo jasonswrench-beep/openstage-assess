@@ -55,6 +55,8 @@ export async function renderBank(host, params, shell) {
   let check = "";
   /** The things the list is narrowed to besides the kind and the checks: an axis and the one value it must have. @type {Record<string, string>} */
   let filters = {};
+  /** Left out of the list: the retired. Set when the list is opened from a cell of the coverage grid, which does not count them. */
+  let hideRetired = false;
   let coverageRows = "objective";
   let coverageCols = "bloom";
   /** @type {string | null} */
@@ -146,7 +148,10 @@ export async function renderBank(host, params, shell) {
         await reload();
       }, 250);
     });
-    const kinds = h("select", { attrs: { "aria-label": "Kind of question" } }, h("option", { value: "", text: "All kinds" }), ...EDITABLE_TYPES.map((t) => h("option", { value: t, text: /** @type {any} */ (TYPE_NAMES)[t], selected: t === type })));
+    // The kinds that can be written here, and the kind the list is narrowed to if it is another (a cell of the coverage grid can be a
+    // hotspot question, which the select would otherwise not show, with the list narrowed to it and the select saying All kinds).
+    const kindChoices = type !== "" && !EDITABLE_TYPES.includes(type) ? [...EDITABLE_TYPES, type] : EDITABLE_TYPES;
+    const kinds = h("select", { attrs: { "aria-label": "Kind of question" } }, h("option", { value: "", text: "All kinds" }), ...kindChoices.map((t) => h("option", { value: t, text: /** @type {any} */ (TYPE_NAMES)[t] ?? t, selected: t === type })));
     kinds.addEventListener("change", async () => {
       type = kinds.value;
       await reload();
@@ -179,11 +184,14 @@ export async function renderBank(host, params, shell) {
       const choices = bank.facets?.[axis] ?? [];
       const worth = choices.some((c) => c.value !== NONE) && (axis !== "status" || choices.length > 1);
       if (!worth && !filters[axis]) continue;
+      // A value the list is narrowed to that no question has any more (the last of them was changed) is still a choice, with none:
+      // left out, the select said Any and the list stayed narrowed to something it did not show.
+      const shown = filters[axis] && !choices.some((c) => c.value === filters[axis]) ? [...choices, { value: /** @type {string} */ (filters[axis]), count: 0 }] : choices;
       const select = h(
         "select",
         { attrs: { "aria-label": label } },
         h("option", { value: "", text: `Any ${label.toLowerCase()}` }),
-        ...choices.map((c) => h("option", { value: c.value, text: `${c.value === NONE ? "Not set" : c.value} (${c.count})`, selected: filters[axis] === c.value })),
+        ...shown.map((c) => h("option", { value: c.value, text: `${c.value === NONE ? "Not set" : c.value} (${c.count})`, selected: filters[axis] === c.value })),
       );
       select.addEventListener("change", async () => {
         if (select.value) filters[axis] = select.value;
@@ -195,11 +203,12 @@ export async function renderBank(host, params, shell) {
   }
 
   function filtersActive() {
-    return Object.keys(filters).length > 0 || type !== "" || check !== "";
+    return Object.keys(filters).length > 0 || type !== "" || check !== "" || hideRetired;
   }
 
   async function clearFilters() {
     filters = {};
+    hideRetired = false;
     type = "";
     check = "";
     renderTools();
@@ -222,6 +231,7 @@ export async function renderBank(host, params, shell) {
     if (type) params2.set("type", type);
     if (check) params2.set("check", check);
     for (const [axis, value] of Object.entries(filters)) params2.set(axis, value);
+    if (hideRetired) params2.set("hideRetired", "1");
     const suffix = params2.toString();
     bank = await get(suffix ? `${base}?${suffix}` : base);
     renderHead();
@@ -283,12 +293,20 @@ export async function renderBank(host, params, shell) {
     if (!(await canLeave())) return;
     try {
       const result = await post(`${base}/quality`);
+      // A person may have started changing a question while the check ran. The notes are written to the questions either way, but
+      // the results would replace the pane the change is in, so they wait for the person to ask again.
+      if (editor?.isDirty()) {
+        shell.notify("The check is done and its notes are on the questions. Your unsaved change was left alone: save it or discard it, then press Check quality to see the results.", "ok");
+        await reload();
+        return;
+      }
       selected = null;
       // The results are about the whole bank, and name questions by their place in it, so the list is the whole bank.
       query = "";
       type = "";
       check = "";
       filters = {};
+      hideRetired = false;
       renderTools();
       await reload();
       showQuality(result);
@@ -373,6 +391,11 @@ export async function renderBank(host, params, shell) {
       shell.notify(/** @type {Error} */ (error).message, "error");
       return;
     }
+    // The grid was asked for before a change could have been started in the pane it is drawn in.
+    if (editor?.isDirty()) {
+      shell.notify("Your unsaved change was left alone. Save it or discard it, then ask for the coverage again.", "ok");
+      return;
+    }
     hold();
     const nameOf = (/** @type {string} */ axis) => String(COVERAGE_CHOICES.find(([a]) => a === axis)?.[1] ?? axis);
     const heading = h("h2", { text: "Coverage", attrs: { tabindex: "-1" } });
@@ -434,6 +457,8 @@ export async function renderBank(host, params, shell) {
     type = "";
     check = "";
     query = "";
+    // The grid does not count a retired question, so the list a cell opens must not show one: the cell said 3 and the list said 4.
+    hideRetired = true;
     for (const [axis, value] of [[coverageRows, rowLabel], [coverageCols, colLabel]]) {
       if (axis === "type") type = /** @type {string} */ (value);
       else filters[/** @type {string} */ (axis)] = /** @type {string} */ (value);

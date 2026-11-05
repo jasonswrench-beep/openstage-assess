@@ -104,7 +104,8 @@ export class BankStore {
     await this.open(name);
     const report = this.held.get(name)?.report;
     return {
-      unreadable: (report?.invalid ?? []).map((entry) => ({ id: entry.id, message: entry.issues[0]?.message ?? "It could not be read." })),
+      // Not the questions that were read and only had the wrong file name: they are in the list.
+      unreadable: (report?.invalid ?? []).filter((entry) => !entry.loaded).map((entry) => ({ id: entry.id, message: entry.issues[0]?.message ?? "It could not be read." })),
       count: report?.countMismatch ? countMismatchMessage(report.countMismatch) : null,
     };
   }
@@ -162,7 +163,7 @@ export class BankStore {
     const wanted = cleanName(fileName.replace(/\.openassess$/i, "") || opened.bank.manifest.title);
     const name = await uniqueName(this.library.banks, wanted, BANK_EXTENSION);
     await opened.bank.save(bankFile(this.library, name));
-    return { name, skipped: opened.report.invalid.length };
+    return { name, skipped: opened.report.invalid.filter((entry) => !entry.loaded).length };
   }
 
   async retitle(name: string, title: string): Promise<void> {

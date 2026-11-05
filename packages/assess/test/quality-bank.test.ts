@@ -134,6 +134,23 @@ describe("questions that are alike", () => {
     assert.deepEqual(findDuplicates([essay(short.join(" ")), essay([...short.slice(0, 10), "different"].join(" "))]), []);
   });
 
+  test("a different sign makes two questions different, as a different number does", () => {
+    const question = (sign: string, right: string, wrong: string) => mc(`Which value of x satisfies the inequality 2x + 1 ${sign} 7 for every real number in the set?`, [`${right}*`, wrong, "x = 3"], {});
+    const greater = question(">", "x > 3", "x < 3");
+    const less = question("<", "x < 3", "x > 3");
+    assert.deepEqual(findDuplicates([greater, less]), [], "not the same question, and not alike either");
+    // And the same two with the same sign are a copy.
+    assert.equal(findDuplicates([question(">", "x > 3", "x < 3"), question(">", "x > 3", "x < 3")])[0]?.kind, "same");
+  });
+
+  test("punctuation between the words does not make questions different, and the vowel marks of a word do", () => {
+    const stem = "Which of the following describes the role of the nucleus in a eukaryotic cell";
+    assert.equal(findDuplicates([essay(`${stem}?`), essay(stem)])[0]?.kind, "same", "a question mark");
+    assert.equal(findDuplicates([essay(stem), essay(stem.replace("of the following", "of, the following"))])[0]?.kind, "alike", "a comma, the same words");
+    const hindi = (word: string) => mc(`इस शब्द का अर्थ क्या है कृपया तीन बार पढ़ें`, [`${word}*`, "काला", "लाल"]);
+    assert.deepEqual(findDuplicates([hindi("किताब"), hindi("कुताब")]).filter((g) => g.kind === "same"), [], "two different words are not the same word");
+  });
+
   test("a different number makes two questions different however alike the words are", () => {
     const stem = (n: number) => `What is the product of 12 and ${n} when they are multiplied together in the usual way`;
     assert.deepEqual(findDuplicates([essay(stem(7)), essay(stem(8))]), []);

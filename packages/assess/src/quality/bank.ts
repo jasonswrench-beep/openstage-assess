@@ -17,7 +17,7 @@ import { isChoice, optionsOf, type Question } from "../model/question.ts";
 import { richTextToPlain, type RichText } from "../model/richtext.ts";
 import { placeLetter, VERSION_LABELS, versionOf, versionQuestions, type TestRecord } from "../model/test.ts";
 import { hasUsableKey } from "./answer-key.ts";
-import { normalForm } from "./items.ts";
+import { normalForm, wordTokens } from "./items.ts";
 import { isPlaceholderOption } from "./placeholders.ts";
 import { versionKey } from "./test-key.ts";
 
@@ -72,25 +72,30 @@ interface Compared {
   /** The same for two questions that are the same question. */
   same: string;
   words: string[];
+  /** Every number and sign in what a student reads, in order of the sort, with repeats. Two questions that differ in it are different. */
+  signs: string;
 }
 
 /** What of a question is compared, or undefined for a question that is left out. */
 function compared(question: Question): Compared | undefined {
   if (question.metadata.status === "retired" || question.media.length > 0) return undefined;
-  const stem = normalForm(textWithMath(question, question.stem));
-  // `parts` is everything that makes two questions the same question, the answer among it. `wording` is what a student reads: the
-  // stem and the options, and not the answer, so that the same question with a different answer marked is alike and not unrelated.
+  const stemText = textWithMath(question, question.stem);
+  const stem = normalForm(stemText);
+  // `parts` is everything that makes two questions the same question, the answer among it. `wording` is what a student reads, as
+  // written (the words are taken from it by `wordTokens`): the stem and the options, and not the answer, so that the same question
+  // with a different answer marked is alike and not unrelated.
   const parts: string[] = [];
-  const wording: string[] = [stem];
+  const wording: string[] = [stemText];
   const body = question.body as unknown as Record<string, unknown>;
   switch (question.type) {
     case "multipleChoice":
     case "multipleResponse": {
       const options = optionsOf(question).filter((o) => !isPlaceholderOption(o));
-      const texts = options.map((o) => normalForm(textWithMath(question, o.content)));
+      const raw = options.map((o) => textWithMath(question, o.content));
+      const texts = raw.map(normalForm);
       // Right or wrong, with the words: the same options with a different one marked right are two questions.
       parts.push(...options.map((o, i) => `${o.correct ? "+" : "-"}${texts[i]}`).sort());
-      wording.push(...texts);
+      wording.push(...raw);
       break;
     }
     case "trueFalse":
@@ -103,17 +108,19 @@ function compared(question: Question): Compared | undefined {
       parts.push(...((body["accepted"] ?? []) as string[]).map(normalForm).sort());
       break;
     case "matching": {
-      const pairs = ((body["pairs"] ?? []) as Array<{ left: RichText; right: string }>).map((p) => [normalForm(textWithMath(question, p.left)), normalForm(p.right)] as const);
-      const extras = ((body["distractors"] ?? []) as string[]).map(normalForm);
+      const rawPairs = ((body["pairs"] ?? []) as Array<{ left: RichText; right: string }>).map((p) => [textWithMath(question, p.left), p.right] as const);
+      const rawExtras = (body["distractors"] ?? []) as string[];
+      const pairs = rawPairs.map(([l, r]) => [normalForm(l), normalForm(r)] as const);
+      const extras = rawExtras.map(normalForm);
       parts.push(...pairs.map(([l, r]) => `${l}=${r}`).sort(), ...extras.map((e) => `?${e}`).sort());
-      wording.push(...pairs.flat(), ...extras);
+      wording.push(...rawPairs.flat(), ...rawExtras);
       break;
     }
     case "ordering": {
       // A copy is sorted: sorting the question's own list would reorder it.
-      const items = [...((body["items"] ?? []) as Array<{ content: RichText; position: number }>)].sort((a, b) => a.position - b.position).map((i) => normalForm(textWithMath(question, i.content)));
-      parts.push(...items);
-      wording.push(...items);
+      const raw = [...((body["items"] ?? []) as Array<{ content: RichText; position: number }>)].sort((a, b) => a.position - b.position).map((i) => textWithMath(question, i.content));
+      parts.push(...raw.map(normalForm));
+      wording.push(...raw);
       break;
     }
     case "numeric":
@@ -124,8 +131,12 @@ function compared(question: Question): Compared | undefined {
       if (question.type !== "essay") return undefined;
   }
   if (stem === "") return undefined;
-  const words = [...new Set(wording.join(" ").split(" ").filter((w) => w !== ""))];
-  return { question, same: [question.type, stem, ...parts].join("\u0001"), words };
+  const tokens = wording.flatMap(wordTokens);
+  const words = [...new Set(tokens)];
+  // The numbers and signs, counted and not only listed: "x > 3" against "x < 3" has the same two signs among its options either way
+  // round, and what tells the questions apart is how many times each sign is used.
+  const signs = tokens.filter((w) => /\d/.test(w) || /^\p{S}+$/u.test(w)).sort().join(" ");
+  return { question, same: [question.type, stem, ...parts].join("\u0001"), words, signs };
 }
 
 /** Disjoint sets, for putting questions that are alike in pairs into groups of any size. */
@@ -153,7 +164,8 @@ function alikePairs(items: Compared[]): Array<[number, number]> {
   for (const item of items) for (const w of item.words) frequency.set(w, (frequency.get(w) ?? 0) + 1);
   const ordered = items.map((item) => [...item.words].sort((a, b) => (frequency.get(a) as number) - (frequency.get(b) as number) || (a < b ? -1 : 1)));
   const sets = items.map((item) => new Set(item.words));
-  const numbers = items.map((item) => item.words.filter((w) => /\d/.test(w)).sort().join(" "));
+  // A number is a difference that makes two questions different, and so is a sign: "x > 3" and "x < 3" are not one question.
+  const numbers = items.map((item) => item.signs);
   const index = new Map<string, number[]>();
   const found: Array<[number, number]> = [];
 
