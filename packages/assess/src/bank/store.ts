@@ -7,7 +7,7 @@
  * thing is testable without a disk.
  */
 
-import { readFile, writeFile, rename } from "node:fs/promises";
+import { open, readFile, rename, rm } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { BANK_FORMAT, BANK_FORMAT_VERSION, GENERATOR } from "../naming.ts";
@@ -396,8 +396,22 @@ export class Bank {
     if (!target) throw new Error("This bank has no path yet. Pass one to save().");
     const bytes = this.toBytes();
     const temp = `${target}.writing`;
-    await writeFile(temp, bytes);
-    await rename(temp, target);
+    try {
+      // Written, then flushed to the disk, before the rename: a rename of a file whose contents are still in the system's memory can
+      // survive a power cut that the contents do not, and leave an empty bank where the old one was.
+      const file = await open(temp, "w");
+      try {
+        await file.writeFile(bytes);
+        await file.sync();
+      } finally {
+        await file.close();
+      }
+      await rename(temp, target);
+    } catch (error) {
+      // A failed save leaves the bank that was there, and no half-written file beside it.
+      await rm(temp, { force: true });
+      throw error;
+    }
     this.path = target;
     return target;
   }
@@ -481,6 +495,11 @@ export class Bank {
     }
     if (this.questions.has(question.id)) {
       throw new Error(`This bank already holds a question with the id ${question.id}.`);
+    }
+    // The folder is checked before anything is changed. Checked afterwards (by moveToFolder), a wrong id left the question in the
+    // bank, in the index and in no folder, with an error saying it had not been added.
+    if (options.folderId && !this.allFolders().some((f) => f.id === options.folderId)) {
+      throw new Error(`No folder with the id ${options.folderId} is in this bank.`);
     }
     this.questions.set(question.id, question);
     this.index.add(question);

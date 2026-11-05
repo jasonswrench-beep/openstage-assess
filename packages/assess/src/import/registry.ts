@@ -24,6 +24,12 @@ export function importerFor(file: string): Importer | undefined {
   return IMPORTERS.find((importer) => importer.extensions.includes(extension));
 }
 
+/** True for a file that begins `{\rtf`, which is what every Rich Text file begins with. */
+function startsWithRtf(bytes: Uint8Array): boolean {
+  const mark = "{\\rtf";
+  return bytes.length >= mark.length && [...mark].every((c, i) => bytes[i] === c.charCodeAt(0));
+}
+
 /** How much of a text file is looked at to tell which format it is in. More than enough to see a pattern, and bounded. */
 const SNIFF_BYTES = 400_000;
 
@@ -35,6 +41,9 @@ const SNIFF_BYTES = 400_000;
  * answers is a question table, which is what a spreadsheet's "Unicode Text" is.
  */
 export function importerForContent(file: string, bytes: Uint8Array): Importer {
+  // A Rich Text file is not text: read as text its control words come in as stray lines of a question. It is sent to the Word
+  // importer, which does not read it and says what to do instead (save it from Word as a .docx), by name or by what it begins with.
+  if (file.toLowerCase().endsWith(".rtf") || startsWithRtf(bytes)) return wordImporter;
   const named = importerFor(file);
   if (named && named !== standardTextImporter) return named;
   // A PDF is told by what it begins with, whatever it was named.
