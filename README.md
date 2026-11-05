@@ -118,7 +118,8 @@ only and answers only to the window it opened.
   box, one sheet for every version or one for each, four corner marks and a strip of squares
   that say which test and which page a sheet is. A question a sheet cannot carry keeps its
   number and says to answer in the booklet.
-- A reader for a picture of a filled-in answer sheet (a PNG for now): it finds the four corner
+- A reader for a picture of a filled-in answer sheet (a PNG, or a scanned PDF where each page is one
+  picture; a JPEG is decoded by the app's window and is not built yet): it finds the four corner
   marks and which way up the page is, reads the code strip, finds each row of bubbles by its
   printed outline, and says for each question what is marked, what is blank and what a person
   has to look at, and why. A mark it is not sure of is flagged and never guessed. A picture it
@@ -126,7 +127,10 @@ only and answers only to the window it opened.
   reason and what to do. `assess sheets gate` draws sheets with known answers, fills them in like
   students, spoils them like scanners and cameras, and fails if one answer is read wrong without
   a flag; `assess sheets check` reads a scan of a blank printed copy and says what is wrong with
-  the printing. Scoring, the window's own screens and JPEG and PDF input are not built yet.
+  the printing. A scanned PDF page that is fax or JBIG2 compressed, in layers or strips, or empty of
+  pictures is refused for that page with the scanner setting to change, and the other pages are
+  still read; a batch is put into sheets in the order it came and the same picture twice, a missing
+  page and pages out of order are flagged. Scoring and the window's own screens are not built yet.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question
@@ -214,7 +218,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1795 tests, run by Node's own test runner
+  test/                 1841 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

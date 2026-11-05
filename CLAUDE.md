@@ -132,15 +132,25 @@ to make a test pass. The harness draws a black and white student as marking firm
 it judges the reader on what the picture can show; keep that said wherever it is described. Do not loosen
 a refusal, a flag or the gate's first line to get a number up.
 
+**A scanned PDF is read only where each page is one picture, and what is not read is said.**
+`sheets/pdf-page.ts` takes the one picture a page draws (Flate, plain, or a JPEG handed on as bytes for the
+window to decode) and works out the mirror, turn and black and white swap from how it is drawn. A page of
+several pictures, layers, fax or JBIG2 or JPEG 2000 compression, or no picture is refused for that page with
+the scanner setting to change, and the other pages are still read. Do not add a decoder for a refused
+format to make a file open: the spec leaves the fax decoder and pdf.js until the real scanner test says
+they are needed. A batch is put into sheets in the order it came (`sheets/batch.ts`): the same picture twice
+is flagged and not counted, and a sheet is known by its place in the batch and nothing else (no name, no file
+name is kept).
+
 ## Commands
 
 ```
-npm test                       # 1795 engine tests and 124 app tests, Node's own runner
+npm test                       # 1841 engine tests and 124 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- sheets gate  # the answer sheet reader's gate: no answer read wrong without a flag, on drawn and spoiled sheets
-npm run assess -- sheets read <bank> <picture.png>    # one page of a scanned sheet, against a test in the bank
+npm run assess -- sheets read <bank> <picture.png|scan.pdf|folder>    # scanned sheets against a test in the bank, put into sheets in order
 npm run assess -- sheets check <bank> <picture.png>   # Check my printing: a scan of a blank printed copy
 npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine
 npm run assess -- perf         # the speed budget on a 500-question bank

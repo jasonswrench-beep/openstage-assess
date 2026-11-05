@@ -12,7 +12,7 @@
 
 import { seededRandom } from "../model/random.ts";
 import { applyHomography, homographyFrom, invertHomography, type Homography, type Point } from "./homography.ts";
-import { newImage, sample, type GreyImage } from "./image.ts";
+import { newImage, sample, turnQuarters, type GreyImage } from "./image.ts";
 
 const clamp = (v: number): number => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
 
@@ -54,15 +54,7 @@ export function rotate(image: GreyImage, degrees: number, background = 255): Gre
 }
 
 /** A quarter turn clockwise, whole pixels, no blending: what a scanner does when a sheet goes in sideways. */
-export function quarterTurn(image: GreyImage, turns: number): GreyImage {
-  let current = image;
-  for (let t = 0; t < ((turns % 4) + 4) % 4; t++) {
-    const out = newImage(current.height, current.width);
-    for (let y = 0; y < current.height; y++) for (let x = 0; x < current.width; x++) out.data[x * out.width + (current.height - 1 - y)] = current.data[y * current.width + x] as number;
-    current = out;
-  }
-  return current;
-}
+export const quarterTurn = turnQuarters;
 
 /** The picture cut down to the part inside the given distances from each side, in pixels. */
 export function crop(image: GreyImage, left: number, top: number, right: number, bottom: number): GreyImage {

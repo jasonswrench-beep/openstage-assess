@@ -316,3 +316,28 @@ export function writePng(image: GreyImage, options: { dpi?: number } = {}): Uint
   }
   return new Uint8Array(Buffer.concat([Buffer.from(SIGNATURE), chunk("IHDR", header), ...(options.dpi ? [chunk("pHYs", physical)] : []), chunk("IDAT", deflateSync(raw)), chunk("IEND", new Uint8Array(0))]));
 }
+
+/** The picture turned a number of quarter turns clockwise (negative turns go the other way), in whole pixels with no blending. */
+export function turnQuarters(image: GreyImage, turns: number): GreyImage {
+  let current = image;
+  for (let t = 0; t < ((turns % 4) + 4) % 4; t++) {
+    const out = newImage(current.height, current.width);
+    for (let y = 0; y < current.height; y++) for (let x = 0; x < current.width; x++) out.data[x * out.width + (current.height - 1 - y)] = current.data[y * current.width + x] as number;
+    current = out;
+  }
+  return current;
+}
+
+/** The picture as a mirror shows it: left and right changed over. */
+export function flipHorizontal(image: GreyImage): GreyImage {
+  const out = newImage(image.width, image.height);
+  for (let y = 0; y < image.height; y++) for (let x = 0; x < image.width; x++) out.data[y * image.width + x] = image.data[y * image.width + (image.width - 1 - x)] as number;
+  return out;
+}
+
+/** Black for white and white for black. */
+export function invertGrey(image: GreyImage): GreyImage {
+  const out = newImage(image.width, image.height);
+  for (let i = 0; i < image.data.length; i++) out.data[i] = 255 - (image.data[i] as number);
+  return out;
+}
