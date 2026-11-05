@@ -169,11 +169,36 @@ export class Bank {
     // folder, which is exactly where a malformed folder tree comes from, and a
     // missing root used to throw out of the folder walk with nothing naming
     // the file. A bank with a broken folder tree still has its questions.
-    const rawFolders = readJson<FolderFile>(files, FOLDERS_PATH);
-    const folders = isUsableFolderFile(rawFolders) ? rawFolders : emptyFolderFile();
-    const bank = new Bank(manifest, folders);
-
+    //
+    // It is also never thrown away. A folder file that was not JSON stopped the whole bank from opening, which is the opposite of
+    // the sentence above, and one with the wrong shape was replaced by an empty tree without a word and written back that way by
+    // the next save, so the author's folders were gone. Now the bank opens with no folders, the file is reported, and the damaged
+    // file is kept as it was under another name (folders.damaged.json) for someone to mend.
     const invalid: OpenReport["invalid"] = [];
+    let rawFolders: unknown;
+    let foldersProblem: string | undefined;
+    try {
+      rawFolders = readJson<FolderFile>(files, FOLDERS_PATH);
+    } catch (error) {
+      foldersProblem = (error as Error).message;
+    }
+    const damagedFolders = files.get(FOLDERS_PATH);
+    let folders = emptyFolderFile();
+    let keptFoldersAs: string | undefined;
+    if (isUsableFolderFile(rawFolders)) {
+      folders = rawFolders;
+    } else if (damagedFolders !== undefined) {
+      let n = 1;
+      keptFoldersAs = "folders.damaged.json";
+      while (files.has(keptFoldersAs)) keptFoldersAs = `folders.damaged-${++n}.json`;
+      invalid.push({
+        id: FOLDERS_PATH,
+        issues: [{ path: FOLDERS_PATH, message: `${foldersProblem ?? "the folders are not in the shape a bank keeps them"}. The bank was opened with no folders, and this file is kept as ${keptFoldersAs}.` }],
+      });
+    }
+    const bank = new Bank(manifest, folders);
+    if (keptFoldersAs !== undefined && damagedFolders !== undefined) bank.passthrough.set(keptFoldersAs, damagedFolders);
+
     const unknownFiles: string[] = [];
 
     for (const [name, data] of files) {

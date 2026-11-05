@@ -91,6 +91,22 @@ describe("a bank with a file that cannot be read", () => {
   });
 });
 
+describe("a bank whose folder file is damaged", () => {
+  test("opens, lists its questions, and says which file was set aside and where it is kept", async () => {
+    await withApp(async (client) => {
+      writeBank(client, "Folders", (files) => void files.set("folders.json", new Uint8Array(Buffer.from("{ not json"))));
+      const reply = await client.get<Json>("/api/banks/Folders");
+      assert.equal(reply.status, 200, reply.text);
+      assert.equal(reply.json["questions"].length, 3, "the bank opens with all its questions");
+      const unreadable = reply.json["problems"].unreadable;
+      assert.equal(unreadable.length, 1);
+      assert.equal(unreadable[0].id, "folders.json");
+      assert.match(unreadable[0].message, /kept as folders\.damaged\.json/);
+      assert.equal(reply.json["problems"].count, null, "and the count is right");
+    });
+  });
+});
+
 describe("a bank that lost a question file", () => {
   test("says how many it said and how many it found", async () => {
     await withApp(async (client) => {

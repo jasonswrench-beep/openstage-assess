@@ -322,6 +322,11 @@ says how many questions it held when it was last saved (`manifest.questionCount`
 opens with fewer is told so, with a line that the missing ones are in an earlier copy; with more, that nothing is lost. `validate`
 fails on it, and `info` says it.
 
+The folder file had the same two faults. One that was not JSON stopped the whole bank from opening, although the code said a bank
+with a broken folder tree still has its questions; one of the wrong shape was replaced by an empty tree, without a word, and
+written back that way by the next save, so the author's folders were gone. The bank now opens with no folders, the file is reported,
+and the damaged file is kept as it was under another name (`folders.damaged.json`, then `-2` and so on, never over an earlier one).
+
 ### A matching question padded with `(missing)` lost its error on the next edit
 
 The importer pads a matching question that has fewer than two pairs with `(missing)` on both sides, so that it can be stored and
