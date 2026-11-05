@@ -168,6 +168,22 @@ been tried in Blackboard. Use `Blackboard, Upload questions (text file)` in the 
 - [ ] **A numeric question.** It is left out because the page does not say what the tolerance means. If you know, or can try
   one, say what the third field does.
 
+## Answer sheets (the scantron part)
+
+Planned in `docs/paper-tests-spec.md`. These are the parts that need people, paper and machines. Everything a program can check is
+in the tests and in `assess sheets gate`.
+
+- [ ] **Scan a test page on the department copier, and with two phones, and look at what each PDF holds.** In grey, in colour and in
+  black and white on the copier; one scan each from the iPhone and the Android document scanners. For each PDF: the image format
+  (JPEG, fax, JBIG2 or something else), how many images are on a page, and the page rotation. The build reads JPEG, Flate and
+  uncompressed images only, so this says whether a fax decoder or pdf.js is needed. Decided on 4 November 2026 to build without it.
+- [ ] **A real-sheet corpus.** Volunteers fill in printed sheets by hand to a written answer list; scan them on the department
+  copier (feeder, 200 and 300 dpi, grey and black and white), on a flatbed, and photograph them on an iPhone and an Android phone in
+  office light. The expected answers come from the volunteer's list, never from the reader. Tune thresholds on half and report on the
+  other half. The targets are in the spec's success criteria.
+- [ ] **Print the sheet on the department printer and photocopy it.** Check my printing should read a scan of one blank photocopy:
+  corner marks, code strip, no blank bubble read as filled, and the scale within 2 percent.
+
 ## The app and its window
 
 Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in

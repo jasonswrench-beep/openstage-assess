@@ -34,7 +34,11 @@ structural validity only.
 **No runtime dependencies.** The engine has none and should keep none. It runs
 on Node's native type stripping, so it installs by copying and works offline.
 Dev dependencies are the type checker only. If something seems to need a
-library, that is worth a conversation first. The app (`packages/app`) keeps the
+library, that is worth a conversation first. That conversation was had on
+4 November 2026: a library may be added when plain code will not do, its licence
+works with Apache 2.0, a copy of it with its licence file is kept in the repository
+and carried in the installer (it is never fetched at install), its notice goes
+into `NOTICE`, and the commit says why nothing simpler would do. The app (`packages/app`) keeps the
 same rule: plain JavaScript modules, no framework, no build step. The one
 exception is the Tauri window in `packages/app/shell`, which is built with
 Rust crates and the Tauri command-line tool, is kept out of the npm workspaces,
