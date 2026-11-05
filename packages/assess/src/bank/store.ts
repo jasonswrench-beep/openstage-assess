@@ -44,6 +44,8 @@ import { editQuestion, type EditOptions, type QuestionEdit } from "../model/crea
 import type { HistoryEntry, Question } from "../model/question.ts";
 import { validateTest, type TestRecord } from "../model/test.ts";
 import { validateAdministration, type Administration, type AdministrationItem } from "../model/statistics.ts";
+import { checkBankQuality, type BankQualityReport } from "../quality/bank.ts";
+import { QUALITY_CODES, withFreshQuality } from "../quality/items.ts";
 import { SearchIndex, matchesQuery } from "./search.ts";
 
 export interface OpenReport {
@@ -64,6 +66,19 @@ export interface BankStats {
   withWarnings: number;
   mediaFiles: number;
   totalPoints: number;
+}
+
+/** What checking a bank for quality found. */
+export interface QualityRun {
+  checked: number;
+  /** Questions whose notes are not what they were. Nothing else about them changed. */
+  changed: number;
+  /** Notes now live (not dismissed), by finding code. */
+  notes: Record<string, number>;
+  /** Each question that has a live note, with the codes. */
+  questions: Array<{ id: string; title: string; codes: string[] }>;
+  /** What looks at more than one question: copies, and how the right answers are spread. Worked out now, not stored. */
+  report: BankQualityReport;
 }
 
 /**
@@ -365,7 +380,11 @@ export class Bank {
       entries.push({ name, data, store: shouldStore(name) });
     }
 
-    return zipSync(entries);
+    // Given a time to save at, every file in the zip is stamped with it. Left alone they are stamped with the clock, and two saves
+    // of one bank with the same `at` came out different whenever the clock ticked between them (a test that saves twice and
+    // compares failed now and then).
+    const stamp = options.at === undefined ? undefined : new Date(options.at);
+    return zipSync(stamp && !Number.isNaN(stamp.getTime()) ? entries.map((entry) => ({ ...entry, date: stamp })) : entries);
   }
 
   /**
@@ -477,7 +496,8 @@ export class Bank {
   update(id: string, edit: QuestionEdit, opts: EditOptions = {}): Question {
     const current = this.questions.get(id);
     if (!current) throw new Error(`No question with the id ${id} is in this bank.`);
-    const next = editQuestion(current, edit, opts);
+    // A question that is saved into a bank has its notes about writing made fresh, so they describe what was saved.
+    const next = withFreshQuality(editQuestion(current, edit, opts));
     const result = validateQuestion(next);
     if (!result.ok) {
       throw new Error(
@@ -489,6 +509,32 @@ export class Bank {
     this.index.add(next);
     this.note(`updated ${id} to version ${next.version}`, opts.by ?? "unknown", opts.at);
     return next;
+  }
+
+  /**
+   * Check every question for the item quality and accessibility notes, and look across the bank for copies and for answers that sit
+   * in one place too often. The notes are written to the questions (the version, the history and the status are not touched,
+   * since this is looking, not editing); the rest is returned and not stored, because it goes stale when a question changes.
+   */
+  checkQuality(by = "unknown", at?: string): QualityRun {
+    let changed = 0;
+    for (const [id, question] of this.questions) {
+      const next = withFreshQuality(question);
+      if (next === question) continue;
+      this.questions.set(id, next);
+      changed++;
+    }
+    if (changed > 0) this.note(`checked the questions for quality; the notes of ${changed} changed`, by, at);
+
+    const notes: Record<string, number> = {};
+    const questions: QualityRun["questions"] = [];
+    for (const question of [...this.questions.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+      const live = question.findings.filter((f) => !f.dismissed && QUALITY_CODES.has(f.code));
+      if (live.length === 0) continue;
+      for (const f of live) notes[f.code] = (notes[f.code] ?? 0) + 1;
+      questions.push({ id: question.id, title: question.title, codes: live.map((f) => f.code) });
+    }
+    return { checked: this.questions.size, changed, notes, questions, report: checkBankQuality([...this.questions.values()], this.listTests()) };
   }
 
   remove(id: string): boolean {

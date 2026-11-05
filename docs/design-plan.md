@@ -487,7 +487,27 @@ home screen and stops its server when it is closed; the installer is unsigned.
   QTI 2.1 and 3.0, and the 2.x or 3.x subset of Brightspace's Course Import, are not started.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
   pools, blueprints, versions, the item quality and accessibility checks (phase
-  7), and the web quiz.
+  7), and the web quiz. Done so far: versions (the test record), copies, and a first set of
+  item quality and accessibility notes (Check quality, below). Not done: folders and tags in the
+  app, the coverage grid, pools, blueprints, the web quiz, and from the original list of checks
+  the reading level, which would need a reading-level formula that is not misleading on technical
+  words, and an equation that is a picture, which the import already reports.
+
+**Check quality** (phase 7, first set; `quality/items.ts`, `quality/bank.ts`, `assess check`, and the Check quality
+button on a bank). Every result is a note (severity `info`) and never a warning or an error, because those two are what
+the import gate counts and what an export holds back, and advice about writing must not move either. The checks speak
+only when sure: a rule that depends on which option is right is skipped for a question with no usable key; the a/an rule is
+silent when any option starts with a letter that does not settle the sound (an hour, a university, a one); the negative
+stem rule leaves "at least", "whether or not", "not only" and "least common multiple" alone. They run when a question is
+saved into a bank and when the whole bank is checked, and not at import. The notes are written to the questions without
+changing a version, a history or a status (looking is not editing), and a dismissal survives. What looks across questions
+is worked out each time and not stored: the same question twice or nearly (0.85 of the words, with the same numbers), and
+a letter that holds more of the right answers than chance would (a binomial test, divided by the number of letters tried,
+at 20 answers or more), for the questions that keep their option order and for each version of an assembled test. The
+lines are judgements, kept in named constants: the right answer is noted when it is 1.5 times as long as the longest wrong
+one and 20 characters longer; a matching list is long above 8 pairs. What is not covered: a question with a picture is not
+compared for copies (the pictures are not read here), and `MissingAltText` stays an import warning, since the app cannot
+edit a description yet.
 - **M4, assistance.** AI drafting and import rescue, the MCP server, QTI import
   from LMS exports, and publisher Word templates.
 - **M5, answer sheets.** Stages 1 to 3 above, and item statistics from scans.

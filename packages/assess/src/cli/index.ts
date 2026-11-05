@@ -23,6 +23,7 @@ import { formatSummary, summarise } from "../harness/score.ts";
 import { runHarness, TARGET_SCORE } from "../harness/run.ts";
 import { validateQuestion } from "../model/schema.ts";
 import { liveFindings } from "../model/findings.ts";
+import { QUALITY_CODES } from "../quality/items.ts";
 import { allCapabilities, READ_CONTRACT_VERSION, typeVerdicts } from "../read/index.ts";
 import { QUESTION_TYPES } from "../model/question.ts";
 import { createQuestion } from "../model/create.ts";
@@ -91,6 +92,14 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       Brightspace's CSV, a QTI 1.2 package (Brightspace and Canvas), a
       Common Cartridge package (Brightspace), or Blackboard's upload file. It says what will arrive, what will be lost,
       what cannot go. With --out, write the file or files into that folder.
+
+  openassess check <bank${BANK_EXTENSION}> [--save]
+      Look at every question for notes about its writing and its accessibility (an option that
+      says "all of the above", the longest answer being the right one, a NOT that is not set
+      apart, a picture described with its own answer), and across the bank for the same question
+      twice and for right answers that sit in one place too often. They are notes: nothing is
+      changed and the exit code is 0. With --save the notes are written to the questions, as
+      Check quality in the app does; the version, history and status of a question stay as they were.
 
   openassess search <bank${BANK_EXTENSION}> <words...>
       Search a bank.
@@ -403,6 +412,43 @@ async function cmdExport(args: string[]): Promise<number> {
     const target = join(folder, file.name);
     await writeFile(target, file.bytes ?? file.content, "utf8");
     console.log(`\nWrote ${file.questions} question(s) to ${target}`);
+  }
+  return 0;
+}
+
+async function cmdCheck(args: string[]): Promise<number> {
+  const path = positional(args)[0];
+  if (!path) return fail("Name a bank file.");
+  const { bank } = await Bank.open(resolve(path));
+  const run = bank.checkQuality("openassess check");
+
+  const noted = bank.sortedQuestions().flatMap((q) => {
+    const live = q.findings.filter((f) => !f.dismissed && QUALITY_CODES.has(f.code));
+    return live.length > 0 ? [{ q, live }] : [];
+  });
+  const total = Object.values(run.notes).reduce((sum, n) => sum + n, 0);
+  console.log(`Checked ${run.checked} question(s). ${noted.length} have notes (${total} in all).`);
+  for (const { q, live } of noted) {
+    console.log(`\n${q.id}  ${q.title}`);
+    for (const f of live) console.log(`    ${f.message}`);
+  }
+
+  const { duplicates, keyBalance } = run.report;
+  if (duplicates.length > 0) {
+    console.log(`\nThe same question more than once:`);
+    for (const group of duplicates) console.log(`    ${group.message}`);
+  }
+  if (keyBalance.length > 0) {
+    console.log(`\nWhere the right answers sit:`);
+    for (const note of keyBalance) console.log(`    ${note.message}`);
+  }
+  if (noted.length === 0 && duplicates.length === 0 && keyBalance.length === 0) console.log("Nothing to note.");
+
+  if (has(args, "save")) {
+    await bank.save();
+    console.log(`\nThe notes were written to ${resolve(path)}.`);
+  } else if (run.changed > 0) {
+    console.log(`\nNothing was written. Add --save to keep these notes on the questions.`);
   }
   return 0;
 }
@@ -866,6 +912,8 @@ async function main(): Promise<number> {
       return cmdReview(args);
     case "export":
       return cmdExport(args);
+    case "check":
+      return cmdCheck(args);
     case "search":
       return cmdSearch(args);
     case "score":

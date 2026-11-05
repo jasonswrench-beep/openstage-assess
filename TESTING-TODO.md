@@ -214,6 +214,28 @@ in the tests and in `assess sheets gate`.
   flag, and firm marks on clean scans were flagged 0 times in 100. That says the rules hold. It does not say how many answers a real
   class will have flagged; only the real-sheet corpus does.
 
+## Check quality (the notes about writing and accessibility)
+
+Planned in `docs/design-plan.md` (phase 7, first set). Everything a program can check is in `quality-items`, `quality-bank`,
+`quality-cli` and the app's `quality` tests and in the mutation run. What is left is whether the notes are right about real questions.
+
+- [ ] **Check a real bank and read every note as the author of the questions.** Press Check quality on a bank you wrote, or run
+  `npm run assess -- check <bank>`. For each kind of note ask whether it was right to speak, and which you would switch off. The
+  rules are written to be silent when unsure, and they have only been tried on invented questions. Likely to be wrong: the right
+  answer being the longest (a real question can have a long right answer for a good reason), the stem that ends in "a" or "an",
+  and NOT or EXCEPT in a stem that is already clear.
+- [ ] **Look at the copies on a bank that has some.** The same question twice, and a few words changed. Is "very much alike" the
+  right line (0.85 of the words, the same numbers), and is a question with the same wording and a different answer marked worth
+  being called alike? Questions with pictures are not compared at all.
+- [ ] **Look at where the right answers sit on a real test.** Assemble a test and check the bank. A version whose key is mostly one
+  letter should be said; one that is not should not. The test is a binomial test at 20 answers or more, divided by the letters tried.
+- [ ] **Use the Check quality panel and the notes in the editor with a screen reader and with the keyboard alone.** The panel opens
+  in the pane where a question would be and takes focus; each question in a group of copies is a button; each note can be dismissed
+  in the editor. Looked at in the built-in browser at desktop and phone width, not with a screen reader.
+- [ ] **Decide the lines.** A matching list is long above 8 pairs; the right answer is noted when it is 1.5 times and 20 characters
+  longer than the longest wrong one; two questions are alike at 0.85 of their words; a spread is judged at 20 answers. All are
+  named constants (`LONG_MATCHING_LIST`, `LONGEST_RATIO`, `LONGEST_MARGIN`, `ALIKE_AT`, `BALANCE_MIN_ANSWERS`), chosen to be quiet.
+
 ## The app and its window
 
 Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in
@@ -313,6 +335,17 @@ These change what the app does, and were made without asking. Each is one flag o
 - [ ] **A numbered outline before the questions is read as essays and flagged**, as eight were in one PDF. Telling an outline from a
   list of essay prompts would be a guess, and numbered prompts with no heading are common. They are marked for review and can be
   left out of the save from the import screen.
+- [ ] **Every quality note is a note, never a warning or an error.** A warning makes a question "needs review" and an error makes
+  it "failed", and the import gate and the exports go by those. So Check quality can never make a question look broken, and also
+  never holds one back from an export. If you want a kind of note to count (two options that read the same, say), it is one
+  severity in `quality/items.ts`, and the questions that have it would then show as needing a look.
+- [ ] **A question saved in a bank has its notes made fresh; an import has none until the bank is checked.** At import a finding means
+  the importer had to guess, and notes about style would be mixed in with them. So a bank you just imported shows no notes until you
+  press Check quality or save a question in it.
+- [ ] **What looks across questions (copies, the spread of right answers) is shown and never kept.** A note about two questions goes
+  stale when either changes, so it is worked out each time. The cost is that "these two are meant to be alike" cannot be remembered.
+- [ ] **A picture's description is not edited in the app, so a missing one is only an import warning.** `a11y.missing-alt-text` is
+  raised by the importers and stays; a note here would have nothing to fix it with. An equation that is a picture is the same.
 - [ ] **The samples are about the planets, and are in the repository** (`packages/app/samples`, made by `tools/make-samples.ts`),
   so they are offered on the first screen of any install. Saving one writes it to the Exports folder, never over a file.
 

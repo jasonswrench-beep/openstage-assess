@@ -65,12 +65,15 @@ export * from "./model/bank.ts";
 export * from "./container/zip.ts";
 export * from "./container/layout.ts";
 export { Bank } from "./bank/store.ts";
-export type { OpenReport, BankStats } from "./bank/store.ts";
+export type { OpenReport, BankStats, QualityRun } from "./bank/store.ts";
 export { SearchIndex, tokenize, searchableText, matchesQuery } from "./bank/search.ts";
 
 // Quality
 export * from "./quality/answer-key.ts";
 export * from "./quality/placeholders.ts";
+export { checkItemQuality, withFreshQuality, QUALITY_CODES, LONG_MATCHING_LIST } from "./quality/items.ts";
+export { checkBankQuality, findDuplicates, keyBalance, overusedLetter } from "./quality/bank.ts";
+export type { BankQualityReport, DuplicateGroup, KeyBalance } from "./quality/bank.ts";
 
 // Import
 export * from "./import/types.ts";
