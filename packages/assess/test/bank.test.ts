@@ -67,6 +67,44 @@ describe("the zip container", () => {
     );
   });
 
+  test("says that a zip cut short was cut short, and that an empty file is empty", () => {
+    const whole = zipSync([textEntry("a.txt", "hello"), textEntry("dir/b.json", '{"x":1}')]);
+    // Every length short of the whole: a copy that stopped part of the way. None is a TypeError or a RangeError.
+    for (let cut = 1; cut < whole.length; cut++) {
+      let message = "";
+      try {
+        unzipSync(whole.subarray(0, cut));
+        assert.fail(`a zip cut at ${cut} of ${whole.length} bytes was read`);
+      } catch (error) {
+        assert.ok(error instanceof Error && !(error instanceof TypeError) && !(error instanceof RangeError), `cut at ${cut}: ${String(error)}`);
+        message = (error as Error).message;
+      }
+      assert.ok(message.length > 0);
+      if (cut >= 4) assert.match(message, /cut short|damaged|not a zip/, `cut at ${cut}: ${message}`);
+    }
+    assert.throws(() => unzipSync(whole.subarray(0, whole.length - 10)), /starts like a zip but its end is missing, so it was cut short/);
+    assert.throws(() => unzipSync(new Uint8Array(0)), /This file is empty\./);
+    assert.throws(() => unzipSync(new Uint8Array([1, 2, 3, 4])), /not a zip/, "and a file that never was one still says so");
+  });
+
+  test("a comment that holds the end-of-directory signature does not stand in for the real one", () => {
+    const whole = zipSync([textEntry("a.txt", "hello")]);
+    // A comment is allowed after the record. This one holds a fake record: the signature, then bytes that point nowhere.
+    const fake = Buffer.alloc(40);
+    fake.writeUInt32LE(0x06054b50, 0);
+    fake.writeUInt16LE(7, 10);
+    fake.writeUInt32LE(5, 16);
+    const bytes = new Uint8Array(whole.length + fake.length);
+    bytes.set(whole);
+    bytes.set(fake, whole.length);
+    new DataView(bytes.buffer).setUint16(whole.length - 2, fake.length, true);
+    assert.equal(Buffer.from(unzipSync(bytes).get("a.txt")!).toString("utf8"), "hello");
+    // Bytes after a record that does not account for them (a program that appends) are still tolerated, as they were.
+    const trailing = new Uint8Array(whole.length + 6);
+    trailing.set(whole);
+    assert.equal(unzipSync(trailing).size, 1);
+  });
+
   test("crc32 matches the known value for the standard check string", () => {
     assert.equal(crc32(new Uint8Array(Buffer.from("123456789", "ascii"))), 0xcbf43926);
   });

@@ -484,8 +484,11 @@ Media is never garbage collected either.
   still not implemented.
 - ~~`Bank.add` leaves the bank partially mutated when the folder id is wrong.~~ **Fixed on 5 November 2026:** the folder is checked
   before anything changes.
-- A zip whose archive comment contains the EOCD signature is rejected with the
-  wrong diagnosis; a truncated file reports "not a zip".
+- ~~A zip whose archive comment contains the EOCD signature is rejected with the wrong diagnosis; a truncated file reports "not
+  a zip".~~ **Fixed on 5 November 2026:** the end-of-directory record is the first one from the end that accounts for the whole end
+  of the file by its own comment length (a signature inside a comment is not taken for it), a file that starts like a zip and has
+  no end says it was cut short and to copy it again, and an empty file says it is empty. A file cut at every possible length is
+  held to a sentence and never a TypeError (`bank.test.ts`).
 - ~~`isEmptyRichText` ignores math refs, so a stem that is only an equation reports empty.~~ **Fixed on 5 November 2026.**
 - A link whose stored version is **ahead** of the bank is reported as behind it,
   with advice that would overwrite newer course content. This is the restored
