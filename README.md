@@ -130,7 +130,15 @@ only and answers only to the window it opened.
   the printing. A scanned PDF page that is fax or JBIG2 compressed, in layers or strips, or empty of
   pictures is refused for that page with the scanner setting to change, and the other pages are
   still read; a batch is put into sheets in the order it came and the same picture twice, a missing
-  page and pages out of order are flagged. Scoring and the window's own screens are not built yet.
+  page and pages out of order are flagged. Sheets are scored against each version's own key, with
+  all-or-nothing or partial credit for questions with several answers, and adjustments (drop a
+  question, count another answer as right, give everyone credit, change its points) that show how
+  many sheets they change before they are applied and need no rescan. Item statistics (difficulty,
+  discrimination, which answers were marked, blanks, KR-20 or Cronbach's alpha) carry their number
+  of sheets and say when a group is under 30. The results go to a spreadsheet (xlsx and CSV, with an
+  empty Name column), a printable item analysis and a scores file that holds no names or file names;
+  a bank can keep the class-level figures for each question, never a response. The window's own
+  screens for all of this are not built yet.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question
@@ -218,7 +226,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1841 tests, run by Node's own test runner
+  test/                 1894 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

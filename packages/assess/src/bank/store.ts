@@ -16,6 +16,9 @@ import {
   FOLDERS_PATH,
   HISTORY_PATH,
   MANIFEST_PATH,
+  administrationIdFromPath,
+  administrationPath,
+  isAdministrationPath,
   isMediaPath,
   isQuestionPath,
   isTestPath,
@@ -40,6 +43,7 @@ import { validateQuestion, type Issue } from "../model/schema.ts";
 import { editQuestion, type EditOptions, type QuestionEdit } from "../model/create.ts";
 import type { HistoryEntry, Question } from "../model/question.ts";
 import { validateTest, type TestRecord } from "../model/test.ts";
+import { validateAdministration, type Administration, type AdministrationItem } from "../model/statistics.ts";
 import { SearchIndex, matchesQuery } from "./search.ts";
 
 export interface OpenReport {
@@ -81,6 +85,8 @@ export class Bank {
   readonly media = new Map<string, Uint8Array>();
   /** Assembled tests, each holding a copy of its questions as they were used. */
   readonly tests = new Map<string, TestRecord>();
+  /** The class-level figures of tests given to classes. Never a response: see model/statistics.ts. */
+  readonly administrations = new Map<string, Administration>();
   folders: FolderFile;
   history: HistoryEntry[] = [];
   /** Files the engine did not write and does not understand, carried through untouched. */
@@ -258,6 +264,33 @@ export class Bank {
         continue;
       }
 
+      if (isAdministrationPath(name)) {
+        // Figures that cannot be read, or that hold a field a bank may not (anything that could be a response), are kept exactly as they were,
+        // reported, and not used: the file may be someone else's, and what is in it is not this program's to rewrite.
+        const id = administrationIdFromPath(name);
+        let raw: unknown;
+        try {
+          raw = JSON.parse(Buffer.from(data).toString("utf8"));
+        } catch (err) {
+          invalid.push({ id, issues: [{ path: name, message: `not valid JSON: ${(err as Error).message}` }] });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        const checked = validateAdministration(raw);
+        if (!checked.ok) {
+          invalid.push({ id, issues: checked.issues.map((i) => ({ ...i, path: `${name}${i.path ? `: ${i.path}` : ""}` })) });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        if (bank.administrations.has(checked.administration.id)) {
+          invalid.push({ id: checked.administration.id, issues: [{ path: name, message: `another file in this bank already holds the figures ${checked.administration.id}, so this copy was not loaded` }] });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        bank.administrations.set(checked.administration.id, checked.administration);
+        continue;
+      }
+
       if (isMediaPath(name)) {
         bank.media.set(name, data);
         continue;
@@ -309,6 +342,9 @@ export class Bank {
     }
     for (const test of this.listTests()) {
       entries.push(jsonEntry(testPath(test.id), test));
+    }
+    for (const administration of this.listAdministrations()) {
+      entries.push(jsonEntry(administrationPath(administration.id), administration));
     }
     for (const [name, data] of this.media) {
       entries.push({ name, data, store: shouldStore(name) });
@@ -373,6 +409,43 @@ export class Bank {
 
   removeTest(id: string): boolean {
     return this.tests.delete(id);
+  }
+
+  // -------------------------------------------------------------------------
+  // The figures of tests given to classes
+  // -------------------------------------------------------------------------
+
+  /** Keeps the class-level figures of a test given to a class. Figures with a field a bank may not hold, or that do not add up, are refused. */
+  addAdministration(administration: Administration): Administration {
+    const checked = validateAdministration(administration);
+    if (!checked.ok) {
+      throw new Error(`Refusing to add figures that a bank may not hold:\n` + checked.issues.map((i) => `  ${i.path || "<root>"}: ${i.message}`).join("\n"));
+    }
+    if (this.administrations.has(administration.id)) throw new Error(`This bank already holds the figures ${administration.id}.`);
+    this.administrations.set(administration.id, administration);
+    return administration;
+  }
+
+  /** The administrations, oldest first by the day they were given. */
+  listAdministrations(): Administration[] {
+    return [...this.administrations.values()].sort((a, b) => (a.date === b.date ? (a.id < b.id ? -1 : 1) : a.date < b.date ? -1 : 1));
+  }
+
+  removeAdministration(id: string): boolean {
+    return this.administrations.delete(id);
+  }
+
+  /** What each time a question was given says of it, oldest first: the test, the day, how many sheets, and its figures. */
+  statisticsFor(questionId: string): Array<{ administration: Omit<Administration, "items">; item: AdministrationItem }> {
+    const out: Array<{ administration: Omit<Administration, "items">; item: AdministrationItem }> = [];
+    for (const a of this.listAdministrations()) {
+      const item = a.items.find((i) => i.questionId === questionId);
+      if (item) {
+        const { items: _items, ...meta } = a;
+        out.push({ administration: meta, item });
+      }
+    }
+    return out;
   }
 
   // -------------------------------------------------------------------------

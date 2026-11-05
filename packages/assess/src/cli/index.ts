@@ -41,7 +41,14 @@ import type { Question } from "../model/question.ts";
 import { formatGate, runSheetGate } from "../sheets/gate.ts";
 import { imageFingerprint } from "../sheets/image.ts";
 import { openScans } from "../sheets/intake.ts";
-import { assembleBatch, type BatchEntry } from "../sheets/batch.ts";
+import { assembleBatch, type BatchEntry, type BatchSheet } from "../sheets/batch.ts";
+import { adjustmentWords, scoreSheets, settleSheets, type Adjustment, type Decision } from "../sheets/score.ts";
+import { itemStatistics } from "../sheets/stats.ts";
+import { exportResults, itemAnalysisHtml } from "../sheets/results-export.ts";
+import { newScoresFile, readScoresFile, restore, scoresFileName, writeScoresFile } from "../sheets/scores-file.ts";
+import { administrationFrom } from "../model/statistics.ts";
+import { answerAt, versionQuestions, type TestRecord } from "../model/test.ts";
+import { safeName } from "../export/text.ts";
 import { SheetReader } from "../sheets/read.ts";
 import { checkPrinting } from "../sheets/check-print.ts";
 
@@ -107,6 +114,19 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       Check my printing: read a scan of a blank printed copy of the sheet, and say
       whether the printer, the paper and the scanner are doing what the reading needs.
 
+  openassess sheets score <bank${BANK_EXTENSION}> <picture.png|scan.pdf|folder...> [--test <id or name>] [--accept-blanks] [--drop N] [--credit N] [--points N:P] [--also-right N:L] [--out <folder>] [--save-statistics]
+      Read the scans as read does, settle what the reader was sure of, score every sheet against
+      the test's own key, and show the scores and the item statistics. A flagged question is
+      undecided and earns nothing, and is counted: use the app's review to settle it.
+      --accept-blanks takes a row the reader found blank as blank. The adjustments name a question
+      by its number in version A: drop it from the total, give everyone credit, change its points,
+      or count another letter as right as well. With --out, write the scores file, a workbook, a
+      CSV and the item analysis page. --save-statistics keeps the class-level figures in the bank.
+
+  openassess sheets rescore <bank${BANK_EXTENSION}> <file.openassess-scores> [the same adjustments and options]
+      Score again from a saved scores file, with its decisions and adjustments and any more given
+      here, with no rescan.
+
   openassess perf [--count 500]
       Build a bank of N questions and time open, search and save.
 
@@ -119,6 +139,15 @@ function arg(args: string[], name: string): string | undefined {
   return at === -1 ? undefined : args[at + 1];
 }
 
+/** Every value given for a flag that may be given more than once. */
+function all(args: string[], name: string): string[] {
+  const out: string[] = [];
+  args.forEach((a, i) => {
+    if (a === `--${name}` && args[i + 1] !== undefined) out.push(args[i + 1] as string);
+  });
+  return out;
+}
+
 function has(args: string[], name: string): boolean {
   return args.includes(`--${name}`);
 }
@@ -129,7 +158,7 @@ function positional(args: string[]): string[] {
     const value = args[i] as string;
     if (value.startsWith("--")) {
       // Flags that take a value consume the next item.
-      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test"].includes(value.slice(2))) i++;
+      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test", "date", "drop", "credit", "points", "also-right"].includes(value.slice(2))) i++;
       continue;
     }
     out.push(value);
@@ -652,7 +681,109 @@ async function cmdSheets(args: string[]): Promise<number> {
     for (const flag of batch.flags) console.log(`  ${flag.sheet === undefined ? "Batch" : `Sheet ${flag.sheet}`} (${flag.kind}): ${flag.reason}`);
     return batch.flags.length === 0 && read.length === results.length ? 0 : 1;
   }
-  return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, read and check.` : "Say which sheets command: gate, read or check.");
+  if (sub === "score" || sub === "rescore") {
+    const [bankPath, ...rest2] = positional(rest);
+    if (!bankPath || rest2.length === 0) return fail(sub === "score" ? "Name a bank file and the scans: sheets score <bank> <picture.png|scan.pdf|folder...>." : "Name a bank file and a scores file: sheets rescore <bank> <file.openassess-scores>.");
+    const { bank } = await Bank.open(resolve(bankPath));
+    const date = arg(rest, "date") ?? new Date().toISOString().slice(0, 10);
+    let record: TestRecord;
+    let sheets: BatchSheet[];
+    let entries: BatchEntry[];
+    let decisions: Decision[] = [];
+    let adjustments: Adjustment[] = [];
+    let acceptBlanks = has(rest, "accept-blanks");
+    let pagesPerSheet = 1;
+    if (sub === "score") {
+      const chosen = pickTest(bank, rest);
+      if ("error" in chosen) return fail(chosen.error);
+      record = chosen.test;
+      const reader = new SheetReader(record);
+      const files = await scanFiles(rest2);
+      if (files.length === 0) return fail("There are no scans in what was named: a picture is a PNG, JPG or PDF file.");
+      entries = (await readScans(reader, files)).map((o) => o.entry);
+      const firstRead = entries.find((e) => e.result.ok);
+      pagesPerSheet = firstRead && firstRead.result.ok ? firstRead.result.code.pages : 1;
+      const batch = assembleBatch(entries, pagesPerSheet);
+      sheets = batch.sheets;
+      for (const flag of batch.flags) console.log(`${flag.sheet === undefined ? "Batch" : `Sheet ${flag.sheet}`} (${flag.kind}): ${flag.reason}`);
+    } else {
+      const loaded = readScoresFile(new Uint8Array(await readFile(resolve(rest2[0] as string))));
+      if (!loaded.ok) return fail(loaded.reason);
+      const found = bank.getTest(loaded.file.testId);
+      if (!found) return fail(`This scores file is for the test "${loaded.file.testName}" (${loaded.file.testId}), which this bank does not hold.`);
+      if (found.fingerprint !== loaded.file.testFingerprint) return fail("This scores file is for a test whose record has changed since: its fingerprint is not the one in the bank.");
+      record = found;
+      const back = restore(loaded.file);
+      sheets = back.sheets;
+      entries = back.entries;
+      decisions = loaded.file.decisions;
+      adjustments = loaded.file.adjustments;
+      acceptBlanks = acceptBlanks || loaded.file.acceptBlanks;
+      pagesPerSheet = loaded.file.pagesPerSheet;
+    }
+    // Adjustments given on the command line are named by the question's number in version A and the letters of version A.
+    const questionIdOf = (n: number): string | undefined => versionQuestions(record, "A")[n - 1]?.id;
+    const given: Adjustment[] = [];
+    const add = (flag: string, make: (n: number, rest: string) => Adjustment | undefined): string | undefined => {
+      for (const value of all(rest, flag)) {
+        const [n, more] = value.split(":");
+        const adjustment = make(Number(n), more ?? "");
+        if (!adjustment) return `--${flag} ${value} does not name a question of this test.`;
+        given.push(adjustment);
+      }
+      return undefined;
+    };
+    const stamp = new Date().toISOString();
+    const bad =
+      add("drop", (n) => (questionIdOf(n) ? { id: `adj_${adjustments.length + given.length + 1}`, kind: "drop", questionId: questionIdOf(n) as string, at: stamp } : undefined)) ??
+      add("credit", (n) => (questionIdOf(n) ? { id: `adj_${adjustments.length + given.length + 1}`, kind: "credit", questionId: questionIdOf(n) as string, at: stamp } : undefined)) ??
+      add("points", (n, p) => (questionIdOf(n) && Number.isFinite(Number(p)) && p !== "" ? { id: `adj_${adjustments.length + given.length + 1}`, kind: "points", questionId: questionIdOf(n) as string, points: Number(p), at: stamp } : undefined)) ??
+      add("also-right", (n, l) => {
+        const answer = questionIdOf(n) ? answerAt(record, "A", questionIdOf(n) as string, l.toUpperCase()) : undefined;
+        return answer ? { id: `adj_${adjustments.length + given.length + 1}`, kind: "alsoRight", questionId: questionIdOf(n) as string, answer, at: stamp } : undefined;
+      });
+    if (bad) return fail(bad);
+    adjustments = [...adjustments, ...given];
+
+    const reader = new SheetReader(record);
+    const settled = settleSheets(sheets, entries, decisions, { acceptBlanks, reader });
+    const scores = scoreSheets(record, settled, adjustments);
+    const stats = itemStatistics(record, scores);
+    console.log(`Scored ${scores.length} sheet${scores.length === 1 ? "" : "s"} for "${record.name}".`);
+    for (const s of scores) {
+      const what = s.complete ? "complete" : `${s.unsettled} question${s.unsettled === 1 ? "" : "s"} not settled${s.problems.length ? `; ${s.problems.join(" ")}` : ""}`;
+      console.log(`  Sheet ${String(s.number).padStart(3)}  ${s.version === undefined ? "?" : String.fromCharCode(64 + s.version)}  ${String(s.earned).padStart(5)} of ${String(s.possible).padEnd(5)} ${s.percent === undefined ? "     " : `${s.percent.toFixed(1).padStart(5)}%`}  ${what}`);
+    }
+    if (stats.mean !== undefined) console.log(`Mean ${stats.mean} of ${stats.possible} (standard deviation ${stats.sd}) over ${stats.sheets} complete sheet${stats.sheets === 1 ? "" : "s"}${stats.reliability ? `; ${stats.reliability.kind} ${stats.reliability.value}` : ""}.`);
+    for (const note of stats.notes) console.log(`Note: ${note}`);
+    for (const a of adjustments) console.log(`Adjustment: question ${versionQuestions(record, "A").findIndex((q) => q.id === a.questionId) + 1}: ${adjustmentWords(a)}${a.note ? ` (${a.note})` : ""}`);
+
+    const out = arg(rest, "out");
+    if (out) {
+      const folder = resolve(out);
+      await mkdir(folder, { recursive: true });
+      const exported = exportResults(record, settled, adjustments, stats, date);
+      const file = newScoresFile(record, { sheets, flags: [], duplicates: [] }, entries, { decisions, adjustments, acceptBlanks, pagesPerSheet });
+      const writes: Array<[string, Uint8Array | string]> = [
+        [scoresFileName(record.name, date), writeScoresFile(file)],
+        [`${exported.base}.xlsx`, exported.xlsx],
+        [`${exported.base}.csv`, exported.csv],
+        [`${safeName(record.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(record, stats, date)],
+      ];
+      for (const [name, data] of writes) {
+        await writeFile(join(folder, name), data);
+        console.log(`  Wrote ${join(folder, name)}`);
+      }
+    }
+    if (has(rest, "save-statistics")) {
+      if (stats.sheets === 0) return fail("There are no complete sheets, so there are no figures to keep in the bank.");
+      bank.addAdministration(administrationFrom(record, stats, date));
+      await bank.save(resolve(bankPath));
+      console.log(`The class-level figures were kept in ${bankPath}. No response, name or file name is in them.`);
+    }
+    return scores.every((s) => s.complete) ? 0 : 1;
+  }
+  return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, read, check, score and rescore.` : "Say which sheets command: gate, read, check, score or rescore.");
 }
 
 function cmdContract(): number {

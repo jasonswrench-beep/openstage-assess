@@ -142,15 +142,27 @@ they are needed. A batch is put into sheets in the order it came (`sheets/batch.
 is flagged and not counted, and a sheet is known by its place in the batch and nothing else (no name, no file
 name is kept).
 
+**Scores are worked out, never stored, and no bank or scores file ever holds a student.**
+`sheets/score.ts` puts the readings, a person's decisions, the test record's own key and the
+adjustments together every time a score is shown, so a new key or an adjustment needs no rescan. A
+flagged or unconfirmed question is undecided, earns nothing and is counted, never guessed. The
+scores file (`sheets/scores-file.ts`) holds sheet numbers, page numbers and picture fingerprints, and
+no file name, picture or name; a bank holds class-level figures only (`model/statistics.ts`, in
+`statistics/`). Both refuse a field they do not know when read, which is what keeps a response or a
+name from being carried in by another writer. Do not add a field to either to make something easier,
+and do not write figures into a bank unless the instructor asked (`--save-statistics`).
+
 ## Commands
 
 ```
-npm test                       # 1841 engine tests and 124 app tests, Node's own runner
+npm test                       # 1894 engine tests and 124 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- sheets gate  # the answer sheet reader's gate: no answer read wrong without a flag, on drawn and spoiled sheets
 npm run assess -- sheets read <bank> <picture.png|scan.pdf|folder>    # scanned sheets against a test in the bank, put into sheets in order
+npm run assess -- sheets score <bank> <scans...> [--accept-blanks] [--drop N] [--out <folder>]   # scores, item statistics, and with --out the scores file, workbook, CSV and item analysis
+npm run assess -- sheets rescore <bank> <file.openassess-scores>   # score again from a saved file, with no rescan
 npm run assess -- sheets check <bank> <picture.png>   # Check my printing: a scan of a blank printed copy
 npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine
 npm run assess -- perf         # the speed budget on a 500-question bank
