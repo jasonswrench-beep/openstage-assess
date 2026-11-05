@@ -160,6 +160,11 @@ only and answers only to the window it opened.
   not yet tagged, retired questions are left out, and a question with several tags is counted under each. Each count in the app
   is a button that narrows the list to those questions. A bank's list can also be narrowed to one chapter, objective, section,
   tag, Bloom level, difficulty or status, whichever the bank has values for.
+- Folders (the "Folders" button on a bank): make folders and put folders inside folders, rename them, move them, and file each
+  question in one folder (a choice beside the question, or by writing it while a folder is open). A folder is a way of finding
+  questions and never holds one: taking a folder away keeps its questions in the bank, in no folder, and moves the folders inside
+  it up, and the screen says so before it does. A bank's list can be narrowed to a folder (and what is inside it) or to the
+  questions in none. Two folders side by side cannot have one name. Folders are kept in the bank file, so they travel with it.
 - Pick for me, on the Make a test screen of the Answer sheets area: choose some number of the questions that have a chapter, an
   objective, a tag, a Bloom level and so on, at random, and add them to the ones already chosen; pressed again with another value it
   builds a test chapter by chapter, and every question stays visible and can be taken out. It does not pick a retired question, one
@@ -270,7 +275,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 2152 tests, run by Node's own test runner
+  test/                 2171 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

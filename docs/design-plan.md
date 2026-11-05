@@ -494,7 +494,7 @@ home screen and stops its server when it is closed; the installer is unsigned.
   question with nothing set under "(none)" so the gaps show, and leaves retired questions out), and Pick for me on the Make a
   test screen (`bank/pick.ts`: some questions with a value, at random, never a retired one, one already chosen, one with no usable
   key or a copy of one in the test, and it says what it left out and why; it is a helper for building a test chapter by chapter,
-  not a stored blueprint). Not done: folders in the app, stored pools and blueprints, the web quiz, and from the original list of checks
+  not a stored blueprint), and folders in the app (`bank/store.ts`: make, rename, move and take away a folder, file a question in one, narrow the list to one; a folder never holds a question, so taking one away leaves its questions in the bank in no folder, and the folders inside it move up). Not done: stored pools and blueprints, choosing a folder when importing, the web quiz, and from the original list of checks
   the reading level, which would need a reading-level formula that is not misleading on technical
   words, and an equation that is a picture, which the import already reports.
 

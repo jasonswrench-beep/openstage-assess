@@ -212,6 +212,22 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.5); }
 .coverage .zero { color: var(--muted); }
 .coverage .total { font-weight: 600; }
 .coverage tfoot th, .coverage tfoot td { border-top-width: 2px; }
+.folder-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 8px 0 14px; }
+.folder-form .field { margin: 0; }
+.folder-form input[type="text"] { min-width: 14em; }
+.folder-tree { list-style: none; padding: 0; margin: 8px 0; }
+.folder-tree li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.folder-tree li:first-child { border-top: 0; }
+.folder-name { font-weight: 600; overflow-wrap: anywhere; }
+.folder-count { color: var(--muted); font-size: 0.92rem; }
+.folder-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+.inline-select { display: inline-flex; align-items: center; gap: 4px; font-size: 0.92rem; }
+.folder-tree .depth-1 { padding-left: 18px; }
+.folder-tree .depth-2 { padding-left: 36px; }
+.folder-tree .depth-3 { padding-left: 54px; }
+.folder-tree .depth-4 { padding-left: 72px; }
+.folder-tree .depth-5 { padding-left: 90px; }
+.folder-tree .depth-6 { padding-left: 108px; }
 .quality h3 { margin: 16px 0 6px; }
 .quality-kinds { margin: 8px 0; padding-left: 20px; }
 .quality-kinds li { margin: 2px 0; overflow-wrap: anywhere; }

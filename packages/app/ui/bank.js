@@ -57,6 +57,8 @@ export async function renderBank(host, params, shell) {
   let filters = {};
   /** Left out of the list: the retired. Set when the list is opened from a cell of the coverage grid, which does not count them. */
   let hideRetired = false;
+  /** The folder the list is narrowed to: "" for any, NONE for the questions in no folder, or a folder's id (and what is inside it). */
+  let folder = "";
   let coverageRows = "objective";
   let coverageCols = "bloom";
   /** @type {string | null} */
@@ -131,6 +133,7 @@ export async function renderBank(host, params, shell) {
         h("button", { type: "button", text: "Print…", on: { click: () => shell.go(`#/print/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", text: "Export…", on: { click: () => shell.go(`#/export/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", text: "Answer sheets…", on: { click: () => shell.go(`#/sheets/${encodeURIComponent(params.name)}`) } }),
+        h("button", { type: "button", text: "Folders", on: { click: () => void showFolders() } }),
         h("button", { type: "button", text: "Coverage", on: { click: () => void showCoverage() } }),
         h("button", { type: "button", text: "Check quality", on: { click: () => void checkQuality() } }),
         h("button", { type: "button", class: "danger", text: "Remove…", on: { click: () => void remove() } }),
@@ -175,10 +178,26 @@ export async function renderBank(host, params, shell) {
   /** The selects for narrowing the list to a chapter, an objective, a tag and so on: only those the bank has values for. */
   function renderFacets() {
     clearButton.hidden = !filtersActive();
-    const key = JSON.stringify(bank.facets ?? {});
+    // Not the folder chosen: the select already shows it, and one rebuilt under a person's hands loses their place.
+    const key = JSON.stringify([bank.facets ?? {}, bank.folders ?? [], bank.unfiled ?? 0]);
     if (key === facetsKey) return;
     facetsKey = key;
     clear(facetBar);
+    // Folders first: a bank with none has no select for them, so a person who does not use folders never sees one.
+    if ((bank.folders ?? []).length > 0 || folder !== "") {
+      const select = h(
+        "select",
+        { attrs: { "aria-label": "Folder" } },
+        h("option", { value: "", text: "Any folder" }),
+        h("option", { value: NONE, text: `Not in a folder (${bank.unfiled ?? 0})`, selected: folder === NONE }),
+        ...folderChoices(folder),
+      );
+      select.addEventListener("change", async () => {
+        folder = select.value;
+        await reload();
+      });
+      facetBar.append(select);
+    }
     for (const [axis, label] of FILTER_AXES) {
       /** @type {Array<{ value: string, count: number }>} */
       const choices = bank.facets?.[axis] ?? [];
@@ -202,13 +221,43 @@ export async function renderBank(host, params, shell) {
     }
   }
 
+  /**
+   * The folders as the options of a select, each set in by how deep it is. `leave` is folders not to offer (a folder cannot be put
+   * inside itself); `counts` adds how many questions are under each.
+   * @param {string} chosen
+   * @param {Set<string>} [leave]
+   * @param {boolean} [counts]
+   */
+  function folderChoices(chosen, leave = new Set(), counts = true) {
+    return (bank.folders ?? [])
+      .filter(/** @param {any} f */ (f) => !leave.has(f.id))
+      .map(/** @param {any} f */ (f) => h("option", { value: f.id, text: `${"  ".repeat(f.depth)}${f.name}${counts ? ` (${f.total})` : ""}`, selected: f.id === chosen }));
+  }
+
+  /** A folder and every folder inside it. The list is in the order it is shown, each folder followed by what is inside it. @param {string} id */
+  function folderAndInside(id) {
+    /** @type {any[]} */
+    const list = bank.folders ?? [];
+    const at = list.findIndex((f) => f.id === id);
+    const out = new Set([id]);
+    if (at === -1) return out;
+    for (let i = at + 1; i < list.length && list[i].depth > list[at].depth; i++) out.add(list[i].id);
+    return out;
+  }
+
+  /** @param {string} id */
+  function folderName(id) {
+    return /** @type {any} */ ((bank.folders ?? []).find(/** @param {any} f */ (f) => f.id === id))?.name ?? "the folder";
+  }
+
   function filtersActive() {
-    return Object.keys(filters).length > 0 || type !== "" || check !== "" || hideRetired;
+    return Object.keys(filters).length > 0 || type !== "" || check !== "" || hideRetired || folder !== "";
   }
 
   async function clearFilters() {
     filters = {};
     hideRetired = false;
+    folder = "";
     type = "";
     check = "";
     renderTools();
@@ -230,10 +279,19 @@ export async function renderBank(host, params, shell) {
     if (query.trim()) params2.set("q", query.trim());
     if (type) params2.set("type", type);
     if (check) params2.set("check", check);
+    if (folder) params2.set("folder", folder);
     for (const [axis, value] of Object.entries(filters)) params2.set(axis, value);
     if (hideRetired) params2.set("hideRetired", "1");
     const suffix = params2.toString();
     bank = await get(suffix ? `${base}?${suffix}` : base);
+    // A folder taken away in another window is not one to stay narrowed to: the list would be empty and the choice would say nothing.
+    if (folder && folder !== NONE && !(bank.folders ?? []).some(/** @param {any} f */ (f) => f.id === folder)) {
+      folder = "";
+      facetsKey = "";
+      shell.notify("That folder is not in the bank any more, so the list shows every folder.", "ok");
+      await reload();
+      return;
+    }
     renderHead();
     renderList();
     renderFacets();
@@ -278,11 +336,35 @@ export async function renderBank(host, params, shell) {
       dismiss: (payload) => post(`${base}/questions/${encodeURIComponent(id)}/dismiss`, payload),
       onSaved: () => void reload(),
       actions: [
+        ...((bank.folders ?? []).length > 0 ? [folderPicker(id, loaded.folderId ?? "")] : []),
         h("button", { type: "button", text: "Duplicate", on: { click: () => void duplicate(id) } }),
         h("button", { type: "button", class: "danger", text: "Delete…", on: { click: () => void removeQuestion(id) } }),
       ],
     });
     detail.append(editor.element);
+  }
+
+  /**
+   * Where the question is filed. Filing is not an edit of the question, so it is done as soon as it is chosen and is not held for Save.
+   * @param {string} id
+   * @param {string} current
+   */
+  function folderPicker(id, current) {
+    const select = h("select", { id: "question-folder" }, h("option", { value: "", text: "Not in a folder", selected: current === "" }), ...folderChoices(current, new Set(), false));
+    let was = current;
+    select.addEventListener("change", async () => {
+      const wanted = select.value;
+      try {
+        await post(`${base}/questions/${encodeURIComponent(id)}/folder`, { folderId: wanted || null });
+        was = wanted;
+        await reload();
+        shell.notify(wanted ? `Put in the folder "${folderName(wanted)}".` : "Taken out of its folder.", "ok");
+      } catch (error) {
+        select.value = was;
+        shell.notify(/** @type {Error} */ (error).message, "error");
+      }
+    });
+    return h("div", { class: "field inline" }, h("label", { for: "question-folder", text: "Folder" }), select);
   }
 
   /**
@@ -307,6 +389,7 @@ export async function renderBank(host, params, shell) {
       check = "";
       filters = {};
       hideRetired = false;
+      folder = "";
       renderTools();
       await reload();
       showQuality(result);
@@ -362,6 +445,150 @@ export async function renderBank(host, params, shell) {
     check = "notes";
     renderTools();
     await reload();
+  }
+
+  /**
+   * The folders of the bank, in the pane where a question would be: make one, rename one, put one inside another, show its questions,
+   * take one away. A folder is a way of finding questions and never holds one: taking a folder away keeps its questions.
+   */
+  async function showFolders() {
+    if (!(await canLeave())) return;
+    selected = null;
+    renderList();
+    drawFolders();
+  }
+
+  /** @param {string} [focusKey] the control to put the focus on when the panel is drawn again ("name", or a control's data-key); the heading when none */
+  function drawFolders(focusKey) {
+    // Drawn after a request: a person may have started changing a question while it ran, and the panel would replace the change.
+    if (editor?.isDirty()) return;
+    hold();
+    /** @type {any[]} */
+    const list = bank.folders ?? [];
+    const heading = h("h2", { text: "Folders", attrs: { tabindex: "-1" } });
+    const panel = h("section", { class: "card folders" }, heading);
+    panel.append(h("p", { class: "sub", text: "A folder is a way of finding questions. A question is in one folder at a time, and taking a folder away keeps its questions in the bank, in no folder." }));
+
+    const nameInput = h("input", { type: "text", id: "folder-name", autocomplete: "off", spellcheck: true, attrs: { maxlength: "80" } });
+    const inside = h("select", { id: "folder-inside" }, h("option", { value: "", text: "At the top of the bank" }), ...folderChoices(""));
+    const form = h(
+      "form",
+      { class: "folder-form" },
+      h("div", { class: "field" }, h("label", { for: "folder-name", class: "field-label", text: "New folder" }), nameInput),
+      h("div", { class: "field" }, h("label", { for: "folder-inside", class: "field-label", text: "Inside" }), inside),
+      h("button", { type: "submit", class: "primary", text: "Add folder" }),
+    );
+    form.addEventListener("submit", (/** @type {Event} */ event) => {
+      event.preventDefault();
+      void addFolder(nameInput.value, inside.value);
+    });
+    panel.append(form);
+
+    if (list.length === 0) {
+      panel.append(h("p", { class: "hint", text: "This bank has no folders yet." }));
+    } else {
+      const tree = h("ul", { class: "folder-tree", attrs: { "aria-label": "Folders" } });
+      for (const f of list) {
+        const move = h(
+          "select",
+          { attrs: { "aria-label": `Put the folder ${f.name} inside`, "data-key": `move-${f.id}` } },
+          h("option", { value: "", text: "At the top of the bank", selected: !f.parentId }),
+          ...folderChoices(f.parentId ?? "", folderAndInside(f.id)),
+        );
+        move.addEventListener("change", () => void moveFolder(f, move.value));
+        tree.append(
+          h(
+            "li",
+            { class: `depth-${Math.min(f.depth, 6)}` },
+            h("span", { class: "folder-name", text: f.name }),
+            h("span", { class: "folder-count", text: `${plural(f.own, "question", "questions")}${f.total !== f.own ? `, ${f.total} with the folders inside` : ""}` }),
+            h(
+              "span",
+              { class: "folder-actions" },
+              h("button", { type: "button", class: "small-button", text: "Show", attrs: { "aria-label": `Show the questions in ${f.name}` }, on: { click: () => void showFolder(f.id) } }),
+              h("button", { type: "button", class: "small-button", text: "Rename…", attrs: { "aria-label": `Rename the folder ${f.name}`, "data-key": `rename-${f.id}` }, on: { click: () => void renameFolder(f) } }),
+              h("label", { class: "inline-select" }, "Inside ", move),
+              h("button", { type: "button", class: "small-button danger", text: "Delete…", attrs: { "aria-label": `Delete the folder ${f.name}` }, on: { click: () => void deleteFolder(f) } }),
+            ),
+          ),
+        );
+      }
+      panel.append(tree);
+    }
+    detail.append(panel);
+    const target = focusKey === "name" ? nameInput : focusKey ? panel.querySelector(`[data-key="${CSS.escape(focusKey)}"]`) : null;
+    /** @type {HTMLElement} */ (target ?? heading).focus();
+  }
+
+  /** @param {string} nameValue @param {string} parentId */
+  async function addFolder(nameValue, parentId) {
+    const wanted = nameValue.trim();
+    if (wanted === "") {
+      shell.notify("Give the folder a name.", "error");
+      document.getElementById("folder-name")?.focus();
+      return;
+    }
+    try {
+      await post(`${base}/folders`, parentId ? { name: wanted, parentId } : { name: wanted });
+      await reload();
+      drawFolders("name");
+      shell.notify(`Added the folder "${wanted}".`, "ok");
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+      document.getElementById("folder-name")?.focus();
+    }
+  }
+
+  /** @param {any} f */
+  async function renameFolder(f) {
+    const next = await askText("Rename this folder", "Name", f.name, "Rename");
+    if (!next || next === f.name) return;
+    try {
+      await put(`${base}/folders/${encodeURIComponent(f.id)}`, { name: next });
+      await reload();
+      drawFolders(`rename-${f.id}`);
+      shell.notify("Renamed.", "ok");
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
+
+  /** @param {any} f @param {string} parentId */
+  async function moveFolder(f, parentId) {
+    try {
+      await put(`${base}/folders/${encodeURIComponent(f.id)}`, { parentId: parentId || null });
+      await reload();
+      shell.notify(parentId ? `Put "${f.name}" inside "${folderName(parentId)}".` : `Put "${f.name}" at the top of the bank.`, "ok");
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+    drawFolders(`move-${f.id}`);
+  }
+
+  /** @param {any} f */
+  async function deleteFolder(f) {
+    const holds = f.total > 0 ? ` ${plural(f.total, "question is", "questions are")} in it or in the folders inside it.` : "";
+    const ok = await confirmAction(`Delete the folder "${f.name}"?`, `Its questions stay in the bank, in no folder, and the folders inside it move up one level.${holds}`, { yes: "Delete the folder", no: "Keep it", danger: true });
+    if (!ok) return;
+    try {
+      const result = await del(`${base}/folders/${encodeURIComponent(f.id)}`);
+      if (folder === f.id) folder = "";
+      facetsKey = "";
+      await reload();
+      drawFolders();
+      shell.notify(result.unfiled > 0 ? `Deleted the folder. ${plural(result.unfiled, "question is", "questions are")} in no folder now.` : "Deleted the folder.", "ok");
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
+
+  /** Narrows the list to a folder, and leaves the panel where it is. @param {string} id */
+  async function showFolder(id) {
+    folder = id;
+    facetsKey = "";
+    renderTools();
+    await reload();
+    shell.notify(`${plural(bank.questions.length, "question", "questions")} shown. Clear filters shows them all again.`, "ok");
   }
 
   /**
@@ -459,6 +686,7 @@ export async function renderBank(host, params, shell) {
     query = "";
     // The grid does not count a retired question, so the list a cell opens must not show one: the cell said 3 and the list said 4.
     hideRetired = true;
+    folder = "";
     for (const [axis, value] of [[coverageRows, rowLabel], [coverageCols, colLabel]]) {
       if (axis === "type") type = /** @type {string} */ (value);
       else filters[/** @type {string} */ (axis)] = /** @type {string} */ (value);
@@ -480,7 +708,8 @@ export async function renderBank(host, params, shell) {
         saveLabel: "Add to the bank",
         notify: shell.notify,
         save: async (input) => {
-          const result = await post(`${base}/questions`, { input });
+          // Written while a folder is open, a question goes into it (and is not lost to the top of the bank, out of the list shown).
+          const result = await post(`${base}/questions`, { input, folderId: folder && folder !== NONE ? folder : undefined });
           selected = result.question.id;
           return result;
         },
