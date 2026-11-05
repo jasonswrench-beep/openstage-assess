@@ -29,10 +29,15 @@ import {
   testPath,
 } from "../container/layout.ts";
 import {
+  cleanFolderName,
   emptyFolderFile,
   folderIndex,
+  folderNameKey,
+  questionsUnder,
+  walkFolders,
   type BankManifest,
   type FolderFile,
+  type FolderListing,
   type FolderNode,
   type Query,
   type SavedFilter,
@@ -714,29 +719,161 @@ export class Bank {
   // -------------------------------------------------------------------------
 
   addFolder(name: string, parentId?: string): FolderNode {
-    const node: FolderNode = { id: newFolderId(), name, questionIds: [], children: [] };
-    if (!parentId) {
-      this.folders.root.push(node);
-    } else {
-      const parent = this.allFolders().find((f) => f.id === parentId);
-      if (!parent) throw new Error(`No folder with the id ${parentId} is in this bank.`);
-      parent.children.push(node);
-    }
+    const clean = cleanFolderName(name);
+    const siblings = parentId ? this.folderNamed(parentId).children : this.folders.root;
+    this.refuseSiblingNamed(siblings, clean);
+    const node: FolderNode = { id: newFolderId(), name: clean, questionIds: [], children: [] };
+    siblings.push(node);
+    this.note(`added the folder ${clean}`, "unknown");
     return node;
+  }
+
+  /** A folder is found by its id or the person is told there is none; the first of two with one id (a damaged file) is the one meant. */
+  private folderNamed(id: string): FolderNode {
+    const found = this.allFolders().find((f) => f.id === id);
+    if (!found) throw new Error(`No folder with the id ${id} is in this bank.`);
+    return found;
+  }
+
+  /** Two folders side by side with one name cannot be told apart in a list, so the second is refused. */
+  private refuseSiblingNamed(siblings: readonly FolderNode[], name: string, except?: string): void {
+    const key = folderNameKey(name);
+    if (siblings.some((f) => f.id !== except && folderNameKey(f.name) === key)) {
+      throw new Error(`There is already a folder called "${name}" in that place. Choose another name.`);
+    }
+  }
+
+  /** The list a folder is in (the top of the bank, or the folder it is inside), and where it is in that list. */
+  private placeOf(id: string): { siblings: FolderNode[]; at: number; parent: FolderNode | undefined } {
+    const find = (siblings: FolderNode[], parent: FolderNode | undefined): { siblings: FolderNode[]; at: number; parent: FolderNode | undefined } | undefined => {
+      const at = siblings.findIndex((f) => f.id === id);
+      if (at !== -1) return { siblings, at, parent };
+      for (const f of siblings) {
+        const inner = find(f.children, f);
+        if (inner) return inner;
+      }
+      return undefined;
+    };
+    const place = find(this.folders.root, undefined);
+    if (!place) throw new Error(`No folder with the id ${id} is in this bank.`);
+    return place;
+  }
+
+  renameFolder(id: string, name: string): FolderNode {
+    const clean = cleanFolderName(name);
+    const folder = this.folderNamed(id);
+    if (folder.name === clean) return folder;
+    this.refuseSiblingNamed(this.placeOf(id).siblings, clean, id);
+    const before = folder.name;
+    folder.name = clean;
+    this.note(`renamed the folder ${before} to ${clean}`, "unknown");
+    return folder;
+  }
+
+  /**
+   * Takes a folder away and nothing it holds. Its questions stay in the bank, in no folder, and the folders inside it move up to the
+   * place it was in (so a person who deletes a folder to tidy up does not also lose the tidying inside it). Where one of those has the
+   * name of a folder already there, it is kept under a name that says so, and nothing is merged or dropped.
+   */
+  removeFolder(id: string): { unfiled: number; movedUp: number } {
+    const { siblings, at } = this.placeOf(id);
+    const folder = siblings[at] as FolderNode;
+    const unfiled = folder.questionIds.filter((q) => this.questions.has(q)).length;
+    // A folder can name a question this bank does not hold (its file could not be read and is kept as it was). That name goes with the
+    // folder, and the history says so, since the person may mend the file later and want to know where the question had been.
+    const unknown = folder.questionIds.length - unfiled;
+    for (const q of folder.questionIds) this.folderOf.delete(q);
+    const others = siblings.filter((f) => f.id !== id);
+    for (const child of folder.children) {
+      let name = child.name;
+      for (let n = 2; others.some((f) => folderNameKey(f.name) === folderNameKey(name)); n++) name = `${child.name} (${n})`;
+      child.name = name;
+      others.push(child);
+    }
+    siblings.splice(at, 1, ...folder.children);
+    this.note(`removed the folder ${folder.name}${unfiled > 0 ? `; ${unfiled} question${unfiled === 1 ? " is" : "s are"} in no folder now` : ""}${unknown > 0 ? `; it also named ${unknown} question${unknown === 1 ? "" : "s"} this bank could not read` : ""}`, "unknown");
+    return { unfiled, movedUp: folder.children.length };
+  }
+
+  /** Puts a folder inside another, or at the top of the bank (no `parentId`). A folder cannot go inside itself or anything in it. */
+  moveFolder(id: string, parentId?: string): FolderNode {
+    const folder = this.folderNamed(id);
+    const target = parentId ? this.folderNamed(parentId) : undefined;
+    if (target && [...walkFolders([folder])].some((f) => f.id === target.id)) {
+      throw new Error("A folder cannot be moved into itself or into a folder inside it.");
+    }
+    const here = this.placeOf(id);
+    if ((here.parent?.id ?? undefined) === (target?.id ?? undefined)) return folder;
+    const siblings = target ? target.children : this.folders.root;
+    this.refuseSiblingNamed(siblings, folder.name);
+    here.siblings.splice(here.at, 1);
+    siblings.push(folder);
+    this.note(`moved the folder ${folder.name}${target ? ` into ${target.name}` : " to the top"}`, "unknown");
+    return folder;
   }
 
   moveToFolder(questionId: string, folderId: string): void {
     if (!this.questions.has(questionId)) {
       throw new Error(`No question with the id ${questionId} is in this bank.`);
     }
-    const target = this.allFolders().find((f) => f.id === folderId);
-    if (!target) throw new Error(`No folder with the id ${folderId} is in this bank.`);
-    for (const node of this.allFolders()) {
-      const at = node.questionIds.indexOf(questionId);
-      if (at !== -1) node.questionIds.splice(at, 1);
-    }
+    const target = this.folderNamed(folderId);
+    this.takeOutOfFolders(questionId);
     target.questionIds.push(questionId);
     this.folderOf.set(questionId, folderId);
+  }
+
+  /** The question is in no folder. */
+  unfile(questionId: string): void {
+    if (!this.questions.has(questionId)) {
+      throw new Error(`No question with the id ${questionId} is in this bank.`);
+    }
+    this.takeOutOfFolders(questionId);
+    this.folderOf.delete(questionId);
+  }
+
+  /** Every place it is listed, not the first: a damaged file can list one question twice, and it would stay in the second. */
+  private takeOutOfFolders(questionId: string): void {
+    for (const node of this.allFolders()) {
+      if (node.questionIds.includes(questionId)) node.questionIds = node.questionIds.filter((q) => q !== questionId);
+    }
+  }
+
+  /**
+   * The folders as a list in the order a person sees them (each folder, then what is inside it), with how many questions are in each
+   * alone and under it. Only questions this bank holds are counted.
+   */
+  folderList(): FolderListing[] {
+    const out: FolderListing[] = [];
+    const walk = (nodes: readonly FolderNode[], depth: number, parentId: string | undefined) => {
+      for (const node of nodes) {
+        const own = node.questionIds.filter((q) => this.questions.has(q)).length;
+        const at = out.length;
+        out.push({ id: node.id, name: node.name, depth, parentId, own, total: own });
+        walk(node.children, depth + 1, node.id);
+        out[at]!.total = own + out.slice(at + 1).filter((f) => f.parentId === node.id).reduce((sum, f) => sum + f.total, 0);
+      }
+    };
+    walk(this.folders.root, 0, undefined);
+    return out;
+  }
+
+  /** The questions in a folder and in the folders inside it. */
+  questionIdsUnder(folderId: string): Set<string> {
+    const ids = new Set<string>();
+    for (const q of questionsUnder(this.folderNamed(folderId))) if (this.questions.has(q)) ids.add(q);
+    return ids;
+  }
+
+  /** The questions that are in no folder (or in one that is no longer there). */
+  unfiledIds(): Set<string> {
+    const filed = new Set<string>();
+    for (const node of this.allFolders()) for (const q of node.questionIds) filed.add(q);
+    return new Set([...this.questions.keys()].filter((q) => !filed.has(q)));
+  }
+
+  /** The folder a question is in, if it is in one. */
+  folderIdOf(questionId: string): string | undefined {
+    return this.folderOf.get(questionId);
   }
 
   saveFilter(filter: SavedFilter): void {

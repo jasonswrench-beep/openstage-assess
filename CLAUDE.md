@@ -65,6 +65,14 @@ damaged file byte for byte through every save (`passthrough`; a damaged folder f
 the engine in `OpenReport`, the app in the amber box on the bank screen. A branch of the bank reader that reports a file and does not
 keep it is a bug (two were found). Do not add a path that drops a file the reader could not understand.
 
+**A folder is a way of finding questions and never a place one can be lost.** Taking a folder away (`Bank.removeFolder`) leaves its
+questions in the bank, in no folder, and moves the folders inside it up (a name that would clash is numbered, never merged); a folder
+cannot go inside itself, two side by side cannot share a name, and a question is in one folder at a time even when a damaged file
+listed it in two. Filing a question is not an edit of it (no version, no history entry, no change of notes). What a folder names that
+the bank could not read is said in the history. The folder rules are held by `folders.test.ts` (engine, with a seeded run of random
+changes that checks them after every step, and the app's) and `mutate`-style runs; do not add a path that deletes a question with
+its folder.
+
 **Delivery settings are not part of a question.** Attempts, feedback timing,
 time limits and scoring weight belong to the course that uses the question, not
 to the item. `schema.ts` rejects them by name with an explanation.
@@ -200,7 +208,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2152 engine tests and 194 app tests, Node's own runner
+npm test                       # 2171 engine tests and 207 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

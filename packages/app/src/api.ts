@@ -113,7 +113,9 @@ function asBadRequest<T>(fn: () => T): T {
   } catch (error) {
     if (error instanceof HttpError) throw error;
     const message = (error as Error).message;
-    if (/^(Refusing to add|That edit would leave|No question with the id|This bank already holds)/.test(message)) throw badRequest(message);
+    // The engine's own sentences about a request that cannot be done (a folder with no name, two folders of one name, a folder that is
+    // not there): said to the person as they are, where anything else is a fault and stays one.
+    if (/^(Refusing to add|That edit would leave|No question with the id|This bank already holds|No folder with the id|A folder\b|There is already a folder called)/.test(message)) throw badRequest(message);
     throw error;
   }
 }
@@ -360,7 +362,19 @@ function facetFilters(query: URLSearchParams): Partial<Record<(typeof COVERAGE_A
   return out;
 }
 
-function listQuestions(questions: Question[], query: URLSearchParams): Question[] {
+/**
+ * The questions a folder choice in the address means: the ones in a folder and in the folders inside it, or (with "(none)") the ones in
+ * no folder. A folder that is not there any more (taken away in another window) holds nothing, so the list is empty and the screen,
+ * which is sent the folders that are there, can see it and say so.
+ */
+function folderChoice(bank: Bank, query: URLSearchParams): Set<string> | undefined {
+  const folder = query.get("folder");
+  if (!folder) return undefined;
+  if (folder === "(none)") return bank.unfiledIds();
+  return bank.allFolders().some((f) => f.id === folder) ? bank.questionIdsUnder(folder) : new Set();
+}
+
+function listQuestions(questions: Question[], query: URLSearchParams, inFolder?: Set<string>): Question[] {
   const type = query.get("type");
   const status = query.get("status");
   const check = query.get("check");
@@ -368,6 +382,7 @@ function listQuestions(questions: Question[], query: URLSearchParams): Question[
   // Retired questions are left out when asked: a cell of the coverage grid does not count them, so the list it opens must not show them.
   const hideRetired = query.get("hideRetired") === "1";
   return questions.filter((q) => {
+    if (inFolder && !inFolder.has(q.id)) return false;
     if (hideRetired && q.metadata.status === "retired") return false;
     if (type && q.type !== type) return false;
     if (status && q.metadata.status !== status) return false;
@@ -381,6 +396,57 @@ function listQuestions(questions: Question[], query: URLSearchParams): Question[
     }
     return true;
   });
+}
+
+/**
+ * Folders in a bank: made, renamed, moved and taken away. A folder is a way of finding questions and never holds one: taking a folder
+ * away leaves its questions in the bank, in no folder, and moves the folders inside it up. Every answer carries the folders as they are
+ * now, so the screen draws what the bank holds and not what it expects to.
+ */
+async function folderRoute(ctx: Context, req: ApiRequest, name: string, id: string | undefined): Promise<ApiResponse> {
+  if (id === undefined && req.method === "POST") {
+    const body = jsonBody(req);
+    const parentId = typeof body["parentId"] === "string" && body["parentId"] !== "" ? body["parentId"] : undefined;
+    return ok(
+      await ctx.banks.change(name, (bank) => {
+        const node = asBadRequest(() => bank.addFolder(typeof body["name"] === "string" ? body["name"] : "", parentId));
+        return { folder: node.id, folders: bank.folderList() };
+      }),
+    );
+  }
+
+  if (id !== undefined && req.method === "PUT") {
+    const body = jsonBody(req);
+    const renames = "name" in body;
+    const moves = "parentId" in body;
+    if (!renames && !moves) throw badRequest("Say a new name, or a new place for the folder (parentId, or null for the top of the bank).");
+    if (renames && typeof body["name"] !== "string") throw badRequest("A folder's name has to be text.");
+    const parent = body["parentId"];
+    if (moves && parent !== null && (typeof parent !== "string" || parent === "")) throw badRequest("Say which folder to put it in, or null for the top of the bank.");
+    return ok(
+      await ctx.banks.change(name, (bank) => {
+        // A rename that worked and a move that was refused is not kept: a refusal drops the bank from memory, and nothing is saved.
+        if (!bank.allFolders().some((f) => f.id === id)) throw notFound("There is no such folder in this bank.");
+        asBadRequest(() => {
+          if (renames) bank.renameFolder(id, body["name"] as string);
+          if (moves) bank.moveFolder(id, parent === null ? undefined : (parent as string));
+        });
+        return { folder: id, folders: bank.folderList() };
+      }),
+    );
+  }
+
+  if (id !== undefined && req.method === "DELETE") {
+    return ok(
+      await ctx.banks.change(name, (bank) => {
+        if (!bank.allFolders().some((f) => f.id === id)) throw notFound("There is no such folder in this bank.");
+        const done = asBadRequest(() => bank.removeFolder(id));
+        return { ...done, folders: bank.folderList(), unfiled: bank.unfiledIds().size };
+      }),
+    );
+  }
+
+  throw notFound("There is no such page.");
 }
 
 async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
@@ -411,7 +477,7 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
     if (req.method === "GET") {
       const bank = await ctx.banks.open(name);
       const all = bank.sortedQuestions();
-      const shown = listQuestions(req.query.get("q")?.trim() ? bank.search(req.query.get("q") as string) : all, req.query);
+      const shown = listQuestions(req.query.get("q")?.trim() ? bank.search(req.query.get("q") as string) : all, req.query, folderChoice(bank, req.query));
       shown.sort((a, b) => a.id.localeCompare(b.id));
       return ok({
         name,
@@ -422,9 +488,12 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
         total: all.length,
         // The choices for narrowing the list, counted over the whole bank (retired included, since a list can show them).
         facets: facets(all, { includeRetired: true }),
+        // The folders, in the order they are shown, with how many questions are in each alone and under it, and how many are in none.
+        folders: bank.folderList(),
+        unfiled: bank.unfiledIds().size,
         // What could not be read when the file was opened. Those files are kept as they were, and are not in the list.
         problems: await ctx.banks.problems(name),
-        questions: shown.map((q) => ({ ...summarise(q, all.indexOf(q)), notes: liveNotes(q).length })),
+        questions: shown.map((q) => ({ ...summarise(q, all.indexOf(q)), notes: liveNotes(q).length, folderId: bank.folderIdOf(q.id) ?? null })),
       });
     }
     if (req.method === "PUT") {
@@ -454,12 +523,17 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
     return ok(await ctx.banks.change(name, (b) => qualityView(b, b.checkQuality(BY))));
   }
 
+  if (what === "folders") return folderRoute(ctx, req, name, id);
+
   if (what === "questions") {
     if (id === undefined && req.method === "POST") {
-      const input = readInput(jsonBody(req));
+      const body = jsonBody(req);
+      const input = readInput(body);
+      // A question written while a folder is open is put in it, so that it is not lost to the top of the bank.
+      const folderId = typeof body["folderId"] === "string" && body["folderId"] !== "" ? body["folderId"] : undefined;
       const created = await ctx.banks.change(name, (bank) => {
         const question = questionFromInput(input, BY);
-        return asBadRequest(() => bank.add(question));
+        return asBadRequest(() => bank.add(question, { folderId }));
       });
       return ok({ question: toEditor(created), summary: summarise(created, 0) });
     }
@@ -469,7 +543,22 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
       const question = bank.get(id);
       if (!question) throw notFound("There is no such question in this bank.");
 
-      if (action === undefined && req.method === "GET") return ok({ question: toEditor(question) });
+      if (action === undefined && req.method === "GET") return ok({ question: toEditor(question), folderId: bank.folderIdOf(id) ?? null });
+
+      // Filing a question in a folder, or taking it out of one (folderId null). It is not an edit of the question: the version, the
+      // history and the notes of the question are as they were.
+      if (action === "folder" && req.method === "POST") {
+        const body = jsonBody(req);
+        const folderId = body["folderId"];
+        if (folderId !== null && (typeof folderId !== "string" || folderId === "")) throw badRequest("Say which folder, or null for none.");
+        await ctx.banks.change(name, (b) =>
+          asBadRequest(() => {
+            if (folderId === null) b.unfile(id);
+            else b.moveToFolder(id, folderId);
+          }),
+        );
+        return ok({ folderId });
+      }
 
       if (action === undefined && req.method === "PUT") {
         const body = jsonBody(req);
@@ -513,7 +602,9 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
           by: BY,
           id: newQuestionId(),
         });
-        await ctx.banks.change(name, (b) => asBadRequest(() => b.add(copy)));
+        // The copy goes where the question is, so that duplicating one in a folder does not send the copy to the top of the bank.
+        const folderId = bank.folderIdOf(id);
+        await ctx.banks.change(name, (b) => asBadRequest(() => b.add(copy, { folderId })));
         return ok({ question: toEditor(copy), summary: summarise(copy, 0) });
       }
     }
