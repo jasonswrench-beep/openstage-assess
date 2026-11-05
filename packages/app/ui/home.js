@@ -96,7 +96,8 @@ export async function renderHome(host, _params, shell) {
     h(
       "article",
       { class: "card" },
-      h("h3", null, b.error ? h("span", { text: b.name }) : h("a", { href: `#/bank/${encodeURIComponent(b.name)}`, text: b.title })),
+      // An h2, under the page's h1: a card title that was an h3 skipped a level, which a screen reader's list of headings shows.
+      h("h2", { class: "card-title" }, b.error ? h("span", { text: b.name }) : h("a", { href: `#/bank/${encodeURIComponent(b.name)}`, text: b.title })),
       b.error
         ? h("p", { class: "problem", text: `This file could not be read: ${b.error}` })
         : h("p", { class: "sub", text: `${plural(b.questions, "question", "questions")} · changed ${when(b.modified)}` }),

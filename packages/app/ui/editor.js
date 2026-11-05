@@ -414,7 +414,7 @@ export function createEditor(options) {
     const dismissed = question.findings.filter((f) => f.dismissed);
     const notes = live.filter((f) => f.severity !== "error");
     if (live.length === 0 && dismissed.length === 0) return;
-    checksHost.append(h("h3", { text: "Checks" }));
+    checksHost.append(h("h2", { class: "checks-title", text: "Checks" }));
     const list = h("ul", { class: "findings" });
     for (const f of live) {
       list.append(
