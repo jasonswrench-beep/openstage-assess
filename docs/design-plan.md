@@ -491,8 +491,10 @@ home screen and stops its server when it is closed; the installer is unsigned.
   7), and the web quiz. Done so far: versions (the test record), copies, and a first set of
   item quality and accessibility notes (Check quality, below), and the coverage grid and narrowing a list by chapter, objective,
   tag, Bloom level and so on (`bank/coverage.ts`, `assess coverage`, and the Coverage button; it counts what is there, puts a
-  question with nothing set under "(none)" so the gaps show, and leaves retired questions out). Not done: folders in the
-  app, pools, blueprints, the web quiz, and from the original list of checks
+  question with nothing set under "(none)" so the gaps show, and leaves retired questions out), and Pick for me on the Make a
+  test screen (`bank/pick.ts`: some questions with a value, at random, never a retired one, one already chosen, one with no usable
+  key or a copy of one in the test, and it says what it left out and why; it is a helper for building a test chapter by chapter,
+  not a stored blueprint). Not done: folders in the app, stored pools and blueprints, the web quiz, and from the original list of checks
   the reading level, which would need a reading-level formula that is not misleading on technical
   words, and an equation that is a picture, which the import already reports.
 
