@@ -109,6 +109,11 @@ only and answers only to the window it opened.
   blank, matching, ordering and essay. A short answer is written as a fill in the blank.
   Points, feedback and formatting are not in the file and are said against each question.
   It follows Blackboard's help pages and sample file, and has not been tried in Blackboard.
+- An assembled test with up to four versions: the bank keeps a copy of each question as it was
+  used, so editing the bank later never changes a test already given, and booklets and answer
+  keys are printed for every version (Word or PDF) with the version at the top of every page.
+  This is the first part of the answer sheets planned in `docs/paper-tests-spec.md`; the sheet
+  and the reader that scores scans are not built yet.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question
@@ -193,7 +198,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1573 tests, run by Node's own test runner
+  test/                 1618 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

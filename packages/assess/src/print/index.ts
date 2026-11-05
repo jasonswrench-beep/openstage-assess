@@ -5,6 +5,7 @@
 import type { DestinationReport } from "../export/types.ts";
 import { plural, safeName } from "../export/text.ts";
 import type { Question } from "../model/question.ts";
+import { versionQuestions, type TestRecord, type VersionLabel } from "../model/test.ts";
 import { writeDocx } from "./docx.ts";
 import { DEFAULT_OPTIONS, layoutTest, type PrintOptions } from "./layout.ts";
 import { writePdf } from "./pdf.ts";
@@ -39,11 +40,48 @@ export function printOptions(given: Partial<PrintOptions> & { title: string }): 
   };
 }
 
+export interface VersionPrint {
+  label: VersionLabel;
+  kind: "student" | "key";
+  result: PrintResult;
+}
+
+/**
+ * Every version of an assembled test as a student booklet and an answer key. The questions are the record's own copies in each
+ * version's order, so the booklets and keys come out the same on every printing and do not move when the bank is edited. A test of
+ * one version is printed without a version, since there is nothing to tell apart.
+ */
+export function printVersions(
+  record: TestRecord,
+  format: PrintFormat,
+  more: Partial<Omit<PrintOptions, "title" | "kind" | "versionLabel">> = {},
+  kinds: ReadonlyArray<"student" | "key"> = ["student", "key"],
+  at: Date = new Date(),
+): VersionPrint[] {
+  const several = record.versions.length > 1;
+  const out: VersionPrint[] = [];
+  for (const version of record.versions) {
+    const questions = versionQuestions(record, version.label);
+    for (const kind of kinds) {
+      const options = printOptions({
+        ...more,
+        title: record.name,
+        kind,
+        ...(several ? { versionLabel: version.label } : {}),
+        ...(kind === "student" ? { answerOnSheet: more.answerOnSheet ?? true } : { keyStrip: more.keyStrip ?? true }),
+      });
+      out.push({ label: version.label, kind, result: printTest(questions, options, format, at) });
+    }
+  }
+  return out;
+}
+
 /** A student copy or an answer key, as a file, and the report of what it holds. */
 export function printTest(questions: readonly Question[], options: PrintOptions, format: PrintFormat, at: Date = new Date()): PrintResult {
   const { document, report } = layoutTest(questions, options);
   const kind = options.kind === "key" ? "Answer key" : "Student copy";
-  const name = `${safeName(options.title, "Test")} - ${kind}.${format}`;
+  const version = options.versionLabel && options.versionLabel.trim() !== "" ? ` - Version ${safeName(options.versionLabel, "")}` : "";
+  const name = `${safeName(options.title, "Test")}${version} - ${kind}.${format}`;
   const printable = report.items.filter((item) => item.outcome !== "leftOut").length;
 
   if (printable === 0) return { file: { name, bytes: new Uint8Array(0) }, report: { ...report, files: [] } };

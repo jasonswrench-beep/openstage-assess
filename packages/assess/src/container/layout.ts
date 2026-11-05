@@ -31,6 +31,18 @@ export function mediaPath(id: string, extension: string): string {
   return `${MEDIA_DIR}${id}${ext}`;
 }
 
+export function testPath(id: string): string {
+  return `${TESTS_DIR}${id}.json`;
+}
+
+export function isTestPath(name: string): boolean {
+  return name.startsWith(TESTS_DIR) && name.endsWith(".json");
+}
+
+export function testIdFromPath(name: string): string {
+  return name.slice(TESTS_DIR.length, name.length - ".json".length);
+}
+
 export function isQuestionPath(name: string): boolean {
   return name.startsWith(QUESTIONS_DIR) && name.endsWith(".json");
 }

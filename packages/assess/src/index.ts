@@ -18,6 +18,10 @@ export * from "./model/richtext.ts";
 export * from "./model/findings.ts";
 export * from "./model/question.ts";
 export * from "./model/schema.ts";
+export * from "./model/test.ts";
+export { shuffledFor, seededRandom } from "./model/random.ts";
+export { versionKey } from "./quality/test-key.ts";
+export type { VersionKeyEntry } from "./quality/test-key.ts";
 export * from "./model/create.ts";
 export * from "./model/migrate.ts";
 export * from "./model/bank.ts";
@@ -72,8 +76,8 @@ export type { CommonCartridgeOptions } from "./export/common-cartridge.ts";
 export type { MoodleXmlOptions } from "./export/moodle-xml.ts";
 
 // Printing
-export { printTest, printOptions, layoutTest, writeDocx, writePdf, PAPERS, PRINT_ID, PRINT_LABEL } from "./print/index.ts";
-export type { PrintFormat, PrintOptions, PrintDocument, PrintResult, PrintedFile, Layout as PrintLayout } from "./print/index.ts";
+export { printTest, printVersions, printOptions, layoutTest, writeDocx, writePdf, PAPERS, PRINT_ID, PRINT_LABEL } from "./print/index.ts";
+export type { PrintFormat, PrintOptions, PrintDocument, PrintResult, PrintedFile, VersionPrint, Layout as PrintLayout } from "./print/index.ts";
 
 // Harness
 export * from "./harness/score.ts";

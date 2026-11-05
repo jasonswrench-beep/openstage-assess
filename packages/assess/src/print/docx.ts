@@ -63,7 +63,7 @@ function documentXml(doc: PrintDocument): string {
   const textWidth = paper.width - 2 * paper.margin;
   const body = doc.blocks.map((b) => blockXml(b, textWidth, doc.fontSize)).join("");
   const section =
-    `<w:sectPr><w:footerReference w:type="default" r:id="rId2"/>` +
+    `<w:sectPr>${doc.header ? '<w:headerReference w:type="default" r:id="rId3"/>' : ""}<w:footerReference w:type="default" r:id="rId2"/>` +
     `<w:pgSz w:w="${tw(paper.width)}" w:h="${tw(paper.height)}"/>` +
     `<w:pgMar w:top="${tw(paper.margin)}" w:right="${tw(paper.margin)}" w:bottom="${tw(paper.margin)}" w:left="${tw(paper.margin)}" w:header="720" w:footer="${tw(paper.margin / 2)}" w:gutter="0"/></w:sectPr>`;
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${NS}><w:body>${body}${section}</w:body></w:document>`;
@@ -78,6 +78,7 @@ function stylesXml(doc: PrintDocument): string {
     `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>` +
     `<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="${size + 14}"/><w:szCs w:val="${size + 14}"/></w:rPr></w:style>` +
     `<w:style w:type="paragraph" w:styleId="Footer"><w:name w:val="footer"/><w:basedOn w:val="Normal"/><w:rPr><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:style>` +
+    (doc.header ? `<w:style w:type="paragraph" w:styleId="Header"><w:name w:val="header"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:style>` : "") +
     `</w:styles>`
   );
 }
@@ -93,6 +94,11 @@ function footerXml(doc: PrintDocument): string {
   );
 }
 
+function headerXml(doc: PrintDocument): string {
+  const small = "<w:rPr><w:b/><w:sz w:val=\"18\"/><w:szCs w:val=\"18\"/></w:rPr>";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ${NS}><w:p><w:pPr><w:pStyle w:val="Header"/></w:pPr><w:r>${small}<w:t xml:space="preserve">${esc(doc.header ?? "")}</w:t></w:r></w:p></w:hdr>`;
+}
+
 /** The test as a Word document, as bytes. `at` is the time written into its properties. */
 export function writeDocx(doc: PrintDocument, at: Date = new Date()): Uint8Array {
   const stamp = at.toISOString().replace(/\.\d+Z$/, "Z");
@@ -102,6 +108,7 @@ export function writeDocx(doc: PrintDocument, at: Date = new Date()): Uint8Array
     `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
     `<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>` +
     `<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>` +
+    (doc.header ? `<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>` : "") +
     `<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>` +
     `<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
   const rels =
@@ -112,7 +119,9 @@ export function writeDocx(doc: PrintDocument, at: Date = new Date()): Uint8Array
   const documentRels =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
     `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
-    `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>`;
+    `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>` +
+    (doc.header ? `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>` : "") +
+    `</Relationships>`;
   const core =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
     `<dc:title>${esc(doc.title)}</dc:title><dc:creator>OpenAssess</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${stamp}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${stamp}</dcterms:modified></cp:coreProperties>`;
@@ -125,6 +134,7 @@ export function writeDocx(doc: PrintDocument, at: Date = new Date()): Uint8Array
     textEntry("word/_rels/document.xml.rels", documentRels),
     textEntry("word/styles.xml", stylesXml(doc)),
     textEntry("word/footer1.xml", footerXml(doc)),
+    ...(doc.header ? [textEntry("word/header1.xml", headerXml(doc))] : []),
     textEntry("docProps/core.xml", core),
     textEntry("docProps/app.xml", app),
   ]);

@@ -39,20 +39,26 @@ interface Case {
   bytes: Uint8Array;
   expected: string[];
   paragraphs: number;
+  /** The running header Word should show: empty when the test is not one of several versions. */
+  header: string;
 }
 
 const cases: Case[] = [];
-for (const kind of ["student", "key"] as const) {
-  for (const paper of ["letter", "a4"] as const) {
-    const options = printOptions({ title: "Check test", kind, paper, instructions: "Use a pen." });
-    const { document } = layoutTest(SET, options);
-    const bytes = writeDocx(document);
-    const expected = document.blocks.flatMap((b: Block): string[] => {
-      if (b.kind === "para") return [`${b.marker ? `${b.marker}\t` : ""}${b.runs.map((r) => r.text.replace(/\n/g, "\u000b")).join("")}`];
-      if (b.kind === "lines") return Array.from({ length: b.count }, () => "\t");
-      return [""];
-    });
-    cases.push({ name: `${kind}-${paper}`, options, bytes, expected, paragraphs: expected.length });
+// A test of one version, and a version of a test of several: the second has a running header and a line about the answer sheet,
+// and on the key a strip of letters, and Word has to open it without offering to repair it and show the header.
+for (const [label, more] of [["", {}], ["-version-B", { versionLabel: "B", answerOnSheet: true, keyStrip: true }]] as const) {
+  for (const kind of ["student", "key"] as const) {
+    for (const paper of ["letter", "a4"] as const) {
+      const options = printOptions({ title: "Check test", kind, paper, instructions: "Use a pen.", ...more });
+      const { document } = layoutTest(SET, options);
+      const bytes = writeDocx(document);
+      const expected = document.blocks.flatMap((b: Block): string[] => {
+        if (b.kind === "para") return [`${b.marker ? `${b.marker}\t` : ""}${b.runs.map((r) => r.text.replace(/\n/g, "\u000b")).join("")}`];
+        if (b.kind === "lines") return Array.from({ length: b.count }, () => "\t");
+        return [""];
+      });
+      cases.push({ name: `${kind}-${paper}${label}`, options, bytes, expected, paragraphs: expected.length, header: document.header ?? "" });
+    }
   }
 }
 
@@ -72,6 +78,11 @@ function main(): void {
       continue;
     }
     const pages = theirs.at(-1)?.startsWith("PAGES:") ? Number(theirs.pop()?.slice(6)) : 0;
+    const header = theirs.at(-1)?.startsWith("HEADER:") ? (theirs.pop() as string).slice(7) : "";
+    if (header !== c.header) {
+      console.log(`${c.name}: Word shows the header ${JSON.stringify(header)}, the layout meant ${JSON.stringify(c.header)}`);
+      disagreements++;
+    }
     // Word counts a paragraph that is only a tab as one, as the layout does. Anything else is a difference worth saying.
     if (theirs.length !== c.expected.length) {
       console.log(`${c.name}: Word reads ${theirs.length} paragraphs, the layout has ${c.expected.length}`);
@@ -90,7 +101,7 @@ function main(): void {
   // The package itself is checked too: Word opens the file, and every part it should have is in it.
   for (const c of cases) {
     const parts = unzipSync(c.bytes);
-    for (const name of ["[Content_Types].xml", "word/document.xml", "word/styles.xml", "word/footer1.xml"]) {
+    for (const name of ["[Content_Types].xml", "word/document.xml", "word/styles.xml", "word/footer1.xml", ...(c.header !== "" ? ["word/header1.xml"] : [])]) {
       if (!parts.has(name)) {
         console.log(`${c.name}: the package has no ${name}`);
         disagreements++;
