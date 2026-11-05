@@ -60,7 +60,7 @@ describe("the Standard Format profile", () => {
     assert.equal(second.origin?.source?.lastBlock, 6);
   });
 
-  test("does not guess when no answer is marked, unlike the test-bank vendor", () => {
+  test("does not guess when no answer is marked", () => {
     const result = parse(`1) Which planet is closest to the sun?\na. Mercury\nb. Venus\n`);
     const q = result.questions[0]!;
     assert.equal(optionsOf(q).some((o) => o.correct), false, "nothing may be guessed correct");

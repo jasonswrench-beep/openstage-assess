@@ -2,7 +2,7 @@
  * A printed test as a Word file.
  *
  * It writes what the layout says and decides nothing: the numbers and letters are typed text with a tab and a hanging
- * indent, as the test-bank vendor's own handout asks and as OpenAssess's importer reads them, so a test printed from a bank can be
+ * indent, as the format's own guidance asks and as OpenAssess's importer reads them, so a test printed from a bank can be
  * edited in Word and read back. Writing lines are paragraphs with a leader that draws a line to the margin, which Word does
  * not merge into one box as it would adjacent bordered paragraphs. The page number is a field.
  *

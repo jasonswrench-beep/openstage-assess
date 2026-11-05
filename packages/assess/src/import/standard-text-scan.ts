@@ -929,7 +929,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     if (covered.length === 0) return false;
     if (!block.entries.has(number)) return true;
 
-    // A number the list has already answered. the test-bank vendor repeats the number to
+    // A number the list has already answered. The format repeats the number to
     // give several accepted forms of one answer ("1. Van Hook" then "1. Dr. Van
     // Hook"), but only for a fill in the blank or short answer. For any other
     // type a repeat is the next chapter's question 1, so it stays a question.

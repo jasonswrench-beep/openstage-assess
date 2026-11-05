@@ -13,8 +13,7 @@
  *   <oa-media ref="m_01J..."></oa-media>
  *   <oa-math ref="e_01J..."></oa-math>
  *
- * That is the idea worth taking from the the test-bank vendor HTML and equation editors,
- * where a block becomes a short token in the editing field. It keeps a stem
+ * A block becomes a short token in the editing field. It keeps a stem
  * readable, and it means alt text and MathML can be checked without parsing
  * the surrounding HTML.
  */

@@ -2,7 +2,7 @@
  * Export as an IMS Common Cartridge 1.3 package: the other way a quiz gets into Brightspace.
  *
  * The bare QTI 1.2 zip (qti12.ts) was tried in Brightspace and was not read as a quiz. D2L's own table of what its course import
- * reads names Common Cartridge, Blackboard, the test-bank vendor and others as sources, each with a version of IMS content packaging and
+ * reads names Common Cartridge, Blackboard and others as sources, each with a version of IMS content packaging and
  * of QTI, and a bare QTI package is none of them. A Common Cartridge package is. The shape here follows what a tool that builds
  * quizzes for Brightspace writes today (Brightspacosaurus 0.35.0, whose source was read on 1 November 2026): a manifest in the
  * Common Cartridge 1.3 namespace with an organization that lists the quiz, one resource of type

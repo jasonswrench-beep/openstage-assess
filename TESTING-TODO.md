@@ -107,7 +107,7 @@ Quizzes tool's Import or the Question Library's Import. D2L's own Question Libra
 route was probably wrong; that is now corrected in the app. The package itself has not been shown to be at fault, and it has
 not been shown to be right.
 
-**The second try, the same day, by the Course Admin route the test-bank vendor documents:** "It still does not like the format". No message
+**The second try, the same day, by the Course Admin route a commercial test-bank tool's guide documents:** "It still does not like the format". No message
 was recorded. That makes two tries not accepted, so the bare QTI zip is now the less likely of the two Brightspace packages to
 work, and the Common Cartridge package (next section) was built for that reason.
 

@@ -7,9 +7,9 @@
  * bank of the size this tool is for.
  *
  * The index covers everything a person would search a bank by: the title, the
- * stem, every option, the tags, and the metadata values. the test-bank vendor lets you
- * choose whether answer choices and feedback are included; here they always
- * are, because excluding them only ever surprises people.
+ * stem, every option, the tags, and the metadata values. Answer choices and
+ * feedback are always included, because excluding them only ever surprises
+ * people.
  */
 
 import { richTextToPlain } from "../model/richtext.ts";
