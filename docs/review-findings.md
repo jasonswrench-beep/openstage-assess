@@ -327,6 +327,13 @@ with a broken folder tree still has its questions; one of the wrong shape was re
 written back that way by the next save, so the author's folders were gone. The bank now opens with no folders, the file is reported,
 and the damaged file is kept as it was under another name (`folders.damaged.json`, then `-2` and so on, never over an earlier one).
 
+Found by fuzzing the bank reader (about 12,000 damaged banks, two crashes): a folder tree whose root was a list but whose folders were
+not (no list of questions, a child that was not a list) passed the shape check and threw out of the walk that builds the index, so a
+bank with a folder file damaged in the middle would not open; the check now goes through every folder, bounded in depth. A manifest
+with no format said the file was "undefined"; it says it does not say what kind of file it is. The importers (Word, Excel, CSV, PDF,
+text) and the scan reader were fuzzed the same way (about 45,000 damaged files and 3,000 damaged scans) and had no crash and no hang;
+`fuzz-import.test.ts` keeps a small, quick, repeatable run of all of it.
+
 ### A matching question padded with `(missing)` lost its error on the next edit
 
 The importer pads a matching question that has fewer than two pairs with `(missing)` on both sides, so that it can be stored and
