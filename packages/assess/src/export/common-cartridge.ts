@@ -27,7 +27,7 @@ import type { RichText } from "../model/richtext.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { escapeXml } from "./moodle-xml.ts";
 import { flat, needsMarkup, num } from "./qti12.ts";
-import { buildReport, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
+import { buildReport, exportable, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
 
 export const COMMON_CARTRIDGE_ID = "common-cartridge";
 export const COMMON_CARTRIDGE_LABEL = "Common Cartridge 1.3 package (Brightspace)";
@@ -202,6 +202,7 @@ export function checkCommonCartridge(questions: readonly Question[], options: Co
 
 /** The destination check, and the package to write. */
 export function exportCommonCartridge(questions: readonly Question[], options: CommonCartridgeOptions = {}): ExportResult {
+  questions = exportable(questions);
   const items: ReportItem[] = [];
   const written: string[] = [];
   questions.forEach((question, i) => {

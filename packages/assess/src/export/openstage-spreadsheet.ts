@@ -33,7 +33,7 @@
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import type { DestinationReport, ExportedFile, ExportResult, ReportItem } from "./types.ts";
-import { hasText, keyProblem, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
+import { exportable, hasText, keyProblem, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
 export const DESTINATION_ID = "openstage-spreadsheet";
 export const DESTINATION_LABEL = "OpenStage question spreadsheet (Author and Scroll)";
@@ -256,6 +256,7 @@ interface Plan {
 }
 
 function buildPlan(questions: readonly Question[], options: SpreadsheetOptions): Plan {
+  questions = exportable(questions);
   const items: ReportItem[] = [];
   const rows: Row[] = [];
   questions.forEach((question, i) => {

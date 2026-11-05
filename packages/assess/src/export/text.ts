@@ -8,9 +8,53 @@
 
 import { checkAnswerKey } from "../quality/answer-key.ts";
 import { liveFindings } from "../model/findings.ts";
-import { escapeHtml, richTextToPlain, type RichText } from "../model/richtext.ts";
+import { escapeHtml, richTextToPlain, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
 import type { Question, QuestionType } from "../model/question.ts";
 import type { DestinationReport, ReportItem } from "./types.ts";
+
+/**
+ * The questions as they are written to a file: every string in them without the characters a file format may refuse (control
+ * characters, half a surrogate pair, U+FFFE and U+FFFF). The XML formats forbid them outright, so one such character in one question
+ * made Moodle, a QTI package or a Common Cartridge not well formed and an LMS refused the whole file; the text and spreadsheet
+ * formats gain nothing from them either. Done once, at the door of every exporter and every destination check, so that no path to a
+ * file can forget it, and so that what a check says is what the export writes. The questions are not changed: a question is copied
+ * only when a string in it is cleaned, and the same list is returned when none is.
+ */
+export function exportable<T extends Question>(questions: readonly T[]): readonly T[] {
+  const clean = (value: unknown): [unknown, boolean] => {
+    if (typeof value === "string") {
+      const next = stripInvalidCharacters(value);
+      return [next, next !== value];
+    }
+    if (Array.isArray(value)) {
+      let changed = false;
+      const out = value.map((v) => {
+        const [c, did] = clean(v);
+        changed ||= did;
+        return c;
+      });
+      return [changed ? out : value, changed];
+    }
+    if (value !== null && typeof value === "object") {
+      let changed = false;
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        const [c, did] = clean(v);
+        changed ||= did;
+        out[k] = c;
+      }
+      return [changed ? out : value, changed];
+    }
+    return [value, false];
+  };
+  let any = false;
+  const out = questions.map((q) => {
+    const [c, did] = clean(q);
+    any ||= did;
+    return c as T;
+  });
+  return any ? out : questions;
+}
 
 export const TYPE_NAMES: Record<QuestionType, string> = {
   multipleChoice: "multiple choice",
@@ -154,7 +198,7 @@ export function keyProblem(question: Question, destination = "the destination"):
 
 /** A name that is safe as a file name on Windows. */
 export function safeName(name: string | undefined, fallback = "questions"): string {
-  const cleaned = (name ?? "")
+  const cleaned = stripInvalidCharacters(name ?? "")
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
     .replace(/\s+/g, " ")
     .trim()

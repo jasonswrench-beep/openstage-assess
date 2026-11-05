@@ -20,7 +20,7 @@
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isOrdering, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
-import { buildReport, hasText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
+import { buildReport, exportable, hasText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
 export const BLACKBOARD_UPLOAD_ID = "blackboard-upload";
 export const BLACKBOARD_UPLOAD_LABEL = "Blackboard, Upload questions (text file)";
@@ -170,6 +170,7 @@ export function checkBlackboardUpload(questions: readonly Question[], options: B
 
 /** The destination check, and the file or files to write. */
 export function exportBlackboardUpload(questions: readonly Question[], options: BlackboardUploadOptions = {}): ExportResult {
+  questions = exportable(questions);
   const items: ReportItem[] = [];
   const rows: string[][] = [];
   questions.forEach((question, i) => {
