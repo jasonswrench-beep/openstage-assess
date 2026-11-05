@@ -334,6 +334,24 @@ with no format said the file was "undefined"; it says it does not say what kind 
 text) and the scan reader were fuzzed the same way (about 45,000 damaged files and 3,000 damaged scans) and had no crash and no hang;
 `fuzz-import.test.ts` keeps a small, quick, repeatable run of all of it.
 
+### One control character in one question made an LMS refuse the whole file
+
+Found on 5 November 2026 by exporting 12,600 sets of awkward text (control characters, half a surrogate pair, markup, quotes, emoji,
+right to left text, very long text) through every exporter and checking what came out.
+
+Moodle XML, a QTI package and a Common Cartridge are XML 1.0, which forbids the control characters other than tab and line break,
+half of a surrogate pair, and U+FFFE and U+FFFF. A form feed from a PDF, a vertical tab from Word or half a pair from a damaged copy
+in one stem, one option or one bank name made the file not well formed, and an LMS refuses such a file whole. The Moodle escape took
+out some control characters (not the ones inside a CDATA, and not the surrogates), the Word printer the same, and the text and
+spreadsheet formats took out none. A printed Word test with U+FFFE in a stem is one Word says has unreadable content.
+
+`stripInvalidCharacters` (in `model/richtext.ts`) takes them out, turning a vertical tab and a form feed into a space (they are a
+line break and a page break, and must not join two words). It runs when text is first stored (`normalizeCharacters`), at the door
+of every exporter and every destination check (`exportable`, in `export/text.ts`, which copies a question only when a string in it
+is cleaned), in the XML escape and CDATA of the XML formats, in `safeName`, and in the Word printer's escape. Markup, quotes, emoji,
+right to left text and a leading equals sign come out as they went in. `export-awkward-text.test.ts` holds it, and fails on the old
+code. The spreadsheet writer (`container/xlsx.ts`) already took out everything XML forbids.
+
 ### A matching question padded with `(missing)` lost its error on the next edit
 
 The importer pads a matching question that has fewer than two pairs with `(missing)` on both sides, so that it can be stored and

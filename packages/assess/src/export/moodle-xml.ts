@@ -13,17 +13,18 @@
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
-import { buildReport, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
-import type { RichText } from "../model/richtext.ts";
+import { buildReport, exportable, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
+import { stripInvalidCharacters, type RichText } from "../model/richtext.ts";
 
 export const MOODLE_XML_ID = "moodle-xml";
 export const MOODLE_XML_LABEL = "Moodle XML";
 
+/** Text for an XML element or attribute: nothing XML 1.0 forbids (see `stripInvalidCharacters`), and the four characters that mean markup written out. */
 export const escapeXml = (text: string): string =>
-  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
+  stripInvalidCharacters(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** HTML inside CDATA, with the one sequence that would end it split in two. */
-export const cdata = (html: string): string => `<![CDATA[${html.replace(/\]\]>/g, "]]]]><![CDATA[>")}]]>`;
+/** HTML inside CDATA, with the one sequence that would end it split in two, and nothing XML 1.0 forbids. */
+export const cdata = (html: string): string => `<![CDATA[${stripInvalidCharacters(html).replace(/\]\]>/g, "]]]]><![CDATA[>")}]]>`;
 
 /** The weight of one right answer out of several, in the form Moodle reads. */
 const share = (n: number): number => Math.round((100 / n) * 100000) / 100000;
@@ -172,6 +173,7 @@ export function checkMoodleXml(questions: readonly Question[], options: MoodleXm
 }
 
 export function exportMoodleXml(questions: readonly Question[], options: MoodleXmlOptions = {}): ExportResult {
+  questions = exportable(questions);
   const items: ReportItem[] = [];
   const blocks: string[] = [];
   questions.forEach((question, i) => {

@@ -17,7 +17,7 @@ import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, titleFromStem, type Question } from "../model/question.ts";
 import { richTextToPlain } from "../model/richtext.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
-import { buildReport, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
+import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
 export const GIFT_ID = "gift";
 export const GIFT_LABEL = "GIFT (Moodle and other tools)";
@@ -160,6 +160,7 @@ export function checkGift(questions: readonly Question[], options: GiftOptions =
 
 /** The destination check, and the file to write. */
 export function exportGift(questions: readonly Question[], options: GiftOptions = {}): ExportResult {
+  questions = exportable(questions);
   const items: ReportItem[] = [];
   const blocks: string[] = [];
   questions.forEach((question, i) => {

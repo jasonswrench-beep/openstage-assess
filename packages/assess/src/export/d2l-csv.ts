@@ -22,7 +22,7 @@ import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isOrdering, isShortAnswer, isTrueFalse, titleFromStem, type Question } from "../model/question.ts";
 import { richTextToPlain } from "../model/richtext.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
-import { buildReport, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
+import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
 export const D2L_CSV_ID = "d2l-csv";
 export const D2L_CSV_LABEL = "Brightspace (D2L) Question Library, CSV";
@@ -205,6 +205,7 @@ export function checkD2lCsv(questions: readonly Question[], options: D2lCsvOptio
 
 /** The destination check, and the file to write. */
 export function exportD2lCsv(questions: readonly Question[], options: D2lCsvOptions = {}): ExportResult {
+  questions = exportable(questions);
   const items: ReportItem[] = [];
   // The comment has no comma or quote in it: a cell that needed quoting would begin with a quote mark, and a reader that looks
   // for // at the start of the line would not see it.

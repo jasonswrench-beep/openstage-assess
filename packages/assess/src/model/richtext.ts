@@ -112,11 +112,25 @@ function decodeEntities(text: string): string {
 }
 
 /**
+ * Characters that have no place in the text of a question and that a file format may refuse: the control characters other than a
+ * tab and a line break, a lone half of a surrogate pair, and the two code points that are not characters (U+FFFE and U+FFFF). A
+ * vertical tab and a form feed are how Word and a PDF write a manual line break and a page break, so they become a space and not
+ * nothing, which would join two words. XML 1.0, which Moodle, QTI and Common Cartridge are written in, does not allow any of the
+ * rest, so one such character in one question made an LMS refuse the whole file as not well formed.
+ */
+export function stripInvalidCharacters(text: string): string {
+  return text
+    .replace(/[\u000b\u000c]/g, " ")
+    .replace(/[\u0000-\u0008\u000e-\u001f\u007f￾￿]/g, "")
+    .replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
+}
+
+/**
  * Character noise that arrives from Word and breaks exact-match grading,
  * search and QTI output. Normalised once, on the way in.
  */
 export function normalizeCharacters(text: string): string {
-  return text
+  return stripInvalidCharacters(text)
     .replace(/[‘’‚‛]/g, "'")
     .replace(/[“”„‟]/g, '"')
     .replace(/–/g, "-")

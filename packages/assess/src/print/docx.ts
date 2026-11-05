@@ -11,12 +11,15 @@
  */
 
 import { textEntry, zipSync } from "../container/zip.ts";
+import { stripInvalidCharacters } from "../model/richtext.ts";
 import type { Block, Para, PrintDocument, Run } from "./layout.ts";
 
 const NUMBER_INDENT = 28;
 
 const esc = (text: string): string =>
-  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
+  // Nothing XML 1.0 forbids, which is more than the control characters: half a surrogate pair, U+FFFE and U+FFFF made Word say a
+  // printed test had unreadable content. A vertical tab and a form feed become a space and not nothing, so two words are not joined.
+  stripInvalidCharacters(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const tw = (points: number): number => Math.round(points * 20);
 

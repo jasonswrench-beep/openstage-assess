@@ -24,7 +24,7 @@ import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse
 import type { RichText } from "../model/richtext.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { escapeXml } from "./moodle-xml.ts";
-import { buildReport, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
+import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
 
 export const QTI12_ID = "qti-1.2";
 export const QTI12_LABEL = "QTI 1.2 package (Brightspace and Canvas)";
@@ -225,6 +225,7 @@ export function checkQti12(questions: readonly Question[], options: Qti12Options
 
 /** The destination check, and the package to write. */
 export function exportQti12(questions: readonly Question[], options: Qti12Options = {}): ExportResult {
+  questions = exportable(questions);
   const items: ReportItem[] = [];
   const written: string[] = [];
   questions.forEach((question, i) => {
