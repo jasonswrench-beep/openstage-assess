@@ -1,6 +1,6 @@
 {
   "file": "12-multiple-response-mr.txt",
-  "note": "Moodle and D2L write multiple response as Type: MR; the generic and Canvas guides write Type: MA. They mean the same thing. MR used to be flagged as an unknown type, and with an Answers list it was read as single choice and failed. Written to the formats in the vendor guides for the standard test-bank text format, with original questions.",
+  "note": "Moodle and D2L write multiple response as Type: MR; the generic and Canvas guides write Type: MA. They mean the same thing. MR used to be flagged as an unknown type, and with an Answers list it was read as single choice and failed. Written to the formats in the published guides for the standard test-bank text format, with original questions.",
   "orphans": 0,
   "questions": [
     {

@@ -737,7 +737,7 @@ a space, so only a hand-built plain-text field shows it), and a matching questio
   multiple answer question are not carried in this first version. Blackboard's file has no points, feedback, formatting or picture,
   and a numeric question is left out because the page does not say what its tolerance means.
 - **Decided, after the second try: a Common Cartridge package, in the form a Brightspace quiz tool writes.** The QTI zip was tried
-  a second time by the Course Admin route a commercial test-bank tool's guide documents and "still does not like the format" (no message recorded). D2L's
+  a second time by the Course Admin route a published import guide documents and "still does not like the format" (no message recorded). D2L's
   course import table names Common Cartridge 1.0 to 1.3 with QTI 1.2.1 as a source its importer reads, and Brightspacosaurus 0.35.0,
   which builds Brightspace courses and was published days before, writes quizzes as a Common Cartridge 1.3 package in the QTI
   profile and says to import them with Import Components, from a course package. `src/export/common-cartridge.ts` follows its
@@ -749,7 +749,7 @@ a space, so only a hand-built plain-text field shows it), and a matching questio
 - **Open: the QTI zip was tried twice in Brightspace and did not make questions.** The person who tried it said the zip "just uploaded as a zip" and that
   the structure of the file may be at fault; they did not say which screen they used. My note had sent them to the Quizzes tool's
   Import or the Question Library's Import, and D2L's own Question Library article (updated August 2026) names a CSV file, not
-  QTI, while a commercial test-bank tool's guide documents Course Admin, Import/Export/Copy Components for a QTI zip. So the route was probably wrong, and
+  QTI, while a published import guide documents Course Admin, Import/Export/Copy Components for a QTI zip. So the route was probably wrong, and
   the note now gives that route. It is not settled that the package is right: D2L's course import table lists QTI 1.2.1
   and IMS CP 1.1.2, 1.1.3 or 1.2, and that importer may want a package it recognises as one of the sources it names (Blackboard,
   Common Cartridge and others) and not a bare one. The QTI package is written from the standard, from the shapes Canvas is known to
