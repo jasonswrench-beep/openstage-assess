@@ -417,6 +417,8 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
         total: all.length,
         // The choices for narrowing the list, counted over the whole bank (retired included, since a list can show them).
         facets: facets(all, { includeRetired: true }),
+        // What could not be read when the file was opened. Those files are kept as they were, and are not in the list.
+        problems: await ctx.banks.problems(name),
         questions: shown.map((q) => ({ ...summarise(q, all.indexOf(q)), notes: liveNotes(q).length })),
       });
     }

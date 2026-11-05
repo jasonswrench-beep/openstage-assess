@@ -10,7 +10,7 @@
 import { rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Bank, BANK_EXTENSION } from "./engine.ts";
+import { Bank, BANK_EXTENSION, countMismatchMessage, type OpenReport } from "./engine.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { bankFile, bankNames, checkName, cleanName, uniqueName, type Library } from "./library.ts";
 
@@ -27,7 +27,17 @@ export interface BankInfo {
 
 interface Held {
   bank: Bank;
+  /** What was found when the file was read: files it could not read (kept as they were), and a count that did not match. */
+  report: OpenReport;
   mtimeMs: number;
+}
+
+/** What is wrong with a bank as it was read, in words for the screen. Empty when nothing is. */
+export interface BankProblems {
+  /** Files in the bank that could not be read. They are kept exactly as they were, and are not lost. */
+  unreadable: Array<{ id: string; message: string }>;
+  /** Set when the bank opened with a different number of questions than it says it held. */
+  count: string | null;
 }
 
 export class BankStore {
@@ -78,12 +88,25 @@ export class BankStore {
     const kept = this.held.get(name);
     if (kept && kept.mtimeMs === info.mtimeMs) return kept.bank;
     try {
-      const { bank } = await Bank.open(path);
-      this.held.set(name, { bank, mtimeMs: info.mtimeMs });
+      const { bank, report } = await Bank.open(path);
+      this.held.set(name, { bank, report, mtimeMs: info.mtimeMs });
       return bank;
     } catch (error) {
       throw new HttpError(422, `The bank "${name}" could not be opened: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * What was wrong with the bank when its file was read: questions and other files it could not read, which are kept as they were
+   * and are not in the list, and a count that did not match. Without this a bank with an unreadable question looks complete.
+   */
+  async problems(name: string): Promise<BankProblems> {
+    await this.open(name);
+    const report = this.held.get(name)?.report;
+    return {
+      unreadable: (report?.invalid ?? []).map((entry) => ({ id: entry.id, message: entry.issues[0]?.message ?? "It could not be read." })),
+      count: report?.countMismatch ? countMismatchMessage(report.countMismatch) : null,
+    };
   }
 
   /** Runs `work` after everything already queued for this bank. A failure is passed on to the caller and does not stop the queue. */
@@ -108,7 +131,9 @@ export class BankStore {
         const result = await fn(bank);
         const path = bankFile(this.library, name);
         await bank.save(path);
-        this.held.set(name, { bank, mtimeMs: (await stat(path)).mtimeMs });
+        // What was found when the file was read stays true, except the count: the save has written the count it holds now.
+        const { countMismatch: _written, ...stillSo } = this.held.get(name)?.report ?? { invalid: [], unknownFiles: [], migrationNotes: [], elapsedMs: 0 };
+        this.held.set(name, { bank, report: stillSo, mtimeMs: (await stat(path)).mtimeMs });
         return result;
       } catch (error) {
         this.held.delete(name);

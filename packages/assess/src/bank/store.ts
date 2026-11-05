@@ -54,6 +54,8 @@ export interface OpenReport {
   /** Files inside the container the engine did not recognise. */
   unknownFiles: string[];
   migrationNotes: string[];
+  /** Present when the bank says it held a different number of questions than were read: what it says, and what was found. */
+  countMismatch?: { says: number; found: number };
   migratedFrom?: number;
   elapsedMs: number;
 }
@@ -66,6 +68,14 @@ export interface BankStats {
   withWarnings: number;
   mediaFiles: number;
   totalPoints: number;
+}
+
+/** What to tell a person when a bank opens with a different number of questions than it says it held. */
+export function countMismatchMessage(m: { says: number; found: number }): string {
+  const noun = (n: number) => `${n} ${n === 1 ? "question" : "questions"}`;
+  return m.found < m.says
+    ? `This bank says it held ${noun(m.says)} when it was last saved, and ${m.found} could be read. If files were lost when it was synced or merged, the missing ${m.says - m.found === 1 ? "question is" : "questions are"} in an earlier copy.`
+    : `This bank says it held ${noun(m.says)} when it was last saved, and ${m.found} were read. It has more than it says, which a merge with another copy can do. Nothing is lost.`;
 }
 
 /** What checking a bank for quality found. */
@@ -207,6 +217,10 @@ export class Bank {
           raw = JSON.parse(Buffer.from(data).toString("utf8")) as Record<string, unknown>;
         } catch (err) {
           invalid.push({ id, issues: [{ path: "", message: `not valid JSON: ${(err as Error).message}` }] });
+          // Kept as it was, like every other file that cannot be read. This one was reported and then left out of the passthrough,
+          // so the next save of the bank deleted it: a question file damaged by a sync that did not finish, which is the author's
+          // work and may be mended by hand, was destroyed by the first change made to the bank.
+          bank.passthrough.set(name, data);
           continue;
         }
         const moved = needsMigration(fileVersion) ? migrateQuestion(raw, fileVersion).value : raw;
@@ -317,12 +331,20 @@ export class Bank {
 
     bank.rebuildIndex();
 
+    // The manifest says how many questions the bank held when it was last saved. A shared folder is where files go missing (a sync
+    // that did not finish, a merge that took one side), and a bank that opens with fewer questions than it says it has is exactly
+    // that. The count is of questions that could be read, which is what a save writes, so a bank that keeps an unreadable question
+    // beside the others does not disagree with itself.
+    const says = (manifest as { questionCount?: unknown }).questionCount;
+    const countMismatch = typeof says === "number" && says !== bank.questions.size ? { says, found: bank.questions.size } : undefined;
+
     return {
       bank,
       report: {
         invalid,
         unknownFiles,
         migrationNotes: migrated.notes,
+        ...(countMismatch ? { countMismatch } : {}),
         ...(needsMigration(fileVersion) ? { migratedFrom: fileVersion } : {}),
         elapsedMs: performance.now() - started,
       },

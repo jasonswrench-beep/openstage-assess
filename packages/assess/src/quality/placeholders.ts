@@ -8,17 +8,23 @@
 
 import { FindingCode, type Finding } from "../model/findings.ts";
 import { optionsOf, type Option, type Question } from "../model/question.ts";
-import { collectRefs, richTextToPlain } from "../model/richtext.ts";
+import { collectRefs, richTextToPlain, type RichText } from "../model/richtext.ts";
 
 /** What an importer writes into an option it does not have the words for. */
 export const PLACEHOLDER_TEXT = "(missing)";
 
+/** True for text that says nothing: the importer's placeholder, or no words and no picture or equation. */
+export function isPlaceholderText(content: RichText | undefined): boolean {
+  if (content === undefined) return true;
+  const refs = collectRefs(content);
+  if (refs.media.length > 0 || refs.math.length > 0) return false;
+  const text = richTextToPlain(content).trim();
+  return text === "" || text === PLACEHOLDER_TEXT;
+}
+
 /** True for an option that says nothing: the importer's placeholder, or no words and no picture or equation. */
 export function isPlaceholderOption(option: Option): boolean {
-  const refs = collectRefs(option.content);
-  if (refs.media.length > 0 || refs.math.length > 0) return false;
-  const text = richTextToPlain(option.content).trim();
-  return text === "" || text === PLACEHOLDER_TEXT;
+  return isPlaceholderText(option.content);
 }
 
 /** What an importer says about the options it had to make up. */

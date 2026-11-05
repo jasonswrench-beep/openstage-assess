@@ -307,6 +307,30 @@ or the rule against joining a label to an option, switched off, the gate falls f
 100 to 96.8 percent. A stem is left alone, since a stem line with a colon is far more
 often prose.
 
+### A question file that was not JSON was deleted by the next save, and the app never said a file could not be read
+
+Found on 5 November 2026, while making the app say what it could not read, and fixed there.
+
+The engine reports every file in a bank that it cannot read, and keeps each one so that the next save writes it back as it was. One
+case was reported and not kept: a question file that was not valid JSON (damaged by a sync that did not finish, say). It was listed
+as unreadable and "kept untouched", and the first change made to the bank wrote the bank without it. It is kept now, byte for byte.
+
+The app threw the report away when it opened a bank. A bank with an unreadable question looked complete, with the question
+missing from the list and nothing to say why; a bank that lost a question file looked like a smaller bank. The report is now held
+with the bank, and the bank screen says how many files could not be read (and which, and why) and that they are kept. A bank also
+says how many questions it held when it was last saved (`manifest.questionCount`, written for years and never read), so a bank that
+opens with fewer is told so, with a line that the missing ones are in an earlier copy; with more, that nothing is lost. `validate`
+fails on it, and `info` says it.
+
+### A matching question padded with `(missing)` lost its error on the next edit
+
+The importer pads a matching question that has fewer than two pairs with `(missing)` on both sides, so that it can be stored and
+repaired, and says with an error that it is not complete. That error is about a missing answer, which an edit works out again from
+the body, and the body looked complete: "(missing)" is a word. So the first edit of any kind cleared the error, and a question with a
+pair of placeholders became usable, exported and printed as if it were an answer. `checkAnswerKey` now reads a pair whose either side
+is the placeholder (or empty, or only spaces; a picture or an equation is something) as a pair with nothing in it, so the error is
+worked out again every time and goes only when words are written in. The same holds for the pairs GIFT pads.
+
 ### Two checks that could pass without checking
 
 Found on 5 November 2026, while adding the item quality checks, and fixed there.
@@ -415,8 +439,8 @@ Media is never garbage collected either.
 - `toBytes()` mutates the manifest, so it is not idempotent (with a given `at` it now is, byte for byte).
   ~~`save()` has no fsync before the rename and leaves a stray `.writing` file if the rename fails. `rebuildIndex()` never
   clears.~~ **Fixed on 5 November 2026:** a save flushes before it renames, a failed save removes its temporary file and leaves the
-  bank that was there, and the index is cleared before it is built again. `manifest.questionCount` is written but never checked on
-  open.
+  bank that was there, and the index is cleared before it is built again. ~~`manifest.questionCount` is written but never checked on
+  open.~~ **Fixed on 5 November 2026:** a bank that opens with a different count says so (see "A question file that was not JSON").
 - Four of the eleven types have no import path: ordering, numeric, hotspot and
   calculated. The D2L and Blackboard dialects document ordering, so it is refused
   by name rather than missing.
@@ -471,7 +495,7 @@ Media is never garbage collected either.
   that are not True and False (Yes and No, say) is flagged for having no key.
   The option words are now quoted in an `OptionNotKept` warning rather than
   vanishing, but they are still not stored.
-- **A matching question padded with `(missing)` pairs loses its error on the next
+- **(Fixed on 5 November 2026, see above.) A matching question padded with `(missing)` pairs loses its error on the next
   edit.** The padding satisfies the schema, but its error is `NoAnswerKey`, which
   `withRecomputedFindings` re-derives from the body, and `checkAnswerKey` sees
   two complete pairs. The choice placeholders use codes that are not re-derived,

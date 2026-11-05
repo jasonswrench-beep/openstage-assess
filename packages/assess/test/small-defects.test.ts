@@ -10,11 +10,14 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { Bank } from "../src/bank/store.ts";
+import { Bank, countMismatchMessage } from "../src/bank/store.ts";
+import { unzipSync, zipSync } from "../src/container/zip.ts";
 import { importerForContent, runImporter } from "../src/import/registry.ts";
 import { standardTextImporter } from "../src/import/standard-text.ts";
 import { wordImporter } from "../src/import/word.ts";
@@ -144,6 +147,115 @@ describe("saving a bank", () => {
       const bank = Bank.createEmpty("Nowhere");
       await assert.rejects(() => bank.save(join(dir, "missing-folder", "bank.openassess")));
       assert.deepEqual(readdirSync(dir), []);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("a bank that opens with a different number of questions than it says", () => {
+  const threeQuestions = (): Bank => {
+    const bank = Bank.createEmpty("Counted");
+    for (const stem of ["First question", "Second question", "Third question"]) bank.add(createQuestion({ type: "essay", stem: plainToRich(stem), body: {} }));
+    return bank;
+  };
+  const questionFiles = (files: Map<string, Uint8Array>): string[] => [...files.keys()].filter((name) => name.startsWith("questions/"));
+
+  test("a bank that was written as it is reports nothing", () => {
+    const { report } = Bank.fromBytes(threeQuestions().toBytes());
+    assert.equal(report.countMismatch, undefined);
+    assert.deepEqual(report.invalid, []);
+  });
+
+  test("says so when a question file is gone, which is what a sync or a merge that took one side does", () => {
+    const files = unzipSync(threeQuestions().toBytes());
+    files.delete(questionFiles(files)[0] as string);
+    const { bank, report } = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
+    assert.equal(bank.questions.size, 2);
+    assert.deepEqual(report.countMismatch, { says: 3, found: 2 });
+    assert.match(countMismatchMessage(report.countMismatch as { says: number; found: number }), /^This bank says it held 3 questions when it was last saved, and 2 could be read\. If files were lost when it was synced or merged, the missing question is in an earlier copy\.$/);
+  });
+
+  test("says so, more gently, when there are more than it says", () => {
+    const files = unzipSync(threeQuestions().toBytes());
+    const extra = createQuestion({ type: "essay", stem: plainToRich("A fourth question from another copy"), body: {} });
+    files.set(`questions/${extra.id}.json`, new Uint8Array(Buffer.from(JSON.stringify(extra))));
+    const { report } = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
+    assert.deepEqual(report.countMismatch, { says: 3, found: 4 });
+    assert.match(countMismatchMessage(report.countMismatch as { says: number; found: number }), /says it held 3 questions.*4 were read\. It has more than it says.*Nothing is lost\.$/);
+  });
+
+  test("names the numbers in the singular and the plural", () => {
+    assert.match(countMismatchMessage({ says: 1, found: 0 }), /held 1 question when.*the missing question is in/);
+    assert.match(countMismatchMessage({ says: 5, found: 2 }), /held 5 questions when.*2 could be read.*the missing questions are in/);
+  });
+
+  test("a bank that says nothing about its count has nothing to disagree with", () => {
+    const files = unzipSync(threeQuestions().toBytes());
+    const manifest = JSON.parse(Buffer.from(files.get("manifest.json") as Uint8Array).toString("utf8"));
+    delete manifest.questionCount;
+    files.set("manifest.json", new Uint8Array(Buffer.from(JSON.stringify(manifest))));
+    assert.equal(Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data })))).report.countMismatch, undefined);
+  });
+
+  test("a question that cannot be read is kept, and a bank that keeps one is not at odds with itself after it is saved", () => {
+    const files = unzipSync(threeQuestions().toBytes());
+    files.set(questionFiles(files)[0] as string, new Uint8Array(Buffer.from("{ this is not json")));
+    const opened = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
+    assert.equal(opened.report.invalid.length, 1);
+    assert.deepEqual(opened.report.countMismatch, { says: 3, found: 2 }, "it was three when saved, and one can no longer be read");
+    // Saved again, it says what it holds now, and still keeps the file.
+    const reopened = Bank.fromBytes(opened.bank.toBytes());
+    assert.equal(reopened.report.countMismatch, undefined);
+    assert.equal(reopened.report.invalid.length, 1, "the unreadable file is still there, kept as it was");
+    const damaged = questionFiles(files)[0] as string;
+    assert.equal(Buffer.from(unzipSync(opened.bank.toBytes()).get(damaged) as Uint8Array).toString("utf8"), "{ this is not json", "byte for byte");
+  });
+
+  test("a question file with a mistake in it, and one that is not JSON at all, are both kept through a save", () => {
+    const files = unzipSync(threeQuestions().toBytes());
+    const [first, second] = questionFiles(files);
+    files.set(first as string, new Uint8Array(Buffer.from("not json at all")));
+    const wrong = JSON.parse(Buffer.from(files.get(second as string) as Uint8Array).toString("utf8"));
+    wrong.points = -4;
+    files.set(second as string, new Uint8Array(Buffer.from(JSON.stringify(wrong))));
+    const opened = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
+    assert.equal(opened.report.invalid.length, 2);
+    const saved = unzipSync(opened.bank.toBytes());
+    for (const name of [first, second] as string[]) assert.ok(saved.has(name), `${name} was dropped by the save`);
+  });
+});
+
+describe("openassess validate and info on a bank that lost a file", () => {
+  const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
+  const run = (...args: string[]) => {
+    const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", cli, ...args], { encoding: "utf8" });
+    return { code: r.status, out: r.stdout, err: r.stderr };
+  };
+
+  test("both say so, and validate fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openassess-lost-"));
+    try {
+      const bank = Bank.createEmpty("Lost");
+      for (const stem of ["One question", "Two questions", "Three questions"]) bank.add(createQuestion({ type: "essay", stem: plainToRich(stem), body: {} }));
+      const files = unzipSync(bank.toBytes());
+      files.delete([...files.keys()].find((f) => f.startsWith("questions/")) as string);
+      const path = join(dir, "lost.openassess");
+      writeFileSync(path, zipSync([...files].map(([name, data]) => ({ name, data }))));
+
+      const validate = run("validate", path);
+      assert.equal(validate.code, 1, validate.err);
+      assert.match(validate.out, /\(the bank as a whole\)\n {4}This bank says it held 3 questions when it was last saved, and 2 could be read\./);
+      assert.match(validate.out, /1 question\(s\) do not satisfy the model\./);
+
+      const info = run("info", path);
+      assert.equal(info.code, 0, info.err);
+      assert.match(info.out, /This bank says it held 3 questions when it was last saved, and 2 could be read\./);
+
+      const whole = join(dir, "whole.openassess");
+      await bank.save(whole);
+      assert.equal(run("validate", whole).code, 0);
+      assert.doesNotMatch(run("info", whole).out, /says it held/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
