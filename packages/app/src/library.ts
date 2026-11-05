@@ -16,6 +16,8 @@ export interface Library {
   home: string;
   banks: string;
   exports: string;
+  /** Scores files: the readings, decisions and adjustments of a class of answer sheets. Never a name, a file name or a picture. */
+  scores: string;
   /** A bank that was removed is moved here, not deleted, so that it can be got back. */
   deleted: string;
 }
@@ -26,8 +28,8 @@ export function defaultHome(): string {
 
 export async function openLibrary(home: string = defaultHome()): Promise<Library> {
   const root = resolve(home);
-  const library: Library = { home: root, banks: join(root, "Banks"), exports: join(root, "Exports"), deleted: join(root, "Deleted") };
-  for (const dir of [library.banks, library.exports, library.deleted]) await mkdir(dir, { recursive: true });
+  const library: Library = { home: root, banks: join(root, "Banks"), exports: join(root, "Exports"), scores: join(root, "Scores"), deleted: join(root, "Deleted") };
+  for (const dir of [library.banks, library.exports, library.scores, library.deleted]) await mkdir(dir, { recursive: true });
   return library;
 }
 
