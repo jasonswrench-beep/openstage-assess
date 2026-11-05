@@ -100,6 +100,21 @@ describe("making and renaming folders", () => {
   });
 });
 
+describe("a folder by name", () => {
+  test("is found if the place has one of that name, and made if not", () => {
+    const { bank } = bankOf("One");
+    const a = bank.ensureFolder("Chapter 3");
+    assert.equal(bank.ensureFolder("  chapter   3 ").id, a.id, "the case and the spaces do not make another");
+    assert.equal(bank.folderList().length, 1);
+    const inner = bank.ensureFolder("Quizzes", a.id);
+    assert.equal(bank.ensureFolder("Quizzes", a.id).id, inner.id);
+    assert.notEqual(bank.ensureFolder("Quizzes").id, inner.id, "the same name at the top is another folder");
+    assert.throws(() => bank.ensureFolder(""), /needs a name/);
+    assert.throws(() => bank.ensureFolder("Quizzes", "nothing"), /No folder with the id nothing/);
+    holds(bank);
+  });
+});
+
 describe("filing questions", () => {
   test("a question is in one folder at a time, and can be taken out of it", () => {
     const { bank, ids } = bankOf("One", "Two", "Three");

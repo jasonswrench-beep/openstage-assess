@@ -728,6 +728,17 @@ export class Bank {
     return node;
   }
 
+  /**
+   * The folder of this name in that place, made if there is none. For filing what comes in (an import) under the name of where it came
+   * from, so that a second file with the same name goes to the same folder and does not make a second one beside it.
+   */
+  ensureFolder(name: string, parentId?: string): FolderNode {
+    const clean = cleanFolderName(name);
+    const siblings = parentId ? this.folderNamed(parentId).children : this.folders.root;
+    const key = folderNameKey(clean);
+    return siblings.find((f) => folderNameKey(f.name) === key) ?? this.addFolder(clean, parentId);
+  }
+
   /** A folder is found by its id or the person is told there is none; the first of two with one id (a damaged file) is the one meant. */
   private folderNamed(id: string): FolderNode {
     const found = this.allFolders().find((f) => f.id === id);

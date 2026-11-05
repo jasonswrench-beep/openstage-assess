@@ -280,7 +280,8 @@ built-in browser at desktop and phone width. What is left needs a real bank and 
 
 - [ ] **Sort a real bank into folders by chapter and see whether it feels right.** Make a folder per chapter, put questions in from
   the choice beside each one, and see whether filing a few hundred questions this way is bearable. If it is not, the likely
-  additions are filing several at once (select, then move) and choosing a folder when a file is imported; neither is built.
+  addition is filing several at once (select, then move), which is not built. An import can already be saved into a folder
+  named for the file: try that with a real chapter first.
 - [ ] **Delete a folder that has questions and folders in it, and read the words.** The box says the questions stay in the bank in
   no folder and the folders inside move up one level. Is that what you expected from Delete, and is "Delete" the right word for
   something that keeps everything?

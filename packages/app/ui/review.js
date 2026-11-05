@@ -297,6 +297,10 @@ export async function renderReview(host, params, shell) {
     const banks = /** @type {any[]} */ (state.banks).filter((b) => !b.error);
     const titleInput = h("input", { type: "text", id: "save-title", value: session.file.replace(/\.[^.]+$/, ""), autocomplete: "off" });
     const bankSelect = h("select", { id: "save-bank", disabled: banks.length === 0 }, ...banks.map((b) => h("option", { value: b.name, text: `${b.title} (${plural(b.questions, "question", "questions")})` })));
+    // Optional: the questions go into a folder of this name (the file's name to begin with), made if the bank has none, so that a
+    // chapter brought in is one folder and not a hundred questions among the others.
+    const folderInput = h("input", { type: "text", id: "save-folder", value: session.file.replace(/\.[^.]+$/, ""), autocomplete: "off", attrs: { maxlength: "80" } });
+    const folderOn = h("input", { type: "checkbox", id: "save-in-folder" });
     const modeNew = h("input", { type: "radio", name: "save-mode", id: "mode-new", checked: true });
     const modeOld = h("input", { type: "radio", name: "save-mode", id: "mode-old", disabled: banks.length === 0 });
     const notes = [`${plural(kept, "question", "questions")} will be saved.`];
@@ -311,21 +315,24 @@ export async function renderReview(host, params, shell) {
         titleInput,
         h("div", { class: "check" }, modeOld, h("label", { for: "mode-old", text: "Add to a bank you already have" })),
         bankSelect,
+        h("div", { class: "check" }, folderOn, h("label", { for: "save-in-folder", text: "Put the questions in a folder called" })),
+        folderInput,
       ],
       actions: [
         { label: "Cancel", value: false },
         { label: "Save", value: true, primary: true },
       ],
-      collect: () => ({ isNew: modeNew.checked, title: titleInput.value.trim(), bank: bankSelect.value }),
+      collect: () => ({ isNew: modeNew.checked, title: titleInput.value.trim(), bank: bankSelect.value, folder: folderOn.checked ? folderInput.value.trim() : "" }),
     });
     if (!answer || answer.value !== true) return;
     const choice = answer.collected;
     try {
-      const result = await post(`${base}/save`, choice.isNew ? { title: choice.title } : { bank: choice.bank });
+      const where = choice.isNew ? { title: choice.title } : { bank: choice.bank };
+      const result = await post(`${base}/save`, choice.folder ? { ...where, folder: choice.folder } : where);
       saved = true;
       session.savedTo = { bank: result.bank, added: result.added };
       const extra = result.notSaved.length > 0 ? ` ${plural(result.notSaved.length, "question", "questions")} could not be saved: ${result.notSaved.map(/** @param {any} n */ (n) => n.reason).join(" ")}` : "";
-      shell.notify(`Saved ${plural(result.added, "question", "questions")} into "${result.bank}".${extra}`, "ok");
+      shell.notify(`Saved ${plural(result.added, "question", "questions")} into "${result.bank}"${result.folder ? `, in the folder "${result.folder}"` : ""}.${extra}`, "ok");
       shell.go(`#/bank/${encodeURIComponent(result.bank)}`);
     } catch (error) {
       shell.notify(/** @type {Error} */ (error).message, "error");
