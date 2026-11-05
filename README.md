@@ -117,7 +117,16 @@ only and answers only to the window it opened.
   A to E with 100 questions to a page, wide A to H, or large print): numbered bubbles, a name
   box, one sheet for every version or one for each, four corner marks and a strip of squares
   that say which test and which page a sheet is. A question a sheet cannot carry keeps its
-  number and says to answer in the booklet. The reader that scores scans is not built yet.
+  number and says to answer in the booklet.
+- A reader for a picture of a filled-in answer sheet (a PNG for now): it finds the four corner
+  marks and which way up the page is, reads the code strip, finds each row of bubbles by its
+  printed outline, and says for each question what is marked, what is blank and what a person
+  has to look at, and why. A mark it is not sure of is flagged and never guessed. A picture it
+  cannot read (a corner hidden, another test's sheet, too blurred, too small) is refused with the
+  reason and what to do. `assess sheets gate` draws sheets with known answers, fills them in like
+  students, spoils them like scanners and cameras, and fails if one answer is read wrong without
+  a flag; `assess sheets check` reads a scan of a blank printed copy and says what is wrong with
+  the printing. Scoring, the window's own screens and JPEG and PDF input are not built yet.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question
@@ -179,6 +188,9 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `review <file> [--out <page>] [--key-mark <mark>]` | Read a file as `import` does and write one web page showing each question with its answer, its checks and its lines of the file, then the text no question used. Nothing is written to a bank |
 | `export <bank> [--to <destination>] [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet (the default), Moodle XML (`moodle-xml`), GIFT (`gift`) a Brightspace Question Library CSV (`d2l-csv`), a QTI 1.2 package for Brightspace and Canvas (`qti-1.2`), a Common Cartridge package for Brightspace (`common-cartridge`) or a Blackboard upload file (`blackboard-upload`), and with `--out` write it |
 | `print <bank> [--kind student\|key\|both] [--format docx\|pdf] [--paper letter\|a4] [--out <folder>]` | Say what a printed student copy and answer key would hold, and with `--out` write them |
+| `sheets gate [--sheets 60] [--seed s] [--only synthetic\|damaged]` | The answer sheet reader's accuracy gate: drawn and spoiled sheets with known answers; an answer read wrong without a flag fails it |
+| `sheets read <bank> <picture.png> [--test <id>] [--json]` | Read one page of a scanned answer sheet against a test in the bank |
+| `sheets check <bank> <picture.png> [--test <id>]` | Check my printing: read a scan of a blank printed copy and say whether the printing is fine |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
 | `perf [--count 500]` | Time open, search and save |
@@ -202,7 +214,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1668 tests, run by Node's own test runner
+  test/                 1795 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

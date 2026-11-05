@@ -51,8 +51,25 @@ function pdfString(text: string): string {
   return `(${out})`;
 }
 
+/**
+ * Where a sheet is drawn. The sheet is described once, in drawSheetPage, as these five shapes in millimetres from the top left, and
+ * a surface turns them into something: the PDF writer below makes the operators of a page, and raster.ts makes pixels for the test
+ * harness. The picture a reader is tested on is therefore the printed page drawn by another hand, never a second description of it.
+ */
+export interface Surface {
+  /** A rectangle given by its top left corner, filled or outlined, in a grey (0 black, 1 white). */
+  rect(x: number, y: number, w: number, h: number, mode: "f" | "S", gray?: number): void;
+  /** A circle outline or disc. */
+  circle(c: Point, diameter: number, mode: "f" | "S", gray?: number, width?: number): void;
+  /** The lower half of a disc. */
+  halfDisc(c: Point, diameter: number): void;
+  line(a: Point, b: Point, width?: number, gray?: number): void;
+  /** Text with its baseline at y. The x is the left, centre or right of the text. */
+  text(str: string, x: number, y: number, size: number, o?: { bold?: boolean; align?: "left" | "center" | "right"; gray?: number }): void;
+}
+
 /** A page of drawing in millimetres from the top left, as the operators of a PDF content stream. */
-class Page {
+class Page implements Surface {
   readonly ops: string[] = [];
   readonly height: number;
 
@@ -145,8 +162,9 @@ export function sheetCode(plan: SheetPlan, input: SheetInput, page: number): She
 
 const hex5 = (value: number): string => value.toString(16).toUpperCase().padStart(5, "0");
 
-function drawPage(plan: SheetPlan, input: SheetInput, layout: SheetLayout, pageNumber: number): Page {
-  const page = new Page(layout.height);
+/** Draws one page of the sheet (from 1) onto a surface. */
+export function drawSheetPage(plan: SheetPlan, input: SheetInput, pageNumber: number, page: Surface): void {
+  const layout = layoutFor(plan.paper, plan.style);
   const pages = pagesNeeded(layout, plan.drawn.length);
 
   // The corner marks. The top left has a white square in its middle.
@@ -231,6 +249,11 @@ function drawPage(plan: SheetPlan, input: SheetInput, layout: SheetLayout, pageN
   }
 
   page.text("Mark only inside the bubbles, and only between the four black squares.", layout.width / 2, layout.height - FOOTER_RISE, 6.5, { align: "center", gray: 0.45 });
+}
+
+function drawPage(plan: SheetPlan, input: SheetInput, layout: SheetLayout, pageNumber: number): Page {
+  const page = new Page(layout.height);
+  drawSheetPage(plan, input, pageNumber, page);
   return page;
 }
 

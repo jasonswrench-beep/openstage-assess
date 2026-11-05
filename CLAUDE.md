@@ -118,13 +118,30 @@ is a change that stops printed sheets reading, which is never made quietly. A ne
 gets a new layout number. A sheet carries no answer and no student detail, and it says in words
 which test and which sheet it is.
 
+**The sheet reader flags what it cannot vouch for, and an answer read wrong without a flag fails the gate.**
+`sheets/decide.ts` records a question as answered only when every bubble is plainly filled or plainly
+empty and the pattern means an answer; a blank row, a faint mark, two marks on one answer, a mark where
+this version has no bubble, and a row whose printed circles are not where the transform puts them are all
+flagged and never read. A picture whose corner marks cannot be found, whose code strip does not check,
+that belongs to another test, that is too blurred, or whose circles show at less than half the clearness
+its own sharpness allows, is refused with the reason and what to do. A black and white picture is
+recognised and no question with several answers is read from it, because it can lose a pale mark or turn a
+smudge solid and nothing in it shows which. The lines for filled and empty (0.5, 0.1, and 0.06 for several
+answers) are provisional and are changed only on numbers from `assess sheets gate` and real sheets, never
+to make a test pass. The harness draws a black and white student as marking firmly with no smudge, since
+it judges the reader on what the picture can show; keep that said wherever it is described. Do not loosen
+a refusal, a flag or the gate's first line to get a number up.
+
 ## Commands
 
 ```
-npm test                       # 1668 engine tests and 124 app tests, Node's own runner
+npm test                       # 1795 engine tests and 124 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
+npm run assess -- sheets gate  # the answer sheet reader's gate: no answer read wrong without a flag, on drawn and spoiled sheets
+npm run assess -- sheets read <bank> <picture.png>    # one page of a scanned sheet, against a test in the bank
+npm run assess -- sheets check <bank> <picture.png>   # Check my printing: a scan of a blank printed copy
 npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine
 npm run assess -- perf         # the speed budget on a 500-question bank
 npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|common-cartridge|blackboard-upload   # the destination check; the Author/Scroll CSV is the default; --out writes it
