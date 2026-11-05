@@ -397,24 +397,26 @@ Media is never garbage collected either.
 
 ### 7. Smaller open items
 
-- `checkReferences` covers 4 fields out of about a dozen: matching lefts,
-  hotspot alternatives, option feedback, blank labels and essay model answers
-  are unchecked, and the promised orphaned-sidecar check is not implemented.
-- `Bank.add` leaves the bank partially mutated when the folder id is wrong.
+- ~~`checkReferences` covers 4 fields out of about a dozen.~~ **Fixed on 5 November 2026:** it walks every piece of rich text a
+  question has (`richTextFields`), so a reference that dangles in option feedback, a matching question's left side, an ordering
+  item, a model answer or a hotspot's alternative is found. The promised orphaned-sidecar check (a picture nothing points at) is
+  still not implemented.
+- ~~`Bank.add` leaves the bank partially mutated when the folder id is wrong.~~ **Fixed on 5 November 2026:** the folder is checked
+  before anything changes.
 - A zip whose archive comment contains the EOCD signature is rejected with the
   wrong diagnosis; a truncated file reports "not a zip".
-- `isEmptyRichText` ignores math refs, so a stem that is only an equation
-  reports empty.
+- ~~`isEmptyRichText` ignores math refs, so a stem that is only an equation reports empty.~~ **Fixed on 5 November 2026.**
 - A link whose stored version is **ahead** of the bank is reported as behind it,
   with advice that would overwrite newer course content. This is the restored
   from backup case and needs its own status.
 - Migrations are a mechanism with no content and no tests, and a migration that
   throws midway leaves a partially migrated bank that `toBytes` will stamp with
   the current format version.
-- `toBytes()` mutates the manifest, so it is not idempotent. `save()` has no
-  fsync before the rename and leaves a stray `.writing` file if the rename
-  fails. `rebuildIndex()` never clears. `manifest.questionCount` is written but
-  never checked on open.
+- `toBytes()` mutates the manifest, so it is not idempotent (with a given `at` it now is, byte for byte).
+  ~~`save()` has no fsync before the rename and leaves a stray `.writing` file if the rename fails. `rebuildIndex()` never
+  clears.~~ **Fixed on 5 November 2026:** a save flushes before it renames, a failed save removes its temporary file and leaves the
+  bank that was there, and the index is cleared before it is built again. `manifest.questionCount` is written but never checked on
+  open.
 - Four of the eleven types have no import path: ordering, numeric, hotspot and
   calculated. The D2L and Blackboard dialects document ordering, so it is refused
   by name rather than missing.
@@ -450,7 +452,8 @@ Media is never garbage collected either.
   marker, so it can come out `parsed` with the figure it depends on missing. Fine
   for a first slice, wrong for the 95 percent target. Stages 6 and 7 read the
   content, and until then the question should carry a finding of its own.
-- **The text importer claims `.rtf`.** Its extensions are `.txt`, `.rtf` and `.md`,
+- **(Fixed on 5 November 2026: a Rich Text file, by name or by what it begins with, goes to the Word importer, which does not
+  read it and says to save it from Word as a `.docx`; the text importer no longer claims `.rtf`.) The text importer claims `.rtf`.** Its extensions are `.txt`, `.rtf` and `.md`,
   so an RTF file is read as plain text and its control words come in as stray
   text. RTF is out of scope; the extension should go, and the Word importer's
   message for an RTF file ("save it as .docx") is the better answer.

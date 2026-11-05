@@ -1344,7 +1344,7 @@ function hasAnyKey(q: RawQuestion): boolean {
 export const standardTextImporter: Importer = {
   id: PROFILE_ID,
   label: "Standard test-bank format (plain text)",
-  extensions: [".txt", ".rtf", ".md"],
+  extensions: [".txt", ".md"],
 
   parse(input: string | SourceBlock[], options: ImportOptions = {}): ImportResult {
     const file = options.file ?? "input.txt";

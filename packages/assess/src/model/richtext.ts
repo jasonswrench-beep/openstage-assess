@@ -373,5 +373,19 @@ export function sanitizeDeep<T>(value: T): { value: T; removedTags: string[]; re
 
 export function isEmptyRichText(value: RichText | undefined): boolean {
   if (!value) return true;
-  return richTextToPlain(value).length === 0 && collectRefs(value).media.length === 0;
+  // A picture or an equation is not words but is not nothing: a stem that is only an equation is not empty.
+  const refs = collectRefs(value);
+  return richTextToPlain(value).length === 0 && refs.media.length === 0 && refs.math.length === 0;
+}
+
+/**
+ * Every rich text value anywhere inside a structure, with its dotted path ("body.pairs.0.left"). The walk is structural, like
+ * `sanitizeDeep`, so a field added to a body later is covered without anyone remembering to list it.
+ */
+export function richTextFields(root: unknown, path = ""): Array<[string, RichText]> {
+  if (Array.isArray(root)) return root.flatMap((child, i) => richTextFields(child, path === "" ? String(i) : `${path}.${i}`));
+  if (root === null || typeof root !== "object") return [];
+  const record = root as Record<string, unknown>;
+  if ((record["format"] === "rich" || record["format"] === "plain") && typeof record["content"] === "string") return [[path, record as unknown as RichText]];
+  return Object.entries(record).flatMap(([key, child]) => richTextFields(child, path === "" ? key : `${path}.${key}`));
 }

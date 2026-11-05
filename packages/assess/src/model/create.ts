@@ -10,7 +10,7 @@ import { newQuestionId } from "./ids.ts";
 import type { Finding } from "./findings.ts";
 import { checkAnswerKey, replaceFileKeyProblems } from "../quality/answer-key.ts";
 import { replacePlaceholderProblems } from "../quality/placeholders.ts";
-import { collectRefs, plainToRich, richTextToPlain, sanitizeDeep, type RichText } from "./richtext.ts";
+import { collectRefs, plainToRich, richTextFields, richTextToPlain, sanitizeDeep, type RichText } from "./richtext.ts";
 import {
   MAX_TITLE_LENGTH,
   titleFromStem,
@@ -247,21 +247,12 @@ export function checkReferences(question: Question): Finding[] {
   const mediaIds = new Set(question.media.map((m) => m.id));
   const mathIds = new Set(question.math.map((m) => m.id));
 
-  const texts: Array<[string, RichText | undefined]> = [
-    ["stem", question.stem],
-    ["feedback.general", question.feedback.general],
-    ["feedback.correct", question.feedback.correct],
-    ["feedback.incorrect", question.feedback.incorrect],
-  ];
-  const body = question.body as Record<string, unknown>;
-  if (Array.isArray(body["options"])) {
-    (body["options"] as Array<{ content?: RichText }>).forEach((o, i) =>
-      texts.push([`body.options.${i}.content`, o.content]),
-    );
-  }
+  // Every piece of rich text the question has, wherever it is: the stem, the feedback, and anything in the body (an option and its
+  // feedback, a matching question's left side, an ordering item, an essay's model answer, a hotspot's alternative). This used to
+  // list four of them, so a picture reference that dangled anywhere else was never found.
+  const texts = richTextFields({ stem: question.stem, feedback: question.feedback, body: question.body });
 
   for (const [field, text] of texts) {
-    if (!text) continue;
     const refs = collectRefs(text);
     for (const ref of refs.media) {
       if (!mediaIds.has(ref)) {
