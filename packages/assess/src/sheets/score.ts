@@ -12,6 +12,7 @@
  */
 
 import { hasUsableKey } from "../quality/answer-key.ts";
+import { richTextToPlain } from "../model/richtext.ts";
 import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
 import { VERSION_LABELS, versionQuestions, type TestRecord, type VersionLabel } from "../model/test.ts";
 import type { BatchEntry, BatchSheet } from "./batch.ts";
@@ -121,14 +122,32 @@ export type Adjustment =
   | (AdjustmentBase & { kind: "credit" })
   | (AdjustmentBase & { kind: "points"; points: number });
 
-export const adjustmentWords = (a: Adjustment): string => {
+/**
+ * An adjustment in words. With the test it is for, an answer that counts too is named by the letter it has in version A and what it says
+ * (a bank answer's id means nothing to the person who reads it); without, it is named by what it was stored as.
+ */
+export const adjustmentWords = (a: Adjustment, record?: TestRecord): string => {
   switch (a.kind) {
     case "drop": return "Dropped from the total";
-    case "alsoRight": return `Another answer counts as right (${a.answer})`;
+    case "alsoRight": return `Another answer counts as right (${record ? answerName(record, a.questionId, a.answer) : a.answer})`;
     case "credit": return "Everyone has credit";
     case "points": return `Worth ${a.points} point${a.points === 1 ? "" : "s"}`;
   }
 };
+
+/** A bank answer as a person reads it: its letter in version A and its words, or True or False. */
+function answerName(record: TestRecord, questionId: string, answer: string): string {
+  const question = record.questions.find((q) => q.id === questionId);
+  if (!question) return answer;
+  if (isTrueFalse(question)) return answer === "true" ? "True" : answer === "false" ? "False" : answer;
+  if (!isChoice(question) && !isMultipleResponse(question)) return answer;
+  const first = versionQuestions(record, "A").find((q) => q.id === questionId);
+  const options = first && (isChoice(first) || isMultipleResponse(first)) ? first.body.options : [];
+  const at = options.findIndex((o) => o.id === answer);
+  if (at < 0) return answer;
+  const words = richTextToPlain(options[at]!.content).replace(/\s+/g, " ").trim();
+  return `${String.fromCharCode(65 + at)}: ${words.length > 40 ? `${words.slice(0, 37).trimEnd()}...` : words}`;
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Scoring

@@ -12,6 +12,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import {
+  adjustmentWords,
   assembleBatch,
   cropRects,
   imageFingerprint,
@@ -389,7 +390,7 @@ export function view(s: ScoringSession, after = 0): Record<string, unknown> {
   return {
     id: s.id,
     bank: s.bank,
-    test: { id: s.test.id, name: s.test.name, versions: s.test.versions.map((v) => v.label), questions: s.test.questions.length, fingerprint: s.test.fingerprint.toString(16).toUpperCase().padStart(5, "0"), possible },
+    test: { id: s.test.id, name: s.test.name, versions: s.test.versions.map((v) => v.label), questions: s.test.questions.length, fingerprint: s.test.fingerprint.toString(16).toUpperCase().padStart(5, "0"), possible, items: itemsOf(s) },
     opened: s.fixed !== undefined,
     acceptBlanks: s.acceptBlanks,
     savedAs: s.savedAs ?? null,
@@ -428,9 +429,24 @@ export function view(s: ScoringSession, after = 0): Record<string, unknown> {
     }),
     queue: { total: queue.length, items: queue.slice(after, after + QUEUE_PAGE) },
     stats: c.stats,
-    adjustments: s.adjustments.map((a) => ({ ...a, question: questionNumberOf(s, a.questionId) })),
+    adjustments: s.adjustments.map((a) => ({ ...a, question: questionNumberOf(s, a.questionId), words: adjustmentWords(a, s.test) })),
     decisions: s.decisions.length,
   };
+}
+
+/** The questions as version A prints them, with the letters of their answers, which is how an adjustment names a question and an answer. */
+function itemsOf(s: ScoringSession): Array<{ number: number; id: string; stem: string; options: Array<{ letter: string; text: string }> }> {
+  return versionQuestions(s.test, "A").map((q, i) => ({
+    number: i + 1,
+    id: q.id,
+    stem: clip(richTextToPlain(q.stem).replace(/\s+/g, " ").trim(), 100),
+    options:
+      q.type === "trueFalse"
+        ? [{ letter: "A", text: "True" }, { letter: "B", text: "False" }]
+        : q.type === "multipleChoice" || q.type === "multipleResponse"
+          ? (q.body as { options: Array<{ content: Parameters<typeof richTextToPlain>[0] }> }).options.map((o, at) => ({ letter: placeLetter(at), text: clip(richTextToPlain(o.content).replace(/\s+/g, " ").trim(), 60) }))
+          : [],
+  }));
 }
 
 /** The number of a question in version A, which is how the screen names it. */
@@ -463,7 +479,13 @@ export function sheetView(s: ScoringSession, number: number): Record<string, unk
         const answer = settled.answers[q.number];
         const places = placesOf(s, c, sheet, score.version, q.number);
         const name = (p: number): string => places.labels[p] ?? placeLetter(p);
+        const where = pageOf(c, sheet, q.number);
         return {
+          labels: places.labels,
+          multiple: places.multiple,
+          entry: where?.entry ?? null,
+          picture: where ? (s.entries[where.entry] as ScanEntry).crops.has(`q${q.number}`) : false,
+          fills: where?.reading.fills[q.number] ?? [],
           number: q.number,
           stem: stemOf(s, score.version, q.number),
           outcome: q.outcome,

@@ -119,7 +119,7 @@ only and answers only to the window it opened.
   that say which test and which page a sheet is. A question a sheet cannot carry keeps its
   number and says to answer in the booklet.
 - A reader for a picture of a filled-in answer sheet (a PNG, or a scanned PDF where each page is one
-  picture; a JPEG is decoded by the app's window and is not built yet): it finds the four corner
+  picture; a JPEG or a phone's photo is decoded by the app's window): it finds the four corner
   marks and which way up the page is, reads the code strip, finds each row of bubbles by its
   printed outline, and says for each question what is marked, what is blank and what a person
   has to look at, and why. A mark it is not sure of is flagged and never guessed. A picture it
@@ -137,8 +137,19 @@ only and answers only to the window it opened.
   discrimination, which answers were marked, blanks, KR-20 or Cronbach's alpha) carry their number
   of sheets and say when a group is under 30. The results go to a spreadsheet (xlsx and CSV, with an
   empty Name column), a printable item analysis and a scores file that holds no names or file names;
-  a bank can keep the class-level figures for each question, never a response. The window's own
-  screens for all of this are not built yet.
+  a bank can keep the class-level figures for each question, never a response.
+- The app's Answer sheets area (the "Answer sheets…" button on a bank): make a test from the bank's
+  questions, print its answer sheet, booklets and keys (Letter or A4, one sheet for every version or
+  one for each, PDF or Word), check a scan of a blank printed copy, and score a class from scans or
+  phone photographs. The window opens the pictures it can (a JPEG, with the camera's own turn) and
+  sends grey pixels; a PNG or a scanned PDF is opened by the engine. What the reader is not sure of
+  is put in front of you one question at a time, with a piece of the picture and how full each
+  bubble read, and can be settled from the keyboard alone (a letter chooses the bubble, 0 says
+  blank, Enter records several, the arrows move, Z takes the last back). Scores, adjustments (with
+  how many sheets each changes shown first) and item statistics update at once, and nothing is
+  guessed. No picture of a sheet is kept: only a small cut-out of each row a person has to look at,
+  in memory, and a scores file you save holds readings and decisions and no name, file name or
+  picture. The same paper can be made from the command line with `assess sheets print`.
 - A question table in: a list of questions kept in Excel (`.xlsx`) or saved as CSV or
   Unicode text, in the columns OpenStage Author reads (Type, Question, A to H, Correct,
   Points, feedback, Category), so one file works in both tools. A row is a question
@@ -201,8 +212,11 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `export <bank> [--to <destination>] [--out <folder>]` | Run the destination check for the Author and Scroll spreadsheet (the default), Moodle XML (`moodle-xml`), GIFT (`gift`) a Brightspace Question Library CSV (`d2l-csv`), a QTI 1.2 package for Brightspace and Canvas (`qti-1.2`), a Common Cartridge package for Brightspace (`common-cartridge`) or a Blackboard upload file (`blackboard-upload`), and with `--out` write it |
 | `print <bank> [--kind student\|key\|both] [--format docx\|pdf] [--paper letter\|a4] [--out <folder>]` | Say what a printed student copy and answer key would hold, and with `--out` write them |
 | `sheets gate [--sheets 60] [--seed s] [--only synthetic\|damaged]` | The answer sheet reader's accuracy gate: drawn and spoiled sheets with known answers; an answer read wrong without a flag fails it |
+| `sheets print <bank> --out <folder> [--test <id>] [--paper letter\|a4] [--sheet shared\|each\|none] [--large] [--no-booklets] [--no-keys] [--docx]` | Write the answer sheet, and a booklet and a key for each version, of an assembled test; a file already there is never written over |
 | `sheets read <bank> <picture.png> [--test <id>] [--json]` | Read one page of a scanned answer sheet against a test in the bank |
 | `sheets check <bank> <picture.png> [--test <id>]` | Check my printing: read a scan of a blank printed copy and say whether the printing is fine |
+| `sheets score <bank> <scans...> [--test <id>] [--accept-blanks] [--drop N] [--credit N] [--points N:P] [--also-right N:L] [--out <folder>] [--save-statistics]` | Score scanned sheets against the test's own key, with adjustments and item statistics; `--out` writes the scores file, workbook, CSV and item analysis; the bank keeps class figures only with `--save-statistics` |
+| `sheets rescore <bank> <file.openassess-scores>` | Score again from a saved scores file, with no rescan |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
 | `perf [--count 500]` | Time open, search and save |
@@ -226,7 +240,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 1894 tests, run by Node's own test runner
+  test/                 1912 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

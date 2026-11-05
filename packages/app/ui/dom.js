@@ -9,7 +9,7 @@
  *   checked?: boolean, disabled?: boolean, hidden?: boolean, href?: string, name?: string, rows?: number,
  *   placeholder?: string, for?: string, role?: string, min?: number | string, max?: number | string, step?: number | string,
  *   on?: Record<string, (event: any) => void>, attrs?: Record<string, string>, open?: boolean, selected?: boolean,
- *   accept?: string, multiple?: boolean, autocomplete?: string, spellcheck?: boolean, readOnly?: boolean, tabIndex?: number,
+ *   accept?: string, multiple?: boolean, src?: string, scope?: string, autocomplete?: string, spellcheck?: boolean, readOnly?: boolean, tabIndex?: number,
  * }} Props
  */
 

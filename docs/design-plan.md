@@ -389,10 +389,12 @@ the accessible route, because some students cannot use a bubble sheet.
    4 November 2026 from a last stage.
 
 The buildable plan, with its phases and gates, is `docs/paper-tests-spec.md`. Where it stands is
-written there, under Build plan: the assembled test with versions, the printed sheet and the reader
-that turns a picture of a sheet into a reading (with its accuracy gate) are built in the engine and
-the command line; images and PDFs coming in through the window, scoring and the app's own area are
-not.
+written there, under Build plan: the assembled test with versions, the printed sheet, the reader
+that turns a picture of a sheet into a reading (with its accuracy gate), images and PDFs coming in
+(a JPEG through the window), scoring with adjustments and item statistics, and the app's Answer
+sheets area (assemble, print, check my printing, score, review, results) are built, as of
+5 November 2026. What is open is real paper: real sheets, real scanners and phones, and the
+thresholds tuned on them (`TESTING-TODO.md`).
 
 **Never guess.** A blank answer, two marks, or a faint mark is flagged, with a
 picture of that part of the sheet beside it, for the teacher to settle with a

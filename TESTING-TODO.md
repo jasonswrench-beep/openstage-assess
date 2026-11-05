@@ -181,9 +181,17 @@ in the tests and in `assess sheets gate`.
   its PDFs in the tests were written from the format's description, not from any scanner. Look for what it refuses and why, whether a
   phone's PDF has one picture to a page, and whether a copier's "compact" setting is what it names. Page rotation and mirroring are
   done from how the picture is drawn; a scan that comes out sideways or mirrored in the reader and fine in a PDF viewer is a bug.
-- [ ] **Read a JPEG, from a phone, in the window.** A JPEG, and a JPEG inside a PDF, are decoded by the window (`createImageBitmap`) and
-  not by the engine, so nothing in `npm test` reads one. That is built with the app's Score screen (Phase 5) and has to be looked at
-  with real photos: an iPhone's, with its turn flag, and an Android phone's.
+- [ ] **Read a JPEG, from a phone, in the window.** A JPEG, and a JPEG inside a PDF, are decoded by the window (`createImageBitmap`,
+  with the camera's own turn applied, laid on white and made grey) and not by the engine, so nothing in `npm test` reads one. The
+  Score screen does it and was run in the built-in browser (a canvas-made JPEG of a drawn sheet read at version A, 150 dots to the
+  inch, and the keyboard review settled a faint mark, a blank row and a doubled mark), but not in the Tauri window (WebView2) and not
+  with real photos. Look at an iPhone's, with its turn flag (a photo taken sideways must come out upright), and an Android phone's,
+  and at a JPEG page inside a phone's scanned PDF. Also in the Tauri window: choosing several files at once, and dropping files on
+  the Scans panel (the window may take a drop for itself).
+- [ ] **Review with a screen reader and with the keyboard alone, on a real class.** The keys are built (a letter or a digit chooses
+  the bubble, 0 is blank, Enter records several, the arrows move, Z takes the last back) and announce what they did; nobody who
+  uses a screen reader has tried them. Also look at how long a class of 100 sheets takes to settle by key, and whether the piece of
+  picture is large enough on a laptop screen to tell a faint mark from an erasure.
 - [ ] **A real-sheet corpus.** Volunteers fill in printed sheets by hand to a written answer list; scan them on the department
   copier (feeder, 200 and 300 dpi, grey and black and white), on a flatbed, and photograph them on an iPhone and an Android phone in
   office light. The expected answers come from the volunteer's list, never from the reader. Tune thresholds on half and report on the

@@ -222,6 +222,10 @@ describe("adjusting the scoring", () => {
     assert.equal(adjustmentWords(at("a", "points", { points: 2 })), "Worth 2 points");
     assert.equal(adjustmentWords(at("a", "points", { points: 1 })), "Worth 1 point");
     assert.equal(adjustmentWords(at("a", "alsoRight", { answer: "c" })), "Another answer counts as right (c)");
+    // With the test, an answer is named the way a person reads it: its letter in version A and its words, never the bank's id for it.
+    assert.equal(adjustmentWords(at("a", "alsoRight", { answer: "c" }), record), "Another answer counts as right (C: c)");
+    assert.equal(adjustmentWords(at("a", "alsoRight", { answer: "nope" }), record), "Another answer counts as right (nope)", "an answer the question does not have is shown as stored, not guessed");
+    assert.equal(adjustmentWords({ id: "t", kind: "alsoRight", questionId: t.id, answer: "false" }, record), "Another answer counts as right (False)");
   });
 });
 

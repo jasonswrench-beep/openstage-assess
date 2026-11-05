@@ -235,4 +235,33 @@ describe("openassess sheets score", () => {
     assert.match(run("score", bankPath()).err, /Name a bank file and the scans/);
     assert.match(run("rescore", bankPath(), join(dir, "nothing.openassess-scores")).err ?? "", /ENOENT|no such file|cannot find/i);
   });
+
+test("prints the paper for a test: the sheet, a booklet and a key, as asked, and never writes over a file", () => {
+    const bank = bankPath();
+    const out = join(dir, "paper");
+    const first = run("print", bank, "--out", out);
+    assert.equal(first.code, 0, first.err);
+    assert.match(first.out, /Wrote .*Quiz - Answer sheet\.pdf \(1 page\)/);
+    assert.deepEqual(readdirSync(out).sort(), ["Quiz - Answer key.pdf", "Quiz - Answer sheet.pdf", "Quiz - Student copy.pdf"]);
+    assert.match(first.out, /Print the answer sheet at 100 percent/);
+    assert.match(first.out, /Note: question 4 has no bubbles/i);
+    assert.equal(readFileSync(join(out, "Quiz - Answer sheet.pdf")).subarray(0, 5).toString("latin1"), "%PDF-");
+
+    // Again, and with Word booklets and no keys: the files that are there are left alone, and the new ones take the next free name.
+    const again = run("print", bank, "--out", out, "--docx", "--no-keys", "--sheet", "none");
+    assert.equal(again.code, 0, again.err);
+    assert.deepEqual(readdirSync(out).sort(), ["Quiz - Answer key.pdf", "Quiz - Answer sheet.pdf", "Quiz - Student copy.docx", "Quiz - Student copy.pdf"]);
+    const twice = run("print", bank, "--out", out, "--no-booklets", "--no-keys");
+    assert.deepEqual(readdirSync(out).sort(), ["Quiz - Answer key.pdf", "Quiz - Answer sheet 2.pdf", "Quiz - Answer sheet.pdf", "Quiz - Student copy.docx", "Quiz - Student copy.pdf"]);
+    assert.equal(twice.code, 0, twice.err);
+  });
+
+  test("says what is wrong with a print it was not given right", () => {
+    const bank = bankPath();
+    assert.match(run("print", bank).err, /Name a bank file and a folder/);
+    assert.match(run("print", bank, "--out", join(dir, "x"), "--paper", "legal").err, /--paper is letter or a4/);
+    assert.match(run("print", bank, "--out", join(dir, "x"), "--sheet", "some").err, /--sheet is shared, each or none/);
+    assert.match(run("print", bank, "--out", join(dir, "x"), "--sheet", "none", "--no-booklets", "--no-keys").err, /Choose something to print/);
+    assert.match(run("print", bank, "--out", join(dir, "x"), "--test", "nope").err, /has no test "nope"/);
+  });
 });
