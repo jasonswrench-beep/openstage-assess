@@ -17,8 +17,7 @@ import {
   openScans,
   planSheet,
   pointsOf,
-  printSheet,
-  printVersions,
+  printTestPaper,
   richTextToPlain,
   SheetReader,
   versionQuestions,
@@ -29,7 +28,7 @@ import {
 } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
-import { checkName, cleanName, freeFileName } from "./library.ts";
+import { checkName, freeFileName } from "./library.ts";
 import { flag, jsonObject, oneOf, onlyFields, text, whole } from "./request.ts";
 import { view } from "./scoring.ts";
 
@@ -148,16 +147,8 @@ function idList(value: unknown): string[] {
 const PAPERS = ["letter", "a4"] as const;
 const FORMATS = ["pdf", "docx"] as const;
 
-interface Written {
-  name: string;
-  path: string;
-  kind: "sheet" | "booklet" | "key";
-  version?: string;
-  format: string;
-  pages?: number;
-}
-
-async function printTestPaper(ctx: Context, req: ApiRequest, record: TestRecord): Promise<ApiResponse> {
+/** The paper is made by the engine, the same function the command line uses; what is done here is to read the request and to write the files. */
+async function printTestPaperRoute(ctx: Context, req: ApiRequest, record: TestRecord): Promise<ApiResponse> {
   const input = jsonObject(req);
   onlyFields(input, ["paper", "large", "sheet", "booklets", "keys", "formats", "nameBox"], "The request");
   const paper = oneOf(input["paper"], PAPERS, "the paper", "letter");
@@ -174,50 +165,17 @@ async function printTestPaper(ctx: Context, req: ApiRequest, record: TestRecord)
         : (() => {
             throw badRequest("Say what to print the booklets and keys as, from pdf and docx.");
           })();
-  if (sheet === "none" && !booklets && !keys) throw badRequest("Choose something to print.");
 
-  const at = new Date();
-  const written: Written[] = [];
-  const notes: string[] = [];
-  const write = async (name: string, bytes: Uint8Array, rest: Omit<Written, "name" | "path">): Promise<void> => {
-    const fileName = await freeFileName(ctx.library.exports, checkName(name));
-    const path = join(ctx.library.exports, fileName);
-    await writeFile(path, bytes);
-    written.push({ name: fileName, path, ...rest });
-  };
-
-  const title = cleanName(record.name, "Test");
-  if (sheet !== "none") {
-    const planned = planSheet(record, { paper, large });
-    if (!planned.ok) throw badRequest(`The answer sheet for this test cannot be made: ${planned.reason}.`);
-    notes.push(...planned.plan.notes);
-    const several = record.versions.length > 1;
-    const input2 = { title: record.name, fingerprint: record.fingerprint, versions: record.versions.length };
-    if (sheet === "each" && several) {
-      for (let v = 1; v <= record.versions.length; v++) {
-        const label = (record.versions[v - 1] as { label: string }).label;
-        const file = printSheet(planned.plan, { ...input2, version: v, nameBox }, at);
-        await write(`${title} - Answer sheet - Version ${label}.pdf`, file.bytes, { kind: "sheet", version: label, format: "pdf", pages: file.pages });
-      }
-    } else {
-      const file = printSheet(planned.plan, { ...input2, nameBox }, at);
-      await write(`${title} - Answer sheet.pdf`, file.bytes, { kind: "sheet", format: "pdf", pages: file.pages });
-    }
+  const made = printTestPaper(record, { paper, large, sheet, booklets, keys, nameBox, formats });
+  if (!made.ok) throw badRequest(made.reason);
+  const written: Array<{ name: string; path: string; kind: string; version?: string; format: string; pages?: number }> = [];
+  for (const file of made.files) {
+    const name = await freeFileName(ctx.library.exports, checkName(file.name));
+    const path = join(ctx.library.exports, name);
+    await writeFile(path, file.bytes);
+    written.push({ name, path, kind: file.kind, ...(file.version !== undefined ? { version: file.version } : {}), format: file.format, ...(file.pages !== undefined ? { pages: file.pages } : {}) });
   }
-  const kinds = [...(booklets ? (["student"] as const) : []), ...(keys ? (["key"] as const) : [])];
-  const unprinted: string[] = [];
-  if (kinds.length > 0) {
-    for (const format of formats) {
-      for (const piece of printVersions(record, format, { paper, answerOnSheet: sheet !== "none" }, kinds, at)) {
-        const { file, report } = piece.result;
-        for (const g of report.general) if (!notes.includes(g)) notes.push(g);
-        for (const item of report.items) if (item.outcome === "leftOut") unprinted.push(`Version ${piece.label}: ${item.notes.join(" ")}`);
-        if (file.bytes.length === 0) continue;
-        await write(file.name, file.bytes, { kind: piece.kind === "student" ? "booklet" : "key", ...(record.versions.length > 1 ? { version: piece.label } : {}), format, ...(file.pages !== undefined ? { pages: file.pages } : {}) });
-      }
-    }
-  }
-  return ok({ written, notes, unprinted: [...new Set(unprinted)] });
+  return ok({ written, notes: made.notes, unprinted: made.unprinted });
 }
 
 /** A scan of a blank printed copy, read to see whether the printing is true to size and the reader can use it. Writes nothing. */
@@ -269,7 +227,7 @@ export async function sheetsRoute(ctx: Context, req: ApiRequest): Promise<ApiRes
       return ok({ removed: record.id });
     }
   }
-  if (action === "print" && req.method === "POST") return printTestPaper(ctx, req, record);
+  if (action === "print" && req.method === "POST") return printTestPaperRoute(ctx, req, record);
   if (action === "printing-check" && req.method === "POST") return checkPrintingRoute(req, record);
   if (action === "score" && req.method === "POST") return ok(view(ctx.scoring.create(bankName, record)));
   throw notFound("There is no such page.");

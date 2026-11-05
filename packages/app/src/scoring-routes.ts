@@ -277,7 +277,7 @@ export async function scoringRoute(ctx: Context, req: ApiRequest): Promise<ApiRe
   if (what === "files" && req.method === "POST") {
     if (req.body.length === 0) throw badRequest("That file is empty.");
     const result = addFile(s, fileLabel(req.query.get("name"), "scan"), new Uint8Array(req.body));
-    return ok({ ...result, view: view(s) });
+    return ok({ ...result, pages: s.entries.length });
   }
 
   if (what === "pages" && req.method === "POST") {
@@ -286,7 +286,7 @@ export async function scoringRoute(ctx: Context, req: ApiRequest): Promise<ApiRe
     const page = queryWhole(req.query, "page", 1, 100000, 1);
     const replacing = req.query.has("replace") ? queryWhole(req.query, "replace", 0, 1_000_000) : undefined;
     const entry = addPicture(s, file, page, image, replacing);
-    return ok({ entry, view: view(s) });
+    return ok({ entry, pages: s.entries.length });
   }
 
   if (what === "refused" && req.method === "POST") {
@@ -302,9 +302,9 @@ export async function scoringRoute(ctx: Context, req: ApiRequest): Promise<ApiRe
       delete held.waiting;
       held.entry.result = { ok: false, cause: "quality", reason };
       changed(s);
-      return ok({ entry: at, view: view(s) });
+      return ok({ entry: at, pages: s.entries.length });
     }
-    return ok({ entry: addRefused(s, file, page, reason), view: view(s) });
+    return ok({ entry: addRefused(s, file, page, reason), pages: s.entries.length });
   }
 
   if (what === "waiting" && req.method === "GET") {
@@ -342,7 +342,7 @@ export async function scoringRoute(ctx: Context, req: ApiRequest): Promise<ApiRe
       const candidate = adjustmentFrom(s, req);
       const c = compute(s);
       const effect = adjustmentEffect(s.test, c.settled, s.adjustments, candidate);
-      return ok({ words: adjustmentWords(candidate), changed: effect.changed, sheets: effect.sheets });
+      return ok({ words: adjustmentWords(candidate, s.test), changed: effect.changed, sheets: effect.sheets });
     }
     if (a === undefined && req.method === "POST") {
       const candidate = adjustmentFrom(s, req);

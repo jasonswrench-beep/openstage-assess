@@ -12,8 +12,9 @@ import { join } from "node:path";
 
 import { scanPdf } from "../../assess/test/support/pdf-scan.ts";
 import { drawn } from "../../assess/test/support/sheet-fixtures.ts";
-import { openScans, orient, unzipSync, versionQuestions, writePng, type GreyImage, type TestRecord, type VersionLabel } from "../src/engine.ts";
+import { createTest, openScans, orient, unzipSync, versionQuestions, writePng, type GreyImage, type TestRecord, type VersionLabel } from "../src/engine.ts";
 import { quarterTurn as turn } from "../../assess/src/sheets/damage.ts";
+import { flipHorizontal } from "../../assess/src/sheets/image.ts";
 import { chunkedPost, rawRequest, withApp, type Client } from "./support/app.ts";
 
 
@@ -237,10 +238,21 @@ describe("scoring a class", () => {
       assert.equal(view["stats"].sheets, 3);
       assert.equal(view["stats"].unstable, true);
       assert.deepEqual(view["pages"].map((p: Json) => p.ok), [true, true, true]);
+      // The questions as version A prints them, in words, for an adjustment to name (a regex once ate every letter s in these).
+      const items = view["test"].items as Json[];
+      assert.equal(items.length, 8);
+      assert.equal(items[0]!.stem, "Question number 1?");
+      assert.deepEqual(items[0]!.options.map((o: Json) => `${o.letter}=${o.text}`), ["A=Option 1", "B=Option 2", "C=Option 3", "D=Option 4"]);
+      assert.deepEqual(items[5]!.options, [{ letter: "A", text: "True" }, { letter: "B", text: "False" }]);
+      assert.equal(items[6]!.stem, "Which of these are even?");
+      assert.deepEqual(items[7]!.options, [], "an essay has no answers to name");
       const detail = (await client.get<Json>(`/api/scoring/${sid}/sheets/1`)).json;
       assert.equal(detail["questions"].length, 7, "the essay is not on the sheet");
       assert.equal(detail["questions"][1].outcome, "wrong");
       assert.equal(detail["questions"][0].outcome, "right");
+      assert.equal(detail["questions"][0].stem, "Question number 1?");
+      assert.deepEqual(detail["questions"][0].labels, ["A", "B", "C", "D"]);
+      assert.equal(detail["questions"][6].multiple, true);
     });
   });
 
@@ -299,6 +311,7 @@ describe("scoring a class", () => {
       const url = `/api/scoring/${sid}/decisions`;
       for (const [body, status, pattern] of [
         [{ sheet: 1, kind: "answer", question: 1, places: [4] }, 400, /Choose the bubbles/],
+        [{ sheet: 1, kind: "answer", question: 7, places: [0, 0] }, 400, /Choose the bubbles/],
         [{ sheet: 1, kind: "answer", question: 1, places: [0, 1] }, 400, /takes one answer/],
         [{ sheet: 1, kind: "answer", question: 1, places: [] }, 400, /Choose the bubbles/],
         [{ sheet: 1, kind: "answer", question: 8, places: [0] }, 400, /does not carry question 8/],
@@ -339,7 +352,7 @@ describe("scoring a class", () => {
       const waiting = (sent.json as Json)["waiting"] as Array<{ entry: number; format: string }>;
       assert.equal(waiting.length, 1);
       assert.equal(waiting[0]!.format, "jpeg");
-      let view = (sent.json as Json)["view"] as Json;
+      let view = (await client.get<Json>(`/api/scoring/${sid}`)).json;
       assert.equal(view["pages"][0].ok, false, "held, not read, and not dropped");
       assert.equal(view["pages"][0].waiting, "jpeg");
 
@@ -358,12 +371,64 @@ describe("scoring a class", () => {
     });
   });
 
+test("turns a mirrored page of a PDF back, as the PDF says, before it is read, and does not let a refusal replace a page that was read", async () => {
+    await withApp(async (client) => {
+      const { record, sid } = await ready(client);
+      const upright = drawn(record).render(marksFor(rightPlaces(record, "A"), 1));
+      const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xd9]);
+      // A scanner that saved the page as seen from the back: the picture inside is mirrored, and the page is drawn mirrored to show it right.
+      const mirrored = flipHorizontal(upright);
+      const pdf = scanPdf([{ picture: { image: mirrored, encoding: "jpeg", jpeg: jpegBytes }, matrix: [-mirrored.width * 0.36, 0, 0, mirrored.height * 0.36, mirrored.width * 0.36, 0] }]);
+      const sent = await post(client, `/api/scoring/${sid}/files?name=back.pdf`, pdf);
+      const waiting = (sent.json as Json)["waiting"] as Array<{ entry: number }>;
+      assert.equal(waiting.length, 1);
+      // The window decodes the picture as it is inside the file, mirrored, and the server puts it right.
+      const back = await pixels(client, sid, mirrored, "back.pdf", `&replace=${waiting[0]!.entry}`);
+      assert.equal(back.status, 200, back.text);
+      const view = (await client.get<Json>(`/api/scoring/${sid}`)).json;
+      assert.equal(view["pages"][0].ok, true, JSON.stringify(view["pages"][0]));
+      assert.equal(view["sheets"][0].complete, true);
+
+      // The page is read now. A refusal that says it replaces it is not allowed to, and the page stands.
+      const stray = await client.post<Json>(`/api/scoring/${sid}/refused`, { page: 1, reason: "Could not be opened.", replace: waiting[0]!.entry });
+      assert.equal(stray.status, 400);
+      assert.equal(((await client.get<Json>(`/api/scoring/${sid}`)).json["pages"][0] as Json).ok, true, "still read");
+    });
+  });
+
+  test("takes a whole page of pixels at 300 dots to the inch and a scanner's uncompressed PDF, which are larger than an ordinary request, and refuses a picture with more pixels than a page can have", async () => {
+    await withApp(async (client) => {
+      const { record, sid } = await ready(client);
+      const marks = marksFor(rightPlaces(record, "A"), 1);
+      const big = drawn(record, { dpi: 300 }).render(marks);
+      assert.ok(big.width * big.height > 8_000_000, "a page of grey pixels at 300 dots to the inch is about 8 MB");
+      const sent = await pixels(client, sid, big, "300 dpi.png");
+      assert.equal(sent.status, 200, sent.text);
+      // An uncompressed scan is as big as its pixels.
+      const raw = scanPdf([{ picture: { image: drawn(record, { dpi: 300 }).render(marksFor(rightPlaces(record, "B"), 2)), encoding: "raw" } }]);
+      assert.ok(raw.length > 8_000_000);
+      const viaPdf = await post(client, `/api/scoring/${sid}/files?name=uncompressed.pdf`, raw);
+      assert.equal(viaPdf.status, 200, viaPdf.text);
+      const view = (await client.get<Json>(`/api/scoring/${sid}`)).json;
+      assert.deepEqual(view["pages"].map((p: Json) => p.ok), [true, true]);
+
+      // More pixels than a page of a scan can have, inside what a request may carry: refused for its size and not read.
+      const huge = await post(client, `/api/scoring/${sid}/pages?width=4100&height=4100`, new Uint8Array(4100 * 4100));
+      assert.equal(huge.status, 400);
+      assert.match(String((huge.json as Json)["error"]), /too large to read/);
+      // A scores file too is more than an ordinary request: this is refused as not being one, which is to say it was read.
+      const junk = await post(client, "/api/scoring/open?upload=1", new Uint8Array(5 * 1024 * 1024).fill(65));
+      assert.equal(junk.status, 422, junk.text);
+    });
+  });
+
   test("keeps a page the window could not open as a refused page in its place, with the reason", async () => {
     await withApp(async (client) => {
       const { sid } = await ready(client);
       const reply = await client.post<Json>(`/api/scoring/${sid}/refused`, { file: "broken.jpg", page: 1, reason: "This picture could not be opened." });
       assert.equal(reply.status, 200, reply.text);
-      const view = reply.json["view"] as Json;
+      assert.equal(reply.json["pages"], 1);
+      const view = (await client.get<Json>(`/api/scoring/${sid}`)).json;
       assert.equal(view["pages"][0].ok, false);
       assert.match(view["pages"][0].reason, /could not be opened/);
       assert.equal(view["batchFlags"].length, 1, "and the batch says it was not read");
@@ -416,11 +481,106 @@ describe("scoring a class", () => {
       // Another answer counts as right, by the letter in version A; a letter the question does not have is refused.
       const also = await client.post<Json>(`${base}/check`, { kind: "alsoRight", question: 1, answer: "D" });
       assert.equal(also.status, 200, also.text);
+      assert.equal(also.json["words"], "Another answer counts as right (D: Option 4)", "named as a person reads it, not by the bank's id for the answer");
       assert.equal((await client.post<Json>(`${base}/check`, { kind: "alsoRight", question: 1, answer: "Z" })).status, 400);
       assert.equal((await client.post<Json>(`${base}/check`, { kind: "points", question: 1, points: -1 })).status, 400);
       assert.equal((await client.post<Json>(`${base}/check`, { kind: "drop", question: 40 })).status, 400);
       assert.equal((await client.post<Json>(`${base}/check`, { kind: "drop", question: 1, versions: [3] })).status, 400);
       assert.equal((await client.post<Json>(`${base}/check`, { kind: "drop", question: 1, secret: 1 })).status, 400);
+    });
+  });
+
+  test("asks which version a sheet is when no version bubble is marked, with a piece of the picture, and settles every row once it is told", async () => {
+    await withApp(async (client) => {
+      const { record, sid } = await ready(client);
+      const marks = { ...marksFor(rightPlaces(record, "A"), 1), versions: [] };
+      await pixels(client, sid, drawn(record).render(marks), "no version.png");
+
+      let view = (await client.get<Json>(`/api/scoring/${sid}`)).json;
+      assert.equal(view["sheets"][0].version, null);
+      assert.equal(view["queue"].total, 1, "only the version is asked about: which answers are meant depends on it");
+      const item = view["queue"].items[0] as Json;
+      assert.equal(item.kind, "version");
+      assert.deepEqual(item.labels, ["A", "B"]);
+      assert.equal(item.picture, true);
+      const entry = item.entry as number;
+      assert.equal((await client.get(`/api/scoring/${sid}/entries/${entry}/crops/version`)).status, 200);
+      // Every row was kept too, since any may need a look once the version is known.
+      assert.equal((await client.get(`/api/scoring/${sid}/entries/${entry}/crops/q3`)).status, 200);
+
+      // An answer cannot be settled before the version is.
+      const early = await client.post<Json>(`/api/scoring/${sid}/decisions`, { sheet: 1, kind: "answer", question: 1, places: [0] });
+      assert.equal(early.status, 400);
+      assert.match(String(early.json["error"]), /Settle the version/);
+
+      const told = await client.post<Json>(`/api/scoring/${sid}/decisions`, { sheet: 1, kind: "version", version: 1 });
+      assert.equal(told.status, 200, told.text);
+      view = told.json;
+      assert.equal(view["sheets"][0].version, "A");
+      assert.equal(view["queue"].total, 0, "the answers are decided from what was read, with no rescan");
+      assert.equal(view["sheets"][0].complete, true);
+      assert.equal(view["sheets"][0].earned, view["sheets"][0].possible);
+    });
+  });
+
+  test("lets a second decision on a question replace the first, and a decision taken back leaves the reader's reading", async () => {
+    await withApp(async (client) => {
+      const { record, sid } = await ready(client);
+      const marks = marksFor(rightPlaces(record, "A"), 1);
+      delete (marks as { answers: Record<number, unknown> }).answers[4];
+      await pixels(client, sid, drawn(record).render(marks), "blank four.png");
+      const url = `/api/scoring/${sid}/decisions`;
+      await client.post(url, { sheet: 1, kind: "answer", question: 4, places: [0] });
+      const second = await client.post<Json>(url, { sheet: 1, kind: "answer", question: 4, places: [1] });
+      assert.equal(second.json["decisions"], 1, "one decision for one question");
+      const detail = (await client.get<Json>(`/api/scoring/${sid}/sheets/1`)).json;
+      assert.equal(detail["questions"][3].marked, "B", "the later one stands");
+      const undone = await client.post<Json>(`${url}/undo`, { sheet: 1, kind: "answer", question: 4 });
+      assert.equal(undone.json["decisions"], 0);
+      assert.equal(undone.json["queue"].total, 1, "back to what the reader said: this row was blank, and not yet confirmed");
+    });
+  });
+
+  test("sends the queue from where it is asked to start", async () => {
+    await withApp(async (client) => {
+      const { record, sid } = await ready(client);
+      const marks = marksFor(rightPlaces(record, "A"), 1);
+      for (const q of [2, 3, 4]) delete (marks as { answers: Record<number, unknown> }).answers[q];
+      await pixels(client, sid, drawn(record).render(marks), "three blanks.png");
+      const all = (await client.get<Json>(`/api/scoring/${sid}`)).json["queue"];
+      assert.equal(all.total, 3);
+      const later = (await client.get<Json>(`/api/scoring/${sid}?after=1`)).json["queue"];
+      assert.equal(later.total, 3, "the total is of the whole queue");
+      assert.deepEqual(later.items.map((i: Json) => i.question), all.items.slice(1).map((i: Json) => i.question));
+      assert.equal((await client.get(`/api/scoring/${sid}?after=-1`)).status, 400);
+    });
+  });
+
+  test("does not record an adjustment for every version as a list of them, and refuses a worth no question has", async () => {
+    await withApp(async (client) => {
+      const { record, sid } = await ready(client);
+      await pixels(client, sid, drawn(record).render(marksFor(rightPlaces(record, "A"), 1)), "a.png");
+      const base = `/api/scoring/${sid}/adjustments`;
+      const both = await client.post<Json>(base, { kind: "drop", question: 1, versions: [1, 2] });
+      assert.equal(both.json["adjustments"][0].versions, undefined, "all the versions is the same as saying nothing");
+      assert.equal((await client.post<Json>(base, { kind: "points", question: 2, points: 1001 })).status, 400);
+      assert.equal((await client.post<Json>(base, { kind: "points", question: 2, points: 1000 })).status, 200);
+      assert.equal((await client.post<Json>(base, { kind: "points", question: 2, points: "2" })).status, 400);
+    });
+  });
+
+  test("keeps no figures and writes no results for a sitting with nothing scored, and says a refused page that is not waiting is not", async () => {
+    await withApp(async (client) => {
+      const { sid } = await ready(client);
+      const none = await client.post<Json>(`/api/scoring/${sid}/statistics`, { confirm: true });
+      assert.equal(none.status, 400);
+      assert.match(String(none.json["error"]), /no complete sheets/);
+      const written = await client.post<Json>(`/api/scoring/${sid}/export`, {});
+      assert.equal(written.status, 400);
+      assert.match(String(written.json["error"]), /no sheets/);
+      const stray = await client.post<Json>(`/api/scoring/${sid}/refused`, { page: 1, reason: "x", replace: 0 });
+      assert.equal(stray.status, 400);
+      assert.equal((await client.post<Json>(`/api/scoring/${sid}/save`)).status, 200, "an empty sitting can be saved, and is a scores file of no sheets");
     });
   });
 });
@@ -500,6 +660,22 @@ describe("what is kept and what is written", () => {
       assert.equal(damaged.status, 422);
       const listed = await client.get<Json>("/api/scores");
       assert.ok(listed.json["files"].some((f: Json) => f.name === "Not scores.openassess-scores" && f.problem), "listed, with what is wrong with it");
+    });
+  });
+
+test("will not open scores against a test whose record has changed since, even under the same id", async () => {
+    await withApp(async (client) => {
+      const { sid, bank, record } = await scored(client);
+      const name = ((await client.post<Json>(`/api/scoring/${sid}/save`)).json["name"]) as string;
+      // The same id and the same questions, made again with another seed: the versions come out differently, so the sheets printed from the first
+      // would be read against the wrong answers.
+      await client.server.context.banks.change(bank, (b) => {
+        b.removeTest(record.id);
+        b.addTest(createTest({ id: record.id, name: record.name, questions: record.questions, versions: 2, seed: "another seed", at: record.created }));
+      });
+      const reply = await client.post<Json>("/api/scoring/open", { name });
+      assert.equal(reply.status, 409);
+      assert.match(String(reply.json["error"]), /fingerprint/);
     });
   });
 
@@ -602,7 +778,7 @@ describe("who may ask, and how much", () => {
       const sid = (await client.post<Json>(`/api/sheets/${encodeURIComponent(bank)}/tests/${test["id"]}/score`)).json["id"] as string;
       for (const name of ["..\\x.openassess-scores", "../x.openassess-scores", "a/b.openassess-scores", "CON.openassess-scores", "plain.txt"]) {
         const reply = await client.post<Json>("/api/scoring/open", { name });
-        assert.ok([400, 404].includes(reply.status), `${name}: ${reply.status}`);
+        assert.equal(reply.status, 400, name);
       }
       assert.equal((await client.post<Json>("/api/scoring/open", { name: "../x.openassess-scores" })).status, 400);
       for (const id of ["..", "x", "%2e%2e", "0123456789abcdef0123"]) assert.equal((await client.get(`/api/scoring/${id}`)).status, 404, id);
@@ -645,7 +821,7 @@ describe("who may ask, and how much", () => {
       const heic = new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0]);
       const reply = await post(client, `/api/scoring/${sid}/files?name=photo.heic`, heic);
       assert.equal(reply.status, 200, reply.text);
-      const view = (reply.json as Json)["view"] as Json;
+      const view = (await client.get<Json>(`/api/scoring/${sid}`)).json;
       assert.equal(view["pages"][0].ok, false);
       assert.match(view["pages"][0].reason, /HEIC/);
       assert.equal((await post(client, `/api/scoring/${sid}/files?name=empty.png`, new Uint8Array(0))).status, 400);

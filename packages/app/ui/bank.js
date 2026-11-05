@@ -73,6 +73,7 @@ export async function renderBank(host, params, shell) {
         h("button", { type: "button", text: "Rename", on: { click: () => void rename() } }),
         h("button", { type: "button", text: "Print…", on: { click: () => shell.go(`#/print/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", text: "Export…", on: { click: () => shell.go(`#/export/${encodeURIComponent(params.name)}`) } }),
+        h("button", { type: "button", text: "Answer sheets…", on: { click: () => shell.go(`#/sheets/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", class: "danger", text: "Remove…", on: { click: () => void remove() } }),
       ),
     );

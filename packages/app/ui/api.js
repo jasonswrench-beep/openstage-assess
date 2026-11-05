@@ -55,3 +55,19 @@ export const get = (/** @type {string} */ path) => api("GET", path);
 export const post = (/** @type {string} */ path, /** @type {unknown} */ body = {}) => api("POST", path, body);
 export const put = (/** @type {string} */ path, /** @type {unknown} */ body) => api("PUT", path, body);
 export const del = (/** @type {string} */ path) => api("DELETE", path);
+
+/**
+ * The bytes of something the server holds for the window to open (a picture it could not decode itself).
+ * @param {string} path
+ * @returns {Promise<Uint8Array>}
+ */
+export async function getBytes(path) {
+  let reply;
+  try {
+    reply = await fetch(`/api/${path}`);
+  } catch {
+    throw new ApiError("OpenAssess could not be reached. Close it and open it again.", 0);
+  }
+  if (!reply.ok) throw new ApiError(`Something went wrong (${reply.status}).`, reply.status);
+  return new Uint8Array(await reply.arrayBuffer());
+}

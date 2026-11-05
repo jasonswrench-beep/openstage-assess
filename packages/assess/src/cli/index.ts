@@ -51,6 +51,7 @@ import { answerAt, versionQuestions, type TestRecord } from "../model/test.ts";
 import { safeName } from "../export/text.ts";
 import { SheetReader } from "../sheets/read.ts";
 import { checkPrinting } from "../sheets/check-print.ts";
+import { printTestPaper } from "../sheets/paper.ts";
 
 const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
 
@@ -101,6 +102,11 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       The accuracy gate for the answer sheet reader. Sheets with known answers are
       drawn, filled in like a student's, damaged like a scan or a photograph, and read.
       An answer read wrong without a flag fails it. Exit code 1 on failure.
+
+  openassess sheets print <bank${BANK_EXTENSION}> --out <folder> [--test <id or name>] [--paper letter|a4] [--sheet shared|each|none] [--large] [--no-booklets] [--no-keys] [--docx] [--no-name-box]
+      Write the paper for an assembled test: the answer sheet (a PDF, one for every version or
+      one for each), and a student booklet and an answer key for each version. The booklets and
+      keys are PDF, or Word with --docx. A file already in the folder is never written over.
 
   openassess sheets read <bank${BANK_EXTENSION}> <picture.png|scan.pdf|folder...> [--test <id or name>] [--json]
       Read scanned answer sheets against a test in the bank. One picture is shown in
@@ -158,7 +164,7 @@ function positional(args: string[]): string[] {
     const value = args[i] as string;
     if (value.startsWith("--")) {
       // Flags that take a value consume the next item.
-      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test", "date", "drop", "credit", "points", "also-right"].includes(value.slice(2))) i++;
+      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test", "date", "drop", "credit", "points", "also-right", "paper", "sheet"].includes(value.slice(2))) i++;
       continue;
     }
     out.push(value);
@@ -594,6 +600,33 @@ async function cmdSheets(args: string[]): Promise<number> {
     console.log(formatGate(report));
     return report.passed ? 0 : 1;
   }
+  if (sub === "print") {
+    const [bankPath] = positional(rest);
+    const out = arg(rest, "out");
+    if (!bankPath || !out) return fail("Name a bank file and a folder: sheets print <bank> --out <folder>.");
+    const paper = arg(rest, "paper") ?? "letter";
+    if (paper !== "letter" && paper !== "a4") return fail(`--paper is letter or a4, not "${paper}".`);
+    const sheet = arg(rest, "sheet") ?? "shared";
+    if (sheet !== "shared" && sheet !== "each" && sheet !== "none") return fail(`--sheet is shared, each or none, not "${sheet}".`);
+    const { bank } = await Bank.open(resolve(bankPath));
+    const chosen = pickTest(bank, rest);
+    if ("error" in chosen) return fail(chosen.error);
+    const made = printTestPaper(chosen.test, { paper, sheet, large: has(rest, "large"), booklets: !has(rest, "no-booklets"), keys: !has(rest, "no-keys"), nameBox: !has(rest, "no-name-box"), formats: has(rest, "docx") ? ["docx"] : ["pdf"] });
+    if (!made.ok) return fail(made.reason);
+    const folder = resolve(out);
+    await mkdir(folder, { recursive: true });
+    for (const file of made.files) {
+      // A file that is already there is never written over: the new one is named for the next free number.
+      let name = file.name;
+      for (let n = 2; await stat(join(folder, name)).then(() => true, () => false); n++) name = file.name.replace(/(\.[a-z]+)$/, ` ${n}$1`);
+      await writeFile(join(folder, name), file.bytes);
+      console.log(`  Wrote ${join(folder, name)}${file.pages ? ` (${file.pages} page${file.pages === 1 ? "" : "s"})` : ""}`);
+    }
+    for (const note of made.notes) console.log(`Note: ${note}`);
+    for (const line of made.unprinted) console.log(`Not printed: ${line}`);
+    if (made.files.some((f) => f.kind === "sheet")) console.log("Print the answer sheet at 100 percent (actual size), not fit to page, then use: sheets check.");
+    return 0;
+  }
   if (sub === "read" || sub === "check") {
     const [bankPath, ...scans] = positional(rest);
     if (!bankPath || scans.length === 0) return fail(`Name a bank file and a picture: sheets ${sub} <bank> <picture.png|scan.pdf|folder>.`);
@@ -756,7 +789,7 @@ async function cmdSheets(args: string[]): Promise<number> {
     }
     if (stats.mean !== undefined) console.log(`Mean ${stats.mean} of ${stats.possible} (standard deviation ${stats.sd}) over ${stats.sheets} complete sheet${stats.sheets === 1 ? "" : "s"}${stats.reliability ? `; ${stats.reliability.kind} ${stats.reliability.value}` : ""}.`);
     for (const note of stats.notes) console.log(`Note: ${note}`);
-    for (const a of adjustments) console.log(`Adjustment: question ${versionQuestions(record, "A").findIndex((q) => q.id === a.questionId) + 1}: ${adjustmentWords(a)}${a.note ? ` (${a.note})` : ""}`);
+    for (const a of adjustments) console.log(`Adjustment: question ${versionQuestions(record, "A").findIndex((q) => q.id === a.questionId) + 1}: ${adjustmentWords(a, record)}${a.note ? ` (${a.note})` : ""}`);
 
     const out = arg(rest, "out");
     if (out) {
@@ -783,7 +816,7 @@ async function cmdSheets(args: string[]): Promise<number> {
     }
     return scores.every((s) => s.complete) ? 0 : 1;
   }
-  return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, read, check, score and rescore.` : "Say which sheets command: gate, read, check, score or rescore.");
+  return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, print, read, check, score and rescore.` : "Say which sheets command: gate, print, read, check, score or rescore.");
 }
 
 function cmdContract(): number {

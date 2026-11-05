@@ -152,16 +152,42 @@ no file name, picture or name; a bank holds class-level figures only (`model/sta
 name from being carried in by another writer. Do not add a field to either to make something easier,
 and do not write figures into a bank unless the instructor asked (`--save-statistics`).
 
+**The app never keeps a picture of a student's sheet, and keeps what it holds in memory until the person saves.**
+A scoring sitting (`packages/app/src/scoring.ts`) holds the readings, the person's decisions and the
+adjustments, and for each question a person may have to look at a small cut-out of the row, cut upright
+through the reader's own transform (`sheets/crop.ts`) and served as a PNG; the page itself is let go as soon as
+it is read. Nothing is written until the person saves a scores file (under `Scores`, through the engine's
+whitelist writer) or writes results (into `Exports`, never over a file, with an empty Name column). The file
+labels the window gives a scan are shown to the person and live only in memory: none reaches a file. Class
+figures go into a bank only when the request says `confirm: true`, and once for a state of the sitting. A
+sitting opened from a saved file has no pictures, and takes no more scans, because its sheet numbers are the
+ones its decisions refer to. Do not keep a whole picture to make Review nicer.
+
+**The window decodes what it can, and a page nothing could open is kept as a refused page, in its place.**
+`ui/scan.js` makes a JPEG, WebP, GIF or BMP into grey pixels (the camera's turn applied, laid on white, 3300
+pixels on the long side) and sends the pixels; a PNG or a PDF is sent as it is. A JPEG page inside a scanned PDF is
+held in its place until the window sends what it decoded, so the order of the batch is kept, and one that
+cannot be decoded is replaced by a refused page with the reason. Nothing is dropped, and a page that is read is
+never replaced by a refusal (`replace` is for a page that is waiting).
+
+**Review decides nothing for the person.** A flagged question, an unconfirmed blank and an unsettled version are
+queued, never guessed; a decision (`/scoring/<id>/decisions`) is refused for a place the question does not have,
+for two answers to a question that takes one, and before the version is settled; it replaces the reader's reading
+with the reader's own words kept in `readerSaw`; and Z takes the last back. The keys are letters and digits for the
+bubbles, 0 for blank, Enter for several, and the arrows: they are part of the screen and are tested in a browser
+by hand (`TESTING-TODO.md`), so do not rebind one without looking.
+
 ## Commands
 
 ```
-npm test                       # 1894 engine tests and 124 app tests, Node's own runner
+npm test                       # 1912 engine tests and 157 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- sheets gate  # the answer sheet reader's gate: no answer read wrong without a flag, on drawn and spoiled sheets
 npm run assess -- sheets read <bank> <picture.png|scan.pdf|folder>    # scanned sheets against a test in the bank, put into sheets in order
 npm run assess -- sheets score <bank> <scans...> [--accept-blanks] [--drop N] [--out <folder>]   # scores, item statistics, and with --out the scores file, workbook, CSV and item analysis
+npm run assess -- sheets print <bank> --out <folder>   # the answer sheet, and a booklet and a key for each version
 npm run assess -- sheets rescore <bank> <file.openassess-scores>   # score again from a saved file, with no rescan
 npm run assess -- sheets check <bank> <picture.png>   # Check my printing: a scan of a blank printed copy
 npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine

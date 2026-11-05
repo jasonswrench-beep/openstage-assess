@@ -62,9 +62,17 @@ export function checkPrinting(reader: SheetReader, image: GreyImage, options: Ch
   if (dirtyVersion.length > 0) {
     problems.push(`A version bubble reads as marked or unclear on a copy that should be blank (${read.flags.find((f) => f.kind === "version")?.reason ?? `fill ${dirtyVersion.map((v) => v.toFixed(2)).join(", ")}`}) Check that the copy is unmarked and the sheet is clean.`);
   }
-  const marked = questions.filter((q) => q.status === "answered" || (q.status === "flagged" && q.kind !== "registration" && q.kind !== "bilevel"));
-  const total = questions.filter((q) => q.status !== "notOnSheet").length;
-  const blank = questions.filter((q) => q.status === "blank").length;
+  // A shared sheet of a test with several versions has no questions decided on a blank copy, since which version it is stays unknown, and a check
+  // that looked only at decided questions would count none and find nothing. The fills of every bubble are on the reading either way, so a copy whose
+  // version is not known is judged by them: a row with any bubble above what paper reads as is marked.
+  const byFill = questions.length === 0 && Object.keys(read.fills).length > 0;
+  const marked = byFill
+    ? Object.entries(read.fills)
+        .filter(([, fills]) => fills.some((fill) => fill > BLANK))
+        .map(([number]) => ({ number: Number(number) }))
+    : questions.filter((q) => q.status === "answered" || (q.status === "flagged" && q.kind !== "registration" && q.kind !== "bilevel"));
+  const total = byFill ? Object.keys(read.fills).length : questions.filter((q) => q.status !== "notOnSheet").length;
+  const blank = byFill ? total - marked.length : questions.filter((q) => q.status === "blank").length;
   const bubbles = Object.values(read.fills).flat();
   const darkest = bubbles.length ? Math.max(...bubbles) : 0;
   found.push(`${blank} of ${total} questions read as blank; the darkest bubble reads ${darkest.toFixed(2)} where a mark reads 0.5 or more and paper reads 0.00 to 0.02.`);

@@ -146,6 +146,12 @@ describe("Check my printing", () => {
     const smudged = checkPrinting(new SheetReader(several), sheet.render({ versions: [{ version: 2, mark: { kind: "solid" } }] }), { dpi: 200 });
     assert.equal(smudged.ok, false);
     assert.match(smudged.problems.join(" "), /A version bubble reads as marked or unclear on a copy that should be blank/);
+    // The questions are judged too, though which version this is stays unknown on a blank copy: the count is of every row the sheet carries.
+    assert.match(clean.found.join(" "), /29 of 29 questions read as blank/);
+    const dirtyRows = checkPrinting(new SheetReader(several), sheet.render({ answers: { 3: [{ place: 1, mark: { kind: "solid" } }], 9: [{ place: 0, mark: { kind: "light", darkness: 0.4 } }] } }), { dpi: 200 });
+    assert.equal(dirtyRows.ok, false);
+    assert.match(dirtyRows.problems.join(" "), /2 questions \(3, 9\) read as marked on a copy that should be blank/);
+    assert.match(dirtyRows.found.join(" "), /27 of 29 questions read as blank/);
     const faintly = checkPrinting(new SheetReader(several), sheet.render({ versions: [{ version: 1, mark: { kind: "light", darkness: 0.3 } }] }), { dpi: 200 });
     assert.match(faintly.problems.join(" "), /A version bubble reads as marked or unclear/);
   });

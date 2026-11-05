@@ -75,7 +75,7 @@ export function exportResults(record: TestRecord, settled: readonly SettledSheet
     const others = adjustments.filter((x) => x !== a);
     const effect = adjustmentEffect(record, settled, others, a);
     const q = record.questions.find((x) => x.id === a.questionId);
-    adjustmentRows.push([q ? `${first.findIndex((x) => x.id === q.id) + 1}. ${stemOf(q)}` : a.questionId, adjustmentWords(a), a.versions ? a.versions.map((v) => VERSION_LABELS[v - 1]).join(", ") : "All", effect.changed.length, a.note ?? "", a.at ?? ""]);
+    adjustmentRows.push([q ? `${first.findIndex((x) => x.id === q.id) + 1}. ${stemOf(q)}` : a.questionId, adjustmentWords(a, record), a.versions ? a.versions.map((v) => VERSION_LABELS[v - 1]).join(", ") : "All", effect.changed.length, a.note ?? "", a.at ?? ""]);
   }
 
   const statRows: XlsxCell[][] = [["Question", "Question text", "Sheets", "Difficulty", "Point-biserial", "Top 27% less bottom 27%", "Blanks", "Answers marked", "Notes"]];
