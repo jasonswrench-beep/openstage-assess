@@ -191,6 +191,17 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.5); }
 .export .counts { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 8px 0 12px; }
 .export .counts li { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
 .export .counts b { display: block; font-size: 1.3rem; line-height: 1.1; }
+.facets { display: contents; }
+.coverage-choices { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 12px; }
+.field.inline { display: flex; align-items: center; gap: 6px; }
+.coverage .scroll { overflow-x: auto; }
+.coverage table { border-collapse: collapse; min-width: 100%; }
+.coverage caption { text-align: left; color: var(--muted); padding: 0 0 6px; }
+.coverage th, .coverage td { border: 1px solid var(--line); padding: 4px 8px; text-align: right; white-space: nowrap; }
+.coverage th[scope="col"]:first-child, .coverage th[scope="row"] { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.coverage .zero { color: var(--muted); }
+.coverage .total { font-weight: 600; }
+.coverage tfoot th, .coverage tfoot td { border-top-width: 2px; }
 .quality h3 { margin: 16px 0 6px; }
 .quality-kinds { margin: 8px 0; padding-left: 20px; }
 .quality-kinds li { margin: 2px 0; overflow-wrap: anywhere; }

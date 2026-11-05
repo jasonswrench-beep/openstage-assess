@@ -24,6 +24,7 @@ import { runHarness, TARGET_SCORE } from "../harness/run.ts";
 import { validateQuestion } from "../model/schema.ts";
 import { liveFindings } from "../model/findings.ts";
 import { QUALITY_CODES } from "../quality/items.ts";
+import { COVERAGE_AXES, coverage, isCoverageAxis } from "../bank/coverage.ts";
 import { allCapabilities, READ_CONTRACT_VERSION, typeVerdicts } from "../read/index.ts";
 import { QUESTION_TYPES } from "../model/question.ts";
 import { createQuestion } from "../model/create.ts";
@@ -101,6 +102,12 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       changed and the exit code is 0. With --save the notes are written to the questions, as
       Check quality in the app does; the version, history and status of a question stay as they were.
 
+  openassess coverage <bank${BANK_EXTENSION}> [--rows objective] [--cols bloom] [--retired]
+      What the bank covers: how many questions for each value of two things set against each other
+      (objective, chapter, section, tag, bloom, difficulty, type or status). A question with no value is
+      counted under (none), so the grid shows how much is not yet tagged. Retired questions are left
+      out unless --retired. Nothing is changed.
+
   openassess search <bank${BANK_EXTENSION}> <words...>
       Search a bank.
 
@@ -173,7 +180,7 @@ function positional(args: string[]): string[] {
     const value = args[i] as string;
     if (value.startsWith("--")) {
       // Flags that take a value consume the next item.
-      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test", "date", "drop", "credit", "points", "also-right", "paper", "sheet"].includes(value.slice(2))) i++;
+      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test", "date", "drop", "credit", "points", "also-right", "paper", "sheet", "rows", "cols"].includes(value.slice(2))) i++;
       continue;
     }
     out.push(value);
@@ -450,6 +457,31 @@ async function cmdCheck(args: string[]): Promise<number> {
   } else if (run.changed > 0) {
     console.log(`\nNothing was written. Add --save to keep these notes on the questions.`);
   }
+  return 0;
+}
+
+async function cmdCoverage(args: string[]): Promise<number> {
+  const path = positional(args)[0];
+  if (!path) return fail("Name a bank file.");
+  const rows = arg(args, "rows") ?? "objective";
+  const cols = arg(args, "cols") ?? "bloom";
+  if (!isCoverageAxis(rows) || !isCoverageAxis(cols)) return fail(`Choose from ${COVERAGE_AXES.join(", ")} for --rows and --cols.`);
+  const { bank } = await Bank.open(resolve(path));
+  const grid = coverage(bank.sortedQuestions(), rows, cols, { includeRetired: has(args, "retired") });
+  if (grid.total === 0) {
+    console.log("There are no questions to count.");
+    return 0;
+  }
+
+  const head = ["", ...grid.colLabels, "Total"];
+  const body = grid.rowLabels.map((label, r) => [label, ...(grid.cells[r] as number[]).map(String), String(grid.rowTotals[r])]);
+  const foot = ["Total", ...grid.colTotals.map(String), String(grid.total)];
+  const table = [head, ...body, foot];
+  const widths = head.map((_, c) => Math.max(...table.map((row) => (row[c] as string).length)));
+  const line = (row: string[]) => row.map((cell, c) => (c === 0 ? cell.padEnd(widths[c] as number) : cell.padStart(widths[c] as number))).join("  ");
+  console.log(`${grid.total} question(s), ${rows} down and ${cols} across.\n`);
+  for (const row of table) console.log(line(row));
+  if (rows === "tag" || cols === "tag") console.log("\nA question with several tags is counted under each, so the totals can be more than the number of questions.");
   return 0;
 }
 
@@ -914,6 +946,8 @@ async function main(): Promise<number> {
       return cmdExport(args);
     case "check":
       return cmdCheck(args);
+    case "coverage":
+      return cmdCoverage(args);
     case "search":
       return cmdSearch(args);
     case "score":

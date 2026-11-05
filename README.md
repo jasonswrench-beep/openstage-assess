@@ -150,6 +150,12 @@ only and answers only to the window it opened.
   guessed. No picture of a sheet is kept: only a small cut-out of each row a person has to look at,
   in memory, and a scores file you save holds readings and decisions and no name, file name or
   picture. The same paper can be made from the command line with `assess sheets print`.
+- Coverage (the "Coverage" button on a bank, or `assess coverage <bank> [--rows objective] [--cols bloom]`): how many
+  questions a bank has for each objective, chapter, section, tag, Bloom level, difficulty, kind or status, and any two of them
+  against each other as a grid, with totals. A question with nothing set is counted under "Not set" so the grid shows how much is
+  not yet tagged, retired questions are left out, and a question with several tags is counted under each. Each count in the app
+  is a button that narrows the list to those questions. A bank's list can also be narrowed to one chapter, objective, section,
+  tag, Bloom level, difficulty or status, whichever the bank has values for.
 - Check quality (the "Check quality" button on a bank, or `assess check <bank>`): notes about the
   writing and the accessibility of each question, never warnings, so a note cannot change whether
   a question counts as read or what an export holds back. They name an option that depends on the
@@ -230,6 +236,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `sheets check <bank> <picture.png> [--test <id>]` | Check my printing: read a scan of a blank printed copy and say whether the printing is fine |
 | `sheets score <bank> <scans...> [--test <id>] [--accept-blanks] [--drop N] [--credit N] [--points N:P] [--also-right N:L] [--out <folder>] [--save-statistics]` | Score scanned sheets against the test's own key, with adjustments and item statistics; `--out` writes the scores file, workbook, CSV and item analysis; the bank keeps class figures only with `--save-statistics` |
 | `sheets rescore <bank> <file.openassess-scores>` | Score again from a saved scores file, with no rescan |
+| `coverage <bank> [--rows objective] [--cols bloom] [--retired]` | How many questions the bank has for each value of two things set against each other (objective, chapter, section, tag, bloom, difficulty, type, status); nothing is changed |
 | `check <bank> [--save]` | Notes about the writing and accessibility of each question, and across the bank the same question twice and right answers that sit in one place too often; nothing is changed unless `--save`, which writes only the notes |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |

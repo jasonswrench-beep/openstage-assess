@@ -24,6 +24,23 @@ const NOTE_NAMES = {
   "a11y.long-matching-list": "A long matching list",
 };
 
+/** The label of a question that has no value for a thing, as the engine writes it. */
+const NONE = "(none)";
+
+/** What a list can be narrowed by, besides the kind and the checks: the name the engine uses, and the words the screen uses. */
+const FILTER_AXES = [
+  ["objective", "Objective"],
+  ["chapter", "Chapter"],
+  ["section", "Section"],
+  ["tag", "Tag"],
+  ["bloom", "Bloom level"],
+  ["difficulty", "Difficulty"],
+  ["status", "Status"],
+];
+
+/** What the coverage grid can put down the side and across the top. */
+const COVERAGE_CHOICES = [...FILTER_AXES.slice(0, 6), ["type", "Kind of question"], ["status", "Status"]];
+
 /**
  * @param {HTMLElement} host
  * @param {{ name: string }} params
@@ -36,6 +53,10 @@ export async function renderBank(host, params, shell) {
   let query = "";
   let type = "";
   let check = "";
+  /** The things the list is narrowed to besides the kind and the checks: an axis and the one value it must have. @type {Record<string, string>} */
+  let filters = {};
+  let coverageRows = "objective";
+  let coverageCols = "bloom";
   /** @type {string | null} */
   let selected = null;
   /** @type {ReturnType<typeof createEditor> | null} */
@@ -45,6 +66,10 @@ export async function renderBank(host, params, shell) {
   clear(host);
   const head = h("div", { class: "page-head" });
   const tools = h("div", { class: "tools" });
+  const facetBar = h("div", { class: "facets" });
+  const clearButton = h("button", { type: "button", class: "small-button", text: "Clear filters", on: { click: () => void clearFilters() } });
+  /** The choices the facet selects were built from, so that they are built again only when the bank's own values change (a select rebuilt under a person's hands loses their place). */
+  let facetsKey = "";
   const list = h("ul", { class: "qlist", attrs: { "aria-label": "Questions" } });
   const detail = h("div", { class: "detail", attrs: { "aria-live": "polite" } });
   host.append(head, tools, h("div", { class: "panes" }, h("div", { class: "pane-list" }, list), detail));
@@ -86,6 +111,7 @@ export async function renderBank(host, params, shell) {
         h("button", { type: "button", text: "Print…", on: { click: () => shell.go(`#/print/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", text: "Export…", on: { click: () => shell.go(`#/export/${encodeURIComponent(params.name)}`) } }),
         h("button", { type: "button", text: "Answer sheets…", on: { click: () => shell.go(`#/sheets/${encodeURIComponent(params.name)}`) } }),
+        h("button", { type: "button", text: "Coverage", on: { click: () => void showCoverage() } }),
         h("button", { type: "button", text: "Check quality", on: { click: () => void checkQuality() } }),
         h("button", { type: "button", class: "danger", text: "Remove…", on: { click: () => void remove() } }),
       ),
@@ -118,7 +144,48 @@ export async function renderBank(host, params, shell) {
       add.value = "";
       if (chosen && (await canLeave())) await startNew(chosen);
     });
-    tools.append(search, kinds, checks, add);
+    facetsKey = "";
+    renderFacets();
+    tools.append(search, kinds, facetBar, checks, clearButton, add);
+  }
+
+  /** The selects for narrowing the list to a chapter, an objective, a tag and so on: only those the bank has values for. */
+  function renderFacets() {
+    clearButton.hidden = !filtersActive();
+    const key = JSON.stringify(bank.facets ?? {});
+    if (key === facetsKey) return;
+    facetsKey = key;
+    clear(facetBar);
+    for (const [axis, label] of FILTER_AXES) {
+      /** @type {Array<{ value: string, count: number }>} */
+      const choices = bank.facets?.[axis] ?? [];
+      const worth = choices.some((c) => c.value !== NONE) && (axis !== "status" || choices.length > 1);
+      if (!worth && !filters[axis]) continue;
+      const select = h(
+        "select",
+        { attrs: { "aria-label": label } },
+        h("option", { value: "", text: `Any ${label.toLowerCase()}` }),
+        ...choices.map((c) => h("option", { value: c.value, text: `${c.value === NONE ? "Not set" : c.value} (${c.count})`, selected: filters[axis] === c.value })),
+      );
+      select.addEventListener("change", async () => {
+        if (select.value) filters[axis] = select.value;
+        else delete filters[axis];
+        await reload();
+      });
+      facetBar.append(select);
+    }
+  }
+
+  function filtersActive() {
+    return Object.keys(filters).length > 0 || type !== "" || check !== "";
+  }
+
+  async function clearFilters() {
+    filters = {};
+    type = "";
+    check = "";
+    renderTools();
+    await reload();
   }
 
   function renderList() {
@@ -136,10 +203,12 @@ export async function renderBank(host, params, shell) {
     if (query.trim()) params2.set("q", query.trim());
     if (type) params2.set("type", type);
     if (check) params2.set("check", check);
+    for (const [axis, value] of Object.entries(filters)) params2.set(axis, value);
     const suffix = params2.toString();
     bank = await get(suffix ? `${base}?${suffix}` : base);
     renderHead();
     renderList();
+    renderFacets();
   }
 
   /** @param {string} id */
@@ -201,6 +270,7 @@ export async function renderBank(host, params, shell) {
       query = "";
       type = "";
       check = "";
+      filters = {};
       renderTools();
       await reload();
       showQuality(result);
@@ -256,6 +326,103 @@ export async function renderBank(host, params, shell) {
     check = "notes";
     renderTools();
     await reload();
+  }
+
+  /**
+   * What the bank covers, as a grid of two things against each other (objectives down and Bloom levels across, to begin with), in
+   * the pane where a question would be. Every count above nothing is a button that narrows the list to those questions.
+   */
+  async function showCoverage() {
+    if (!(await canLeave())) return;
+    selected = null;
+    renderList();
+    await drawCoverage();
+  }
+
+  /** @param {string} id @param {string} label @param {string} value @param {(value: string) => void} onChange */
+  function axisChoice(id, label, value, onChange) {
+    const select = h("select", { id }, ...COVERAGE_CHOICES.map(([axis, name]) => h("option", { value: axis, text: name, selected: axis === value })));
+    select.addEventListener("change", () => onChange(select.value));
+    return h("div", { class: "field inline" }, h("label", { for: id, text: label }), select);
+  }
+
+  async function drawCoverage() {
+    /** @type {any} */
+    let grid;
+    try {
+      grid = await get(`${base}/coverage?rows=${encodeURIComponent(coverageRows)}&cols=${encodeURIComponent(coverageCols)}`);
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+      return;
+    }
+    hold();
+    const nameOf = (/** @type {string} */ axis) => String(COVERAGE_CHOICES.find(([a]) => a === axis)?.[1] ?? axis);
+    const heading = h("h2", { text: "Coverage", attrs: { tabindex: "-1" } });
+    const panel = h("section", { class: "card coverage" }, heading);
+    panel.append(
+      h("p", { class: "sub", text: grid.total === 0 ? "There are no questions to count." : `${plural(grid.total, "question", "questions")} counted. Retired questions are left out, and a question with nothing set is counted under "Not set".` }),
+      h(
+        "div",
+        { class: "coverage-choices" },
+        axisChoice("coverage-rows", "Down", coverageRows, (value) => {
+          coverageRows = value;
+          void drawCoverage();
+        }),
+        axisChoice("coverage-cols", "Across", coverageCols, (value) => {
+          coverageCols = value;
+          void drawCoverage();
+        }),
+      ),
+    );
+
+    if (grid.total > 0) {
+      const shown = (/** @type {string} */ label) => (label === NONE ? "Not set" : label);
+      const table = h("table", null, h("caption", { text: `Questions by ${nameOf(coverageRows).toLowerCase()} (down) and ${nameOf(coverageCols).toLowerCase()} (across)` }));
+      table.append(
+        h("thead", null, h("tr", null, h("th", { attrs: { scope: "col" }, text: nameOf(coverageRows) }), ...grid.colLabels.map((/** @type {string} */ c) => h("th", { attrs: { scope: "col" }, text: shown(c) })), h("th", { attrs: { scope: "col" }, text: "Total" }))),
+      );
+      const body = h("tbody");
+      grid.rowLabels.forEach((/** @type {string} */ r, /** @type {number} */ ri) => {
+        const row = h("tr", null, h("th", { attrs: { scope: "row" }, text: shown(r) }));
+        grid.colLabels.forEach((/** @type {string} */ c, /** @type {number} */ ci) => {
+          const count = grid.cells[ri][ci];
+          row.append(
+            h(
+              "td",
+              null,
+              count > 0
+                ? h("button", { type: "button", class: "small-button cell-button", text: String(count), attrs: { "aria-label": `${count} ${count === 1 ? "question" : "questions"}: ${shown(r)}, ${shown(c)}. Show them.` }, on: { click: () => void showCell(r, c) } })
+                : h("span", { class: "zero", text: "0" }),
+            ),
+          );
+        });
+        row.append(h("td", { class: "total", text: String(grid.rowTotals[ri]) }));
+        body.append(row);
+      });
+      table.append(
+        body,
+        h("tfoot", null, h("tr", null, h("th", { attrs: { scope: "row" }, text: "Total" }), ...grid.colTotals.map((/** @type {number} */ n) => h("td", { class: "total", text: String(n) })), h("td", { class: "total", text: String(grid.total) }))),
+      );
+      panel.append(h("div", { class: "scroll" }, table));
+      if (coverageRows === "tag" || coverageCols === "tag") panel.append(h("p", { class: "hint", text: "A question with several tags is counted under each, so the totals can be more than the number of questions." }));
+    }
+    detail.append(panel);
+    heading.focus();
+  }
+
+  /** Narrow the list to the questions of one cell of the grid. */
+  async function showCell(/** @type {string} */ rowLabel, /** @type {string} */ colLabel) {
+    filters = {};
+    type = "";
+    check = "";
+    query = "";
+    for (const [axis, value] of [[coverageRows, rowLabel], [coverageCols, colLabel]]) {
+      if (axis === "type") type = /** @type {string} */ (value);
+      else filters[/** @type {string} */ (axis)] = /** @type {string} */ (value);
+    }
+    renderTools();
+    await reload();
+    shell.notify(`${plural(bank.questions.length, "question", "questions")} shown. Clear filters shows them all again.`, "ok");
   }
 
   /** @param {string} kind */

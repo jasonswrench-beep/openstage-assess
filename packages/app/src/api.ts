@@ -22,6 +22,11 @@ import {
   liveFindings,
   linesToBlocks,
   newQuestionId,
+  COVERAGE_AXES,
+  coverage,
+  facets,
+  isCoverageAxis,
+  matchesFacets,
   QUALITY_CODES,
   QUESTION_TYPES,
   runImporter,
@@ -334,13 +339,36 @@ function qualityView(bank: Bank, run: QualityRun) {
   };
 }
 
+/**
+ * What the bank covers, for the grid: two of objective, chapter, section, tag, Bloom level, difficulty, kind and status, against
+ * each other. Nothing is stored, and nothing is changed.
+ */
+function coverageRoute(ctx: Context, name: string, query: URLSearchParams) {
+  const rows = query.get("rows") ?? "objective";
+  const cols = query.get("cols") ?? "bloom";
+  if (!isCoverageAxis(rows) || !isCoverageAxis(cols)) throw badRequest(`Choose rows and columns from ${COVERAGE_AXES.join(", ")}.`);
+  return ctx.banks.open(name).then((bank) => ok(coverage(bank.sortedQuestions(), rows, cols, { includeRetired: query.get("retired") === "1" })));
+}
+
+/** The things a list can be narrowed by, from the address: each is one value, and "(none)" asks for a question without one. */
+function facetFilters(query: URLSearchParams): Partial<Record<(typeof COVERAGE_AXES)[number], string>> {
+  const out: Partial<Record<(typeof COVERAGE_AXES)[number], string>> = {};
+  for (const axis of COVERAGE_AXES) {
+    const value = query.get(axis);
+    if (value) out[axis] = value;
+  }
+  return out;
+}
+
 function listQuestions(questions: Question[], query: URLSearchParams): Question[] {
   const type = query.get("type");
   const status = query.get("status");
   const check = query.get("check");
+  const narrowed = facetFilters(query);
   return questions.filter((q) => {
     if (type && q.type !== type) return false;
     if (status && q.metadata.status !== status) return false;
+    if (!matchesFacets(q, narrowed)) return false;
     if (check === "notes") return liveNotes(q).length > 0;
     if (check) {
       const verdict = verdictOf(q);
@@ -387,6 +415,8 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
         modified: bank.manifest.modified,
         stats: bank.stats(),
         total: all.length,
+        // The choices for narrowing the list, counted over the whole bank (retired included, since a list can show them).
+        facets: facets(all, { includeRetired: true }),
         questions: shown.map((q) => ({ ...summarise(q, all.indexOf(q)), notes: liveNotes(q).length })),
       });
     }
@@ -408,6 +438,8 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   if (what === "print" && req.method === "POST" && (id === "check" || id === undefined)) {
     return printRoute(ctx, req, name, id === "check" ? "check" : "write");
   }
+
+  if (what === "coverage" && id === undefined && req.method === "GET") return coverageRoute(ctx, name, req.query);
 
   // Check quality: the notes are written to the questions (not as an edit: no version, no history entry on a question, no change of
   // status), and what is across the bank is worked out and sent, not kept.

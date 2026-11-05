@@ -66,7 +66,9 @@ export * from "./container/zip.ts";
 export * from "./container/layout.ts";
 export { Bank } from "./bank/store.ts";
 export type { OpenReport, BankStats, QualityRun } from "./bank/store.ts";
-export { SearchIndex, tokenize, searchableText, matchesQuery } from "./bank/search.ts";
+export { SearchIndex, fold, tokenize, searchableText, matchesQuery } from "./bank/search.ts";
+export { COVERAGE_AXES, NONE as COVERAGE_NONE, coverage, facets, isCoverageAxis, matchesFacets, valuesOn } from "./bank/coverage.ts";
+export type { CoverageAxis, CoverageGrid, CoverageOptions, Facet } from "./bank/coverage.ts";
 
 // Quality
 export * from "./quality/answer-key.ts";
