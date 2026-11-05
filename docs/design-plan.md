@@ -1,7 +1,7 @@
 # OpenAssess design plan
 
 Written on 27 October 2026, after reading the product specification (25
-October), the vendor guides for the standard test-bank text format, a long discussion with two AI assistants
+October), the published guides for the standard test-bank text format, a long discussion with two AI assistants
 about what an assessment tool could be, and a working session on what is
 realistic for one person to build. It records what was decided and why, so that
 the next session does not have to rediscover it.
@@ -280,7 +280,7 @@ Brightspace CSV, which carries ordering. Feedback is not carried.
 What the help pages and staff replies say: a D2L staff reply says the Quizzes tool takes a zip up to QTI 1.2 and reports "no
 quizzes or sections can be found" when the structure is not what it reads. D2L's own course import table (Course import and
 course conversion support) lists QTI 1.2.1 and IMS CP 1.1.2, 1.1.3 or 1.2 for the packages Import/Export/Copy Components reads,
-and a commercial test-bank tool's guide gives the steps for a QTI zip there: Import Components, from a File, Advanced Options, tick Quizzes, and type the
+and a published import guide gives the steps for a QTI zip there: Import Components, from a File, Advanced Options, tick Quizzes, and type the
 exact name of the zip in the Import file to box. D2L's help article for the Question Library (updated August 2026) names a CSV
 file, an existing collection and the Learning Object Repository, and does not name QTI. A staff post said a QTI zip imported
 there lands in a folder named for the file; that is the one claim here the help does not back, and the first try below did
