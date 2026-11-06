@@ -2,8 +2,9 @@
  * A printed test as a PDF, written by hand with no library.
  *
  * The file uses the fonts every PDF reader has built in (Helvetica, in four weights, and Courier), so nothing is embedded
- * and the file is small. That has one cost, said plainly: those fonts hold the Western European characters of Windows
- * Latin-1 and nothing else. A character outside it, such as a letter in another script, cannot be drawn, is printed as a
+ * and the file is small. Those fonts hold the Western European characters of Windows Latin-1, and the built-in Symbol font
+ * holds the Greek letters and the signs of mathematics (less than or equal, the integral, the arrows), which are drawn from it
+ * where a text has them. A character outside both, such as a letter in another script, cannot be drawn, is printed as a
  * question mark, and is counted so that the report can say so and point to the Word file, which can hold any text.
  *
  * The layout is the same as Word's: this draws the blocks it is given. Lines are broken with the real widths of the fonts,
@@ -14,13 +15,33 @@
 
 import { deflateSync } from "node:zlib";
 
+import { symbolCodeOf } from "../import/docx/symbols.ts";
 import type { Block, Para, PdfImage, PrintDocument, PrintedPicture, Run } from "./layout.ts";
 
 const NUMBER_INDENT = 28;
 
 type FontKey = "regular" | "bold" | "italic" | "boldItalic" | "mono";
+/** A face a piece of text is drawn in: one of the Latin faces, or the Symbol font for a Greek letter or a sign. */
+type Face = FontKey | "symbol";
 const BASE_FONT: Record<FontKey, string> = { regular: "Helvetica", bold: "Helvetica-Bold", italic: "Helvetica-Oblique", boldItalic: "Helvetica-BoldOblique", mono: "Courier" };
-const RESOURCE: Record<FontKey, string> = { regular: "F1", bold: "F2", italic: "F3", boldItalic: "F4", mono: "F5" };
+const RESOURCE: Record<Face, string> = { regular: "F1", bold: "F2", italic: "F3", boldItalic: "F4", mono: "F5", symbol: "F6" };
+
+/**
+ * The widths of the Symbol font's characters, by Symbol code, in thousandths of the size (the font's published metrics, written
+ * from memory of them). They decide only where a line is broken: a line with a Symbol character is drawn in one text object, in
+ * which the reader moves along by the font's real widths, so a width that is a little off cannot make two pieces touch.
+ */
+const SYMBOL_WIDTH: Record<number, number> = {
+  0x41: 722, 0x42: 667, 0x43: 722, 0x44: 612, 0x45: 611, 0x46: 763, 0x47: 603, 0x48: 722, 0x49: 333, 0x4a: 631, 0x4b: 722, 0x4c: 686, 0x4d: 889,
+  0x4e: 722, 0x4f: 722, 0x50: 768, 0x51: 741, 0x52: 556, 0x53: 592, 0x54: 611, 0x55: 690, 0x56: 439, 0x57: 768, 0x58: 645, 0x59: 795, 0x5a: 611,
+  0x61: 631, 0x62: 549, 0x63: 549, 0x64: 494, 0x65: 439, 0x66: 521, 0x67: 411, 0x68: 603, 0x69: 329, 0x6a: 603, 0x6b: 549, 0x6c: 549, 0x6d: 576,
+  0x6e: 521, 0x6f: 549, 0x70: 549, 0x71: 521, 0x72: 549, 0x73: 603, 0x74: 439, 0x75: 576, 0x76: 713, 0x77: 686, 0x78: 493, 0x79: 686, 0x7a: 494,
+  0x2d: 549, 0x2a: 500, 0x22: 713, 0x24: 549, 0x27: 439, 0x40: 549, 0x5c: 863, 0x5e: 658, 0x7e: 549,
+  0xa3: 549, 0xa5: 713, 0xab: 1042, 0xac: 987, 0xad: 603, 0xae: 987, 0xaf: 603, 0xb3: 549, 0xb5: 713, 0xb6: 494, 0xb9: 549, 0xba: 549, 0xbb: 549,
+  0xc0: 823, 0xc6: 823, 0xc7: 768, 0xc8: 768, 0xce: 713, 0xcf: 713, 0xd1: 713, 0xd5: 823, 0xd6: 549, 0xd8: 713, 0xd9: 603, 0xda: 603,
+  0xdb: 1042, 0xdc: 987, 0xde: 987, 0xe5: 713, 0xf2: 274,
+};
+const symbolWidth = (code: number): number => SYMBOL_WIDTH[code] ?? 650;
 
 // The widths of the printable characters 32 to 126 in Helvetica and Helvetica-Bold, in thousandths of the size.
 const REGULAR = (
@@ -68,25 +89,56 @@ export function measureText(text: string, size: number, font: "regular" | "bold"
   return (units * size) / 1000;
 }
 
-/** The character codes of a text in Windows Latin-1, and the characters that could not be drawn. */
-function encode(text: string, replaced: Map<string, number>): number[] {
-  const codes: number[] = [];
+/** A run of a text that is drawn in one font: in Windows Latin-1, or in the Symbol font. */
+interface Segment {
+  symbol: boolean;
+  codes: number[];
+}
+
+/**
+ * A text as the codes of Windows Latin-1 and, where a character is a Greek letter or a sign the Symbol font draws, the codes of
+ * that font; and the characters neither can draw, which are written as a question mark and counted. `symbols: false` is for the
+ * places that are not drawn with a change of font (the page footer, the number of a question): a character there is a question mark.
+ */
+function segmentsOf(text: string, replaced: Map<string, number>, symbols: boolean): Segment[] {
+  const segments: Segment[] = [];
+  const add = (symbol: boolean, code: number): void => {
+    const last = segments[segments.length - 1];
+    if (last && last.symbol === symbol) last.codes.push(code);
+    else segments.push({ symbol, codes: [code] });
+  };
   for (const ch of text) {
     const cp = ch.codePointAt(0) as number;
-    if (cp === 0x09 || cp === 0xa0 || (cp >= 0x2000 && cp <= 0x200a)) codes.push(32);
+    if (cp === 0x09 || cp === 0xa0 || (cp >= 0x2000 && cp <= 0x200a)) add(false, 32);
     else if (cp === 0xad || cp === 0x200b || cp === 0x200c || cp === 0x200d || cp === 0xfeff || cp < 32) continue;
-    else if (cp >= 32 && cp <= 126) codes.push(cp);
-    else if (cp >= 0xa1 && cp <= 0xff) codes.push(cp);
-    else if (WIN_ANSI[cp] !== undefined) codes.push(WIN_ANSI[cp] as number);
+    else if (cp >= 32 && cp <= 126) add(false, cp);
+    else if (cp >= 0xa1 && cp <= 0xff) add(false, cp);
+    else if (WIN_ANSI[cp] !== undefined) add(false, WIN_ANSI[cp] as number);
     else {
-      codes.push(63);
-      replaced.set(ch, (replaced.get(ch) ?? 0) + 1);
+      const drawn = symbols ? symbolCodeOf(ch) : undefined;
+      if (drawn !== undefined) add(true, drawn);
+      else {
+        add(false, 63);
+        replaced.set(ch, (replaced.get(ch) ?? 0) + 1);
+      }
     }
   }
-  return codes;
+  return segments;
+}
+
+/** The character codes of a text in Windows Latin-1, and the characters that could not be drawn. */
+function encode(text: string, replaced: Map<string, number>): number[] {
+  return segmentsOf(text, replaced, false).flatMap((s) => s.codes);
 }
 
 const fontOf = (run: Run, whole: boolean): FontKey => (run.mono ? "mono" : (run.bold || whole) && run.italic ? "boldItalic" : run.bold || whole ? "bold" : run.italic ? "italic" : "regular");
+
+/** Part of a word in one face. */
+interface Part {
+  codes: number[];
+  face: Face;
+  width: number;
+}
 
 interface Atom {
   codes: number[];
@@ -96,6 +148,8 @@ interface Atom {
   space: boolean;
   /** A forced line break. */
   newline?: boolean;
+  /** A word with a Greek letter or a sign in it is drawn in more than one face, and is never broken between them. */
+  parts?: Part[];
 }
 
 function atomsOf(runs: Run[], size: number, whole: boolean, replaced: Map<string, number>): Atom[] {
@@ -108,7 +162,14 @@ function atomsOf(runs: Run[], size: number, whole: boolean, replaced: Map<string
       for (const piece of line.split(/( +|\t+)/)) {
         if (piece === "") continue;
         const space = /^[ \t]+$/.test(piece);
-        const codes = space ? [32] : encode(piece, replaced);
+        const segments = space ? [{ symbol: false, codes: [32] }] : segmentsOf(piece, replaced, true);
+        const partWidth = (s: Segment): number => (s.codes.reduce((sum, c) => sum + (s.symbol ? symbolWidth(c) : charWidth(c, font)), 0) * size) / 1000;
+        if (segments.some((s) => s.symbol)) {
+          const parts = segments.map((s): Part => ({ codes: s.codes, face: s.symbol ? "symbol" : font, width: partWidth(s) }));
+          atoms.push({ codes: segments.flatMap((s) => s.codes), font, underline, width: parts.reduce((sum, p) => sum + p.width, 0), space, parts });
+          continue;
+        }
+        const codes = segments.flatMap((s) => s.codes);
         atoms.push({ codes, font, underline, width: (codes.reduce((sum, c) => sum + charWidth(c, font), 0) * size) / 1000, space });
       }
     });
@@ -181,6 +242,8 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
   const top = paper.margin;
   const bottom = paper.height - paper.margin;
   const replaced = new Map<string, number>();
+  // Whether any text is drawn in the Symbol font, which decides whether the file has that font in it.
+  let symbolUsed = false;
 
   // Every block, broken into lines and measured.
   const items: Item[] = doc.blocks.map((block): Item => {
@@ -225,24 +288,41 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
       page().ops.push(`BT /${RESOURCE.regular} ${num(p.size)} Tf 1 0 0 1 ${num(left - hang)} ${num(baseline)} Tm ${pdfString(marker)} Tj ET`);
     }
     let x = left + offset;
-    // Atoms of one font and one underline are drawn together.
-    let group: Atom[] = [];
-    const flush = (): void => {
-      if (group.length === 0) return;
-      const codes = group.flatMap((a) => a.codes);
-      const width = group.reduce((sum, a) => sum + a.width, 0);
-      const font = (group[0] as Atom).font;
-      page().ops.push(`BT /${RESOURCE[font]} ${num(p.size)} Tf 1 0 0 1 ${num(x)} ${num(baseline)} Tm ${pdfString(codes)} Tj ET`);
-      if ((group[0] as Atom).underline) page().ops.push(`0.5 w ${num(x)} ${num(baseline - 1.6)} m ${num(x + width)} ${num(baseline - 1.6)} l S`);
-      x += width;
-      group = [];
-    };
-    for (const atom of line.atoms) {
-      const head = group[0];
-      if (head && (head.font !== atom.font || head.underline !== atom.underline)) flush();
-      group.push(atom);
+    // Parts of one face and one underline are drawn together.
+    interface Group {
+      face: Face;
+      underline: boolean;
+      codes: number[];
+      width: number;
     }
-    flush();
+    const groups: Group[] = [];
+    for (const atom of line.atoms) {
+      for (const part of atom.parts ?? [{ codes: atom.codes, face: atom.font, width: atom.width }]) {
+        const head = groups[groups.length - 1];
+        if (head && head.face === part.face && head.underline === atom.underline) {
+          head.codes.push(...part.codes);
+          head.width += part.width;
+        } else groups.push({ face: part.face, underline: atom.underline, codes: [...part.codes], width: part.width });
+      }
+    }
+    const underline = (g: Group, from: number): void => {
+      if (g.underline) page().ops.push(`0.5 w ${num(from)} ${num(baseline - 1.6)} m ${num(from + g.width)} ${num(baseline - 1.6)} l S`);
+    };
+    if (groups.some((g) => g.face === "symbol")) {
+      // A line with a Greek letter or a sign is one text object, in which the reader moves along by the real widths of the fonts.
+      symbolUsed = true;
+      page().ops.push(`BT 1 0 0 1 ${num(x)} ${num(baseline)} Tm ${groups.map((g) => `/${RESOURCE[g.face]} ${num(p.size)} Tf ${pdfString(g.codes)} Tj`).join(" ")} ET`);
+      for (const g of groups) {
+        underline(g, x);
+        x += g.width;
+      }
+      return;
+    }
+    for (const g of groups) {
+      page().ops.push(`BT /${RESOURCE[g.face]} ${num(p.size)} Tf 1 0 0 1 ${num(x)} ${num(baseline)} Tm ${pdfString(g.codes)} Tj ET`);
+      underline(g, x);
+      x += g.width;
+    }
   };
 
   for (let i = 0; i < items.length; i++) {
@@ -298,24 +378,37 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
   }
 
   // The footer, now that the number of pages is known.
+  // A short line of text in one weight, with a Greek letter or a sign in the Symbol font where the text has one.
+  const widthOf = (segments: Segment[], font: FontKey, size: number): number =>
+    (segments.reduce((sum, s) => sum + s.codes.reduce((t, c) => t + (s.symbol ? symbolWidth(c) : charWidth(c, font)), 0), 0) * size) / 1000;
+  const textObject = (segments: Segment[], font: FontKey, size: number, x: number, y: number): string => {
+    if (!segments.some((s) => s.symbol)) return `BT /${RESOURCE[font]} ${size} Tf 1 0 0 1 ${num(x)} ${num(y)} Tm ${pdfString(segments.flatMap((s) => s.codes))} Tj ET`;
+    symbolUsed = true;
+    return `BT 1 0 0 1 ${num(x)} ${num(y)} Tm ${segments.map((s) => `/${RESOURCE[s.symbol ? "symbol" : font]} ${size} Tf ${pdfString(s.codes)} Tj`).join(" ")} ET`;
+  };
+  /** The same segments with the last character off. */
+  const shorter = (segments: Segment[]): Segment[] => {
+    const last = segments[segments.length - 1] as Segment;
+    return last.codes.length > 1 ? [...segments.slice(0, -1), { symbol: last.symbol, codes: last.codes.slice(0, -1) }] : segments.slice(0, -1);
+  };
+
+  // The footer, now that the number of pages is known.
   pages.forEach((p, index) => {
     const size = 9;
     const baseline = paper.margin / 2;
-    const title = encode(doc.footer, replaced);
-    const right = encode(`Page ${index + 1} of ${pages.length}`, replaced);
-    const rightWidth = (right.reduce((sum, c) => sum + charWidth(c, "regular"), 0) * size) / 1000;
+    const right = segmentsOf(`Page ${index + 1} of ${pages.length}`, replaced, true);
+    const rightWidth = widthOf(right, "regular", size);
     // A long title is cut to leave room for the page number.
-    let shown = title;
+    let shown = segmentsOf(doc.footer, replaced, true);
     const room = textWidth - rightWidth - 12;
-    while (shown.length > 1 && (shown.reduce((sum, c) => sum + charWidth(c, "regular"), 0) * size) / 1000 > room) shown = shown.slice(0, -1);
-    p.ops.push(`BT /${RESOURCE.regular} ${size} Tf 1 0 0 1 ${num(paper.margin)} ${num(baseline)} Tm ${pdfString(shown)} Tj ET`);
-    p.ops.push(`BT /${RESOURCE.regular} ${size} Tf 1 0 0 1 ${num(paper.margin + textWidth - rightWidth)} ${num(baseline)} Tm ${pdfString(right)} Tj ET`);
+    while (shown.reduce((sum, s) => sum + s.codes.length, 0) > 1 && widthOf(shown, "regular", size) > room) shown = shorter(shown);
+    p.ops.push(textObject(shown, "regular", size, paper.margin, baseline));
+    p.ops.push(textObject(right, "regular", size, paper.margin + textWidth - rightWidth, baseline));
   });
 
   // The header, when the test has several versions: the version at the top of every page, so a loose page can be put back with its own.
   if (doc.header) {
-    const text = encode(doc.header, replaced);
-    for (const p of pages) p.ops.push(`BT /${RESOURCE.bold} 9 Tf 1 0 0 1 ${num(paper.margin)} ${num(paper.height - paper.margin / 2)} Tm ${pdfString(text)} Tj ET`);
+    for (const p of pages) p.ops.push(textObject(segmentsOf(doc.header, replaced, true), "bold", 9, paper.margin, paper.height - paper.margin / 2));
   }
 
   // The objects.
@@ -352,7 +445,11 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
   const imageBase = firstPage + 2 * pages.length;
   const imageList = [...images.values()];
   const xobjects = imageList.length > 0 ? ` /XObject << ${imageList.map((entry, k) => `/${entry.name} ${imageBase + k} 0 R`).join(" ")} >>` : "";
-  const resources = `<< /Font << ${(Object.keys(fontIds) as FontKey[]).map((k) => `/${RESOURCE[k]} ${fontIds[k]} 0 R`).join(" ")} >>${xobjects} >>`;
+  // The Symbol font comes after the pictures, so the numbers of every other object are what they were. It has its own built-in
+  // encoding, which is why it is not given the Windows Latin-1 one the others are.
+  const symbolId = imageBase + imageList.length;
+  const fontList = [...(Object.keys(fontIds) as FontKey[]).map((k) => `/${RESOURCE[k]} ${fontIds[k]} 0 R`), ...(symbolUsed ? [`/${RESOURCE.symbol} ${symbolId} 0 R`] : [])];
+  const resources = `<< /Font << ${fontList.join(" ")} >>${xobjects} >>`;
   pages.forEach((p, i) => {
     const pageId = pageIds[i] as number;
     const content = deflateSync(Buffer.from(p.ops.join("\n"), "latin1"));
@@ -371,7 +468,9 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
     write("\nendstream\nendobj\n");
   });
 
-  const count = imageBase + imageList.length;
+  if (symbolUsed) object(symbolId, "<< /Type /Font /Subtype /Type1 /BaseFont /Symbol >>");
+
+  const count = imageBase + imageList.length + (symbolUsed ? 1 : 0);
   const xref = length;
   write(`xref\n0 ${count}\n0000000000 65535 f \n`);
   for (let id = 1; id < count; id++) write(`${String(offsets[id]).padStart(10, "0")} 00000 n \n`);

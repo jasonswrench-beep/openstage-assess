@@ -34,6 +34,24 @@ const SYMBOL: Record<number, string> = {
   0xdb: "⇔", 0xdc: "⇐", 0xdd: "⇑", 0xde: "⇒", 0xdf: "⇓", 0xe0: "◊", 0xe5: "∑", 0xf2: "∫",
 };
 
+let reverse: Map<string, number> | undefined;
+
+/**
+ * The Symbol-font code that draws a character, or `undefined` when the table has none it is sure of. The other way round from
+ * `symbolChar`, for a printer that draws a Greek letter or a sign in the Symbol font every PDF reader has built in. Only the codes
+ * the table is sure of are here, so a character is never drawn as a different one. A few characters that mean the same as one in the
+ * table but have a code point of their own (the increment sign for Delta, the ohm sign for Omega) are added.
+ */
+export function symbolCodeOf(char: string): number | undefined {
+  if (!reverse) {
+    reverse = new Map<string, number>();
+    for (const [code, shown] of Object.entries(SYMBOL)) if (!reverse.has(shown)) reverse.set(shown, Number(code));
+    reverse.set("∆", 0x44);
+    reverse.set("Ω", 0x57);
+  }
+  return reverse.get(char);
+}
+
 /** Whether a font name is the Symbol font. Word writes the name as the person's machine knew it, so the case is not trusted. */
 export const isSymbolFont = (name: string | undefined): boolean => name !== undefined && name.trim().toLowerCase() === "symbol";
 

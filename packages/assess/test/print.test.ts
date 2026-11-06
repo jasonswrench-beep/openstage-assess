@@ -551,7 +551,7 @@ describe("the PDF", () => {
 
   test("writes the characters of Windows Latin-1 as they are and counts the ones it cannot draw", () => {
     // Written straight into the layout: the model turns smart quotes into plain ones on the way in, so no question holds them.
-    const text = "Café “quotes” – dash • €5 Ω 中文 (parens) back\\slash";
+    const text = "Café “quotes” – dash • €5 Ж 中文 (parens) back\\slash";
     const doc: PrintDocument = { ...layout.document, blocks: [{ kind: "para", runs: [{ text }], size: 11, indent: 0, before: 0, after: 0 }] };
     const written = writePdf(doc);
     const line = readPdf(written.bytes).pages.flat().find((s) => s.includes("quotes")) as string;
@@ -559,10 +559,10 @@ describe("the PDF", () => {
     assert.ok(line.includes("\u0093quotes\u0094"), "curly quotes are their Windows Latin-1 codes");
     assert.ok(line.includes("\u0096 dash \u0095 \u0080"), "dash, bullet and euro too");
     assert.ok(line.includes("(parens) back\\slash"), "parentheses and a backslash are escaped in the file and read back whole");
-    assert.ok(line.includes("? ??"), "a Greek letter and two Chinese characters became question marks");
-    assert.deepEqual(written.replaced.map((r) => r.char).sort(), ["Ω", "中", "文"].sort());
+    assert.ok(line.includes("? ??"), "a Cyrillic letter and two Chinese characters became question marks");
+    assert.deepEqual(written.replaced.map((r) => r.char).sort(), ["Ж", "中", "文"].sort());
 
-    const q = make("shortAnswer", { caseSensitive: false, accepted: ["x"] }, "Greek Ω and 中文.");
+    const q = make("shortAnswer", { caseSensitive: false, accepted: ["x"] }, "Russian Ж and 中文.");
     const result = printTest([q], opts("student"), "pdf");
     assert.match(result.report.general.join("\n"), /3 characters cannot be drawn in a PDF's built-in fonts and were printed as \?/);
     assert.match(result.report.general.join("\n"), /The Word file can hold any text/);
