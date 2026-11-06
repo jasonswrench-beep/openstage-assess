@@ -12,7 +12,7 @@
 
 import { textEntry, zipSync } from "../container/zip.ts";
 import { stripInvalidCharacters } from "../model/richtext.ts";
-import type { Block, Para, PrintDocument, Run } from "./layout.ts";
+import type { Block, Para, PictureBlock, PrintDocument, Run } from "./layout.ts";
 
 const NUMBER_INDENT = 28;
 
@@ -51,20 +51,58 @@ function paraXml(p: Para): string {
   return `<w:p><w:pPr>${properties}</w:pPr>${marker}${p.runs.map((r) => runXml(r, p.size, p.bold === true)).join("")}</w:p>`;
 }
 
-function blockXml(block: Block, textWidth: number, fontSize: number): string {
+/** The pictures a document holds, each file once, with the relationship it is reached by and the name it has in the package. */
+class Pictures {
+  readonly files = new Map<string, { rId: string; name: string; bytes: Uint8Array; mime: string }>();
+  private drawings = 0;
+
+  fileFor(block: PictureBlock): { rId: string; name: string; id: number } {
+    let held = this.files.get(block.picture.file);
+    if (held === undefined) {
+      const n = this.files.size + 1;
+      held = { rId: `rIdPic${n}`, name: `image${n}.${block.picture.info.ext === "jpg" ? "jpeg" : block.picture.info.ext}`, bytes: block.picture.bytes, mime: block.picture.info.mime };
+      this.files.set(block.picture.file, held);
+    }
+    // Word wants every drawing in a document to have an id of its own, even when the same picture is drawn twice.
+    return { rId: held.rId, name: held.name, id: ++this.drawings };
+  }
+}
+
+const EMU_PER_POINT = 12700;
+
+/** A picture on a line of its own, drawn in the text at the size it is printed, with its description for a screen reader. */
+function pictureXml(block: PictureBlock, pictures: Pictures): string {
+  const { rId, name, id } = pictures.fileFor(block);
+  const cx = Math.round(block.w * EMU_PER_POINT);
+  const cy = Math.round(block.h * EMU_PER_POINT);
+  const descr = esc(block.picture.alt);
+  const A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
+  const properties = (block.keepNext ? "<w:keepNext/>" : "") + `<w:spacing w:before="${tw(block.before)}" w:after="${tw(block.after)}"/><w:ind w:left="${tw(block.indent)}"/>`;
+  return (
+    `<w:p><w:pPr>${properties}</w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>` +
+    `<wp:docPr id="${id}" name="Picture ${id}" descr="${descr}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks ${A} noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
+    `<a:graphic ${A}><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:nvPicPr><pic:cNvPr id="${id}" name="${esc(name)}" descr="${descr}"/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
+  );
+}
+
+function blockXml(block: Block, textWidth: number, fontSize: number, pictures: Pictures): string {
   if (block.kind === "para") return paraXml(block);
+  if (block.kind === "picture") return pictureXml(block, pictures);
   if (block.kind === "pagebreak") return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
   // A line to write on: a tab that is drawn as an underscore to the right margin.
   const line = `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:leader="underscore" w:pos="${tw(textWidth)}"/></w:tabs><w:spacing w:before="${tw(fontSize * 1.9)}" w:after="0"/><w:ind w:left="${tw(NUMBER_INDENT)}"/></w:pPr><w:r><w:tab/></w:r></w:p>`;
   return line.repeat(Math.max(0, block.count));
 }
 
-const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
 
-function documentXml(doc: PrintDocument): string {
+function documentXml(doc: PrintDocument, pictures: Pictures): string {
   const { paper } = doc;
   const textWidth = paper.width - 2 * paper.margin;
-  const body = doc.blocks.map((b) => blockXml(b, textWidth, doc.fontSize)).join("");
+  const body = doc.blocks.map((b) => blockXml(b, textWidth, doc.fontSize, pictures)).join("");
   const section =
     `<w:sectPr>${doc.header ? '<w:headerReference w:type="default" r:id="rId3"/>' : ""}<w:footerReference w:type="default" r:id="rId2"/>` +
     `<w:pgSz w:w="${tw(paper.width)}" w:h="${tw(paper.height)}"/>` +
@@ -105,9 +143,15 @@ function headerXml(doc: PrintDocument): string {
 /** The test as a Word document, as bytes. `at` is the time written into its properties. */
 export function writeDocx(doc: PrintDocument, at: Date = new Date()): Uint8Array {
   const stamp = at.toISOString().replace(/\.\d+Z$/, "Z");
+  // The body is written first, since writing it is what finds the pictures the package has to carry.
+  const pictures = new Pictures();
+  const documentPart = documentXml(doc, pictures);
+  const defaults = [...new Set([...pictures.files.values()].map((f) => f.mime))]
+    .map((m) => (m === "image/png" ? '<Default Extension="png" ContentType="image/png"/>' : m === "image/gif" ? '<Default Extension="gif" ContentType="image/gif"/>' : '<Default Extension="jpeg" ContentType="image/jpeg"/>'))
+    .join("");
   const types =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>` +
+    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${defaults}` +
     `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
     `<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>` +
     `<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>` +
@@ -124,6 +168,7 @@ export function writeDocx(doc: PrintDocument, at: Date = new Date()): Uint8Array
     `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
     `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>` +
     (doc.header ? `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>` : "") +
+    [...pictures.files.values()].map((f) => `<Relationship Id="${f.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${f.name}"/>`).join("") +
     `</Relationships>`;
   const core =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
@@ -133,11 +178,12 @@ export function writeDocx(doc: PrintDocument, at: Date = new Date()): Uint8Array
   return zipSync([
     textEntry("[Content_Types].xml", types),
     textEntry("_rels/.rels", rels),
-    textEntry("word/document.xml", documentXml(doc)),
+    textEntry("word/document.xml", documentPart),
     textEntry("word/_rels/document.xml.rels", documentRels),
     textEntry("word/styles.xml", stylesXml(doc)),
     textEntry("word/footer1.xml", footerXml(doc)),
     ...(doc.header ? [textEntry("word/header1.xml", headerXml(doc))] : []),
+    ...[...pictures.files.values()].map((f) => ({ name: `word/media/${f.name}`, data: f.bytes, store: true })),
     textEntry("docProps/core.xml", core),
     textEntry("docProps/app.xml", app),
   ]);

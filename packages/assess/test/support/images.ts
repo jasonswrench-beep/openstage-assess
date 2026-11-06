@@ -28,24 +28,69 @@ export interface PngOptions {
   color?: [number, number, number];
   /** Written as an interlaced file (the header says so; the data is not interlaced, so it is for the header's tests only). */
   interlaced?: boolean;
+  /** How opaque a picture with alpha is, 0 to 255. Default 255. For a palette picture, the opacity of its one colour (a tRNS chunk). */
+  alpha?: number;
+  /** For grey and palette pictures: 1, 2, 4 or 8. The pixels are all set to the lowest value (0), or all to the highest with `ones`. */
+  bitDepth?: 1 | 2 | 4 | 8;
+  ones?: boolean;
 }
 
 /** A solid-colour PNG of the given size. */
 export function png(width: number, height: number, options: PngOptions = {}): Uint8Array {
   const colorType = options.colorType ?? 2;
   const [r, g, b] = options.color ?? [30, 90, 200];
-  const pixel = colorType === 2 ? [r, g, b] : colorType === 6 ? [r, g, b, 255] : colorType === 4 ? [r, 255] : colorType === 3 ? [0] : [r];
-  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: width }, () => pixel).flat())]);
-  const raw = Buffer.concat(Array.from({ length: height }, () => row));
-  const ihdr = Buffer.concat([u32(width), u32(height), Buffer.from([8, colorType, 0, 0, options.interlaced ? 1 : 0])]);
+  const alpha = options.alpha ?? 255;
+  const depth = (colorType === 0 || colorType === 3) && options.bitDepth ? options.bitDepth : 8;
+  let raw: Buffer;
+  if (depth < 8) {
+    // Every sample the same, packed: all bits clear, or all bits set.
+    const rowBytes = Math.ceil((width * depth) / 8);
+    const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(rowBytes, options.ones ? 0xff : 0)]);
+    raw = Buffer.concat(Array.from({ length: height }, () => row));
+  } else {
+    const pixel = colorType === 2 ? [r, g, b] : colorType === 6 ? [r, g, b, alpha] : colorType === 4 ? [r, alpha] : colorType === 3 ? [0] : [r];
+    const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: width }, () => pixel).flat())]);
+    raw = Buffer.concat(Array.from({ length: height }, () => row));
+  }
+  const ihdr = Buffer.concat([u32(width), u32(height), Buffer.from([depth, colorType, 0, 0, options.interlaced ? 1 : 0])]);
   return new Uint8Array(
     Buffer.concat([
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       chunk("IHDR", ihdr),
-      ...(colorType === 3 ? [chunk("PLTE", Buffer.from([r, g, b]))] : []),
+      ...(colorType === 3 ? [chunk("PLTE", Buffer.from([r, g, b, 255, 255, 255]))] : []),
+      ...(colorType === 3 && alpha < 255 ? [chunk("tRNS", Buffer.from([alpha]))] : []),
       chunk("IDAT", deflateSync(raw)),
       chunk("IEND", Buffer.alloc(0)),
     ]),
+  );
+}
+
+/** The value of the grey pixel at x, y in `pngGradient`. */
+export const gradientAt = (x: number, y: number): number => (x * 7 + y * 13) & 255;
+
+/** A grey PNG whose pixels are `gradientAt`, with every row written with the given filter (0 to 4), so that each filter is undone by the reader. */
+export function pngGradient(width: number, height: number, filter: 0 | 1 | 2 | 3 | 4): Uint8Array {
+  const rows: number[][] = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => gradientAt(x, y)));
+  const out: number[] = [];
+  for (let y = 0; y < height; y++) {
+    out.push(filter);
+    for (let x = 0; x < width; x++) {
+      const v = rows[y]![x]!;
+      const left = x > 0 ? rows[y]![x - 1]! : 0;
+      const up = y > 0 ? rows[y - 1]![x]! : 0;
+      const upLeft = x > 0 && y > 0 ? rows[y - 1]![x - 1]! : 0;
+      const predicted =
+        filter === 0 ? 0 : filter === 1 ? left : filter === 2 ? up : filter === 3 ? (left + up) >> 1 : (() => {
+          const p = left + up - upLeft;
+          const pa = Math.abs(p - left), pb = Math.abs(p - up), pc = Math.abs(p - upLeft);
+          return pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+        })();
+      out.push((v - predicted) & 255);
+    }
+  }
+  const ihdr = Buffer.concat([u32(width), u32(height), Buffer.from([8, 0, 0, 0, 0])]);
+  return new Uint8Array(
+    Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(Buffer.from(out))), chunk("IEND", Buffer.alloc(0))]),
   );
 }
 

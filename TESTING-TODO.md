@@ -18,12 +18,25 @@ item says what has been run and what has not. Items are removed when done, with 
   `import/docx/numbering.ts`, `formatting.ts` or how tables are read. Stage 4h changed none of them. The hidden text change
   (stage 5) touched `formatting.ts`, so `check:word-formatting` and `check:word` were run on 1 November 2026, each with
   hidden text added, and found no disagreement with Word. `check:word-authored` is not due.
+- [ ] **Import a real Word test bank that has figures in it, and look at every figure.** Pictures are read from a Word file now
+  (they used to be the word [picture]). They were checked against Word's own files for placed, floating, cropped and flipped
+  pictures and a text box (`npm run check:word-pictures`, 6 November 2026), and none of the real banks kept here holds a picture,
+  so how a real chapter's figures come through is not known. Open Check quality's partner, the bank, and look: is each figure
+  there, in the right question, with a description? A figure that was cropped, turned, drawn on or grouped in Word is not kept and
+  says why (the file's findings); tell me which of those your figures are, since cropping a screenshot is common.
+- [ ] **Print a test with figures, as Word and as PDF, and look.** Word opened the printed test without repair and reported each
+  picture's size and description (`check:word-print`); the PDF was taken apart (`print-pictures.test.ts`) and not looked at
+  in a viewer. Are the figures the right size, under the right words, not split from their question across a page? A GIF, a CMYK
+  JPEG and an interlaced PNG cannot be drawn in the PDF here and are printed as words, with the reason against the question.
+- [ ] **Import the Moodle XML of a bank with figures into a Moodle course.** A picture in the text of a question is written as
+  Moodle documents it (an image tag and the file in base64). Not tried in a Moodle. A picture in an answer, in feedback or in a
+  matching question is written as words, and so is a picture in every other format.
 - [ ] **Hide a whole numbered paragraph in Word and look at the numbers.** Triple-click one item of a numbered list, press
   Ctrl+Shift+H, and make sure Word is not set to show hidden text. Word's object model counted the hidden item (the item after
   it kept its number), and the reader does the same. What the page shows on screen is not something the check can see.
-- [ ] **Put a question in a Word text box and import it.** `check:word-authored` does not write a text box, so how Word spells
-  one in a real file is read from memory of the format. Expected: the question is missing, and the file says so and quotes the
-  start of the box.
+- [ ] **Put a question in a Word text box and import it.** `check:word-pictures` has Word write a text box beside a question and the
+  reader leaves it unread and says so (6 November 2026). Expected for a question that is itself in a box: the question is
+  missing, and the file says so and quotes the start of the box.
 
 ## Needs a person's eye
 

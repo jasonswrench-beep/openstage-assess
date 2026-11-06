@@ -498,6 +498,17 @@ home screen and stops its server when it is closed; the installer is unsigned.
   the reading level, which would need a reading-level formula that is not misleading on technical
   words, and an equation that is a picture, which the import already reports.
 
+**Pictures.** A Word file's pictures are read, kept and used: `import/docx/pictures.ts` keeps a PNG, JPEG or GIF that can be shown
+exactly as the author placed it (named by a hash of its bytes, with Word's description of it) and refuses, with the reason, one that
+cannot (cropped, rotated, flipped, drawn on, grouped, linked, in a text box or in another format). The bank writes a picture only
+for a question that is saved and says on the bank screen when a question names one it does not hold; the editor shows each picture,
+writes its description or marks it as decoration, and writes it in the text as `[picture 2]`. A printed test draws pictures (the
+Word file embeds them, the PDF draws a PNG or a JPEG and prints the rest as words with the reason), and Moodle XML carries the picture in
+a question's text. Not done: a picture added by hand in the editor (a file chosen from the computer), a picture in the text format
+(`[ img: ... ]` names a file nothing supplies), pictures in the other exports (none has a place for the file but Moodle's; QTI and
+Common Cartridge could carry them and have not been accepted by Brightspace at all), a decoration mark read from Word, a turned
+picture shown the right way up, and a GIF or CMYK JPEG in a PDF.
+
 **Check quality** (phase 7, first set; `quality/items.ts`, `quality/bank.ts`, `assess check`, and the Check quality
 button on a bank). Every result is a note (severity `info`) and never a warning or an error, because those two are what
 the import gate counts and what an export holds back, and advice about writing must not move either. The checks speak

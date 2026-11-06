@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 
 import { describeUnreadImage, sniffImage, type ImageInfo } from "../../model/image.ts";
 import type { DocxPackage } from "./package.ts";
-import { hasText, type XmlElement } from "./xml.ts";
+import { holdsWords, type XmlElement } from "./xml.ts";
 
 export interface ReadPicture {
   /** The path inside a bank: media/p-<sixteen hex>.<ext>. */
@@ -56,6 +56,11 @@ function tidyAlt(text: string): string {
   return flat.length > MAX_ALT ? flat.slice(0, MAX_ALT).trimEnd() : flat;
 }
 
+/** Whether a drawing floats on the page (Word's anchored form) and not stands in the line of text. */
+export function isFloating(object: XmlElement): boolean {
+  return descendants(object, (e) => e.name === "wp:anchor").length > 0;
+}
+
 export function pictureReader(pkg: DocxPackage): PictureReader {
   const pictures = new Map<string, ReadPicture>();
   const refused: Record<string, number> = {};
@@ -90,7 +95,7 @@ export function pictureReader(pkg: DocxPackage): PictureReader {
     refused,
     tagFor(object: XmlElement): string | undefined {
       // Something that holds text (a text box, a labelled shape) is not a picture, whatever else it holds.
-      if (hasText(object)) return undefined;
+      if (holdsWords(object)) return undefined;
 
       const blips = descendants(object, (e) => e.name === "a:blip" && e.attrs["r:embed"] !== undefined);
       const vml = descendants(object, (e) => e.name === "v:imagedata" && e.attrs["r:id"] !== undefined);

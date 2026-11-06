@@ -106,7 +106,7 @@ export async function printRoute(ctx: Context, req: ApiRequest, rawName: string,
   const at = new Date();
   for (const kind of request.kinds) {
     for (const format of request.formats) {
-      const options = printOptions({ ...request.options, title, kind });
+      const options = printOptions({ ...request.options, title, kind, media: bank.media });
       const result = printTest(questions, options, format, at);
       // The report of a copy covers every format it is made in: the files of each, and the notes that are true of any.
       const before = reports[kind];
