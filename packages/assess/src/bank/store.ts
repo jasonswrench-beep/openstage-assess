@@ -578,7 +578,13 @@ export class Bank {
   // Questions
   // -------------------------------------------------------------------------
 
-  add(question: Question, options: { folderId?: string } = {}): Question {
+  /**
+   * Add a question. `media` is the bytes of pictures that came with it (an import's `media`, by path); the ones this question refers
+   * to are written into the bank, and the rest are left behind, so a picture in a question nobody saved is not stored. A picture the
+   * question names that the bank does not hold and `media` does not supply is allowed in and reported by `missingMedia`, since a
+   * question has to be saveable and a lost file is the bank's to say.
+   */
+  add(question: Question, options: { folderId?: string; media?: ReadonlyMap<string, Uint8Array> } = {}): Question {
     const result = validateQuestion(question);
     if (!result.ok) {
       throw new Error(
@@ -601,12 +607,30 @@ export class Bank {
     this.questions.set(stored.id, stored);
     this.index.add(stored);
     if (options.folderId) this.moveToFolder(stored.id, options.folderId);
+    // Nothing after this point can fail, so a picture is stored only for a question that is.
+    for (const ref of stored.media) {
+      const bytes = options.media?.get(ref.file);
+      if (bytes !== undefined && isMediaPath(ref.file) && !this.media.has(ref.file)) this.media.set(ref.file, bytes);
+    }
     this.note(`added ${stored.id}`, stored.history.at(-1)?.by ?? "unknown");
     return stored;
   }
 
   get(id: string): Question | undefined {
     return this.questions.get(id);
+  }
+
+  /**
+   * Pictures that questions name and the bank does not hold, one entry for each question and file. A bank gets here when a question
+   * was imported from a text that named a file it never had, when a sync lost a file, or when a picture was damaged beyond being kept.
+   * The question is still there, its description is still there, and it is said so that the picture can be put back.
+   */
+  missingMedia(): Array<{ id: string; title: string; file: string }> {
+    const missing: Array<{ id: string; title: string; file: string }> = [];
+    for (const q of this.sortedQuestions()) {
+      for (const ref of q.media) if (!this.media.has(ref.file)) missing.push({ id: q.id, title: q.title, file: ref.file });
+    }
+    return missing;
   }
 
   update(id: string, edit: QuestionEdit, opts: EditOptions = {}): Question {

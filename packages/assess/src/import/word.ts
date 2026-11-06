@@ -20,6 +20,7 @@ import { documentToBlocks, OBJECT_TEXT, type DocumentStats } from "./docx/docume
 import { readFormatting } from "./docx/formatting.ts";
 import { readNumbering } from "./docx/numbering.ts";
 import { DocxError, openDocx, type DocxLimits, type DocxPackage } from "./docx/package.ts";
+import { pictureReader } from "./docx/pictures.ts";
 import { hasText, type XmlElement } from "./docx/xml.ts";
 import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult, SourceBlock } from "./types.ts";
@@ -60,7 +61,7 @@ function optionalPart(pkg: DocxPackage, kind: string, usual: string): { root?: X
   }
 }
 
-function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDamaged: string | undefined): Finding[] {
+function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDamaged: string | undefined, refused: Record<string, number> = {}): Finding[] {
   const found: Finding[] = [];
 
   for (const [reason, count] of Object.entries(stats.unreadLists)) {
@@ -113,12 +114,34 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
       ),
     );
   }
-  if (stats.pictures > 0) {
+  if (stats.picturesRead > 0) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "info",
+        `${plural(stats.picturesRead, "picture was", "pictures were")} read and kept in the bank, in the question each stood in. The description Word holds for a picture is kept with it; one with none is flagged on its question.`,
+      ),
+    );
+  }
+  // A picture that was there and could not be shown as placed says why, one reason at a time, so the author knows what to change in Word.
+  let refusedTotal = 0;
+  for (const [reason, count] of Object.entries(refused)) {
+    refusedTotal += count;
     found.push(
       finding(
         FindingCode.UnreadContent,
         "warn",
-        `${plural(stats.pictures, "picture, shape or text box was", "pictures, shapes or text boxes were")} not read. Each is marked [picture] in the text where it stood.`,
+        `${plural(count, "picture was", "pictures were")} not kept: ${reason}. Each is marked [picture] in the text where it stood, and nothing was guessed about it.`,
+      ),
+    );
+  }
+  const otherObjects = stats.pictures - refusedTotal;
+  if (otherObjects > 0) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `${plural(otherObjects, "picture, shape or text box was", "pictures, shapes or text boxes were")} not read. Each is marked [picture] in the text where it stood.`,
       ),
     );
   }
@@ -196,15 +219,21 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
 }
 
 /** A .docx as source blocks, and what the file holds that the blocks do not. */
-export function docxToBlocks(bytes: Uint8Array, limits?: DocxLimits): { blocks: SourceBlock[]; findings: Finding[] } {
+export function docxToBlocks(
+  bytes: Uint8Array,
+  limits?: DocxLimits,
+): { blocks: SourceBlock[]; findings: Finding[]; media: Map<string, Uint8Array> } {
   const pkg = openDocx(bytes, limits);
   const root = pkg.xml(pkg.mainDocument);
   if (!root) throw new DocxError(`The main document part "${pkg.mainDocument}" could not be read.`);
   const numberingPart = optionalPart(pkg, "numbering", "word/numbering.xml");
   const stylesPart = optionalPart(pkg, "styles", "word/styles.xml");
   const numbering = readNumbering({ numbering: numberingPart.root, styles: stylesPart.root, numberingDamaged: numberingPart.damaged });
-  const { blocks, stats } = documentToBlocks(root, numbering, readFormatting(stylesPart.root));
-  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged) };
+  const pictures = pictureReader(pkg);
+  const { blocks, stats } = documentToBlocks(root, numbering, readFormatting(stylesPart.root), pictures);
+  const media = new Map<string, Uint8Array>();
+  for (const [path, picture] of pictures.pictures) media.set(path, picture.bytes);
+  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged, pictures.refused), media };
 }
 
 /** An importer whose bytes entry point is always there, which is what a caller of this one relies on. */
@@ -222,8 +251,8 @@ export const wordImporter: Importer & { parseBytes: NonNullable<Importer["parseB
   },
 
   parseBytes(bytes: Uint8Array, options: ImportOptions = {}): ImportResult {
-    const { blocks, findings } = docxToBlocks(bytes);
+    const { blocks, findings, media } = docxToBlocks(bytes);
     const result = standardTextImporter.parse(blocks, { ...options, profile: WORD_PROFILE_ID, file: options.file ?? "input.docx" });
-    return { ...result, fileFindings: [...findings, ...result.fileFindings] };
+    return { ...result, fileFindings: [...findings, ...result.fileFindings], ...(media.size > 0 ? { media } : {}) };
   },
 };

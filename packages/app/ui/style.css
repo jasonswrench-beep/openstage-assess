@@ -290,3 +290,12 @@ table.results thead th { color: var(--muted); font-size: 0.85rem; white-space: n
 table.results tbody th { font-weight: 700; }
 table.results tr.current { background: var(--note-bg); }
 @media (max-width: 860px) { table.results { display: block; overflow-x: auto; } }
+
+/* Pictures in a question: each shown beside the words a screen reader says for it. */
+.pictures { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.pictures h3 { font-size: 0.95rem; margin: 0 0 4px; }
+.picture { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.picture:first-of-type { border-top: 0; padding-top: 0; }
+.picture-frame { flex: 0 1 260px; max-width: 100%; display: flex; align-items: flex-start; }
+.picture-image { display: block; max-width: 100%; max-height: 18rem; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #ffffff; }
+.picture-fields { flex: 1 1 260px; min-width: 0; }

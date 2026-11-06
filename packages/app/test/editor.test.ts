@@ -7,7 +7,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { checkAnswerKey, createQuestion, editQuestion, plainToRich, richTextToPlain, validateQuestion, type Question, type QuestionBody, type QuestionType, rich } from "../src/engine.ts";
+import { checkAnswerKey, collectRefs, createQuestion, editQuestion, plainToRich, richTextToPlain, validateQuestion, type Question, type QuestionBody, type QuestionType, rich } from "../src/engine.ts";
 import { blankInput, EDITABLE_TYPES, editFromInput, missingText, parseInput, questionFromInput, toEditor, type EditorInput } from "../src/editor.ts";
 import { HttpError } from "../src/errors.ts";
 
@@ -96,7 +96,7 @@ describe("text that was not changed", () => {
   });
 });
 
-describe("a picture or an equation in the text", () => {
+describe("a picture in the text", () => {
   const withPicture = createQuestion({
     type: "essay",
     stem: rich('<p>Describe this <oa-media ref="m1"></oa-media> chart.</p>'),
@@ -106,8 +106,9 @@ describe("a picture or an equation in the text", () => {
     at: AT,
   });
 
-  test("is listed as locked", () => {
-    assert.deepEqual(toEditor(withPicture).locked, ["stem"]);
+  test("is shown as a token where it stands, and does not lock the text it is in", () => {
+    assert.deepEqual(toEditor(withPicture).locked, []);
+    assert.equal(toEditor(withPicture).stem, "Describe this [picture 1] chart.");
   });
 
   test("keeps the question as it is when its text is left alone", () => {
@@ -115,12 +116,66 @@ describe("a picture or an equation in the text", () => {
     assert.deepEqual(edit.stem, withPicture.stem);
   });
 
-  test("refuses to rewrite the text as plain text, since the picture would be lost without a word", () => {
+  test("is kept in place when the words around the token are changed, and moves with the token", () => {
     const input = inputFrom(withPicture);
-    // The screen shows the picture as a space, so typing what it shows is no change; a different wording is.
-    assert.equal(input.stem, "Describe this chart.");
+    input.stem = "Describe this graph [picture 1].";
+    const { edit } = editFromInput(withPicture, input);
+    assert.equal(richTextToPlain(edit.stem as never), "Describe this graph .");
+    assert.deepEqual(collectRefs(edit.stem as never).media, ["m1"]);
+    assert.match((edit.stem as { content: string }).content, /graph <oa-media ref="m1"><\/oa-media>\./);
+  });
+
+  test("is let go from the text, and kept as the question's, when its token is taken out", () => {
+    const input = inputFrom(withPicture);
     input.stem = "Describe this graph.";
-    assert.throws(() => editFromInput(withPicture, input), (error: unknown) => error instanceof HttpError && error.status === 400 && /picture or an equation/.test(error.message));
+    const { edit } = editFromInput(withPicture, input);
+    assert.deepEqual(collectRefs(edit.stem as never).media, []);
+    assert.equal(edit.media, undefined, "the picture itself is not in the edit, so it stays the question's");
+  });
+
+  test("is refused by number when the token names one the question does not have", () => {
+    const input = inputFrom(withPicture);
+    input.stem = "Describe this [picture 2] graph.";
+    assert.throws(() => editFromInput(withPicture, input), (error: unknown) => error instanceof HttpError && error.status === 400 && /\[picture 2\], and this question has one picture/.test(error.message));
+  });
+
+  test("a description or decoration is an edit of the picture, and nothing else about the question changes", () => {
+    const input = { ...inputFrom(withPicture), pictures: [{ id: "m1", alt: " A bar chart of sales ", decorative: false }] };
+    const { edit } = editFromInput(withPicture, input);
+    assert.deepEqual(edit.media, [{ id: "m1", file: "media/m1.png", mime: "image/png", alt: "A bar chart of sales" }]);
+    assert.deepEqual(edit.stem, withPicture.stem);
+    const decorated = editFromInput(withPicture, { ...inputFrom(withPicture), pictures: [{ id: "m1", alt: "ignored", decorative: true }] });
+    assert.deepEqual(decorated.edit.media, [{ id: "m1", file: "media/m1.png", mime: "image/png", alt: "", decorative: true }]);
+    assert.equal(editFromInput(withPicture, { ...inputFrom(withPicture), pictures: [{ id: "m1", alt: "A chart", decorative: false }] }).edit.media, undefined, "the same description is no edit");
+  });
+
+  test("a picture that dangles is not a token: the text is locked, as an equation's is", () => {
+    const dangling = createQuestion({ type: "essay", stem: rich('<p>See <oa-media ref="gone"></oa-media>.</p>'), body: {}, by: "test", at: AT });
+    assert.deepEqual(toEditor(dangling).locked, ["stem"]);
+  });
+});
+
+describe("an equation in the text", () => {
+  const withEquation = createQuestion({
+    type: "essay",
+    stem: rich('<p>Solve <oa-math ref="e1"></oa-math> now.</p>'),
+    body: {},
+    math: [{ id: "e1", latex: "x^2", mathml: "<math/>" }],
+    by: "test",
+    at: AT,
+  });
+
+  test("is listed as locked, and the text is kept as it is when left alone", () => {
+    assert.deepEqual(toEditor(withEquation).locked, ["stem"]);
+    const { edit } = editFromInput(withEquation, { ...inputFrom(withEquation), points: 2 });
+    assert.deepEqual(edit.stem, withEquation.stem);
+  });
+
+  test("refuses to rewrite the text as plain text, since the equation would be lost without a word", () => {
+    const input = inputFrom(withEquation);
+    assert.equal(input.stem, "Solve now.");
+    input.stem = "Solve it now.";
+    assert.throws(() => editFromInput(withEquation, input), (error: unknown) => error instanceof HttpError && error.status === 400 && /holds an equation/.test(error.message));
   });
 });
 

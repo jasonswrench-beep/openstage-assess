@@ -103,9 +103,10 @@ export async function renderBank(host, params, shell) {
   function renderProblems() {
     clear(problemsHost);
     const problems = bank.problems;
-    if (!problems || (problems.unreadable.length === 0 && !problems.count)) return;
+    if (!problems || (problems.unreadable.length === 0 && !problems.count && !problems.pictures)) return;
     const box = h("section", { class: "problem-box", attrs: { role: "note", "aria-label": "Problems reading this bank" } });
     if (problems.count) box.append(h("p", { text: problems.count }));
+    if (problems.pictures) box.append(h("p", { text: problems.pictures }));
     if (problems.unreadable.length > 0) {
       box.append(
         h("p", { text: `${plural(problems.unreadable.length, "file in this bank could not be read, and is", "files in this bank could not be read, and are")} not in the list. ${problems.unreadable.length === 1 ? "It is" : "They are"} kept exactly as ${problems.unreadable.length === 1 ? "it was" : "they were"}, so nothing is lost; saving the bank does not change ${problems.unreadable.length === 1 ? "it" : "them"}.` }),
@@ -328,6 +329,7 @@ export async function renderBank(host, params, shell) {
     if (selected !== id) return;
     editor = createEditor({
       question: loaded.question,
+      mediaBase: `${base}/media`,
       notify: shell.notify,
       save: async (input, version) => {
         const result = await put(`${base}/questions/${encodeURIComponent(id)}`, { input, expectVersion: version });
@@ -704,7 +706,7 @@ export async function renderBank(host, params, shell) {
       renderList();
       hold();
       editor = createEditor({
-        question: { id: "", version: 0, ...blank, verdict: "parsed", findings: [], formatted: [], locked: [], media: 0, math: 0 },
+        question: { id: "", version: 0, ...blank, verdict: "parsed", findings: [], formatted: [], locked: [], media: 0, math: 0, pictures: [] },
         saveLabel: "Add to the bank",
         notify: shell.notify,
         save: async (input) => {

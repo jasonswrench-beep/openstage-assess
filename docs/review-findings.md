@@ -498,6 +498,14 @@ also collide across questions. The read contract has no operation that
 resolves media bytes, so a consumer holding a payload cannot render an image.
 Media is never garbage collected either.
 
+**Partly fixed on 6 November 2026, for Word files.** A Word file's pictures are read, kept under a name made from their bytes (so
+names cannot collide), written into the bank with the questions that are saved, shown in the import review and the bank, described
+and moved in the editor, and a bank that lacks a picture a question names says so (`Bank.missingMedia`, the amber box). The
+reader refuses, with the reason, a picture it cannot show as placed (cropped, rotated, flipped, drawn on, grouped, in a text box, in
+a format other than PNG, JPEG and GIF). Still so: the `[ img: ... ]` tag typed into a text file still names a file that nothing
+supplies, so it is reported as missing; the read contract still has no operation for a picture's bytes; a picture no question refers
+to any more is not removed from a bank. Print and the exports are below, in the entry for the day they were done.
+
 ### 7. Smaller open items
 
 - ~~`checkReferences` covers 4 fields out of about a dozen.~~ **Fixed on 5 November 2026:** it walks every piece of rich text a

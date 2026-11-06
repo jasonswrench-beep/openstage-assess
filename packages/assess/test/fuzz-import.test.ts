@@ -29,6 +29,8 @@ import { SheetReader } from "../src/sheets/read.ts";
 import { buildPdf, at as drawAt } from "./support/pdf-builder.ts";
 import { scanPdf } from "./support/pdf-scan.ts";
 import { drawn, mcq, testOf, tfq } from "./support/sheet-fixtures.ts";
+import { docx, paragraph, run } from "./support/docx-writer.ts";
+import { drawing, emf, gif, jpeg, pictureParts, png } from "./support/images.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const ROUNDS = 40;
@@ -52,6 +54,21 @@ function seeds(): Seed[] {
   const font = { kind: "simple" as const, base: "Helvetica", widths: Array.from({ length: 224 }, () => 500) };
   out.push({ name: "sample.pdf", bytes: buildPdf({ pages: [page, page], fonts: { F1: font } }) });
   out.push({ name: "compressed.pdf", bytes: buildPdf({ pages: [page], fonts: { F1: font }, compress: true, modern: true }) });
+  // A Word file with pictures of every kind the reader keeps or refuses: PNG, JPEG, GIF, a drawing it does not read, one cropped.
+  const figure = (rId: string, options = {}) => ({ draw: drawing(rId, { alt: "A figure", ...options }) });
+  const lines: Array<string | { draw: string }> = ["1. Look. Which?", figure("rId1"), "a) A", "b) B", "Answer: a", "2. Look. Which?", figure("rId2"), "a) A", "b) B", "Answer: b", "3. Look. Which?", figure("rId3"), "a) A", "b) B", "Answer: a", "4. Look. Which?", figure("rId4"), "a) A", "b) B", "Answer: a", "5. Look. Which?", figure("rId1", { crop: { l: 5000 } }), "a) A", "b) B", "Answer: b"];
+  out.push({
+    name: "pictures.docx",
+    bytes: docx({
+      body: lines.map((l) => (typeof l === "string" ? paragraph(run(l)) : paragraph("<w:r>" + l.draw + "</w:r>"))).join(""),
+      ...pictureParts([
+        { rId: "rId1", part: "word/media/image1.png", bytes: png(12, 9) },
+        { rId: "rId2", part: "word/media/image2.jpeg", bytes: jpeg(30, 20) },
+        { rId: "rId3", part: "word/media/image3.gif", bytes: gif(8, 8) },
+        { rId: "rId4", part: "word/media/image4.emf", bytes: emf() },
+      ]),
+    }),
+  });
   out.push({ name: "table.csv", bytes: new Uint8Array(Buffer.from("Type,Question,A,B,Correct\nMC,What is 2 + 2?,3,4,B\nMC,What is the capital of Spain?,Madrid,Rome,A\n")) });
   return out;
 }
@@ -123,6 +140,19 @@ describe("a damaged bank", () => {
       ),
     );
     bank.moveToFolder((qs[0] as { id: string }).id, bank.addFolder("Chapter 1").id);
+    // Two questions with a picture, one of them with its bytes in the bank and one without.
+    for (const [i, held] of [[0, true], [1, false]] as const) {
+      const file = "media/p-000000000000000" + i + ".png";
+      bank.add(
+        createQuestion({
+          type: "essay",
+          stem: { format: "rich", content: '<p>See <oa-media ref="m' + i + '"></oa-media></p>' },
+          body: {},
+          media: [{ id: "m" + i, file, mime: "image/png", alt: "A figure" }],
+        }),
+        held ? { media: new Map([[file, png(6, 6)]]) } : {},
+      );
+    }
     bank.addTest(createTest({ name: "Quiz", questions: qs, versions: 2, seed: "s" }));
     return bank.toBytes({ at: "2026-01-01T00:00:00.000Z" });
   };
@@ -153,6 +183,7 @@ describe("a damaged bank", () => {
         bank.search("topic");
         bank.stats();
         bank.listTests();
+        bank.missingMedia();
         bank.checkQuality();
         Bank.fromBytes(bank.toBytes());
         opened++;
@@ -170,7 +201,7 @@ describe("a damaged bank", () => {
       const files = unzipSync(bankBytes());
       files.set("folders.json", new Uint8Array(Buffer.from(tree)));
       const { bank, report } = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
-      assert.equal(bank.questions.size, 6, tree);
+      assert.equal(bank.questions.size, 8, tree);
       assert.equal(report.invalid[0]?.id, "folders.json", tree);
       assert.equal(Buffer.from(unzipSync(bank.toBytes()).get("folders.damaged.json") as Uint8Array).toString("utf8"), tree, "kept as it was");
     }
@@ -181,7 +212,7 @@ describe("a damaged bank", () => {
     const files = unzipSync(bankBytes());
     files.set("folders.json", new Uint8Array(Buffer.from(`{"root":${deep(300)},"filters":[]}`)));
     const { bank, report } = Bank.fromBytes(zipSync([...files].map(([name, data]) => ({ name, data }))));
-    assert.equal(bank.questions.size, 6);
+    assert.equal(bank.questions.size, 8);
     assert.equal(report.invalid[0]?.id, "folders.json");
   });
 

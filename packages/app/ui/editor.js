@@ -21,7 +21,8 @@ let counter = 0;
  *   metadata: { status: string, difficulty: string, bloom: string, objective: string, chapter: string, section: string, page: string, tags: string[] },
  *   body: any, verdict: "parsed" | "needsReview" | "failed",
  *   findings: Array<{ index: number, code: string, severity: "error" | "warn" | "info", message: string, dismissed?: boolean, field?: string }>,
- *   formatted: string[], locked: string[], media: number, math: number, readOnly?: string, origin?: any }} EditorQuestion
+ *   formatted: string[], locked: string[], media: number, math: number, readOnly?: string, origin?: any,
+ *   pictures: Array<{ id: string, number: number, file: string, alt: string, decorative: boolean, placed: boolean, width?: number, height?: number }> }} EditorQuestion
  */
 
 /**
@@ -29,7 +30,17 @@ let counter = 0;
  * @param {EditorQuestion} q
  */
 function inputOf(q) {
-  return structuredClone({ type: q.type, title: q.title, stem: q.stem, points: q.points, feedback: q.feedback, metadata: q.metadata, body: q.body });
+  return structuredClone({
+    type: q.type,
+    title: q.title,
+    stem: q.stem,
+    points: q.points,
+    feedback: q.feedback,
+    metadata: q.metadata,
+    body: q.body,
+    // The descriptions of the pictures, sent back with the rest. A question with no pictures sends none.
+    ...((q.pictures ?? []).length > 0 ? { pictures: q.pictures.map((p) => ({ id: p.id, alt: p.alt, decorative: p.decorative })) } : {}),
+  });
 }
 
 /**
@@ -42,7 +53,8 @@ function inputOf(q) {
  *   onSaved?: (question: EditorQuestion, flattened: string[]) => void,
  *   notify: (message: string, kind?: "ok" | "error") => void,
  *   actions?: Node[],
- * }} options
+ *   mediaBase?: string,
+ * }} options  `mediaBase` is the address (after /api/) that a picture's name is added to, to show it: banks/<name>/media or sessions/<id>/media.
  */
 export function createEditor(options) {
   const id = `ed${++counter}`;
@@ -98,7 +110,7 @@ export function createEditor(options) {
       { class: "field" },
       h("label", { for: fieldId, class: "field-label", text: label }),
       area,
-      more.locked ? h("p", { class: "hint", text: "This text holds a picture or an equation, which cannot be edited here yet. It is kept as it is." }) : null,
+      more.locked ? h("p", { class: "hint", text: "This text holds an equation, which cannot be edited here yet. It is kept as it is." }) : null,
       more.hint ? h("p", { class: "hint", text: more.hint }) : null,
     );
   }
@@ -474,7 +486,55 @@ export function createEditor(options) {
       // A row of a spreadsheet is found by the number the spreadsheet shows, which the bank does not keep (only the import screen
       // has the rows in front of it), so a number here would be a line of nothing.
       question.origin?.source && question.origin.profile === "spreadsheet" ? h("span", { class: "meta", text: "From your spreadsheet" }) : question.origin?.source && question.origin.profile === "pdf" ? h("span", { class: "meta", text: "From your PDF" }) : question.origin?.source ? h("span", { class: "meta", text: `From your file, line${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : "s"} ${question.origin.source.firstBlock + 1}${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : ` to ${question.origin.source.lastBlock + 1}`}` }) : null,
-      question.media + question.math > 0 ? h("span", { class: "meta", text: `${question.media} picture(s) and ${question.math} equation(s), kept as they are` }) : null,
+      question.media > 0 ? h("span", { class: "meta", text: question.media === 1 ? "1 picture" : `${question.media} pictures` }) : null,
+      question.math > 0 ? h("span", { class: "meta", text: `${question.math === 1 ? "1 equation" : `${question.math} equations`}, kept as ${question.math === 1 ? "it is" : "they are"}` }) : null,
+    );
+  }
+
+  /**
+   * The pictures of the question: each shown, with the words a screen reader says for it. A picture stands in the text where its
+   * token, [picture 2], is written, and the token is moved or removed like any words.
+   */
+  function picturesPanel() {
+    const shown = question.pictures ?? [];
+    if (shown.length === 0) return null;
+    const entries = draft.pictures ?? [];
+    return h(
+      "section",
+      { class: "pictures", attrs: { "aria-label": "Pictures in this question" } },
+      h("h3", { text: shown.length === 1 ? "Picture" : "Pictures" }),
+      h("p", { class: "hint", text: "A picture stands where its number is written in the text, like [picture 1]. Move the words in brackets to move the picture; take them out and the picture is kept but not shown." }),
+      ...shown.map((p, i) => {
+        const entry = entries[i];
+        if (!entry) return null;
+        const src = options.mediaBase ? `/api/${options.mediaBase}/${encodeURIComponent(p.file)}` : "";
+        const image = h("img", { class: "picture-image", attrs: { alt: entry.decorative ? "" : entry.alt, ...(src ? { src } : {}), loading: "lazy" } });
+        image.addEventListener("error", () => {
+          image.replaceWith(h("p", { class: "problem", text: "This picture is not in the bank, so it cannot be shown. The description is kept." }));
+        });
+        const description = textInput(`Description of picture ${p.number}, read aloud by a screen reader`, entry.alt, (v) => (entry.alt = v));
+        const field = /** @type {HTMLInputElement} */ (description.querySelector("input"));
+        field.disabled = entry.decorative;
+        if (!entry.decorative && entry.alt.trim() === "") field.setAttribute("aria-describedby", `${id}-needs-${p.number}`);
+        return h(
+          "div",
+          { class: "picture" },
+          h("div", { class: "picture-frame" }, image),
+          h(
+            "div",
+            { class: "picture-fields" },
+            h("strong", { text: `Picture ${p.number}` }),
+            description,
+            !entry.decorative && entry.alt.trim() === "" ? h("p", { class: "hint", id: `${id}-needs-${p.number}`, text: "This picture has no description. Say what it shows without giving away the answer, or mark it as decoration." }) : null,
+            checkbox("This picture is decoration, so it needs no description", entry.decorative, (v) => {
+              entry.decorative = v;
+              if (v) entry.alt = "";
+              render();
+            }),
+            p.placed ? null : h("p", { class: "hint", text: `Not in the text yet. Write [picture ${p.number}] where it should stand.` }),
+          ),
+        );
+      }),
     );
   }
 
@@ -583,6 +643,7 @@ export function createEditor(options) {
       headerHost,
       top,
       stem,
+      picturesPanel(),
       bodyHost,
       feedback,
       details,

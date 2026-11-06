@@ -15,6 +15,8 @@ export * from "./naming.ts";
 // Model
 export * from "./model/ids.ts";
 export * from "./model/richtext.ts";
+export { sniffImage, describeUnreadImage, MAX_PICTURE_BYTES } from "./model/image.ts";
+export type { ImageInfo, ImageMime } from "./model/image.ts";
 export * from "./model/findings.ts";
 export * from "./model/question.ts";
 export * from "./model/schema.ts";

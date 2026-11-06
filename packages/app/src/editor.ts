@@ -12,8 +12,10 @@
  */
 
 import {
+  collectRefs,
   createQuestion,
   isEmptyRichText,
+  mediaPlaceholder,
   localId,
   plainToRich,
   richTextToPlain,
@@ -22,6 +24,7 @@ import {
   withRecomputedFindings,
   type Feedback,
   type Finding,
+  type MediaRef,
   type Metadata,
   type Question,
   type QuestionBody,
@@ -40,6 +43,8 @@ const BLOOM = ["remember", "understand", "apply", "analyze", "evaluate", "create
 /** More than anyone writes, so that a mistake in the screen cannot make a bank of a million rows. */
 const MAX_ROWS = 200;
 const MAX_TEXT = 100_000;
+/** The longest description of a picture. A description is a sentence or two. */
+const MAX_ALT = 1000;
 
 export interface EditorOption {
   id?: string;
@@ -86,6 +91,23 @@ export interface EditorInput {
     tags: string[];
   };
   body: EditorBody;
+  /** The description of each picture the question carries, by the picture's id. Left out when the question has none. */
+  pictures?: Array<{ id: string; alt: string; decorative: boolean }>;
+}
+
+/** One picture of a question as the screen shows it. */
+export interface EditorPicture {
+  id: string;
+  /** The number the text refers to it by: [picture 2] is the second. */
+  number: number;
+  /** Its name inside the bank, to ask for its bytes by. */
+  file: string;
+  alt: string;
+  decorative: boolean;
+  /** Whether any text of the question has it in place. A picture with none is carried but not shown. */
+  placed: boolean;
+  width?: number;
+  height?: number;
 }
 
 /** What the screen is given for a question: the input shape, and what it needs to know besides. */
@@ -100,6 +122,7 @@ export interface EditorQuestion extends EditorInput {
   locked: string[];
   /** Pictures and equations the question carries. */
   media: number;
+  pictures: EditorPicture[];
   math: number;
   /** Why the question cannot be edited here at all, when it cannot. */
   readOnly?: string;
@@ -291,6 +314,20 @@ export function parseInput(raw: unknown): { ok: true; input: EditorInput } | { o
       break;
   }
 
+  // The descriptions of the pictures a question carries. Left out when the screen sent none, which leaves the pictures as they are.
+  if (raw["pictures"] !== undefined && raw["pictures"] !== null) {
+    const pictures = r.list(raw["pictures"], "Picture", (item, at) => {
+      const o = isObject(item) ? item : {};
+      const id = r.id(o["id"], at);
+      if (id === undefined) r.errors.push(`${at} has no id.`);
+      const alt = r.string(o["alt"], `${at} (description)`);
+      if (alt.length > MAX_ALT) r.errors.push(`${at}'s description is longer than ${MAX_ALT} characters.`);
+      return { id: id ?? "", alt, decorative: r.bool(o["decorative"], `${at} (decoration)`, false) };
+    });
+    // An empty list says nothing about any picture, so it is the same as none.
+    if (pictures.length > 0) input.pictures = pictures;
+  }
+
   if (r.errors.length > 0) return { ok: false, errors: r.errors };
   return { ok: true, input };
 }
@@ -300,11 +337,51 @@ export function parseInput(raw: unknown): { ok: true; input: EditorInput } | { o
 // ---------------------------------------------------------------------------
 
 const FORMATTING = /<(strong|em|u|s|sub|sup|code|pre|ul|ol|li|blockquote|table|thead|tbody|tr|th|td)[\s>/]/i;
-const HOLDS_OBJECT = /<oa-(media|math)\b/i;
+const HOLDS_MATH = /<oa-math\b/i;
+const MEDIA_ELEMENT = /<oa-media\b[^>]*\bref="([^"]*)"[^>]*>\s*<\/oa-media>/gi;
+/** A picture in the text as the person sees it and moves it: [picture 2] is the second picture the question carries. */
+const PICTURE_TOKEN = /\[picture (\d{1,3})\]/g;
 
 const plain = (text: RichText | undefined): string => (text && !isEmptyRichText(text) ? richTextToPlain(text) : "");
 const hasFormatting = (text: RichText | undefined): boolean => text !== undefined && text.format === "rich" && FORMATTING.test(text.content);
-const holdsObject = (text: RichText | undefined): boolean => text !== undefined && HOLDS_OBJECT.test(text.content);
+
+/**
+ * The text as the screen shows it: the words, with a token where each picture stands. A picture is moved, copied or removed by
+ * editing its token, and the text round-trips: a text the person leaves alone is kept exactly as stored.
+ */
+function shown(text: RichText | undefined, media: readonly MediaRef[]): string {
+  if (text === undefined || isEmptyRichText(text)) return "";
+  const marked = text.content.replace(MEDIA_ELEMENT, (whole, ref: string) => {
+    const at = media.findIndex((m) => m.id === ref);
+    return at === -1 ? whole : ` [picture ${at + 1}] `;
+  });
+  return richTextToPlain({ format: text.format, content: marked });
+}
+
+/**
+ * Text that cannot be shown as plain text and put back: an equation, or a picture the question does not carry (a reference that
+ * dangles). A picture the question does carry is not one of these, since it is shown as a token.
+ */
+function holdsObject(text: RichText | undefined, media: readonly MediaRef[]): boolean {
+  if (text === undefined) return false;
+  if (HOLDS_MATH.test(text.content)) return true;
+  const known = new Set(media.map((m) => m.id));
+  return collectRefs(text).media.some((ref) => !known.has(ref));
+}
+
+/** Plain text made rich again, with each [picture N] put back as the picture it names. */
+function withPictures(rich: RichText, media: readonly MediaRef[], where: string): RichText {
+  // A question with no pictures has nothing the token could mean, so the words are kept as written.
+  if (media.length === 0) return rich;
+  const content = rich.content.replace(PICTURE_TOKEN, (_whole, n: string) => {
+    const ref = media[Number(n) - 1];
+    if (ref === undefined) {
+      throw badRequest(`The text in ${where} has [picture ${n}], and this question has ${media.length === 1 ? "one picture" : `${media.length} pictures`}, so nothing was changed.`);
+    }
+    return mediaPlaceholder(ref.id);
+  });
+  return { ...rich, content };
+}
 
 type Dict = Record<string, unknown>;
 
@@ -336,9 +413,9 @@ function bodyToEditor(q: Question): EditorBody {
       return {
         options: (body["options"] as Array<{ id: string; content: RichText; correct: boolean; feedback?: RichText }>).map((o) => ({
           id: o.id,
-          text: plain(o.content),
+          text: shown(o.content, q.media),
           correct: o.correct,
-          feedback: plain(o.feedback),
+          feedback: shown(o.feedback, q.media),
         })),
         shuffle: body["shuffle"] !== false,
         ...(q.type === "multipleResponse" ? { partialCredit: body["partialCredit"] !== false } : {}),
@@ -354,14 +431,14 @@ function bodyToEditor(q: Question): EditorBody {
       return { accepted: [...(body["accepted"] as string[])], caseSensitive: body["caseSensitive"] === true };
     case "matching":
       return {
-        pairs: (body["pairs"] as Array<{ id: string; left: RichText; right: string }>).map((p) => ({ id: p.id, left: plain(p.left), right: p.right })),
+        pairs: (body["pairs"] as Array<{ id: string; left: RichText; right: string }>).map((p) => ({ id: p.id, left: shown(p.left, q.media), right: p.right })),
         distractors: [...((body["distractors"] as string[] | undefined) ?? [])],
       };
     case "ordering":
       return {
         items: [...(body["items"] as Array<{ id: string; content: RichText; position: number }>)]
           .sort((a, b) => a.position - b.position)
-          .map((it) => ({ id: it.id, text: plain(it.content) })),
+          .map((it) => ({ id: it.id, text: shown(it.content, q.media) })),
       };
     case "numeric":
       return {
@@ -373,7 +450,7 @@ function bodyToEditor(q: Question): EditorBody {
         units: typeof body["units"] === "string" ? (body["units"] as string) : "",
       };
     case "essay":
-      return { modelAnswer: plain(body["modelAnswer"] as RichText | undefined) };
+      return { modelAnswer: shown(body["modelAnswer"] as RichText | undefined, q.media) };
     default:
       return {};
   }
@@ -387,9 +464,9 @@ export function toEditor(q: Question): EditorQuestion {
     version: q.version,
     type: q.type,
     title: q.title,
-    stem: plain(q.stem),
+    stem: shown(q.stem, q.media),
     points: q.points,
-    feedback: { general: plain(q.feedback.general), correct: plain(q.feedback.correct), incorrect: plain(q.feedback.incorrect) },
+    feedback: { general: shown(q.feedback.general, q.media), correct: shown(q.feedback.correct, q.media), incorrect: shown(q.feedback.incorrect, q.media) },
     metadata: {
       status: q.metadata.status,
       difficulty: q.metadata.difficulty ?? "",
@@ -404,8 +481,9 @@ export function toEditor(q: Question): EditorQuestion {
     verdict: verdictOf(q),
     findings: q.findings.map((f, index) => ({ ...f, index })),
     formatted: fields.filter(([, t]) => hasFormatting(t)).map(([where]) => where),
-    locked: fields.filter(([, t]) => holdsObject(t)).map(([where]) => where),
+    locked: fields.filter(([, t]) => holdsObject(t, q.media)).map(([where]) => where),
     media: q.media.length,
+    pictures: picturesOf(q),
     math: q.math.length,
     ...(readOnly ? { readOnly } : {}),
     ...(q.origin ? { origin: q.origin } : {}),
@@ -419,19 +497,21 @@ export function toEditor(q: Question): EditorQuestion {
 interface Built {
   /** Fields whose formatting was flattened because the person changed their text. */
   flattened: string[];
+  /** The pictures the question carries, which a [picture N] in the text stands for. */
+  media: readonly MediaRef[];
 }
 
 /** The stored text if the person left it alone, and plain text made rich if they changed it. */
 function textFor(next: string, previous: RichText | undefined, where: string, built: Built): RichText {
   if (previous !== undefined) {
-    if (holdsObject(previous)) {
-      if (next === plain(previous)) return previous;
-      throw badRequest(`The text in ${where} holds a picture or an equation, which cannot be edited as plain text yet, so nothing was changed.`);
+    if (holdsObject(previous, built.media)) {
+      if (next === shown(previous, built.media)) return previous;
+      throw badRequest(`The text in ${where} holds an equation, which cannot be edited as plain text yet, so nothing was changed.`);
     }
-    if (next === plain(previous)) return previous;
+    if (next === shown(previous, built.media)) return previous;
     if (hasFormatting(previous)) built.flattened.push(where);
   }
-  return plainToRich(next);
+  return withPictures(plainToRich(next), built.media, where);
 }
 
 const optionalText = (next: string, previous: RichText | undefined, where: string, built: Built): RichText | undefined =>
@@ -565,10 +645,11 @@ export interface BuiltEdit {
 /** The change the screen asks for, as an engine edit. A title the person has not touched follows the question text. */
 export function editFromInput(base: Question, input: EditorInput): BuiltEdit {
   if (!EDITABLE.includes(base.type)) throw badRequest(`A ${base.type} question cannot be edited here yet, so nothing was changed.`);
-  const built: Built = { flattened: [] };
+  const built: Built = { flattened: [], media: base.media };
   const stem = textFor(input.stem, base.stem, "the question text", built);
   const titleWasAutomatic = base.title === titleFromStem(plain(base.stem));
   const title = input.title.trim() !== "" && input.title !== base.title ? input.title.trim() : titleWasAutomatic ? titleFromStem(plain(stem)) : base.title;
+  const media = mediaFromInput(base, input);
   return {
     edit: {
       type: input.type,
@@ -578,9 +659,57 @@ export function editFromInput(base: Question, input: EditorInput): BuiltEdit {
       body: buildBody(input, base, built),
       feedback: buildFeedback(input, base, built),
       metadata: buildMetadata(input, base.metadata),
+      ...(media ? { media } : {}),
     },
     flattened: built.flattened,
   };
+}
+
+/** The pictures of a question for the screen, in the order the text refers to them. */
+export function picturesOf(q: Question): EditorPicture[] {
+  const placed = new Set<string>();
+  const texts: Array<RichText | undefined> = [q.stem, q.feedback.general, q.feedback.correct, q.feedback.incorrect];
+  const body = q.body as unknown as Dict;
+  for (const key of ["options", "pairs", "items"]) {
+    const list = body[key];
+    if (Array.isArray(list)) for (const item of list as Array<{ content?: RichText; left?: RichText; feedback?: RichText }>) texts.push(item.content, item.left, item.feedback);
+  }
+  texts.push(body["modelAnswer"] as RichText | undefined);
+  for (const text of texts) if (text !== undefined) for (const ref of collectRefs(text).media) placed.add(ref);
+  return q.media.map((m, i) => ({
+    id: m.id,
+    number: i + 1,
+    // The name inside the bank's media folder, which is what the screen asks for the bytes by.
+    file: m.file.startsWith("media/") ? m.file.slice("media/".length) : m.file,
+    alt: m.alt,
+    decorative: m.decorative === true,
+    placed: placed.has(m.id),
+    ...(m.width ? { width: m.width } : {}),
+    ...(m.height ? { height: m.height } : {}),
+  }));
+}
+
+/**
+ * The descriptions the screen sent, as the question's media with them in. Nothing is returned when nothing differs, so that a save
+ * that changes only words does not rewrite the pictures. A picture marked as decoration has no description.
+ */
+function mediaFromInput(base: Question, input: EditorInput): MediaRef[] | undefined {
+  if (input.pictures === undefined) return undefined;
+  const given = new Map(input.pictures.map((p) => [p.id, p]));
+  for (const id of given.keys()) {
+    if (!base.media.some((m) => m.id === id)) throw badRequest(`This question has no picture with the id ${id}, so nothing was changed.`);
+  }
+  let changed = false;
+  const next = base.media.map((m) => {
+    const p = given.get(m.id);
+    if (p === undefined) return m;
+    const alt = p.decorative ? "" : p.alt.replace(/\s+/g, " ").trim();
+    if (alt === m.alt && p.decorative === (m.decorative === true)) return m;
+    changed = true;
+    const { decorative: _was, ...rest } = m;
+    return { ...rest, alt, ...(p.decorative ? { decorative: true } : {}) };
+  });
+  return changed ? next : undefined;
 }
 
 /**
@@ -610,7 +739,7 @@ export function missingText(input: EditorInput): string[] {
  * only after it has been edited.
  */
 export function questionFromInput(input: EditorInput, by: string, at?: string): Question {
-  const built: Built = { flattened: [] };
+  const built: Built = { flattened: [], media: [] };
   return withRecomputedFindings(
     createQuestion({
       type: input.type,

@@ -314,9 +314,9 @@ async function cmdImport(args: string[]): Promise<number> {
   const out = arg(args, "out");
   if (out) {
     const bank = Bank.createEmpty(basename(out, BANK_EXTENSION));
-    for (const question of result.questions) bank.add(question);
+    for (const question of result.questions) bank.add(question, result.media ? { media: result.media } : {});
     const written = await bank.save(resolve(out));
-    console.log(`\nWrote ${result.questions.length} question(s) to ${written}`);
+    console.log(`\nWrote ${result.questions.length} question(s) to ${written}${bank.media.size > 0 ? `, with ${bank.media.size} picture(s)` : ""}`);
   }
   return result.counts.failed > 0 ? 1 : 0;
 }

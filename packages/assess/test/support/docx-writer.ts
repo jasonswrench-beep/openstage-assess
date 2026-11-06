@@ -182,6 +182,8 @@ export interface DocxParts {
   footers?: string[];
   /** Further parts, such as media, written as they are. */
   extra?: ZipEntry[];
+  /** Further relationships of the main document, written as they are (an image's, say). */
+  relationships?: string[];
   /** Part names and bytes to leave out, for tests of damaged packages. */
   omit?: string[];
 }
@@ -211,6 +213,7 @@ export function docx(parts: DocxParts): Uint8Array {
       : []),
     ...headers.map((_, i) => `<Relationship Id="rIdH${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header${i + 1}.xml"/>`),
     ...footers.map((_, i) => `<Relationship Id="rIdF${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer${i + 1}.xml"/>`),
+    ...(parts.relationships ?? []),
   ].join("");
 
   const references = [
@@ -223,7 +226,7 @@ export function docx(parts: DocxParts): Uint8Array {
   const entries: ZipEntry[] = [
     textEntry(
       "[Content_Types].xml",
-      `${XML_DECLARATION}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${overrides}</Types>`,
+      `${XML_DECLARATION}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/>${overrides}</Types>`,
     ),
     textEntry(
       "_rels/.rels",

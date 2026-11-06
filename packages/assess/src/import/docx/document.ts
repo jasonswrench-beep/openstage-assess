@@ -25,6 +25,7 @@ import type { Formatting, RunFormat } from "./formatting.ts";
 import type { Numbering } from "./numbering.ts";
 import { readTable, type Cell, type Line as TableLine } from "./tables.ts";
 import { DocxError } from "./package.ts";
+import type { PictureReader } from "./pictures.ts";
 import { allText, elements, first, hasText, type XmlElement } from "./xml.ts";
 
 export interface DocumentStats {
@@ -32,8 +33,10 @@ export interface DocumentStats {
   tables: number;
   trackedInsertions: number;
   trackedDeletions: number;
-  /** Pictures, shapes, text boxes and embedded objects, each replaced by "[picture]". */
+  /** Pictures, shapes, text boxes and embedded objects that were not kept, each replaced by "[picture]". */
   pictures: number;
+  /** Pictures that were kept, each replaced by an image tag naming its file. */
+  picturesRead: number;
   /** Word equations, each replaced by "[equation]". */
   equations: number;
   /** Symbol characters (a font glyph by code), which are not read. */
@@ -181,7 +184,7 @@ const sameFormat = (a: RunFormat, b: RunFormat): boolean =>
  * how each run looks, which is kept on the block as `runs`; without it blocks have
  * no runs.
  */
-export function documentToBlocks(root: XmlElement, numbering?: Numbering, formatting?: Formatting): DocumentBlocks {
+export function documentToBlocks(root: XmlElement, numbering?: Numbering, formatting?: Formatting, pictures?: PictureReader): DocumentBlocks {
   if (root.name !== "w:document") {
     throw new DocxError(`The main document part starts with <${root.name}>, not <w:document>, so it is not a Word document.`);
   }
@@ -195,6 +198,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     trackedInsertions: 0,
     trackedDeletions: 0,
     pictures: 0,
+    picturesRead: 0,
     equations: 0,
     symbols: 0,
     notes: 0,
@@ -294,9 +298,15 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
           break;
         default:
           if (OBJECTS.has(child.name)) {
-            stats.pictures++;
-            add(b, "[picture]", format);
-            if (hasText(child)) unread(OBJECT_TEXT, child);
+            const tag = pictures?.tagFor(child);
+            if (tag !== undefined) {
+              stats.picturesRead++;
+              add(b, tag, format);
+            } else {
+              stats.pictures++;
+              add(b, "[picture]", format);
+              if (hasText(child)) unread(OBJECT_TEXT, child);
+            }
           } else if (!SILENT.has(child.name) && hasText(child)) {
             unread(child.name, child);
           }
@@ -321,9 +331,15 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
         stats.equations++;
         add(b, "[equation]");
       } else if (OBJECTS.has(name)) {
-        stats.pictures++;
-        add(b, "[picture]");
-        if (hasText(child)) unread(OBJECT_TEXT, child);
+        const tag = pictures?.tagFor(child);
+        if (tag !== undefined) {
+          stats.picturesRead++;
+          add(b, tag);
+        } else {
+          stats.pictures++;
+          add(b, "[picture]");
+          if (hasText(child)) unread(OBJECT_TEXT, child);
+        }
       } else if (!SILENT.has(name) && hasText(child)) unread(name, child);
     }
   }
