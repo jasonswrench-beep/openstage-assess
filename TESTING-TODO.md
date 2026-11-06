@@ -42,8 +42,10 @@ item says what has been run and what has not. Items are removed when done, with 
   is read is shown drawn, with its LaTeX under it. Look for a wrong one: that is the bad case, and the reader is built to
   refuse before it guesses.
 - [ ] **Look at the equations panel in the app's own window, with a screen reader if you use one.** The equation is drawn from MathML the
-  engine wrote, by the window's own engine (built-in browser checked: a fraction was drawn; the Tauri window was not). Its LaTeX is
-  written under it as text. Is the drawn equation read aloud sensibly, or only the LaTeX under it?
+  engine wrote, by the window's own engine. In the built-in browser all twenty equations that real Word built were turned into
+  MathML elements and nine hostile strings were refused (6 November 2026), but the pane was not on screen, so how an equation
+  looks (a fraction stacked, a sum with its limits) was not seen, and the Tauri window was not tried at all. Its LaTeX is
+  written under it as text. Does it look like the equation, and is it read aloud sensibly, or only the LaTeX under it?
 - [ ] **Print a test with equations as Word and as PDF, and look.** Word opened the printed test without repair and reported three
   inline equations of the right kinds (`check:word-print`); the equations are Word's own XML as the import kept it, drawn in
   Word's math font at the size of the paragraph. The PDF has no font for one and prints `[Equation: LaTeX]` with a note. Does the

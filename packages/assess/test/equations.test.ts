@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { documentToBlocks } from "../src/import/docx/document.ts";
-import { readEquation } from "../src/import/docx/omml.ts";
+import { cleanOmml, readEquation } from "../src/import/docx/omml.ts";
 import { openDocx } from "../src/import/docx/package.ts";
 import { parseXml } from "../src/import/docx/xml.ts";
 import { standardTextImporter } from "../src/import/standard-text.ts";
@@ -211,6 +211,15 @@ describe("Word's own XML, kept", () => {
     assert.match(read.math.omml, /^<m:oMath xmlns:m="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/math">/);
     assert.ok(read.math.omml.includes("<m:f>"));
     assert.ok(!read.math.omml.includes("m:odd") && !read.math.omml.includes("w:rFonts"), read.math.omml);
+  });
+
+  test("holds the text a tracked insertion put in, and not the text a deletion took out, and reads back as the same equation", () => {
+    const read = equation(`<w:ins>${r("x")}</w:ins><w:del>${r("y")}</w:del>${r("z")}`);
+    assert.ok(read.ok);
+    assert.equal(read.math.latex, "xz");
+    assert.ok(!read.math.omml.includes("w:ins") && !read.math.omml.includes("w:del"), read.math.omml);
+    assert.ok(read.math.omml.includes(">x</m:t>") && read.math.omml.includes(">z</m:t>") && !read.math.omml.includes(">y</m:t>"), read.math.omml);
+    assert.equal(cleanOmml(read.math.omml), read.math.omml);
   });
 
   test("keeps the spaces of its text, and escapes it", () => {

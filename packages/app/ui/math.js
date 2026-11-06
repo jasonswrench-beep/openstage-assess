@@ -8,14 +8,15 @@
 
 const NS = "http://www.w3.org/1998/Math/MathML";
 
-/** The elements the engine writes, and the attributes each may keep, with the values those may have. */
-const ELEMENTS = new Set([
+/** The elements the engine writes. A test holds the engine's output to this list, so the two cannot drift apart unseen. */
+export const ELEMENTS = new Set([
   "math", "mrow", "mi", "mn", "mo", "mtext", "mfrac", "msqrt", "mroot", "msub", "msup", "msubsup", "munder", "mover", "munderover",
   "mmultiscripts", "mprescripts", "none", "mtable", "mtr", "mtd", "menclose", "mphantom",
 ]);
 
+/** The attributes the engine writes, and the values each may have. */
 /** @type {Record<string, (value: string) => boolean>} */
-const ATTRIBUTES = {
+export const ATTRIBUTES = {
   mathvariant: (v) => ["normal", "bold", "bold-italic", "script", "fraktur", "double-struck", "sans-serif", "monospace"].includes(v),
   largeop: (v) => v === "true",
   fence: (v) => v === "true",
