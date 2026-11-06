@@ -250,6 +250,8 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
     if (block.kind === "pagebreak") return { block, lines: [], height: 0, keepNext: false };
     if (block.kind === "lines") return { block, lines: [], height: block.count * doc.fontSize * 1.9, keepNext: false };
     if (block.kind === "picture") return { block, lines: [], height: block.before + block.h + block.after, keepNext: block.keepNext === true };
+    // A table is a block only in the layout made for a Word file. A PDF is laid out with its tables as lines of text, a row to a line.
+    if (block.kind === "table") throw new Error("A table was laid out for a Word file and cannot be drawn in a PDF.");
     const lines = breakLines(atomsOf(block.runs, block.size, block.bold === true, replaced), textWidth - block.indent);
     return { block, lines, height: block.before + lines.length * block.size * LEADING + block.after + (block.rule ? 4 : 0), keepNext: block.keepNext === true };
   });
@@ -332,6 +334,7 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
       newPage();
       continue;
     }
+    if (block.kind === "table") continue;
 
     // A question and what has to stay with it go on one page, if they fit on one.
     if (item.keepNext) {

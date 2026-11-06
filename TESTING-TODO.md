@@ -71,9 +71,11 @@ item says what has been run and what has not. Items are removed when done, with 
   checked in the built-in browser by what it makes (header cells, a spanning cell, a hostile cell shown as words), and not by
   looking, since the pane was not on screen. Change the words round `[table 1]`, move the token to another place, take it out and
   save: the table should follow the token, and be gone with it. A table cannot be changed there.
-- [ ] **Print a test with a table in a question, and look.** A printed test draws a table as lines, a row to a line with the cells
-  between bars, in Word and in the PDF, and says so against the question. Does a row to a line read well enough for your tables?
-  Making it a table in the Word file is not built; say if you need it.
+- [ ] **Print a test with a table in a question, as Word and as PDF, and look.** The Word file draws the table of the stem as a
+  table (a thin grey rule round every cell, equal columns, the header row in bold and repeating); Word opened it without repair
+  and showed three tables with the rows and cell text laid out (`check:word-print`), but nobody has looked at how it reads on a
+  page. The PDF draws it as lines, a row to a line with the cells between bars, and says so against the question; so does a
+  table in an option. Does the Word table sit well under its words, and does a row to a line read well enough in the PDF?
 - [ ] **Import the Moodle XML, GIFT or Brightspace CSV of a question with a table into a course.** They carry the table as markup
   (`table`, `thead`, `tbody`, `tr`, `th`, `td`). Not tried in any learning system. The other formats write its words.
 - [ ] **Hide a whole numbered paragraph in Word and look at the numbers.** Triple-click one item of a numbered list, press

@@ -129,6 +129,28 @@ const equationLayout = layoutTest(equationQuestions, { ...equationOptions, forma
 const equationExpected = expectedOf(equationLayout.document.blocks);
 const equationCase: Case = { name: "equations", options: equationOptions, bytes: writeDocx(equationLayout.document), expected: equationExpected, paragraphs: equationExpected.length, header: "" };
 
+// A test with three tables in the text of questions, written into the printed Word file as tables: one with a header row, one with a title
+// cell that spans two columns, and one of plain cells with two paragraphs in a cell. Word is asked for each table's rows, which rows repeat
+// as a header and the text of each cell.
+const tableStems = [
+  '<p>Use the table.</p><table><thead><tr><th scope="col">Student</th><th scope="col">Score</th></tr></thead><tbody><tr><td>Ana</td><td>80</td></tr><tr><td>Ben</td><td>90</td></tr></tbody></table>',
+  '<p>Read the results.</p><table><tbody><tr><td colspan="2">Results</td></tr><tr><td>Ana</td><td>80</td></tr></tbody></table>',
+  "<p>Read the list.</p><table><tbody><tr><td>Ana<br>(first)</td><td>80</td></tr><tr><td>Ben</td><td>90</td></tr></tbody></table>",
+];
+const tableQuestions = tableStems.map((stem, i) =>
+  createQuestion({
+    type: "multipleChoice",
+    stem: rich(stem),
+    body: { shuffle: false, options: [{ id: "o1", content: plainToRich("80"), correct: true }, { id: "o2", content: plainToRich("85"), correct: false }] },
+    by: "t",
+    at: AT,
+    id: `q_${String(i + 1).padStart(26, "0")}`,
+  }),
+);
+const tableOptions = printOptions({ title: "Tables", kind: "student" });
+const tableLayout = layoutTest(tableQuestions, { ...tableOptions, format: "docx" });
+const tableBytes = writeDocx(tableLayout.document);
+
 function main(): void {
   if (!wordIsAvailable()) {
     console.log("This check needs Windows with Microsoft Word installed. Nothing was run.");
@@ -224,6 +246,33 @@ function main(): void {
   }
   console.log(`3 equations, ${equationProblems} disagreements with Word.`);
   if (equationProblems > 0) process.exitCode = 1;
+
+  // The tables: Word has to open the printed test without offering to repair it and show each table with the rows, header marks and
+  // cell text the layout meant. A cell that spans two columns is one cell in Word's own account.
+  const seenTables = askWord(new Map([["tables", tableBytes]]), "tables")["tables"] ?? [];
+  const drawnTables = tableLayout.document.blocks.flatMap((b: Block) => (b.kind === "table" ? [b] : []));
+  const wantRows = drawnTables.flatMap((b, k) =>
+    b.table.rows.map((row, r) => `${k + 1}|${r + 1}|${row.every((c) => c.header) ? "H" : "R"}|${row.map((c) => c.text.replace(/\n/g, "|")).join("~")}`),
+  );
+  let tableProblems = 0;
+  if (drawnTables.length !== 3) {
+    console.log(`tables: the layout has ${drawnTables.length} tables, not 3`);
+    tableProblems++;
+  }
+  if (seenTables[0]?.startsWith("ERROR") || seenTables.length !== wantRows.length) {
+    console.log(`tables: Word shows ${seenTables.length} rows, the layout has ${wantRows.length}${seenTables[0]?.startsWith("ERROR") ? `. ${seenTables[0]}` : ""}`);
+    tableProblems++;
+  } else {
+    wantRows.forEach((want, i) => {
+      console.log(`  ${seenTables[i]}`);
+      if (seenTables[i] !== want) {
+        console.log(`table row ${i + 1}: Word has ${JSON.stringify(seenTables[i])}, the layout meant ${JSON.stringify(want)}`);
+        tableProblems++;
+      }
+    });
+  }
+  console.log(`${drawnTables.length} tables, ${wantRows.length} rows, ${tableProblems} disagreements with Word.`);
+  if (tableProblems > 0) process.exitCode = 1;
 
   // Where Word breaks the pages: a question that begins on one page and goes on over the next is a question a student has to turn
   // the page in the middle of. Word is asked what page each paragraph starts and ends on, in a long test, student copy and key.

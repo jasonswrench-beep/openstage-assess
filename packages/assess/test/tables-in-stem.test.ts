@@ -20,12 +20,14 @@ import { openDocx } from "../src/import/docx/package.ts";
 import { standardTextImporter } from "../src/import/standard-text.ts";
 import { wordImporter } from "../src/import/word.ts";
 import { exportGift } from "../src/export/gift.ts";
+import { unzipSync } from "../src/container/zip.ts";
+import { createQuestion } from "../src/model/create.ts";
 import { exportMoodleXml } from "../src/export/moodle-xml.ts";
 import { exportOpenStageSpreadsheet } from "../src/export/openstage-spreadsheet.ts";
-import { layoutTest, printOptions } from "../src/print/index.ts";
+import { layoutTest, printOptions, printTest } from "../src/print/index.ts";
 import { FindingCode, verdictFrom } from "../src/model/findings.ts";
 import type { Question } from "../src/model/question.ts";
-import { collectRefs, richTextToPlain, type RichText } from "../src/model/richtext.ts";
+import { collectRefs, plainToRich, rich, richTextToPlain, type RichText } from "../src/model/richtext.ts";
 import { readTableHtml, replaceTables, tablesIn } from "../src/model/table.ts";
 import { docx, paragraph, run } from "./support/docx-writer.ts";
 import { drawing, pictureParts, png } from "./support/images.ts";
@@ -375,5 +377,78 @@ describe("tables of every shape (seeded)", () => {
       assert.ok(!question.findings.some((f) => f.code === FindingCode.NoAnswerKey), `run ${run}: the key was lost`);
       assert.equal(flattened(question).length, 0, `run ${run}`);
     }
+  });
+});
+
+describe("a table of the question in a printed Word file", () => {
+  const TABLE = '<table><thead><tr><th scope="col">Student</th><th scope="col">Score</th></tr></thead><tbody><tr><td>Ana</td><td>80</td></tr><tr><td>Ben</td><td>90</td></tr></tbody></table>';
+  const make = (stem: string, extra: Record<string, unknown> = {}): Question =>
+    createQuestion({
+      type: "multipleChoice",
+      stem: rich(stem),
+      body: { shuffle: false, options: [{ id: "o1", content: plainToRich("80"), correct: false }, { id: "o2", content: plainToRich("85"), correct: true }] },
+      by: "t",
+      at: OPTIONS.at,
+      id: "q_00000000000000000000000001",
+      ...extra,
+    });
+  const word = (question: Question) => printTest([question], printOptions({ title: "Quiz", kind: "student" }), "docx");
+  const xmlOf = (result: ReturnType<typeof word>): string => Buffer.from(unzipSync(result.file.bytes).get("word/document.xml") as Uint8Array).toString("utf8");
+
+  test("is a table in the file: a rule round every cell, a header row marked to repeat, and no lines with bars", () => {
+    const result = word(make(`<p>Use the table.</p>${TABLE}`));
+    const xml = xmlOf(result);
+    assert.equal((xml.match(/<w:tbl>/g) ?? []).length, 1);
+    assert.equal((xml.match(/<w:gridCol /g) ?? []).length, 2);
+    assert.equal((xml.match(/<w:tblHeader\/>/g) ?? []).length, 1, "only the first row is a header");
+    assert.match(xml, /<w:b\/>[^]*?>Student</);
+    assert.doesNotMatch(xml, /Student \| Score/);
+    assert.deepEqual(result.report.items?.map((i) => i.notes), [[]], "and nothing is said to have been lost");
+  });
+
+  test("is read back by the importer as the same table in the same question", () => {
+    const back = wordImporter.parseBytes(word(make(`<p>Use the table.</p>${TABLE}`)).file.bytes, OPTIONS).questions[0] as Question;
+    assert.match(back.stem.content, /<p>Use the table\.<\/p><table><thead><tr><th scope="col">Student<\/th><th scope="col">Score<\/th><\/tr><\/thead><tbody><tr><td>Ana<\/td><td>80<\/td><\/tr><tr><td>Ben<\/td><td>90<\/td><\/tr><\/tbody><\/table>/);
+  });
+
+  test("keeps the points on a line under it, and words after it", () => {
+    const xml = xmlOf(word(make(`<p>Use the table.</p>${TABLE}<p>Then answer.</p>`)));
+    const after = xml.slice(xml.indexOf("</w:tbl>"));
+    assert.ok(after.indexOf("Then answer.") !== -1 && after.indexOf("Then answer.") < after.indexOf("(1 point)"), "the words after the table come before the points");
+  });
+
+  test("a stem that begins with a table is still question 1", () => {
+    const xml = xmlOf(word(make(TABLE)));
+    assert.ok(xml.indexOf(">1.<") !== -1 && xml.indexOf(">1.<") < xml.indexOf("<w:tbl>"));
+  });
+
+  test("a cell that spans columns is a cell that spans them, and a short row is spread over the rest", () => {
+    const xml = xmlOf(word(make('<table><tbody><tr><td colspan="2">Results</td></tr><tr><td>Ana</td><td>80</td></tr><tr><td>Ben</td></tr></tbody></table>')));
+    assert.match(xml, /<w:gridSpan w:val="2"\/>[^]*?>Results</);
+    assert.equal((xml.match(/<w:gridSpan /g) ?? []).length, 2, "the title cell, and the last cell of the short row");
+  });
+
+  test("a table in a table, or in an option, is lines of text as in a PDF, and the question says so", () => {
+    const nested = word(make("<p>See</p><table><tbody><tr><td><table><tbody><tr><td>in</td></tr></tbody></table></td></tr></tbody></table>"));
+    assert.doesNotMatch(xmlOf(nested), /<w:tbl>/);
+    assert.match(nested.report.items?.[0]?.notes.join("\n") ?? "", /2 tables printed as lines of text/, "the outer and the one inside it");
+    const inOption = printTest(
+      [createQuestion({ type: "multipleChoice", stem: plainToRich("Which table?"), body: { shuffle: false, options: [{ id: "o1", content: rich(TABLE), correct: true }, { id: "o2", content: plainToRich("None"), correct: false }] }, by: "t", at: OPTIONS.at, id: "q_00000000000000000000000002" })],
+      printOptions({ title: "Quiz", kind: "student" }),
+      "docx",
+    );
+    assert.doesNotMatch(xmlOf(inOption), /<w:tbl>/);
+    assert.match(inOption.report.items?.[0]?.notes.join("\n") ?? "", /1 table printed as lines of text/);
+  });
+
+  test("an equation or a picture in a cell is words in the cell, counted", () => {
+    const result = word(make('<table><tbody><tr><td><oa-math ref="e1"></oa-math></td><td>1</td></tr><tr><td>y</td><td>2</td></tr></tbody></table>', { math: [{ id: "e1", latex: "x^2", mathml: "<math/>" }] }));
+    assert.match(xmlOf(result), />\[Equation: x\^2\]</);
+    assert.match(result.report.items?.[0]?.notes.join("\n") ?? "", /1 equation printed as/);
+  });
+
+  test("a PDF is as it was: the table is lines, and no table block reaches the PDF writer", () => {
+    const result = printTest([make(`<p>Use the table.</p>${TABLE}`)], printOptions({ title: "Quiz", kind: "student" }), "pdf");
+    assert.match(result.report.items?.[0]?.notes.join("\n") ?? "", /1 table printed as lines of text/);
   });
 });
