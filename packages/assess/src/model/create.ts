@@ -21,6 +21,7 @@ import {
   type QuestionType,
 } from "./question.ts";
 import { FindingCode, finding } from "./findings.ts";
+import { unreadObjects } from "./unread-objects.ts";
 
 export interface CreateQuestionInput {
   type: QuestionType;
@@ -197,7 +198,12 @@ export function withRecomputedFindings(question: Question, previous: readonly Fi
   // comes in; this raises it for a picture added by hand, and takes it away when a description is typed.
   const used = new Set(richTextFields({ stem: question.stem, feedback: question.feedback, body: question.body }).flatMap(([, text]) => collectRefs(text).media));
   const stillWithout = question.media.some((m) => used.has(m.id) && m.alt.trim() === "" && m.decorative !== true);
-  const kept = question.findings.filter((f) => !DERIVED_CODES.has(f.code) && !(f.code === FindingCode.MissingAltText && !stillWithout));
+  // A note that a marker stands for something the reader could not read goes when the last marker is gone from the text. It is never
+  // raised here: only an import leaves a marker that stands for something real.
+  const stillUnread = unreadObjects(question).total > 0;
+  const kept = question.findings.filter(
+    (f) => !DERIVED_CODES.has(f.code) && !(f.code === FindingCode.MissingAltText && !stillWithout) && !(f.code === FindingCode.UnreadObject && !stillUnread),
+  );
   const raised =
     stillWithout && !kept.some((f) => f.code === FindingCode.MissingAltText)
       ? [finding(FindingCode.MissingAltText, "warn", "A picture in this question has no description. A screen reader will announce nothing for it.", { field: "media" })]

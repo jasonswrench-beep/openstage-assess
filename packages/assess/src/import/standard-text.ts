@@ -30,6 +30,7 @@
  */
 
 import { finding, FindingCode, type Finding, type SourceRef } from "../model/findings.ts";
+import { unreadObjectFindings } from "../model/unread-objects.ts";
 import { localId } from "../model/ids.ts";
 import {
   escapeHtml,
@@ -1314,10 +1315,11 @@ function buildQuestion(
   // The quality checker is the single source of truth for what a bad answer
   // key is. The importer raises the import-specific wording first, so this
   // only adds what the import path did not already notice.
-  return addFindings(
-    question,
-    checkAnswerKey(question).filter((f) => !findings.some((existing) => existing.code === f.code)),
-  );
+  return addFindings(question, [
+    ...checkAnswerKey(question).filter((f) => !findings.some((existing) => existing.code === f.code)),
+    // A marker left where the reader could not read a picture, an equation or a symbol: the question is flagged, not only the file.
+    ...unreadObjectFindings(question, source),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
