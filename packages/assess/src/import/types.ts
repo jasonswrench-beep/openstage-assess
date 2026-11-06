@@ -46,8 +46,12 @@ export interface SourceBlock {
   bullet?: true;
   /** The block is a later line of a bulleted paragraph, after a soft line break: more of the same item, not another. */
   bulletMore?: true;
-  /** Where a block inside a table sits, counting from zero, so a preview can find it. */
-  table?: { table: number; row: number; cell: number };
+  /**
+   * Where a block inside a table sits, counting from zero, so a preview can find it. `plain` is set when the table was none of the
+   * question layouts, so its cells were read one by one, in order, as lines of text: a question that holds one has lost the table's
+   * rows and columns, and is flagged for it.
+   */
+  table?: { table: number; row: number; cell: number; plain?: true };
 }
 
 export interface SourceRun {

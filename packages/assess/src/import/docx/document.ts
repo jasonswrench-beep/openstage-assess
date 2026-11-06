@@ -157,6 +157,8 @@ interface Location {
   table: number;
   row: number;
   cell: number;
+  /** The table is none of the question layouts, so its cells are read one by one as lines of text. */
+  plain?: true;
 }
 
 /** Whether the paragraph mark was deleted by a tracked change, which takes the paragraph with it if nothing else is left. */
@@ -489,7 +491,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     if (!isSimple(rows)) {
       stats.tablesPlain++;
       rows.forEach((tr, row) => {
-        elements(tr, "w:tc").forEach((tc, cell) => container(tc, { table: number, row, cell }));
+        elements(tr, "w:tc").forEach((tc, cell) => container(tc, { table: number, row, cell, plain: true }));
       });
       return;
     }
@@ -516,7 +518,9 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
       for (const line of reading.lines) emit(line);
     } else {
       stats.tablesPlain++;
-      for (const row of cells) for (const cell of row) for (const line of cell.lines) emit(line);
+      // The lines were made before it was known whether this table is a layout, so they are marked now. A table inside a cell of this
+      // one was read the same way and is marked with it.
+      for (const row of cells) for (const cell of row) for (const line of cell.lines) emit(line.table ? { ...line, table: { ...line.table, plain: true } } : line);
     }
   }
 
