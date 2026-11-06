@@ -192,12 +192,17 @@ export function withRecomputedFindings(question: Question, previous: readonly Fi
     if (f.dismissed) dismissals.set(`${f.code}|${f.field ?? ""}`, f);
   }
 
-  // A note that a picture has no description goes when every picture in use has one (or is marked as decoration). It is only ever
-  // taken away here: it is raised when the picture comes in, and a description typed in later is what makes it stale.
+  // A note that a picture has no description goes when every picture in use has one (or is marked as decoration), and comes when a
+  // picture in use has none and there is no note already (one a person dismissed counts as there). An import raises it as the picture
+  // comes in; this raises it for a picture added by hand, and takes it away when a description is typed.
   const used = new Set(richTextFields({ stem: question.stem, feedback: question.feedback, body: question.body }).flatMap(([, text]) => collectRefs(text).media));
   const stillWithout = question.media.some((m) => used.has(m.id) && m.alt.trim() === "" && m.decorative !== true);
   const kept = question.findings.filter((f) => !DERIVED_CODES.has(f.code) && !(f.code === FindingCode.MissingAltText && !stillWithout));
-  const fresh = [...checkAnswerKey(question), ...checkReferences(question)].map((f) => {
+  const raised =
+    stillWithout && !kept.some((f) => f.code === FindingCode.MissingAltText)
+      ? [finding(FindingCode.MissingAltText, "warn", "A picture in this question has no description. A screen reader will announce nothing for it.", { field: "media" })]
+      : [];
+  const fresh = [...checkAnswerKey(question), ...checkReferences(question), ...raised].map((f) => {
     const dismissal = dismissals.get(`${f.code}|${f.field ?? ""}`);
     return dismissal
       ? {

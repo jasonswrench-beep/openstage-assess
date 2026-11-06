@@ -494,7 +494,7 @@ home screen and stops its server when it is closed; the installer is unsigned.
   question with nothing set under "(none)" so the gaps show, and leaves retired questions out), and Pick for me on the Make a
   test screen (`bank/pick.ts`: some questions with a value, at random, never a retired one, one already chosen, one with no usable
   key or a copy of one in the test, and it says what it left out and why; it is a helper for building a test chapter by chapter,
-  not a stored blueprint), and folders in the app (`bank/store.ts`: make, rename, move and take away a folder, file a question in one, narrow the list to one; a folder never holds a question, so taking one away leaves its questions in the bank in no folder, and the folders inside it move up). an import can be saved into a folder by name. Not done: stored pools and blueprints, filing several questions at once, the web quiz, and from the original list of checks
+  not a stored blueprint), and folders in the app (`bank/store.ts`: make, rename, move and take away a folder, file a question in one, narrow the list to one; a folder never holds a question, so taking one away leaves its questions in the bank in no folder, and the folders inside it move up). an import can be saved into a folder by name. Several questions are filed at once (`Bank.moveManyToFolder`, the control beside the list: the questions shown, all or nothing). Not done: stored pools and blueprints, the web quiz, and from the original list of checks
   the reading level, which would need a reading-level formula that is not misleading on technical
   words, and an equation that is a picture, which the import already reports.
 
@@ -504,10 +504,12 @@ cannot (cropped, rotated, flipped, drawn on, grouped, linked, in a text box or i
 for a question that is saved and says on the bank screen when a question names one it does not hold; the editor shows each picture,
 writes its description or marks it as decoration, and writes it in the text as `[picture 2]`. A printed test draws pictures (the
 Word file embeds them, the PDF draws a PNG or a JPEG and prints the rest as words with the reason), and Moodle XML carries the picture in
-a question's text. Not done: a picture added by hand in the editor (a file chosen from the computer), a picture in the text format
+a question's text. A picture is added, replaced or removed by hand in the editor (`model/picture-edit.ts`: a PNG, JPEG or GIF chosen from
+the computer, told by its bytes, put at the end of the text, with no description and a note that it has none; one an import refused, such
+as a cropped one, is put back this way), and Word's own "mark as decorative" is read. Not done: a picture in the text format
 (`[ img: ... ]` names a file nothing supplies), pictures in the other exports (none has a place for the file but Moodle's; QTI and
-Common Cartridge could carry them and have not been accepted by Brightspace at all), a decoration mark read from Word, a turned
-picture shown the right way up, and a GIF or CMYK JPEG in a PDF.
+Common Cartridge could carry them and have not been accepted by Brightspace at all), a turned picture shown the right way up, and a
+GIF or CMYK JPEG in a PDF.
 
 **Check quality** (phase 7, first set; `quality/items.ts`, `quality/bank.ts`, `assess check`, and the Check quality
 button on a bank). Every result is a note (severity `info`) and never a warning or an error, because those two are what

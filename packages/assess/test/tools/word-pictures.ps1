@@ -21,12 +21,13 @@ function Add-Line($doc, [string]$text) {
 }
 
 # A paragraph of its own holding an inline picture with the description given (nothing given leaves it empty).
-function Add-Picture($doc, [string]$alt, [int]$cropLeft = 0) {
+function Add-Picture($doc, [string]$alt, [int]$cropLeft = 0, [bool]$decorative = $false) {
   $doc.Content.InsertParagraphAfter()
   $range = $doc.Paragraphs.Item($doc.Paragraphs.Count).Range
   $shape = $doc.InlineShapes.AddPicture($Pic, $false, $true, $range)
   $shape.AlternativeText = $alt
   if ($cropLeft -gt 0) { $shape.PictureFormat.CropLeft = $cropLeft }
+  if ($decorative) { $shape.Decorative = $true }
 }
 
 function Save($doc, [string]$name) {
@@ -57,6 +58,11 @@ try {
   New-Question $doc "2"; Add-Picture $doc ""; Add-Options $doc "a"
   New-Question $doc "3"; Add-Picture $doc "A solid blue rectangle"; Add-Options $doc "a"
   Save $doc "pictures-placed"
+
+  # A picture marked as decoration (Word's own "Mark as decorative"), which needs no description.
+  $doc = $word.Documents.Add()
+  New-Question $doc "1"; Add-Picture $doc "" 0 $true; Add-Options $doc "a"
+  Save $doc "pictures-decorative"
 
   # A picture cropped in Word: the file holds the whole picture and the page shows part of it.
   $doc = $word.Documents.Add()

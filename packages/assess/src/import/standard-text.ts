@@ -86,7 +86,9 @@ export const PROFILE_ID = "standard-text";
  */
 const PLACEHOLDER = PLACEHOLDER_TEXT;
 
-const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?\s*\]/gi;
+// The word `decorative` after the description marks a picture that carries no meaning, so that it needs no description: the Word
+// reader writes it when Word's own "mark as decorative" is set on the picture.
+const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?(?:\s+(decorative))?\s*\]/gi;
 const HTML_BLOCK = /\[HTML\]([\s\S]*?)\[\/HTML\]/gi;
 
 const DIFFICULTY_WORDS: Record<string, Difficulty> = {
@@ -160,16 +162,17 @@ function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextC
   });
 
   let imageCount = 0;
-  text = text.replace(IMAGE_TAG, (_whole, fileName: string, alt?: string) => {
+  text = text.replace(IMAGE_TAG, (_whole, fileName: string, alt?: string, decorative?: string) => {
     const id = `${idPrefix}_m${++imageCount}`;
-    const altText = (alt ?? "").trim();
+    const altText = decorative ? "" : (alt ?? "").trim();
     media.push({
       id,
       file: `media/${fileName}`,
       mime: guessMime(fileName),
       alt: altText,
+      ...(decorative ? { decorative: true } : {}),
     });
-    if (altText.length === 0) {
+    if (altText.length === 0 && !decorative) {
       findings.push(
         finding(
           FindingCode.MissingAltText,

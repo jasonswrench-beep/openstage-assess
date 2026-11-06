@@ -35,6 +35,8 @@ const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "ui");
 /** Most a request may carry. A Word file or a bank can be large; everything else is small. */
 const MAX_UPLOAD = 80 * 1024 * 1024;
 const MAX_JSON = 4 * 1024 * 1024;
+/** A picture chosen for a question: the engine keeps at most 25 MB of picture, and a little over is room for it to say so in words. */
+const MAX_PICTURE_UPLOAD = 26 * 1024 * 1024;
 /** A page of a scan, as the window sends it: grey pixels, one byte each. A scan at 300 dots to the inch is about 8.4 million. */
 const MAX_PAGE = 17 * 1024 * 1024;
 
@@ -101,6 +103,7 @@ export function uploadLimit(segments: readonly string[]): number {
   if (a === "scoring" && (b === "open" || c === "files")) return MAX_UPLOAD;
   if (a === "scoring" && c === "pages") return MAX_PAGE;
   if (a === "sheets" && segments[4] === "printing-check") return MAX_UPLOAD;
+  if ((a === "banks" || a === "sessions") && c === "questions" && segments[4] === "pictures") return MAX_PICTURE_UPLOAD;
   return MAX_JSON;
 }
 
