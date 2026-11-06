@@ -60,11 +60,22 @@ item says what has been run and what has not. Items are removed when done, with 
   the marker stands in the text (6 November 2026; before that only the file's own warnings said so and the question read as
   parsed). Write the figure in words or add the picture in the editor and take the marker out: the note should go by itself.
   Tried on invented files only.
-- [ ] **Import a Word bank with a table of data inside a question (scores, a schedule) and look at the question.** The table is
-  read cell by cell, a row after a row, into the stem, and the question now says its rows and columns were not kept. Do the
-  words still read as your table? A question that sits wholly in a table (a test item file with a question to a cell) must not
-  carry the note: one real file of that kind (375 questions) read the same before and after. Tried on invented files, and on
-  that one file; no real bank with data tables inside questions has been seen.
+- [ ] **Import a Word bank with a table of data inside a question (scores, a schedule) and look at the question.** A table that is a
+  grid of two or more rows and columns is kept as a table of the question: it shows in the question's own panel, drawn, and as
+  `[table 1]` in the text. Is it the table you wrote, with its rows and columns, a title row across the top if you had one, and
+  the right row as a header if you marked one to repeat? A table that is not a grid (one column, one row), or has cells joined down,
+  is read cell by cell and the question says so. A question that sits wholly in a table (a test item file with a question to a
+  cell) must carry neither: one real file of that kind (375 questions) read the same before and after. Word wrote the five test
+  tables and agreed (`check:word-tables`); no real bank with data tables inside questions has been seen.
+- [ ] **Look at the table panel in the app's own window, and move and remove a table with its words.** The panel was built and
+  checked in the built-in browser by what it makes (header cells, a spanning cell, a hostile cell shown as words), and not by
+  looking, since the pane was not on screen. Change the words round `[table 1]`, move the token to another place, take it out and
+  save: the table should follow the token, and be gone with it. A table cannot be changed there.
+- [ ] **Print a test with a table in a question, and look.** A printed test draws a table as lines, a row to a line with the cells
+  between bars, in Word and in the PDF, and says so against the question. Does a row to a line read well enough for your tables?
+  Making it a table in the Word file is not built; say if you need it.
+- [ ] **Import the Moodle XML, GIFT or Brightspace CSV of a question with a table into a course.** They carry the table as markup
+  (`table`, `thead`, `tbody`, `tr`, `th`, `td`). Not tried in any learning system. The other formats write its words.
 - [ ] **Hide a whole numbered paragraph in Word and look at the numbers.** Triple-click one item of a numbered list, press
   Ctrl+Shift+H, and make sure Word is not set to show hidden text. Word's object model counted the hidden item (the item after
   it kept its number), and the reader does the same. What the page shows on screen is not something the check can see.

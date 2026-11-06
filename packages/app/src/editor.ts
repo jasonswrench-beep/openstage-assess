@@ -19,8 +19,12 @@ import {
   mediaPlaceholder,
   localId,
   plainToRich,
+  readTableHtml,
+  replaceTables,
   richTextToPlain,
+  tablesIn,
   titleFromStem,
+  titleText,
   verdictOf,
   withRecomputedFindings,
   type Feedback,
@@ -124,6 +128,19 @@ export interface EditorEquation {
   placed: boolean;
 }
 
+/**
+ * A table of a question, as the screen shows it: drawn from the rows and cells, and moved or removed in the text by its token
+ * (`[table 2]` is the second). It is shown, and not edited; to change one, change it in the Word file and import again.
+ */
+export interface EditorTable {
+  /** The number the text refers to it by. */
+  number: number;
+  /** The rows and cells, when the table could be read into them. Empty for a table inside a table, which is shown by its words. */
+  rows: Array<Array<{ header: boolean; text: string; colspan: number; rowspan: number }>>;
+  /** The table's words, a row to a line and the cells of a row between bars. */
+  text: string;
+}
+
 /** What the screen is given for a question: the input shape, and what it needs to know besides. */
 export interface EditorQuestion extends EditorInput {
   id: string;
@@ -139,6 +156,8 @@ export interface EditorQuestion extends EditorInput {
   pictures: EditorPicture[];
   math: number;
   equations: EditorEquation[];
+  /** The tables the text of the question holds, each in the place its [table N] token stands. */
+  tables: EditorTable[];
   /** Why the question cannot be edited here at all, when it cannot. */
   readOnly?: string;
   origin?: Question["origin"];
@@ -358,23 +377,45 @@ const MATH_ELEMENT = /<oa-math\b[^>]*\bref="([^"]*)"[^>]*>\s*<\/oa-math>/gi;
 const PICTURE_TOKEN = /\[picture (\d{1,3})\]/g;
 /** An equation in the text the same way: [equation 2] is the second equation the question carries. */
 const EQUATION_TOKEN = /\[equation (\d{1,3})\]/g;
+/** A table in the text the same way: [table 2] is the second table the question's text holds. Split on, so that it keeps its number. */
+const TABLE_TOKEN = /\[table (\d{1,3})\]/;
 
-/** What a question carries that its text refers to by a token. A question is one of these, and so is the question being built. */
+/**
+ * What a question carries that its text refers to by a token. A question is made one of these by `carriedOf`, and so is the
+ * question being built. A table is not carried beside the text as a picture is: it is in the text, as markup, and is found there.
+ */
 interface Carried {
   readonly media: readonly MediaRef[];
   readonly math: readonly MathRef[];
+  /** The markup of each different table the text of the question holds, in the order it comes. [table 1] is the first. */
+  readonly tables: readonly string[];
 }
 
-const plain = (text: RichText | undefined): string => (text && !isEmptyRichText(text) ? richTextToPlain(text) : "");
-const hasFormatting = (text: RichText | undefined): boolean => text !== undefined && text.format === "rich" && FORMATTING.test(text.content);
+/** Whether the text has formatting that editing it as plain text would flatten. A table is not: it is kept, as a token. */
+const hasFormatting = (text: RichText | undefined): boolean => text !== undefined && text.format === "rich" && FORMATTING.test(replaceTables(text.content, () => ""));
+
+/** The tables the text holds, as markup. Plain text is not markup and holds none, whatever it says. */
+const tablesOfText = (text: RichText | undefined): string[] => (text !== undefined && text.format === "rich" ? tablesIn(text.content) : []);
+
+/** What a question carries, as the token handling needs it. */
+function carriedOf(q: Question): Carried {
+  return { media: q.media, math: q.math, tables: [...new Set(textsOf(q).flatMap(tablesOfText))] };
+}
 
 /**
- * The text as the screen shows it: the words, with a token where each picture and each equation stands. One is moved, copied or
- * removed by editing its token, and the text round-trips: a text the person leaves alone is kept exactly as stored.
+ * The text as the screen shows it: the words, with a token where each picture, each equation and each table stands. One is moved,
+ * copied or removed by editing its token, and the text round-trips: a text the person leaves alone is kept exactly as stored.
  */
 function shown(text: RichText | undefined, carried: Carried): string {
   if (text === undefined || isEmptyRichText(text)) return "";
-  const marked = text.content
+  const withTokens = text.format === "rich"
+    ? replaceTables(text.content, (html) => {
+        const at = carried.tables.indexOf(html);
+        // On a line of its own, so that the words round it are not run into it.
+        return at === -1 ? html : `\n[table ${at + 1}]\n`;
+      })
+    : text.content;
+  const marked = withTokens
     .replace(MEDIA_ELEMENT, (whole, ref: string) => {
       const at = carried.media.findIndex((m) => m.id === ref);
       return at === -1 ? whole : ` [picture ${at + 1}] `;
@@ -398,11 +439,24 @@ function holdsObject(text: RichText | undefined, carried: Carried): boolean {
   return refs.media.some((ref) => !media.has(ref)) || refs.math.some((ref) => !math.has(ref));
 }
 
-/** Plain text made rich again, with each [picture N] and [equation N] put back as the one it names. */
-function withObjects(rich: RichText, carried: Carried, where: string): RichText {
+/** Plain text made rich again, with each [picture N], [equation N] and [table N] put back as the one it names. */
+function withObjects(next: string, carried: Carried, where: string): RichText {
   // A question with none has nothing the token could mean, so the words are kept as written.
-  if (carried.media.length === 0 && carried.math.length === 0) return rich;
-  const content = rich.content
+  if (carried.media.length === 0 && carried.math.length === 0 && carried.tables.length === 0) return plainToRich(next);
+  // A table is a block, so the words round its token are paragraphs of their own on either side of it. Split on the token, the
+  // number it names comes between the pieces of text.
+  const pieces = carried.tables.length === 0 ? [next] : next.split(TABLE_TOKEN);
+  const rich = pieces
+    .map((piece, at) => {
+      if (at % 2 === 0) return plainToRich(piece).content;
+      const html = carried.tables[Number(piece) - 1];
+      if (html === undefined) {
+        throw badRequest(`The text in ${where} has [table ${piece}], and this question has ${carried.tables.length === 1 ? "one table" : `${carried.tables.length} tables`}, so nothing was changed.`);
+      }
+      return html;
+    })
+    .join("");
+  const content = rich
     .replace(PICTURE_TOKEN, (whole, n: string) => {
       if (carried.media.length === 0) return whole;
       const ref = carried.media[Number(n) - 1];
@@ -419,7 +473,7 @@ function withObjects(rich: RichText, carried: Carried, where: string): RichText 
       }
       return mathPlaceholder(ref.id);
     });
-  return { ...rich, content };
+  return { format: "rich", content };
 }
 
 type Dict = Record<string, unknown>;
@@ -446,15 +500,16 @@ function textFields(q: Question): Array<[string, RichText | undefined]> {
 
 function bodyToEditor(q: Question): EditorBody {
   const body = q.body as unknown as Dict;
+  const carried = carriedOf(q);
   switch (q.type) {
     case "multipleChoice":
     case "multipleResponse":
       return {
         options: (body["options"] as Array<{ id: string; content: RichText; correct: boolean; feedback?: RichText }>).map((o) => ({
           id: o.id,
-          text: shown(o.content, q),
+          text: shown(o.content, carried),
           correct: o.correct,
-          feedback: shown(o.feedback, q),
+          feedback: shown(o.feedback, carried),
         })),
         shuffle: body["shuffle"] !== false,
         ...(q.type === "multipleResponse" ? { partialCredit: body["partialCredit"] !== false } : {}),
@@ -470,14 +525,14 @@ function bodyToEditor(q: Question): EditorBody {
       return { accepted: [...(body["accepted"] as string[])], caseSensitive: body["caseSensitive"] === true };
     case "matching":
       return {
-        pairs: (body["pairs"] as Array<{ id: string; left: RichText; right: string }>).map((p) => ({ id: p.id, left: shown(p.left, q), right: p.right })),
+        pairs: (body["pairs"] as Array<{ id: string; left: RichText; right: string }>).map((p) => ({ id: p.id, left: shown(p.left, carried), right: p.right })),
         distractors: [...((body["distractors"] as string[] | undefined) ?? [])],
       };
     case "ordering":
       return {
         items: [...(body["items"] as Array<{ id: string; content: RichText; position: number }>)]
           .sort((a, b) => a.position - b.position)
-          .map((it) => ({ id: it.id, text: shown(it.content, q) })),
+          .map((it) => ({ id: it.id, text: shown(it.content, carried) })),
       };
     case "numeric":
       return {
@@ -489,7 +544,7 @@ function bodyToEditor(q: Question): EditorBody {
         units: typeof body["units"] === "string" ? (body["units"] as string) : "",
       };
     case "essay":
-      return { modelAnswer: shown(body["modelAnswer"] as RichText | undefined, q) };
+      return { modelAnswer: shown(body["modelAnswer"] as RichText | undefined, carried) };
     default:
       return {};
   }
@@ -497,15 +552,16 @@ function bodyToEditor(q: Question): EditorBody {
 
 export function toEditor(q: Question): EditorQuestion {
   const fields = textFields(q);
+  const carried = carriedOf(q);
   const readOnly = EDITABLE.includes(q.type) ? undefined : `A ${q.type} question cannot be edited here yet. It is shown as it is stored, and nothing about it is changed.`;
   return {
     id: q.id,
     version: q.version,
     type: q.type,
     title: q.title,
-    stem: shown(q.stem, q),
+    stem: shown(q.stem, carried),
     points: q.points,
-    feedback: { general: shown(q.feedback.general, q), correct: shown(q.feedback.correct, q), incorrect: shown(q.feedback.incorrect, q) },
+    feedback: { general: shown(q.feedback.general, carried), correct: shown(q.feedback.correct, carried), incorrect: shown(q.feedback.incorrect, carried) },
     metadata: {
       status: q.metadata.status,
       difficulty: q.metadata.difficulty ?? "",
@@ -520,11 +576,12 @@ export function toEditor(q: Question): EditorQuestion {
     verdict: verdictOf(q),
     findings: q.findings.map((f, index) => ({ ...f, index })),
     formatted: fields.filter(([, t]) => hasFormatting(t)).map(([where]) => where),
-    locked: fields.filter(([, t]) => holdsObject(t, q)).map(([where]) => where),
+    locked: fields.filter(([, t]) => holdsObject(t, carried)).map(([where]) => where),
     media: q.media.length,
     pictures: picturesOf(q),
     math: q.math.length,
     equations: equationsOf(q),
+    tables: carried.tables.map((html, i): EditorTable => ({ number: i + 1, ...readTableHtml(html) })),
     ...(readOnly ? { readOnly } : {}),
     ...(q.origin ? { origin: q.origin } : {}),
   };
@@ -541,6 +598,8 @@ interface Built extends Carried {
   media: readonly MediaRef[];
   /** The equations the question carries, which an [equation N] in the text stands for. */
   math: readonly MathRef[];
+  /** The tables the text of the question holds, which a [table N] in the text stands for. */
+  tables: readonly string[];
 }
 
 /** The stored text if the person left it alone, and plain text made rich if they changed it. */
@@ -553,7 +612,7 @@ function textFor(next: string, previous: RichText | undefined, where: string, bu
     if (next === shown(previous, built)) return previous;
     if (hasFormatting(previous)) built.flattened.push(where);
   }
-  return withObjects(plainToRich(next), built, where);
+  return withObjects(next, built, where);
 }
 
 const optionalText = (next: string, previous: RichText | undefined, where: string, built: Built): RichText | undefined =>
@@ -687,10 +746,10 @@ export interface BuiltEdit {
 /** The change the screen asks for, as an engine edit. A title the person has not touched follows the question text. */
 export function editFromInput(base: Question, input: EditorInput): BuiltEdit {
   if (!EDITABLE.includes(base.type)) throw badRequest(`A ${base.type} question cannot be edited here yet, so nothing was changed.`);
-  const built: Built = { flattened: [], media: base.media, math: base.math };
+  const built: Built = { flattened: [], media: base.media, math: base.math, tables: carriedOf(base).tables };
   const stem = textFor(input.stem, base.stem, "the question text", built);
-  const titleWasAutomatic = base.title === titleFromStem(plain(base.stem));
-  const title = input.title.trim() !== "" && input.title !== base.title ? input.title.trim() : titleWasAutomatic ? titleFromStem(plain(stem)) : base.title;
+  const titleWasAutomatic = base.title === titleFromStem(titleText(base.stem));
+  const title = input.title.trim() !== "" && input.title !== base.title ? input.title.trim() : titleWasAutomatic ? titleFromStem(titleText(stem)) : base.title;
   const media = mediaFromInput(base, input);
   return {
     edit: {
@@ -793,7 +852,7 @@ export function missingText(input: EditorInput): string[] {
  * only after it has been edited.
  */
 export function questionFromInput(input: EditorInput, by: string, at?: string): Question {
-  const built: Built = { flattened: [], media: [], math: [] };
+  const built: Built = { flattened: [], media: [], math: [], tables: [] };
   return withRecomputedFindings(
     createQuestion({
       type: input.type,

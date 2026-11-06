@@ -20,7 +20,7 @@
 
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isOrdering, isShortAnswer, isTrueFalse, titleFromStem, type Question } from "../model/question.ts";
-import { richTextToPlain } from "../model/richtext.ts";
+import { titleText } from "../model/table.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
@@ -94,7 +94,7 @@ function plan(question: Question, position: number): Planned {
 
   // A title that is only the start of the question text, which is what an untitled question is given, says nothing the text
   // does not, and Brightspace shows the text when there is no title. Only a title someone wrote is written.
-  const automatic = question.title === titleFromStem(richTextToPlain(question.stem));
+  const automatic = question.title === titleFromStem(titleText(question.stem));
   const title = automatic ? "" : flat(question.title);
 
   // The head of every question, in the order Brightspace's own template has it.

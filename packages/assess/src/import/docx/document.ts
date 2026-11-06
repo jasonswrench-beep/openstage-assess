@@ -21,7 +21,7 @@
 
 import { createHash } from "node:crypto";
 
-import type { SourceBlock, SourceRun } from "../types.ts";
+import type { ReadTable, SourceBlock, SourceRun } from "../types.ts";
 import type { Formatting, RunFormat } from "./formatting.ts";
 import type { Numbering } from "./numbering.ts";
 import { readTable, type Cell, type Line as TableLine } from "./tables.ts";
@@ -83,6 +83,8 @@ export interface DocumentBlocks {
   stats: DocumentStats;
   /** The equations read, by the name written in the tag where each stood. Equal equations are one entry. */
   math: Map<string, MathReading>;
+  /** The tables that are none of the question layouts and are a grid, by the table's number, for a question to keep as a table. */
+  tables: Map<number, ReadTable>;
 }
 
 /** Elements that carry no text of their own and are skipped without comment. */
@@ -191,6 +193,35 @@ function isSimple(rows: XmlElement[]): boolean {
   });
 }
 
+/** The most rows and cells of a grid that is kept as a table in a question. A table past this is a document's data, not a figure of a question. */
+const MAX_GRID_ROWS = 100;
+const MAX_GRID_CELLS = 1000;
+
+/**
+ * A table that is none of the question layouts, as the grid it is, when it is one worth keeping as a table: two or more rows, a row
+ * of two or more cells, no table inside a cell, no cell joined to its neighbour the older way, and not past a size a question's figure
+ * has. A one-column table is the vehicle of a question and not a data table in it, and a table past the limits is a document's data.
+ * A cell's text is its lines, one to a line. A row is a header only when Word was told to repeat it at the top of each page, which is
+ * what marking a row as a header means there; a table is not given a header row because its first row looks like one.
+ */
+function gridOf(rows: XmlElement[], cells: Cell[][], spans: number[][], oldMerge: boolean): ReadTable | undefined {
+  if (oldMerge || rows.length < 2 || rows.length > MAX_GRID_ROWS) return undefined;
+  if (cells.some((row) => row.length === 0 || row.some((c) => c.nested))) return undefined;
+  if (Math.max(...cells.map((row) => row.length)) < 2 || cells.reduce((sum, row) => sum + row.length, 0) > MAX_GRID_CELLS) return undefined;
+  const line = (l: TableLine): string => (l.listLabel ? `${l.listLabel} ${l.text}` : l.text);
+  return {
+    rows: cells.map((row, r) => {
+      const properties = first(rows[r] as XmlElement, "w:trPr");
+      const marked = properties ? first(properties, "w:tblHeader") : undefined;
+      const off = marked !== undefined && /^(0|false|off)$/i.test(marked.attrs["w:val"] ?? "");
+      return {
+        header: marked !== undefined && !off,
+        cells: row.map((cell, c) => ({ text: cell.lines.map(line).filter((t) => t.trim() !== "").join("\n"), span: spans[r]?.[c] ?? 1 })),
+      };
+    }),
+  };
+}
+
 const NO_FORMAT: RunFormat = {};
 
 const sameFormat = (a: RunFormat, b: RunFormat): boolean =>
@@ -243,6 +274,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   };
 
   const math = new Map<string, MathReading>();
+  const grids = new Map<number, ReadTable>();
   /**
    * An equation (`m:oMath`): read, and a tag where it stood; or not read, and the marker with the reason. The name in the tag is
    * made from the equation's own XML, so the same equation written twice is one entry and a name is the same from one import to
@@ -496,8 +528,13 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
       return;
     }
 
-    const cells: Cell[][] = rows.map((tr, row) =>
-      elements(tr, "w:tc").map((tc, cell) => {
+    // How far each cell spans, and whether any is joined to its neighbour the older way, for the grid a data table is kept as.
+    const spans: number[][] = [];
+    let oldMerge = false;
+    const cells: Cell[][] = rows.map((tr, row) => {
+      const rowSpans: number[] = [];
+      spans.push(rowSpans);
+      return elements(tr, "w:tc").map((tc, cell) => {
         const lines: TableLine[] = [];
         // A table inside this cell gathers its own cells the same way, and has to give
         // this cell's lines back when it is done, so what was being collected is kept.
@@ -507,10 +544,13 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
         collecting = outer;
         const properties = first(tc, "w:tcPr");
         const span = properties ? first(properties, "w:gridSpan")?.attrs["w:val"] : undefined;
-        const across = (span !== undefined && Number(span) > 1) || (properties !== undefined && first(properties, "w:hMerge") !== undefined);
+        const joined = properties !== undefined && first(properties, "w:hMerge") !== undefined;
+        if (joined) oldMerge = true;
+        rowSpans.push(span !== undefined && Number.isInteger(Number(span)) && Number(span) > 1 ? Math.min(Number(span), 100) : 1);
+        const across = (span !== undefined && Number(span) > 1) || joined;
         return { lines, ...(across ? { merged: true } : {}), ...(holdsTable(tc) ? { nested: true } : {}) };
-      }),
-    );
+      });
+    });
 
     const reading = readTable(cells, { runs: formatting !== undefined, previous: blocks[blocks.length - 1]?.text ?? "" });
     if (reading.layout) {
@@ -518,6 +558,10 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
       for (const line of reading.lines) emit(line);
     } else {
       stats.tablesPlain++;
+      // A grid of two or more rows and columns is kept beside the blocks, so that a question with it inside its text can keep it as a
+      // table. The cells are still read as lines below, as they always were: a question that stands in this table has nothing to keep.
+      const grid = gridOf(rows, cells, spans, oldMerge);
+      if (grid) grids.set(number, grid);
       // The lines were made before it was known whether this table is a layout, so they are marked now. A table inside a cell of this
       // one was read the same way and is marked with it.
       for (const row of cells) for (const cell of row) for (const line of cell.lines) emit(line.table ? { ...line, table: { ...line.table, plain: true } } : line);
@@ -540,5 +584,5 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   }
 
   container(body, undefined);
-  return { blocks, stats, math };
+  return { blocks, stats, math, tables: grids };
 }

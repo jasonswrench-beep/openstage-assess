@@ -90,10 +90,12 @@ function wordWith(parts: string[]) {
 const cells = (rows: string[][]): string => table(rows.map((row) => row.map((c) => paragraph(run(c)))));
 const flattened = (q: Question) => q.findings.filter((f) => f.code === FindingCode.TableFlattened);
 
-describe("a table inside a question", () => {
+// A table that is not a grid (one column) is not kept as a table, so it is read cell by cell and the question says so. A grid is kept
+// as a table, and has its own tests (tables-in-stem.test.ts).
+describe("a table inside a question that is not kept as a table", () => {
   const stats = wordWith([
     paragraph(run("1. Use the table to find the mean of the scores.")),
-    cells([["Student", "Score"], ["Ana", "80"], ["Ben", "90"]]),
+    cells([["Scores"], ["Ana 80"], ["Ben 90"]]),
     ...OPTIONS_AND_KEY.map((p) => p),
     paragraph(run("2. Next question?")),
     paragraph(run("a) Yes")),
@@ -104,10 +106,10 @@ describe("a table inside a question", () => {
   test("is read cell by cell, in order, and the question says its rows and columns were not kept", () => {
     assert.deepEqual([stats.read.stats.tables, stats.read.stats.tablesPlain], [1, 1]);
     const q = stats.questions[0] as Question;
-    assert.equal(richTextToPlain(q.stem).replace(/\s+/g, " "), "Use the table to find the mean of the scores. Student Score Ana 80 Ben 90");
+    assert.equal(richTextToPlain(q.stem).replace(/\s+/g, " "), "Use the table to find the mean of the scores. Scores Ana 80 Ben 90");
     assert.equal(flattened(q).length, 1);
     assert.equal(flattened(q)[0]?.severity, "warn");
-    assert.match(flattened(q)[0]?.message ?? "", /read cell by cell, in order, as 6 lines of text, so its rows and columns are not kept/);
+    assert.match(flattened(q)[0]?.message ?? "", /read cell by cell, in order, as 3 lines of text, so its rows and columns are not kept/);
     assert.equal(verdictFrom(q.findings), "needsReview");
   });
 

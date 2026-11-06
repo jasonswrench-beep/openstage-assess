@@ -308,3 +308,14 @@ table.results tr.current { background: var(--note-bg); }
 .equation:first-of-type { border-top: 0; padding-top: 0; }
 .equation-drawn { margin: 6px 0; padding: 6px 10px; font-size: 1.2rem; overflow-x: auto; background: var(--bg, #ffffff); border-radius: 4px; }
 .equation-latex { display: block; overflow-wrap: anywhere; font-size: 0.85rem; color: var(--muted, inherit); }
+
+/* Tables in a question: each drawn from its rows and cells, with the words of the cells set as text. */
+.tables { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.tables h3 { font-size: 0.95rem; margin: 0 0 4px; }
+.data-table { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.data-table:first-of-type { border-top: 0; padding-top: 0; }
+.data-table-scroll { margin: 6px 0 0; overflow-x: auto; }
+.data-table table { border-collapse: collapse; }
+.data-table th, .data-table td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; vertical-align: top; white-space: pre-line; }
+.data-table th { background: var(--bg, #ffffff); font-weight: 600; }
+.data-table-words { margin: 6px 0 0; white-space: pre-wrap; font: inherit; }

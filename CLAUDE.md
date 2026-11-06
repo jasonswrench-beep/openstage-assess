@@ -185,10 +185,30 @@ missing in the stem, the options and the feedback. Without it the question read 
 `withRecomputedFindings` takes the note away when the last marker is out of the text and never raises it (only an import leaves a
 marker that stands for something real), and a dismissal survives an edit. Only the exact words count: the editor's `[picture 2]` and
 `[equation 1]` name something the question carries. A table that is none of the question layouts is read cell by cell as lines of
-text (its blocks carry `table.plain`), and a question with such a table inside its text gets `import.table-flattened` for the same
-reason; a question that stands in the table (a test item file with a question to a cell) does not, because nothing of it was
-flattened, and counting it once flagged 373 of the 375 questions of a real file that read perfectly. Measure a rule like this on
-the real files before keeping it.
+text (its blocks carry `table.plain`), and a question with such a table inside its text that is not kept as a table (see the next
+rule) gets `import.table-flattened` for the same reason; a question that stands in the table (a test item file with a question to a
+cell) does not, because nothing of it was flattened, and counting it once flagged 373 of the 375 questions of a real file that read
+perfectly. Measure a rule like this on the real files before keeping it.
+
+**A data table inside a question's text is kept as a table only when it is plainly one, and otherwise is read cell by cell and said.**
+The Word reader hands over, beside its blocks, each table that is none of the question layouts and is a grid (`gridOf` in
+`import/docx/document.ts`): two or more rows, a row of two or more cells, no table inside a cell, no cell joined the older way
+(`w:hMerge`), at most 100 rows and 1000 cells. When the scanner is about to add a line to a question's stem and the line is a cell of
+such a table that is not the table the question stands in, it writes one tag line `[ tbl: "N" ]` where the table stood and claims
+all the table's cells; but not when any cell of the table is a line it reads as something else (an option, a number that starts a
+question, an answer, feedback, a type or title line), because that is options or a key laid out in a grid. The builder makes the tag
+into markup between control-character markers (`import/standard-text.ts`, `gridMarked`), so the picture and equation tags in the
+cells are read with the rest, and every cell's words are escaped. A row is a header (`thead`, `th scope="col"`) only when Word
+marked it to repeat as a header row; a first row that only looks like one is not made one. A cell keeps its words, pictures and
+equations, a joined cell its `colspan`, and not its bold, italics or colour. The rich text holds the table as markup, so
+`model/table.ts` finds, replaces and reads tables (a table in a table is one table; a table never closed runs to the end, so none is
+dropped), and a title is made from the words outside the tables (`titleText`). In the editor a table is the token `[table 2]` in the
+text, on a line of its own, moved or removed like words, shown drawn from its rows and cells and not edited (`tables` in
+`EditorQuestion`; text that holds only tables is not "formatting" that editing would flatten); a table that is not in the text any
+more is not in the question, since it lives in the text. A table that is not kept is read as it always was and flagged. A printed
+test draws a table as lines, a row to a line with the cells between bars, and says so against the question; Moodle XML, GIFT and
+the Brightspace CSV carry it as markup, and the others write its words and say tables became plain text. Real Word wrote five
+tables and agreed with the reader on every row, cell and header mark (`check:word-tables`).
 
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
@@ -275,7 +295,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2404 engine tests and 271 app tests, Node's own runner
+npm test                       # 2440 engine tests and 285 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -300,6 +320,7 @@ npm run check:word-print --workspace packages/assess   # has Word open the print
 npm run check:word-pictures --workspace packages/assess   # has Word write documents with pictures (placed, cropped, floating, flipped, in a text box) and reads them
 npm run check:word-symbols --workspace packages/assess   # has Word write characters from the Symbol font (Insert Symbol, and typed in that font) and reads them
 npm run check:word-equations --workspace packages/assess   # has Word build twenty kinds of equation and reads them back as the parts it was given
+npm run check:word-tables --workspace packages/assess   # has Word write data tables inside a question and holds the reader's rows, cells and header marks to what Word says
 npm run check:excel-authored --workspace packages/assess   # has Excel write a workbook and CSV and compares every cell with what Excel says
 npm run check:generated --workspace packages/assess -- check <folder> --piece N   # holds a generated bank to its plan
 ```
@@ -335,6 +356,12 @@ typed Greek letters), one in a question, and holds the LaTeX the reader finds to
 good as what its author believes Word writes; the first run found one fault in the check itself (Word puts the text it replaced into
 the degree of a root) and none in the reader. `npm run check:word-symbols -- --update-fixtures` and `npm run check:word-equations --
 --update-fixtures` keep what Word wrote in `fixtures/word-authored/symbols` and `fixtures/word-authored/equations`.
+
+`check:word-tables` is run after any change to how a table's grid is read for a question (`gridOf` in `import/docx/document.ts`: the
+rows, the cell text, the header mark, the spans). It has Word write a table of scores in a question, one with a header row, one with a
+merged title row, one with a cell of two paragraphs and one of a single column, asks Word what each table is (its rows, the text of
+each cell, whether a row repeats as a header) and holds the reader's own account to that. It found no disagreement the first time.
+`npm run check:word-tables -- --update-fixtures` keeps what Word wrote in `fixtures/word-authored/tables`, where `npm test` reads it.
 
 `check:excel-authored` is the fifth, and is run after any change to `import/table-xlsx.ts`
 or `import/table-csv.ts`: a cell the reader takes for something other than what Excel stored
