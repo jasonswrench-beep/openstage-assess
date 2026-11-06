@@ -105,6 +105,12 @@ export interface MathRef {
   id: string;
   latex: string;
   mathml: string;
+  /**
+   * Word's own XML for an equation read from a Word file (`m:oMath`, from the elements this reads, with its namespace declared).
+   * It is kept so that a printed Word file can carry the equation as an equation and not as the words of its LaTeX. Absent for an
+   * equation that did not come from Word.
+   */
+  omml?: string;
   /** Where the equation came from, which decides whether it needs a human. */
   source?: "omml" | "typed" | "latex" | "image";
 }

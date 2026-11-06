@@ -236,7 +236,8 @@ describe("what a Word file holds that a text file cannot is reported once, for t
   });
 
   test("pictures and equations: each is marked in the text and counted", () => {
-    const body = paragraph(run("See ") + "<w:r><w:drawing/></w:r>" + run(" and ") + "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+    // An equation made of a part this reader does not know is the one that is not read.
+    const body = paragraph(run("See ") + "<w:r><w:drawing/></w:r>" + run(" and ") + "<m:oMath><m:r><m:t>x</m:t></m:r><m:strange/></m:oMath>");
     const found = findings(docx({ body }));
     assert.deepEqual(found.map((f) => f.code), [FindingCode.UnreadContent, FindingCode.UnreadContent]);
     assert.match(found[0]!.message, /1 picture, shape or text box was not read.*\[picture\]/);
