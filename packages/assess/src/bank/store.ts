@@ -18,7 +18,10 @@ import {
   MANIFEST_PATH,
   administrationIdFromPath,
   administrationPath,
+  blueprintIdFromPath,
+  blueprintPath,
   isAdministrationPath,
+  isBlueprintPath,
   isMediaPath,
   isQuestionPath,
   isTestPath,
@@ -52,6 +55,7 @@ import { validateAdministration, type Administration, type AdministrationItem } 
 import { checkBankQuality, type BankQualityReport } from "../quality/bank.ts";
 import { QUALITY_CODES, withFreshQuality } from "../quality/items.ts";
 import { SearchIndex, matchesQuery } from "./search.ts";
+import { validateBlueprint, type Blueprint, type BlueprintRule } from "./blueprint.ts";
 
 export interface OpenReport {
   /** Questions that failed validation, with their issues. Never silently dropped. */
@@ -140,6 +144,8 @@ export class Bank {
   readonly tests = new Map<string, TestRecord>();
   /** The class-level figures of tests given to classes. Never a response: see model/statistics.ts. */
   readonly administrations = new Map<string, Administration>();
+  /** Stored recipes for a test (`bank/blueprint.ts`). They hold no question, so removing or changing one never touches a test. */
+  readonly blueprints = new Map<string, Blueprint>();
   folders: FolderFile;
   history: HistoryEntry[] = [];
   /** Files the engine did not write and does not understand, carried through untouched. */
@@ -384,6 +390,33 @@ export class Bank {
         continue;
       }
 
+      if (isBlueprintPath(name)) {
+        // A recipe that cannot be read is kept as it was, reported and not used, like a test: it may be the only copy of a
+        // set of rules somebody wrote out, and a field it holds that this program does not know would be lost by a rewrite.
+        const id = blueprintIdFromPath(name);
+        let raw: unknown;
+        try {
+          raw = JSON.parse(Buffer.from(data).toString("utf8"));
+        } catch (err) {
+          invalid.push({ id, issues: [{ path: name, message: `not valid JSON: ${(err as Error).message}` }] });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        const checked = validateBlueprint(raw);
+        if (!checked.ok) {
+          invalid.push({ id, issues: checked.issues.map((i) => ({ ...i, path: `${name}${i.path ? `: ${i.path}` : ""}` })) });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        if (bank.blueprints.has(checked.blueprint.id)) {
+          invalid.push({ id: checked.blueprint.id, issues: [{ path: name, message: `another file in this bank already holds the blueprint ${checked.blueprint.id}, so this copy was not loaded` }] });
+          bank.passthrough.set(name, data);
+          continue;
+        }
+        bank.blueprints.set(checked.blueprint.id, checked.blueprint);
+        continue;
+      }
+
       if (isMediaPath(name)) {
         bank.media.set(name, data);
         continue;
@@ -446,6 +479,9 @@ export class Bank {
     }
     for (const administration of this.listAdministrations()) {
       entries.push(jsonEntry(administrationPath(administration.id), administration));
+    }
+    for (const blueprint of this.listBlueprints()) {
+      entries.push(jsonEntry(blueprintPath(blueprint.id), blueprint));
     }
     for (const [name, data] of this.media) {
       entries.push({ name, data, store: shouldStore(name) });
@@ -559,6 +595,64 @@ export class Bank {
 
   removeAdministration(id: string): boolean {
     return this.administrations.delete(id);
+  }
+
+  // -------------------------------------------------------------------------
+  // Blueprints: stored recipes for a test
+  // -------------------------------------------------------------------------
+
+  /** Keeps a recipe. One that does not hold together is refused, and so is a second with the same id or the same name. */
+  addBlueprint(blueprint: Blueprint): Blueprint {
+    const checked = validateBlueprint(blueprint);
+    if (!checked.ok) {
+      throw new Error(`Refusing to add a blueprint that does not hold together:\n` + checked.issues.map((i) => `  ${i.path || "<root>"}: ${i.message}`).join("\n"));
+    }
+    if (this.blueprints.has(blueprint.id)) throw new Error(`This bank already holds a blueprint with the id ${blueprint.id}.`);
+    this.refuseBlueprintName(blueprint.name, blueprint.id);
+    this.blueprints.set(blueprint.id, blueprint);
+    return blueprint;
+  }
+
+  getBlueprint(id: string): Blueprint | undefined {
+    return this.blueprints.get(id);
+  }
+
+  /** The blueprints, oldest first. */
+  listBlueprints(): Blueprint[] {
+    return [...this.blueprints.values()].sort((a, b) => (a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1));
+  }
+
+  /** Changes a recipe's name or rules. The same checks as adding one; nothing is changed when any fails. */
+  updateBlueprint(id: string, change: { name?: string; rules?: readonly BlueprintRule[] }, at: string = new Date().toISOString()): Blueprint {
+    const current = this.blueprints.get(id);
+    if (!current) throw new Error(`This bank holds no blueprint ${id}.`);
+    const next: Blueprint = {
+      ...current,
+      ...(change.name !== undefined ? { name: change.name.trim() } : {}),
+      ...(change.rules !== undefined ? { rules: change.rules.map((r) => ({ axis: r.axis, value: r.value.trim(), count: r.count })) } : {}),
+      modified: at,
+    };
+    const checked = validateBlueprint(next);
+    if (!checked.ok) {
+      throw new Error(`Refusing a blueprint that does not hold together:\n` + checked.issues.map((i) => `  ${i.path || "<root>"}: ${i.message}`).join("\n"));
+    }
+    // Only a new name is checked: a bank that was opened with two recipes of one name (a merge of two copies can do it) must still let
+    // the rules of either be changed, and the name is the thing that tells them apart.
+    if (next.name !== current.name) this.refuseBlueprintName(next.name, id);
+    this.blueprints.set(id, next);
+    return next;
+  }
+
+  removeBlueprint(id: string): boolean {
+    return this.blueprints.delete(id);
+  }
+
+  /** Two recipes with one name could not be told apart in a list, so the name is the key a person finds one by. */
+  private refuseBlueprintName(name: string, exceptId: string): void {
+    const key = name.trim().toLocaleLowerCase();
+    for (const other of this.blueprints.values()) {
+      if (other.id !== exceptId && other.name.trim().toLocaleLowerCase() === key) throw new Error(`This bank already holds a blueprint called "${other.name}".`);
+    }
   }
 
   /** What each time a question was given says of it, oldest first: the test, the day, how many sheets, and its figures. */

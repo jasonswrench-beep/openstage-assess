@@ -4,8 +4,9 @@
  *   manifest.json        format, version, bank id, title, counts
  *   questions/q_*.json   one file per question
  *   folders.json         the folder tree and saved filters
- *   tests/*.json         assembled tests, blueprints and version seeds
- *   statistics/*.json    the class-level figures of a test given to a class, one file for each (never a response)
+ *   tests/*.json         assembled tests and their version seeds
+ *   blueprints/*.json    stored recipes for a test: which values, and how many of each
+ *   statistics/*.json   the class-level figures of a test given to a class, one file for each (never a response)
  *   media/*              images and attachments
  *   profiles/*.json      import profiles saved into this bank
  *   history.jsonl        append-only change log, one JSON object per line
@@ -23,6 +24,19 @@ export const MEDIA_DIR = "media/";
 export const TESTS_DIR = "tests/";
 export const PROFILES_DIR = "profiles/";
 export const STATISTICS_DIR = "statistics/";
+export const BLUEPRINTS_DIR = "blueprints/";
+
+export function blueprintPath(id: string): string {
+  return `${BLUEPRINTS_DIR}${id}.json`;
+}
+
+export function isBlueprintPath(name: string): boolean {
+  return name.startsWith(BLUEPRINTS_DIR) && name.endsWith(".json");
+}
+
+export function blueprintIdFromPath(name: string): string {
+  return name.slice(BLUEPRINTS_DIR.length, name.length - ".json".length);
+}
 
 export function questionPath(id: string): string {
   return `${QUESTIONS_DIR}${id}.json`;
