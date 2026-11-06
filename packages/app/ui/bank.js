@@ -754,7 +754,7 @@ export async function renderBank(host, params, shell) {
       renderList();
       hold();
       editor = createEditor({
-        question: { id: "", version: 0, ...blank, verdict: "parsed", findings: [], formatted: [], locked: [], media: 0, math: 0, pictures: [] },
+        question: { id: "", version: 0, ...blank, verdict: "parsed", findings: [], formatted: [], locked: [], media: 0, math: 0, pictures: [], equations: [] },
         saveLabel: "Add to the bank",
         notify: shell.notify,
         save: async (input) => {

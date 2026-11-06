@@ -300,3 +300,11 @@ table.results tr.current { background: var(--note-bg); }
 .picture-image { display: block; max-width: 100%; max-height: 18rem; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #ffffff; }
 .picture-fields { flex: 1 1 260px; min-width: 0; }
 .picture-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 0; }
+
+/* Equations in a question: each drawn, with its LaTeX written under it. */
+.equations { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.equations h3 { font-size: 0.95rem; margin: 0 0 4px; }
+.equation { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.equation:first-of-type { border-top: 0; padding-top: 0; }
+.equation-drawn { margin: 6px 0; padding: 6px 10px; font-size: 1.2rem; overflow-x: auto; background: var(--bg, #ffffff); border-radius: 4px; }
+.equation-latex { display: block; overflow-wrap: anywhere; font-size: 0.85rem; color: var(--muted, inherit); }

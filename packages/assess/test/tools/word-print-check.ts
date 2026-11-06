@@ -11,6 +11,8 @@
 import { unzipSync } from "../../src/container/zip.ts";
 import { createQuestion } from "../../src/model/create.ts";
 import { mediaPlaceholder, plainToRich, rich } from "../../src/model/richtext.ts";
+import { wordImporter } from "../../src/import/word.ts";
+import { docx, paragraph, run } from "../support/docx-writer.ts";
 import { png } from "../support/images.ts";
 import type { Question, QuestionBody, QuestionType } from "../../src/model/question.ts";
 import { layoutTest, printOptions, writeDocx, type Block, type PrintOptions } from "../../src/print/index.ts";
@@ -105,6 +107,28 @@ const pictureExpected = expectedOf(pictureLayout.document.blocks);
 const pictureCase: Case = { name: "pictures", options: pictureOptions, bytes: writeDocx(pictureLayout.document), expected: pictureExpected, paragraphs: pictureExpected.length, header: "" };
 cases.push(pictureCase);
 
+// A test with equations that came from a Word file, so that the copy of Word's own XML is the one a real import keeps. The equations
+// are a fraction in a stem, a superscript in an option and a root in a stem.
+const math = (inner: string): string => `<m:oMath>${inner}</m:oMath>`;
+const mr = (t: string): string => `<m:r><m:t>${t}</m:t></m:r>`;
+const equationFile = docx({
+  body: [
+    paragraph(run("1. Solve ") + math(`<m:f><m:fPr><m:ctrlPr/></m:fPr><m:num>${mr("x")}</m:num><m:den>${mr("2")}</m:den></m:f>${mr("=3")}`) + run(" for x.")),
+    paragraph(run("a) ") + math(`<m:sSup><m:sSupPr><m:ctrlPr/></m:sSupPr><m:e>${mr("x")}</m:e><m:sup>${mr("2")}</m:sup></m:sSup>`)),
+    paragraph(run("b) none")),
+    paragraph(run("Answer: a")),
+    paragraph(run("2. What is ") + math(`<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e>${mr("16")}</m:e></m:rad>`) + run("?")),
+    paragraph(run("a) 4")),
+    paragraph(run("b) 8")),
+    paragraph(run("Answer: a")),
+  ].join(""),
+});
+const equationQuestions = wordImporter.parseBytes(equationFile, { file: "equations.docx", at: AT, author: "t" }).questions;
+const equationOptions = printOptions({ title: "Equations", kind: "student" });
+const equationLayout = layoutTest(equationQuestions, { ...equationOptions, format: "docx" });
+const equationExpected = expectedOf(equationLayout.document.blocks);
+const equationCase: Case = { name: "equations", options: equationOptions, bytes: writeDocx(equationLayout.document), expected: equationExpected, paragraphs: equationExpected.length, header: "" };
+
 function main(): void {
   if (!wordIsAvailable()) {
     console.log("This check needs Windows with Microsoft Word installed. Nothing was run.");
@@ -179,6 +203,27 @@ function main(): void {
   }
   console.log(`${drawn.length} pictures, ${pictureProblems} disagreements with Word.`);
   if (pictureProblems > 0) process.exitCode = 1;
+
+  // The equations: a printed test with three equations from a Word file, which Word has to open without offering to repair it and show
+  // as three equations (inline, in the order of the text), of the kinds the file had: a fraction, a superscript and a root.
+  const seenEquations = askWord(new Map([["equations", equationCase.bytes]]), "equations")["equations"] ?? [];
+  let equationProblems = 0;
+  if (seenEquations.length !== 3 || seenEquations[0]?.startsWith("ERROR")) {
+    console.log(`equations: Word shows ${seenEquations.length} equations, the layout has 3${seenEquations[0]?.startsWith("ERROR") ? `. ${seenEquations[0]}` : ""}`);
+    equationProblems++;
+  } else {
+    seenEquations.forEach((line, i) => {
+      const [type, , first] = line.split("|");
+      const want = [7, 19, 16][i];
+      console.log(`  equation ${i + 1}: ${line}`);
+      if (type !== "1" || Number(first) !== want) {
+        console.log(`equation ${i + 1}: Word has an equation of type ${type} whose first function is ${first}; the layout meant an inline one with function ${want}`);
+        equationProblems++;
+      }
+    });
+  }
+  console.log(`3 equations, ${equationProblems} disagreements with Word.`);
+  if (equationProblems > 0) process.exitCode = 1;
 
   // Where Word breaks the pages: a question that begins on one page and goes on over the next is a question a student has to turn
   // the page in the middle of. Word is asked what page each paragraph starts and ends on, in a long test, student copy and key.

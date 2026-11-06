@@ -149,9 +149,11 @@ describe("a picture in the text", () => {
     assert.equal(editFromInput(withPicture, { ...inputFrom(withPicture), pictures: [{ id: "m1", alt: "A chart", decorative: false }] }).edit.media, undefined, "the same description is no edit");
   });
 
-  test("a picture that dangles is not a token: the text is locked, as an equation's is", () => {
+  test("a picture that dangles is not a token: the text is locked, as an equation's that dangles is", () => {
     const dangling = createQuestion({ type: "essay", stem: rich('<p>See <oa-media ref="gone"></oa-media>.</p>'), body: {}, by: "test", at: AT });
     assert.deepEqual(toEditor(dangling).locked, ["stem"]);
+    const equation = createQuestion({ type: "essay", stem: rich('<p>See <oa-math ref="gone"></oa-math>.</p>'), body: {}, by: "test", at: AT });
+    assert.deepEqual(toEditor(equation).locked, ["stem"]);
   });
 });
 
@@ -165,17 +167,48 @@ describe("an equation in the text", () => {
     at: AT,
   });
 
-  test("is listed as locked, and the text is kept as it is when left alone", () => {
-    assert.deepEqual(toEditor(withEquation).locked, ["stem"]);
+  test("is a token in the text, like a picture, and the text is not shut to editing", () => {
+    const e = toEditor(withEquation);
+    assert.equal(e.stem, "Solve [equation 1] now.");
+    assert.deepEqual(e.locked, []);
+    assert.deepEqual(e.equations, [{ id: "e1", number: 1, latex: "x^2", mathml: "<math/>", placed: true }]);
+  });
+
+  test("the text is kept exactly as stored when left alone", () => {
     const { edit } = editFromInput(withEquation, { ...inputFrom(withEquation), points: 2 });
     assert.deepEqual(edit.stem, withEquation.stem);
   });
 
-  test("refuses to rewrite the text as plain text, since the equation would be lost without a word", () => {
+  test("changing the words keeps the equation where its token stays, and moving the token moves it", () => {
     const input = inputFrom(withEquation);
+    input.stem = "Solve it now: [equation 1].";
+    const { edit } = editFromInput(withEquation, input);
+    assert.deepEqual(collectRefs(edit.stem!).math, ["e1"]);
+    assert.equal(richTextToPlain(edit.stem!), "Solve it now: .");
+  });
+
+  test("taking the token out leaves the equation the question's and not in the text", () => {
+    const input = inputFrom(withEquation);
+    input.stem = "Solve it now.";
+    const { edit } = editFromInput(withEquation, input);
+    assert.deepEqual(collectRefs(edit.stem!).math, []);
+    const after = editQuestion(withEquation, edit);
+    assert.equal(after.math.length, 1);
+    assert.equal(toEditor(after).equations[0]!.placed, false);
+  });
+
+  test("a token for an equation the question does not have is refused, in words", () => {
+    const input = inputFrom(withEquation);
+    input.stem = "Solve [equation 2] now.";
+    assert.throws(() => editFromInput(withEquation, input), (error: unknown) => error instanceof HttpError && error.status === 400 && /has \[equation 2\], and this question has one equation/.test(error.message));
+  });
+
+  test("an equation the text refers to that the question does not carry shuts that text, and refuses to rewrite it", () => {
+    const lost = createQuestion({ type: "essay", stem: rich('<p>Solve <oa-math ref="gone"></oa-math> now.</p>'), body: {}, by: "test", at: AT });
+    const input = inputFrom(lost);
     assert.equal(input.stem, "Solve now.");
     input.stem = "Solve it now.";
-    assert.throws(() => editFromInput(withEquation, input), (error: unknown) => error instanceof HttpError && error.status === 400 && /holds an equation/.test(error.message));
+    assert.throws(() => editFromInput(lost, input), (error: unknown) => error instanceof HttpError && error.status === 400 && /refers to a picture or an equation that this question does not carry/.test(error.message));
   });
 });
 

@@ -15,6 +15,7 @@
  *    equation or a table in the text is printed as words that say what it was.
  */
 
+import { cleanOmml } from "../import/docx/omml.ts";
 import { hasUsableKey } from "../quality/answer-key.ts";
 import type { DestinationReport, ReportItem } from "../export/types.ts";
 import { buildReport, hasText, plural, TYPE_NAMES } from "../export/text.ts";
@@ -50,6 +51,11 @@ export interface Run {
   mono?: boolean;
   /** A picture that stands here. The paragraph's text is printed and the picture under it; a run holding one has no text. */
   picture?: PrintedPicture;
+  /**
+   * An equation that stands here, as Word's own XML for it (`MathRef.omml`). A Word file carries it as an equation; every other
+   * reader of the run uses its text, which is the equation written out as `[Equation: LaTeX]`.
+   */
+  equation?: string;
 }
 
 /** A picture ready to print: its bytes, what they are, its description, and for a PDF the pixels or JPEG data it is drawn from. */
@@ -186,16 +192,22 @@ interface Losses {
   why?: Record<string, number>;
 }
 
-/** What a picture needs to be drawn: the bank's files, the format being made, and the PDF forms already worked out. */
+/**
+ * What a picture or an equation needs to be drawn: the format being made, and for pictures the bank's files and the PDF forms already
+ * worked out. A Word file carries an equation as an equation; a PDF has no fonts for one and prints its words.
+ */
 export interface PictureSource {
+  /** The bank's files, when they were offered. Without them every picture is printed as words. */
   media: ReadonlyMap<string, Uint8Array>;
+  offered: boolean;
   format: "docx" | "pdf" | undefined;
   /** What each file turned out to be for this format, worked out once: the PDF form to draw, or the reason it cannot be printed. */
   prepared: Map<string, { image?: PdfImage } | { why: string }>;
 }
 
 export function pictureSource(options: PrintOptions): PictureSource | undefined {
-  return options.media ? { media: options.media, format: options.format, prepared: new Map() } : undefined;
+  if (!options.media && options.format !== "docx") return undefined;
+  return { media: options.media ?? new Map(), offered: options.media !== undefined, format: options.format, prepared: new Map() };
 }
 
 /** A PNG, JPEG or GIF as the form a PDF draws, or the reason it cannot be: the Word file can hold more than a PDF writer without a decoder. */
@@ -348,7 +360,7 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
         const media = question.media.find((m) => m.id === ref);
         // A picture is printed when the bank's files were offered and this one can be drawn in this format, and not inside a table
         // cell, whose text is joined into a line. Otherwise it is words, and counted.
-        if (pictures !== undefined && media !== undefined && cell === undefined) {
+        if (pictures?.offered && media !== undefined && cell === undefined) {
           const choice = pictureFor(media, pictures);
           if ("picture" in choice) {
             current.push({ text: "", picture: choice.picture });
@@ -363,10 +375,18 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
       }
       case "oa-math": {
         if (closing) break;
-        losses.equations++;
         const ref = /ref\s*=\s*"([^"]*)"/.exec(token)?.[1];
         const math = question.math.find((m) => m.id === ref);
-        add(math && math.latex.trim() !== "" ? `[Equation: ${math.latex.trim()}]` : "[Equation]");
+        const words = math && math.latex.trim() !== "" ? `[Equation: ${math.latex.trim()}]` : "[Equation]";
+        // A Word file takes the equation as Word wrote it, so it is printed as an equation and nothing is lost. Not inside a table
+        // cell, whose text is joined into a line; and only an equation that came from Word has Word's copy.
+        const kept = pictures?.format === "docx" && math?.omml && cell === undefined ? cleanOmml(math.omml) : undefined;
+        if (kept !== undefined) {
+          current.push({ text: words, equation: kept });
+          break;
+        }
+        losses.equations++;
+        add(words);
         break;
       }
       default:

@@ -9,6 +9,7 @@
 
 import { api, get } from "./api.js";
 import { badge, clear, EDITABLE_TYPES, grow, h, put, SEVERITY_NAMES, TYPE_NAMES } from "./dom.js";
+import { drawMath } from "./math.js";
 
 /** The importer's errors about options it had to make up, which words written in the place of the placeholder replace. */
 const WORDS_WRITTEN = new Set(["import.empty-option", "import.too-few-options", "import.no-options"]);
@@ -22,7 +23,8 @@ let counter = 0;
  *   body: any, verdict: "parsed" | "needsReview" | "failed",
  *   findings: Array<{ index: number, code: string, severity: "error" | "warn" | "info", message: string, dismissed?: boolean, field?: string }>,
  *   formatted: string[], locked: string[], media: number, math: number, readOnly?: string, origin?: any,
- *   pictures: Array<{ id: string, number: number, file: string, alt: string, decorative: boolean, placed: boolean, width?: number, height?: number }> }} EditorQuestion
+ *   pictures: Array<{ id: string, number: number, file: string, alt: string, decorative: boolean, placed: boolean, width?: number, height?: number }>,
+ *   equations?: Array<{ id: string, number: number, latex: string, mathml: string, placed: boolean }> }} EditorQuestion
  */
 
 /**
@@ -112,7 +114,7 @@ export function createEditor(options) {
       { class: "field" },
       h("label", { for: fieldId, class: "field-label", text: label }),
       area,
-      more.locked ? h("p", { class: "hint", text: "This text holds an equation, which cannot be edited here yet. It is kept as it is." }) : null,
+      more.locked ? h("p", { class: "hint", text: "This text refers to a picture or an equation that this question does not have, so it cannot be edited here. It is kept as it is." }) : null,
       more.hint ? h("p", { class: "hint", text: more.hint }) : null,
     );
   }
@@ -489,7 +491,7 @@ export function createEditor(options) {
       // has the rows in front of it), so a number here would be a line of nothing.
       question.origin?.source && question.origin.profile === "spreadsheet" ? h("span", { class: "meta", text: "From your spreadsheet" }) : question.origin?.source && question.origin.profile === "pdf" ? h("span", { class: "meta", text: "From your PDF" }) : question.origin?.source ? h("span", { class: "meta", text: `From your file, line${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : "s"} ${question.origin.source.firstBlock + 1}${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : ` to ${question.origin.source.lastBlock + 1}`}` }) : null,
       question.media > 0 ? h("span", { class: "meta", text: question.media === 1 ? "1 picture" : `${question.media} pictures` }) : null,
-      question.math > 0 ? h("span", { class: "meta", text: `${question.math === 1 ? "1 equation" : `${question.math} equations`}, kept as ${question.math === 1 ? "it is" : "they are"}` }) : null,
+      question.math > 0 ? h("span", { class: "meta", text: question.math === 1 ? "1 equation" : `${question.math} equations` }) : null,
     );
   }
 
@@ -599,6 +601,35 @@ export function createEditor(options) {
     );
   }
 
+  /**
+   * The equations of the question: each drawn, and its LaTeX written under it. An equation stands in the text where its token,
+   * [equation 2], is written, and the token is moved or removed like any words. An equation is not edited here: the person who needs
+   * a different one writes it in the question's words, or in the Word file and imports again.
+   */
+  function equationsPanel() {
+    const equations = question.equations ?? [];
+    if (equations.length === 0) return null;
+    return h(
+      "section",
+      { class: "equations", attrs: { "aria-label": "Equations in this question" } },
+      h("h3", { text: equations.length === 1 ? "Equation" : "Equations" }),
+      h("p", { class: "hint", text: "An equation stands where its number is written in the text, like [equation 1]. Move the words in brackets to move the equation; take them out and the equation is kept but not shown. An equation cannot be changed here yet." }),
+      ...equations.map((e) => {
+        const drawn = drawMath(e.mathml);
+        return h(
+          "div",
+          { class: "equation" },
+          h("strong", { text: `Equation ${e.number}` }),
+          drawn
+            ? h("div", { class: "equation-drawn" }, drawn)
+            : h("p", { class: "problem", text: "This equation cannot be drawn here. Its LaTeX is shown below." }),
+          h("code", { class: "equation-latex", text: e.latex }),
+          e.placed ? null : h("p", { class: "hint", text: `Not in the text yet. Write [equation ${e.number}] where it should stand.` }),
+        );
+      }),
+    );
+  }
+
   async function changeType(/** @type {string} */ type) {
     if (type === draft.type) return;
     const keepOptions = (draft.type === "multipleChoice" || draft.type === "multipleResponse") && (type === "multipleChoice" || type === "multipleResponse");
@@ -705,6 +736,7 @@ export function createEditor(options) {
       top,
       stem,
       picturesPanel(),
+      equationsPanel(),
       bodyHost,
       feedback,
       details,

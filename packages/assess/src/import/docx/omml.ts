@@ -11,7 +11,7 @@
  * the equation keeps its marker: a wrong equation that looks right is worse than a marker that says it was not read.
  */
 
-import { allText, elements, first, type XmlElement } from "./xml.ts";
+import { allText, elements, first, parseXml, type XmlElement } from "./xml.ts";
 
 export interface MathReading {
   latex: string;
@@ -530,4 +530,25 @@ export function readEquation(el: XmlElement): MathResult {
     if (error instanceof Unread) return { ok: false, reason: error.message };
     throw error;
   }
+}
+
+/** The most XML a stored equation may be before it is not trusted: a real one is a few kilobytes. */
+const MAX_STORED_OMML = 200_000;
+
+/**
+ * Word's own XML for an equation as it is kept in a bank, read again and written out again. A bank is a file a person can edit by
+ * hand, so what it holds as an equation is not put into a printed Word file as it stands: it goes through the reader that made it,
+ * which accepts only the parts of an equation it knows and writes only those. Undefined when it is not an equation this reads.
+ */
+export function cleanOmml(stored: string): string | undefined {
+  if (stored.length > MAX_STORED_OMML) return undefined;
+  let root: XmlElement;
+  try {
+    root = parseXml(stored);
+  } catch {
+    return undefined;
+  }
+  if (root.name !== "m:oMath") return undefined;
+  const read = readEquation(root);
+  return read.ok ? read.math.omml : undefined;
 }

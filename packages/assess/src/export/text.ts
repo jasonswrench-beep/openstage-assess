@@ -8,7 +8,7 @@
 
 import { checkAnswerKey } from "../quality/answer-key.ts";
 import { liveFindings } from "../model/findings.ts";
-import { escapeHtml, richTextToPlain, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
+import { collectRefs, escapeHtml, richTextToPlain, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
 import type { Question, QuestionType } from "../model/question.ts";
 import type { DestinationReport, ReportItem } from "./types.ts";
 
@@ -176,8 +176,13 @@ export function lossNotes(losses: Losses, where: string): string[] {
   return notes;
 }
 
+/**
+ * Whether there is something to write. An equation counts: it is written out (as LaTeX, or as the words [Equation: LaTeX]), so an
+ * answer that is only an equation is an answer and not an empty one.
+ */
 export function hasText(text: RichText): boolean {
-  return text.format === "plain" ? text.content.trim().length > 0 : richTextToPlain(text).length > 0;
+  if (text.format === "plain") return text.content.trim().length > 0;
+  return richTextToPlain(text).length > 0 || collectRefs(text).math.length > 0;
 }
 
 export function plural(n: number, one: string, many: string): string {

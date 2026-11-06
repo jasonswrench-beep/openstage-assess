@@ -846,7 +846,7 @@ Each stage ends in a measurement, and the work stops at each one to run it.
 | 4b | A real publisher's layout: a table for each question with a table for each option, type headings, answers on lines of their own, a mark on the option letter, two copies | The first real chapter scores in full (done, one chapter) |
 | 5 | Tracked changes, text boxes, hyperlinks, fields, hidden text, alternate content | The noise style and the property test pass |
 | 6 | Images, alt text from the picture's description, bytes into the bank | Pictures survive a round trip and a missing description is a finding |
-| 7 | Word equations to MathML and LaTeX | The equation fixtures pass |
+| 7 | Word equations to MathML and LaTeX | The equation fixtures pass (done 6 November 2026: `import/docx/omml.ts`, held to what real Word builds by `check:word-equations`) |
 | 8 | Real files: the dialect pack and real chapters | 95 percent on three real chapters |
 | 9 | Saved import profiles as JSON, and the data a repair screen needs | A fix made once applies to the next chapter |
 
