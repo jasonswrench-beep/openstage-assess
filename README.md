@@ -172,6 +172,12 @@ only and answers only to the window it opened.
   builds a test chapter by chapter, and every question stays visible and can be taken out. It does not pick a retired question, one
   already chosen, one with no usable answer key, or a copy of (or one very much alike to) a question already in the test, and it
   says how many of each it left out, so a short answer is never a mystery.
+- Blueprints, above Make a test (or `assess blueprint <bank> list|add|draw|remove`): a recipe for a test that the bank keeps, such
+  as five questions from chapter 1 and two at the apply level. A rule is a value on one axis and how many to take; using a blueprint
+  adds what it takes to the questions already chosen, with another draw each time, and every question stays visible and can be
+  taken out. It takes a question that fits two rules once, never fills a rule up from another value when the bank has too few (it
+  says how many it came out short and why), and leaves out what Pick for me does. A blueprint holds no question, so changing or
+  removing one touches no question and no test.
 - Check quality (the "Check quality" button on a bank, or `assess check <bank>`): notes about the
   writing and the accessibility of each question, never warnings, so a note cannot change whether
   a question counts as read or what an export holds back. They name an option that depends on the
@@ -253,6 +259,7 @@ node --experimental-strip-types packages/assess/src/cli/index.ts <command>
 | `sheets score <bank> <scans...> [--test <id>] [--accept-blanks] [--drop N] [--credit N] [--points N:P] [--also-right N:L] [--out <folder>] [--save-statistics]` | Score scanned sheets against the test's own key, with adjustments and item statistics; `--out` writes the scores file, workbook, CSV and item analysis; the bank keeps class figures only with `--save-statistics` |
 | `sheets rescore <bank> <file.openassess-scores>` | Score again from a saved scores file, with no rescan |
 | `coverage <bank> [--rows objective] [--cols bloom] [--retired]` | How many questions the bank has for each value of two things set against each other (objective, chapter, section, tag, bloom, difficulty, type, status); nothing is changed |
+| `blueprint <bank> list`, `add <name> --rule axis=value:count ...`, `draw <name> [--seed s]`, `remove <name>` | A recipe for a test that the bank keeps: `draw` shows the questions it would take and how many short each rule came out and why, and writes nothing; `add` and `remove` change the bank |
 | `check <bank> [--save]` | Notes about the writing and accessibility of each question, and across the bank the same question twice and right answers that sit in one place too often; nothing is changed unless `--save`, which writes only the notes |
 | `search <bank> <words>` | Search a bank |
 | `score [directory] [--details]` | Run the accuracy harness |
@@ -277,7 +284,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 2448 tests, run by Node's own test runner
+  test/                 2478 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

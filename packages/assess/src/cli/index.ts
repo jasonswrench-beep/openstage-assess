@@ -8,7 +8,7 @@
  * the harness runs in continuous integration.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,7 @@ import { validateQuestion } from "../model/schema.ts";
 import { liveFindings } from "../model/findings.ts";
 import { QUALITY_CODES } from "../quality/items.ts";
 import { COVERAGE_AXES, coverage, isCoverageAxis } from "../bank/coverage.ts";
+import { describeDraw, drawBlueprint, newBlueprint, type Blueprint } from "../bank/blueprint.ts";
 import { allCapabilities, READ_CONTRACT_VERSION, typeVerdicts } from "../read/index.ts";
 import { QUESTION_TYPES } from "../model/question.ts";
 import { createQuestion } from "../model/create.ts";
@@ -108,6 +109,17 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       counted under (none), so the grid shows how much is not yet tagged. Retired questions are left
       out unless --retired. Nothing is changed.
 
+  openassess blueprint <bank${BANK_EXTENSION}> list
+  openassess blueprint <bank${BANK_EXTENSION}> add <name> --rule <axis>=<value>:<count> [--rule ...]
+  openassess blueprint <bank${BANK_EXTENSION}> draw <name> [--seed <text>]
+  openassess blueprint <bank${BANK_EXTENSION}> remove <name>
+      A blueprint is a recipe for a test that the bank keeps: each rule is a value on one axis (objective, chapter,
+      section, tag, bloom, difficulty or type) and how many questions to take that have it, as in
+      --rule "chapter=Chapter 1:5" --rule bloom=apply:2. "draw" shows the questions the recipe takes (the same seed
+      takes the same ones) and, for a rule that found fewer than it wanted, how many short and why; it writes nothing
+      and never fills a rule up from another value. "add" and "remove" change the bank. A retired question, one with
+      no usable answer key and a copy of one already taken are never taken.
+
   openassess search <bank${BANK_EXTENSION}> <words...>
       Search a bank.
 
@@ -180,7 +192,7 @@ function positional(args: string[]): string[] {
     const value = args[i] as string;
     if (value.startsWith("--")) {
       // Flags that take a value consume the next item.
-      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test", "date", "drop", "credit", "points", "also-right", "paper", "sheet", "rows", "cols"].includes(value.slice(2))) i++;
+      if (["out", "title", "count", "profile", "to", "key-mark", "sheets", "seed", "only", "test", "date", "drop", "credit", "points", "also-right", "paper", "sheet", "rows", "cols", "rule"].includes(value.slice(2))) i++;
       continue;
     }
     out.push(value);
@@ -488,6 +500,93 @@ async function cmdCoverage(args: string[]): Promise<number> {
   for (const row of table) console.log(line(row));
   if (rows === "tag" || cols === "tag") console.log("\nA question with several tags is counted under each, so the totals can be more than the number of questions.");
   return 0;
+}
+
+/** A rule as written on the command line: axis=value:count. The value may hold a colon or an equals sign, so the count is after the last colon. */
+function parseRule(text: string): { axis: string; value: string; count: number } | string {
+  const eq = text.indexOf("=");
+  const colon = text.lastIndexOf(":");
+  if (eq < 1 || colon < eq + 1) return `"${text}" is not a rule. Write it as axis=value:count, such as chapter=Chapter 1:5.`;
+  const axis = text.slice(0, eq).trim();
+  const value = text.slice(eq + 1, colon).trim();
+  const countText = text.slice(colon + 1).trim();
+  if (!isCoverageAxis(axis)) return `"${axis}" is not something a rule can be by. Choose from ${COVERAGE_AXES.join(", ")}.`;
+  if (value === "") return `The rule "${text}" has no value. A blank value would match every question.`;
+  if (!/^[0-9]+$/.test(countText)) return `The rule "${text}" has no number of questions after the last colon.`;
+  return { axis, value, count: Number(countText) };
+}
+
+/** A blueprint is found by its name, in any case, or by its id. */
+function findBlueprint(bank: Bank, key: string): Blueprint | undefined {
+  const wanted = key.trim().toLocaleLowerCase();
+  return bank.listBlueprints().find((b) => b.id === key || b.name.trim().toLocaleLowerCase() === wanted);
+}
+
+async function cmdBlueprint(args: string[]): Promise<number> {
+  const [path, action, ...rest] = positional(args);
+  if (!path || !action) return fail("Name a bank file and what to do: list, add, draw or remove.");
+  const target = resolve(path);
+  const { bank } = await Bank.open(target);
+
+  if (action === "list") {
+    const kept = bank.listBlueprints();
+    if (kept.length === 0) console.log("This bank holds no blueprint.");
+    for (const b of kept) {
+      console.log(`${b.name}  (${b.id})`);
+      for (const r of b.rules) console.log(`    ${r.count} where ${r.axis} is ${r.value}`);
+    }
+    return 0;
+  }
+
+  const name = rest.join(" ").trim();
+  if (name === "") return fail(`Say which blueprint to ${action}.`);
+
+  if (action === "add") {
+    const given = all(args, "rule");
+    if (given.length === 0) return fail("Give at least one rule, such as --rule chapter=Chapter 1:5.");
+    const rules: Array<{ axis: string; value: string; count: number }> = [];
+    for (const text of given) {
+      const rule = parseRule(text);
+      if (typeof rule === "string") return fail(rule);
+      rules.push(rule);
+    }
+    try {
+      const made = bank.addBlueprint(newBlueprint({ name, rules }));
+      await bank.save();
+      console.log(`Kept the blueprint "${made.name}" in ${target}.`);
+    } catch (error) {
+      return fail((error as Error).message);
+    }
+    return 0;
+  }
+
+  const found = findBlueprint(bank, name);
+  if (!found) return fail(`This bank holds no blueprint called "${name}". "openassess blueprint <bank> list" shows what it has.`);
+
+  if (action === "remove") {
+    bank.removeBlueprint(found.id);
+    await bank.save();
+    console.log(`Took the blueprint "${found.name}" out of ${target}. No test and no question was changed by it.`);
+    return 0;
+  }
+
+  if (action === "draw") {
+    const seed = arg(args, "seed") ?? randomBytes(6).toString("hex");
+    const questions = bank.sortedQuestions();
+    const draw = drawBlueprint(questions, found, { seed });
+    const byId = new Map(questions.map((q) => [q.id, q] as const));
+    console.log(`${found.name}, seed ${seed}`);
+    for (const r of draw.rules) {
+      console.log(`\n${r.rule.count} where ${r.rule.axis} is ${r.rule.value}:`);
+      for (const id of r.ids) console.log(`    ${id}  ${byId.get(id)?.title ?? ""}`);
+      if (r.ids.length === 0) console.log("    (none)");
+    }
+    console.log(`\n${describeDraw(draw).join("\n")}`);
+    console.log("Nothing was written.");
+    return 0;
+  }
+
+  return fail(`Unknown action "${action}". Choose list, add, draw or remove.`);
 }
 
 async function cmdSearch(args: string[]): Promise<number> {
@@ -953,6 +1052,8 @@ async function main(): Promise<number> {
       return cmdCheck(args);
     case "coverage":
       return cmdCoverage(args);
+    case "blueprint":
+      return cmdBlueprint(args);
     case "search":
       return cmdSearch(args);
     case "score":

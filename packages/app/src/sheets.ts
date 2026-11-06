@@ -32,6 +32,7 @@ import {
 } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
+import { blueprintsRoute } from "./blueprints.ts";
 import { checkName, freeFileName } from "./library.ts";
 import { flag, jsonObject, oneOf, onlyFields, text, whole } from "./request.ts";
 import { view } from "./scoring.ts";
@@ -227,6 +228,7 @@ async function pickRoute(ctx: Context, req: ApiRequest, bankName: string): Promi
 export async function sheetsRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   const [, rawBank, what, id, action] = req.segments;
   if (rawBank !== undefined && what === "pick" && id === undefined && req.method === "POST") return pickRoute(ctx, req, checkName(rawBank));
+  if (rawBank !== undefined && what === "blueprints") return blueprintsRoute(ctx, req, checkName(rawBank));
   if (rawBank === undefined || what !== "tests") throw notFound("There is no such page.");
   const bankName = checkName(rawBank);
 
