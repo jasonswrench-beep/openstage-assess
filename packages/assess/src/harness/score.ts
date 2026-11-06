@@ -13,7 +13,7 @@
  * as correct only when type, stem, options and key all match.
  */
 
-import { richTextToPlain } from "../model/richtext.ts";
+import { foldTypography, richTextToPlain } from "../model/richtext.ts";
 import { optionsOf, type Question } from "../model/question.ts";
 import { verdictOf, type ImportResult } from "../import/types.ts";
 import type { Verdict } from "../model/findings.ts";
@@ -79,8 +79,12 @@ export interface FileScore {
 }
 
 /** Whitespace and case are not what a parser gets wrong; content is. */
+/**
+ * Folded for typography on both sides: a fixture's expected text was written from the document in plain keys, and a curly quote or
+ * a dash that the importer now keeps as written is the same text. Words, order, type, key and verdict still have to match.
+ */
 function normalize(text: string): string {
-  return text.replace(/\s+/g, " ").trim().toLowerCase();
+  return foldTypography(text).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function same(a: string, b: string): boolean {

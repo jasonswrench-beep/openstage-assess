@@ -123,6 +123,15 @@ not marked right, and a true or false question starts with neither chosen. A
 question made in the app is checked for its answer key before it is kept, or it
 would show as parsed with no answer.
 
+**Typography is what the author wrote.** Curly quotes, the en dash, the em dash and the ellipsis are stored as typed and come out as
+typed, on the printed test and in every export. `normalizeCharacters` cleans what has no place in a question (what XML forbids, a
+no-break space, a soft hyphen) and nothing more; it once also flattened them to straight quotes and `--`, which changed about one
+question in eight of the real Word files and printed an instructor's em dash as two hyphens. `foldTypography` is the flat form, for
+comparing only and always on both sides (the check for copies, the accuracy gate): never store it, and never fold one side of a
+comparison. A short answer's accepted answers are the author's own and are not rewritten; Check quality notes one that a keyboard
+may not type (`typedAnswerTypography`) and asks for the plain form as well. `typography.test.ts` follows one question through every
+importer, a saved bank, the seven exports and both printed forms, and fails if the flattening comes back.
+
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
 answer is recorded. A matching or ordering question is shown shuffled, never in
@@ -208,7 +217,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2174 engine tests and 210 app tests, Node's own runner
+npm test                       # 2202 engine tests and 210 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

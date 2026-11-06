@@ -394,6 +394,53 @@ describe("a long matching list", () => {
   });
 });
 
+describe("a typed answer with typography in it", () => {
+  const short = (accepted: string[], caseSensitive = false) =>
+    createQuestion({ type: "shortAnswer", stem: plainToRich("Name it."), body: { caseSensitive, accepted } as never });
+  const blanks = (lists: string[][]) =>
+    createQuestion({ type: "fillInBlank", stem: plainToRich("A ____ and a ____."), body: { caseSensitive: false, blanks: lists.map((accepted, i) => ({ id: `b${i + 1}`, accepted })) } as never });
+  const noted = (q: Question) => checkItemQuality(q).find((f) => f.code === FindingCode.TypedAnswerTypography);
+
+  test("is noted for a curly apostrophe, a dash and an ellipsis, with the plain form to add", () => {
+    const found = noted(short(["Earth’s moon"]));
+    assert.equal(found?.severity, "info", "a note, never a warning");
+    assert.equal(found?.field, "body.accepted");
+    assert.match(found?.message ?? "", /"Earth's moon" would be marked wrong/);
+    assert.match(found?.message ?? "", /Add "Earth's moon" as another accepted answer/);
+    assert.ok(noted(short(["1914–1918"])), "an en dash");
+    assert.ok(noted(short(["Wait…"])), "an ellipsis");
+    assert.ok(noted(short(["the “best” one"])), "curly double quotes");
+  });
+
+  test("says nothing when the plain form is accepted too, in either order, or the answer is already plain", () => {
+    assert.equal(noted(short(["Earth’s moon", "Earth's moon"])), undefined);
+    assert.equal(noted(short(["Earth's moon", "Earth’s moon"])), undefined);
+    assert.equal(noted(short(["Earth's moon"])), undefined);
+    assert.equal(noted(short([""])), undefined, "an empty answer is the missing key's business, not this note's");
+  });
+
+  test("lets the case of the plain form differ only when the question is not case sensitive", () => {
+    assert.equal(noted(short(["Earth’s Moon", "earth's moon"], false)), undefined);
+    assert.ok(noted(short(["Earth’s Moon", "earth's moon"], true)));
+  });
+
+  test("reads each blank of a fill in the blank by itself, and names the one it found", () => {
+    assert.equal(noted(blanks([["fine"], ["fine"]])), undefined);
+    assert.equal(noted(blanks([["it’s", "it's"], ["fine"]])), undefined, "the first blank has both forms");
+    assert.equal(noted(blanks([["fine"], ["it’s"]]))?.field, "body.blanks.1.accepted");
+  });
+
+  test("is not raised for an answer that is chosen and not typed", () => {
+    assert.equal(noted(mc("Which is it?", ["Earth’s moon*", "Venus"])), undefined);
+  });
+
+  test("changes no answer: the accepted answers are what the author wrote", () => {
+    const q = short(["Earth’s moon"]);
+    const after = withFreshQuality(q);
+    assert.deepEqual((after.body as { accepted: string[] }).accepted, ["Earth’s moon"]);
+  });
+});
+
 describe("making the notes fresh", () => {
   const noted = () => mc("Which is not a fruit?", ["Apple", "Carrot*", "All of the above"]);
 

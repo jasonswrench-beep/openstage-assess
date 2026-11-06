@@ -510,7 +510,9 @@ is worked out each time and not stored: the same question twice or nearly (0.85 
 a letter that holds more of the right answers than chance would (a binomial test, divided by the number of letters tried,
 at 20 answers or more), for the questions that keep their option order and for each version of an assembled test. The
 lines are judgements, kept in named constants: the right answer is noted when it is 1.5 times as long as the longest wrong
-one and 20 characters longer; a matching list is long above 8 pairs. What is not covered: a question with a picture is not
+one and 20 characters longer; a matching list is long above 8 pairs. A short answer or fill in the blank whose accepted answer has a curly quote, a dash or an
+ellipsis in it is noted, with the plain form to add, since a keyboard makes the plain form and a learning system compares letters;
+it is silent when the plain form is accepted too, and the author's answer is never rewritten. What is not covered: a question with a picture is not
 compared for copies (the pictures are not read here), and `MissingAltText` stays an import warning, since the app cannot
 edit a description yet.
 - **M4, assistance.** AI drafting and import rescue, the MCP server, QTI import

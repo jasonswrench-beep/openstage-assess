@@ -17,6 +17,7 @@ import {
   collectRefs,
   mediaPlaceholder,
   normalizeCharacters,
+  foldTypography,
 } from "../src/model/richtext.ts";
 import { verdictFrom, finding } from "../src/model/findings.ts";
 import { checkAnswerKey, hasUsableKey } from "../src/quality/answer-key.ts";
@@ -84,9 +85,24 @@ describe("rich text", () => {
     assert.equal(result.html, "<p>Unclosed</p>");
   });
 
-  test("normalises the character noise that arrives from Word", () => {
+  test("cleans the character noise that arrives from Word and keeps what the author typed", () => {
+    // A no-break space becomes a space, a soft hyphen and a zero-width space go, and a line ends one way. Curly quotes, the en dash,
+    // the em dash and the ellipsis stay: they were once flattened here, and an em dash printed as two hyphens.
+    const noisy = "“Smart” – quotes… and spaces­​\r\nnext — line";
+    assert.equal(normalizeCharacters(noisy), "“Smart” – quotes… and spaces\nnext — line");
+  });
+
+  test("typography is folded to its flat form only when a comparison asks, and never in what is stored", () => {
+    assert.equal(foldTypography("“Smart” – it’s… —"), '"Smart" - it\'s... --');
+    // Two texts that differ only in how a quotation mark is drawn fold to the same text.
+    assert.equal(foldTypography("don’t"), foldTypography("don't"));
+    // The stored form of rich text is not folded.
+    assert.equal(sanitizeRichText("<p>“Hamlet” — it’s…</p>").html, "<p>“Hamlet” — it’s…</p>");
+  });
+
+  test("a no-break space between the words of a line with typography becomes a space and nothing else changes", () => {
     const messy = "“Smart” – quotes… and spaces";
-    assert.equal(normalizeCharacters(messy), '"Smart" - quotes... and spaces');
+    assert.equal(normalizeCharacters(messy), "“Smart” – quotes… and spaces");
   });
 
   test("placeholders are found by collectRefs and ignored by the plain text", () => {

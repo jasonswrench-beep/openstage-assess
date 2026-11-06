@@ -164,9 +164,9 @@ describe("the Standard Format profile", () => {
     assert.ok(result.fileFindings.some((f) => f.severity === "error"));
   });
 
-  test("normalises smart quotes so exact-match grading works", () => {
-    const result = parse(`Type: F\n1) Who wrote “Hamlet”?\na. Shakespeare\n`);
-    assert.match(richTextToPlain(result.questions[0]!.stem), /"Hamlet"/);
+  test("keeps smart quotes, dashes and ellipses as the author typed them", () => {
+    const result = parse(`Type: F\n1) Who wrote “Hamlet” — and when… it’s 1600–1601?\na. Shakespeare\n`);
+    assert.equal(richTextToPlain(result.questions[0]!.stem), "Who wrote “Hamlet” — and when… it’s 1600–1601?");
   });
 });
 

@@ -32,6 +32,10 @@ item says what has been run and what has not. Items are removed when done, with 
   you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank
   if you have one. It was looked at in the browser pane at desktop width and at phone width; the dark colours were not looked at.
 
+- [ ] **Print a test from a real bank with curly quotes and dashes in it, as Word and as PDF, and look.** Since 6 November 2026
+  the quotes, the en and em dashes and the ellipses you typed are kept (they used to come out as straight quotes and `--`). The
+  tests take both files apart and find the characters; looking at the printed page, in the font you would use, is not done. Also
+  import a file with an em dash into an LMS and see that it arrives as a dash.
 - [ ] **Read three generated files as an instructor would.** Do they look like banks a person made? The checker cannot say. This
   is step 6 of "Doing a piece" in `docs/synthetic-bank-spec.md`, not done for pieces 2 to 6.
 - [ ] **Open one real bank with no numbers and no letters, if you have one, and look at the first five questions it reads.**
@@ -235,6 +239,10 @@ Planned in `docs/design-plan.md` (phase 7, first set). Everything a program can 
 - [ ] **Use the Check quality panel and the notes in the editor with a screen reader and with the keyboard alone.** The panel opens
   in the pane where a question would be and takes focus; each question in a group of copies is a button; each note can be dismissed
   in the editor. Looked at in the built-in browser at desktop and phone width, not with a screen reader.
+- [ ] **Read the note about a typed answer with a curly quote in it.** A short answer or fill in the blank whose accepted answer
+  has a curly apostrophe or quotation mark, a dash or an ellipsis is noted, with the plain form to add (`typedAnswerTypography`).
+  Is it right to speak? A phone can curl an apostrophe by itself, so a student may type either form, and the note asks for both.
+  Check an LMS too: type the plain form against an accepted curly one and see whether it is marked wrong.
 - [ ] **Decide the lines.** A matching list is long above 8 pairs; the right answer is noted when it is 1.5 times and 20 characters
   longer than the longest wrong one; two questions are alike at 0.85 of their words; a spread is judged at 20 answers. All are
   named constants (`LONG_MATCHING_LIST`, `LONGEST_RATIO`, `LONGEST_MARGIN`, `ALIKE_AT`, `BALANCE_MIN_ANSWERS`), chosen to be quiet.

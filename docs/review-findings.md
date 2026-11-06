@@ -402,6 +402,28 @@ question the editor cannot write (a hotspot, opened from a cell) and a value no 
 "Any" with the list still narrowed to them. The Make a test search box was empty after a test was made but its word still hid
 questions.
 
+### Typography was flattened on the way in (fixed on 6 November 2026)
+
+`normalizeCharacters` turned a curly quote into a straight one, an en dash into a hyphen, an em dash into two hyphens and an ellipsis
+into three dots, on every piece of text a question stores, so that exact-match grading, search and QTI would not trip over them. It
+was a rule from phase 1 that three later stages asked to have decided (it is listed below as an open item three times), and its cost
+was seen on a real file: an instructor's em dash read `--` on the printed test and in every export. Measured on the 21 Word files
+and 5 PDFs that are kept on this machine, 169 of 1,421 Word questions and 34 of 165 PDF questions hold at least one of these
+characters, so about one question in eight was being changed.
+
+`normalizeCharacters` now cleans only what has no place in a question (what XML forbids, a no-break space, a soft hyphen, a
+zero-width space, the line endings). A new `foldTypography` gives the flat form, and it is used only where two texts are compared and
+always on both sides: the check for copies (`normalForm`, `wordTokens`) and the accuracy gate's comparison. Nothing stored is folded.
+Search already split on anything that is not a letter, so an apostrophe of either kind finds the same word, and the quality checks
+already read both kinds of quote. The PDF printer already had the Windows Latin-1 place and the width of each of the seven
+characters, and the Word file and every export are UTF-8, so nothing in print or export had to change; `typography.test.ts`
+follows one question full of them through the importers, a saved bank, the seven exports, the Word file and the PDF, and fails if
+the flattening is put back. The gate read the same before and after (61 of 61; 1,421 of 1,421; 129 of 157 for the PDFs).
+
+What is not done: a short answer's accepted answers keep a curly apostrophe if the author typed one, as they always did, and a
+student who types a straight one on an ordinary keyboard will not match it in a learning system that compares letters exactly.
+That is a note for Check quality to make and not a rewrite, because the form a student types is not for this program to guess.
+
 ---
 
 ## Open, and roughly in the order I would take them
@@ -522,7 +544,8 @@ Media is never garbage collected either.
   feedback; the guide appendix uses `@` there, even on the correct answer. Both
   styles exist, and the second is handled. No text is lost, but the meaning
   moves.
-- **Typography is flattened on the way in, and exports show it.** Curly quotes
+- **(Fixed on 6 November 2026: typography is kept as written and folded only for comparing; see "Typography was flattened on the
+  way in".) Typography is flattened on the way in, and exports show it.** Curly quotes
   become straight, an en dash becomes `-`, an em dash becomes `--` and an
   ellipsis becomes `...` (`normalizeCharacters`, applied by the sanitizer to
   every piece of rich text). The reason is sound: that noise from Word breaks
@@ -1225,7 +1248,7 @@ A 375-question test item file, a 42-question chapter and a 30-question bank went
   key. A question this ambiguous is probably better with no key. Left alone because it is older than this stage.
 - **The model's character rule now applies to the right side of a matching pair and to distractors.**
   The em dash that becomes two hyphens is still the phase 1 rule, still worth deciding about, and now
-  in more places.
+  in more places. (Decided on 6 November 2026: the rule is gone, and typography is kept.)
 - **Essay and short answer questions in these banks have no model answer**, and none was expected.
 
 ### Found while reading a second real file, typed by hand (stage 4c), not yet fixed
@@ -1292,7 +1315,7 @@ not show or what was decided on one file's evidence.
   a stem that has an em dash in it comes out with two hyphens in its place. It was found
   because the real file has em dashes and a comparison disagreed. It is the model's rule and
   not this stage's, and an em dash is punctuation, not noise, so it is worth deciding whether
-  it should stay.
+  it should stay. (Fixed on 6 November 2026: it stays.)
 - **The greyed-out letters are taken to agree, not asked.** The side that picks out fewer options
   in more questions is the key. That is right for bold on one and grey on the rest, and it would
   be wrong for a file that greys out the one right answer and bolds the others, which is not

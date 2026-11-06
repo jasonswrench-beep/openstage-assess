@@ -21,7 +21,7 @@
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import { isChoice, isMatching, isMultipleResponse, isOrdering, type Option, type Question } from "../model/question.ts";
-import { collectRefs, richTextToPlain, type RichText } from "../model/richtext.ts";
+import { collectRefs, foldTypography, richTextToPlain, type RichText } from "../model/richtext.ts";
 import { dependsOnPlace, placeLetter } from "../model/test.ts";
 import { hasUsableKey } from "./answer-key.ts";
 import { isPlaceholderOption } from "./placeholders.ts";
@@ -36,6 +36,7 @@ export const QUALITY_CODES: ReadonlySet<string> = new Set<string>([
   FindingCode.AltTextGivesAnswer,
   FindingCode.ColourOnlyMeaning,
   FindingCode.LongMatchingList,
+  FindingCode.TypedAnswerTypography,
 ]);
 
 /** The longest a matching list may be before it is called long. A judgement, kept in one place so it can be changed. */
@@ -57,7 +58,9 @@ const COLOURS = ["red", "orange", "yellow", "green", "blue", "purple", "violet",
  * to disappear unless it is only spacing, case, or the stop at the end.
  */
 export function normalForm(text: string): string {
-  return text
+  // Typography is folded because the text is no longer flattened on the way in (see `normalizeCharacters`): the same question
+  // typed with straight quotes and with curly ones is still the same question.
+  return foldTypography(text)
     .normalize("NFC")
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -73,7 +76,7 @@ export function normalForm(text: string): string {
  * and "c++" is not "c".
  */
 export function wordTokens(text: string): string[] {
-  return text
+  return foldTypography(text)
     .normalize("NFC")
     .toLowerCase()
     .split(/\s+/)
@@ -305,6 +308,37 @@ function longMatching(question: Question): Finding | undefined {
   );
 }
 
+/**
+ * An accepted answer with a curly quotation mark or apostrophe, a dash or an ellipsis in it. A student types an answer on a keyboard
+ * that makes the plain forms, and a learning system compares what was typed with what is accepted letter for letter, so "Earth's
+ * moon" is marked wrong against an accepted "Earth’s moon". (A phone may curl an apostrophe by itself, so the plain form is not the
+ * only one a student may type, and the note asks for both.) It is a note and never a rewrite: which form a student types is not for
+ * this program to guess, and the author's own accepted answer is not changed. It says nothing when the plain form is accepted too.
+ */
+function typedAnswerTypography(question: Question): Finding | undefined {
+  const lists: Array<{ accepted: string[]; field: string; caseSensitive: boolean }> = [];
+  const body = question.body as { accepted?: string[]; blanks?: Array<{ accepted: string[] }>; caseSensitive?: boolean };
+  const caseSensitive = body.caseSensitive === true;
+  if (question.type === "shortAnswer" && Array.isArray(body.accepted)) lists.push({ accepted: body.accepted, field: "body.accepted", caseSensitive });
+  if (question.type === "fillInBlank" && Array.isArray(body.blanks)) {
+    body.blanks.forEach((blank, i) => lists.push({ accepted: blank.accepted ?? [], field: `body.blanks.${i}.accepted`, caseSensitive }));
+  }
+  for (const list of lists) {
+    const key = (text: string): string => (list.caseSensitive ? text.trim() : text.trim().toLowerCase());
+    const have = new Set(list.accepted.map(key));
+    for (const answer of list.accepted) {
+      const flat = foldTypography(answer).trim();
+      if (flat === "" || flat === answer.trim() || have.has(key(flat))) continue;
+      return note(
+        FindingCode.TypedAnswerTypography,
+        `The accepted answer "${shorten(answer, 40)}" has a curly quotation mark or apostrophe, a dash or an ellipsis in it. A student's keyboard may type the plain form instead, and a learning system compares what is typed letter for letter, so "${shorten(flat, 40)}" would be marked wrong. Add "${shorten(flat, 40)}" as another accepted answer.`,
+        list.field,
+      );
+    }
+  }
+  return undefined;
+}
+
 /** Every note the item checks have about one question. At most one of each code. */
 export function checkItemQuality(question: Question): Finding[] {
   const options = choiceOptions(question);
@@ -317,6 +351,7 @@ export function checkItemQuality(question: Question): Finding[] {
     altGivesAnswer(question),
     colourOnly(question),
     longMatching(question),
+    typedAnswerTypography(question),
   ];
   return found.filter((f): f is Finding => f !== undefined);
 }
