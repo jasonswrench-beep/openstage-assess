@@ -7,6 +7,7 @@
  */
 
 import { get, post, del } from "./api.js";
+import { blueprintsPanel } from "./blueprints.js";
 import { confirmAction } from "./dialogs.js";
 import { clear, h, plural, put, TYPE_NAMES, when } from "./dom.js";
 import { fileButtons } from "./files.js";
@@ -486,8 +487,22 @@ export async function renderSheets(host, params, shell) {
       }
     });
 
+    // A kept recipe: using one adds the questions it takes to the ones chosen below, where each can be seen and taken out.
+    const blueprints = blueprintsPanel({
+      base,
+      facets: () => bank.facets ?? {},
+      chosen: () => [...chosen],
+      add: (ids) => {
+        for (const id of ids) chosen.add(id);
+        fill();
+      },
+      tell,
+      notify: shell.notify,
+    });
+
     put(
       makeHost,
+      blueprints,
       h(
         "section",
         { class: "panel" },

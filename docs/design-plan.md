@@ -496,8 +496,13 @@ home screen and stops its server when it is closed; the installer is unsigned.
   tag, Bloom level and so on (`bank/coverage.ts`, `assess coverage`, and the Coverage button; it counts what is there, puts a
   question with nothing set under "(none)" so the gaps show, and leaves retired questions out), and Pick for me on the Make a
   test screen (`bank/pick.ts`: some questions with a value, at random, never a retired one, one already chosen, one with no usable
-  key or a copy of one in the test, and it says what it left out and why; it is a helper for building a test chapter by chapter,
-  not a stored blueprint), and folders in the app (`bank/store.ts`: make, rename, move and take away a folder, file a question in one, narrow the list to one; a folder never holds a question, so taking one away leaves its questions in the bank in no folder, and the folders inside it move up). an import can be saved into a folder by name. Several questions are filed at once (`Bank.moveManyToFolder`, the control beside the list: the questions shown, all or nothing). Not done: stored pools and blueprints, the web quiz, and from the original list of checks
+  key or a copy of one in the test, and it says what it left out and why; it is a helper for building a test chapter by chapter;
+  a stored recipe is a blueprint, below), and folders in the app (`bank/store.ts`: make, rename, move and take away a folder, file a question in one, narrow the list to one; a folder never holds a question, so taking one away leaves its questions in the bank in no folder, and the folders inside it move up). an import can be saved into a folder by name. Several questions are filed at once (`Bank.moveManyToFolder`, the control beside the list: the questions shown, all or nothing). Blueprints are done in their first form (`bank/blueprint.ts`, the Blueprints panel above Make a test, `assess blueprint`): a stored recipe
+  in `blueprints/`, each rule a value on one axis and how many to take, drawn rule by rule through the same pick, so it takes a
+  question that fits two rules once, never fills a rule up from another value when the bank is short (it says how many short and why),
+  holds no question id and no seed, and is kept byte for byte when its file cannot be read. A rule is one value on one axis; a rule for
+  two things together ("chapter 2 and hard"), a limit ("at most 2 hard") and a blueprint that draws when a student takes the test
+  are not built. Not done: pools in that sense, the web quiz, and from the original list of checks
   the reading level, which would need a reading-level formula that is not misleading on technical
   words, and an equation that is a picture, which the import already reports.
 

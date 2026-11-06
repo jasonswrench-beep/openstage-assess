@@ -329,9 +329,17 @@ Everything a program can check is in `coverage.test.ts` (engine and app). What i
   heading when the grid opens. Looked at in the built-in browser at desktop and phone width (the table scrolls inside its own box
   at phone width), not with a screen reader.
 - [ ] **Use Pick for me to build a real test.** On Make a test, pick five from one chapter, then five from the next, and look at
-  what it chose and what it says it left out. It is random and does not keep a blueprint; if you want a stored recipe ("5 from
-  each chapter, at most 2 hard") that is a feature to decide on. It leaves out a question with no usable answer key, which a person
-  can still choose by hand, and a copy of a question already in the test (the same words, or 0.85 alike with the same numbers).
+  what it chose and what it says it left out. It is random and keeps nothing (a stored recipe is a blueprint, next). It leaves out a
+  question with no usable answer key, which a person can still choose by hand, and a copy of a question already in the test (the
+  same words, or 0.85 alike with the same numbers).
+- [ ] **Write a blueprint for a real test and use it.** In Answer sheets, open "Write or change a blueprint" above Make a test, write
+  "5 from chapter 1, 3 from chapter 2" with the chapters of a bank of your own, save it, and press Use. Look at what it chose and at
+  what it says when a chapter has fewer than you asked for. Press Use again for another draw, take a question out and put another in
+  by hand, and make the test. Then change a question in the bank, or retire it, and use the blueprint again to see that nothing in
+  it went stale. A rule is one value on one axis, so a recipe that wants two things together ("chapter 2 and hard") cannot be
+  written yet; whether it should be, and whether you would rather it kept a seed so that a draw can be repeated, are yours to
+  decide. Looked at in the built-in browser at desktop and phone width and driven by script (create, use, change, delete, a name
+  made of markup shown as text), not with a screen reader and not with a bank of real questions.
 - [ ] **Try the three states the window can be left in.** Open a cell of the grid on a bank with a retired question and see that
   the list has the number the cell showed (the retired are left out), and that Clear filters brings them back. Start changing a
   question, press Check quality, and see that the pane you are typing in is left alone and the notice says why. Narrow the list

@@ -75,6 +75,17 @@ the bank could not read is said in the history. The folder rules are held by `fo
 changes that checks them after every step, and the app's) and `mutate`-style runs; do not add a path that deletes a question with
 its folder.
 
+**A blueprint is a recipe and never a list of questions.** `bank/blueprint.ts` keeps rules (a value on one axis, and how many) in
+`blueprints/<id>.json`, and drawing one is `pickQuestions` for each rule in turn with what the earlier rules took counted as chosen,
+so a question that fits two rules is taken once and the second rule says it found it taken. It holds no question id, so nothing it
+holds goes stale when a question changes or goes, and changing or removing one touches no question and no test (a test holds its own
+copies). A rule that finds too few is reported short, by how many and why, and is never filled up from another value, because a
+question taken to make up a number is one nobody chose. A blank value is refused (`matchesFacets` reads it as no filter, so the rule
+would take from the whole bank and read as though it had asked for something), in the engine and again in the app's routes. A
+blueprint file the bank cannot read, or that holds a field it does not know, is kept byte for byte, reported and not used, like a
+test. Names are told apart without regard to case when one is added or renamed, and are not refused when a merge left two. The seed
+is not kept (the test record keeps the one it used). Do not add a field that holds a question id, a seed or a way to fill a rule up.
+
 **Delivery settings are not part of a question.** Attempts, feedback timing,
 time limits and scoring weight belong to the course that uses the question, not
 to the item. `schema.ts` rejects them by name with an explanation.
@@ -301,7 +312,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2448 engine tests and 285 app tests, Node's own runner
+npm test                       # 2478 engine tests and 296 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -318,6 +329,7 @@ npm run assess -- print <bank> --out <folder>   # a student copy and an answer k
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
 npm run assess -- check <bank> [--save]   # notes on the writing of each question, copies, and where the right answers sit
 npm run assess -- coverage <bank> [--rows objective] [--cols bloom]   # what the bank covers: questions by objective, chapter, tag, Bloom level and so on
+npm run assess -- blueprint <bank> list|add|draw|remove   # a stored recipe for a test; draw writes nothing and says how short each rule came out and why
 npm run assess -- contract     # the read contract and consumer capabilities
 npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks
