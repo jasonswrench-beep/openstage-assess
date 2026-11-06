@@ -130,7 +130,9 @@ describe("tables", () => {
       paragraph(run("after"));
     const { blocks, stats } = read(body);
     assert.deepEqual(blocks.map((b) => b.text), ["before", "r0c0", "r0c1a", "r0c1b", "r1c0", "", "after"]);
-    assert.deepEqual(blocks.map((b) => b.table), [undefined, { table: 0, row: 0, cell: 0 }, { table: 0, row: 0, cell: 1 }, { table: 0, row: 0, cell: 1 }, { table: 0, row: 1, cell: 0 }, { table: 0, row: 1, cell: 1 }, undefined]);
+    // None of the question layouts, so every cell is read as plain lines, and says so.
+    const at = (row: number, cell: number) => ({ table: 0, row, cell, plain: true });
+    assert.deepEqual(blocks.map((b) => b.table), [undefined, at(0, 0), at(0, 1), at(0, 1), at(1, 0), at(1, 1), undefined]);
     assert.equal(stats.tables, 1);
   });
 

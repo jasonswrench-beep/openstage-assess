@@ -967,9 +967,16 @@ file restored and compared byte for byte):
 
 Open:
 
-- **PDF output is Latin-1 only and untagged.** A character outside it prints as `?` and the print check says which. A PDF
-  with no tags is read poorly by a screen reader; the Word copy is the accessible one. Embedding a font is the repair, and
-  was not done because it needs a font file that can be shipped.
+- **PDF output is Latin-1 and the Symbol font, and untagged.** (Changed on 6 November 2026: the Greek letters and signs of
+  mathematics that a Word file's Symbol characters and equations bring in used to print as `?`, so the alpha came in right and
+  printed wrong. They are now drawn in the Symbol font every PDF reader has built in, with nothing embedded, in the text, the
+  footer and the header, from the same table the Word reader uses read the other way, so a character is never drawn as another.
+  A line holding one is a single text object, in which the reader moves along by the real widths, so the widths in the file's
+  table, written from memory of the font's metrics, decide only where a line breaks. Looked at once, in Windows' own PDF
+  renderer: nineteen letters and signs on a test page drew as written. Bold and italic do not apply to a Symbol character,
+  which has one weight.) A character in neither (a Cyrillic or Chinese letter) still prints as `?` and the print check says
+  which. A PDF with no tags is read poorly by a screen reader; the Word copy is the accessible one. Embedding a font is the
+  repair for the rest, and was not done because it needs a font file that can be shipped.
 - **A printed multiple response reads back as a single answer with two marked.** The importer then flags it, which is the
   honest result of its rule. Printing a key in a form the importer reads as a multiple response is not worth bending the
   importer for.
@@ -1397,6 +1404,14 @@ not show or what was decided on one file's evidence.
 - **A key marked by shading is not read.** Shading a cell or a row green is a common way
   to mark an answer in a table, and `w:shd` is not looked at (the same gap is recorded for
   formatting).
+- **A data table inside a question's text is read cell by cell, and the question now says so (6 November 2026).** A table that is
+  none of the layouts (a table of scores in a statistics question, say) comes into the stem as its cells one to a line, in order.
+  The words are all there and the rows and columns are not, and until now only the file said it, so the question read as parsed.
+  It now carries `import.table-flattened` (a warning) when a table other than the one it begins in lies inside its text. The first
+  version counted every question that touched a plain table and flagged 373 of the 375 questions of a real test item file that puts
+  a question in each cell and reads perfectly, so the rule is only the table that is not the question's own. Still open: keeping the
+  table as a table. The rich text subset has `table`, the printer already draws one as lines with the cells between bars, and the
+  editor would need a token for it as it has for a picture and an equation.
 - **Matching questions as a two-column table are not read**, and neither is a question that
   spreads over several rows of a grid or whose options are the rows below it with a
   stem cell merged down. Those tables are read cell by cell, and the file says so.

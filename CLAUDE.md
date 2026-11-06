@@ -184,7 +184,11 @@ warning `import.unread-object` (`model/unread-objects.ts`) at import: it needs a
 missing in the stem, the options and the feedback. Without it the question read as parsed with the figure it depends on gone.
 `withRecomputedFindings` takes the note away when the last marker is out of the text and never raises it (only an import leaves a
 marker that stands for something real), and a dismissal survives an edit. Only the exact words count: the editor's `[picture 2]` and
-`[equation 1]` name something the question carries.
+`[equation 1]` name something the question carries. A table that is none of the question layouts is read cell by cell as lines of
+text (its blocks carry `table.plain`), and a question with such a table inside its text gets `import.table-flattened` for the same
+reason; a question that stands in the table (a test item file with a question to a cell) does not, because nothing of it was
+flattened, and counting it once flagged 373 of the 375 questions of a real file that read perfectly. Measure a rule like this on
+the real files before keeping it.
 
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
@@ -271,7 +275,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2390 engine tests and 271 app tests, Node's own runner
+npm test                       # 2404 engine tests and 271 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

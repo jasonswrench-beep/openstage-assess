@@ -55,6 +55,16 @@ item says what has been run and what has not. Items are removed when done, with 
 - [ ] **Put a Greek letter and a sign in a Word question by Insert Symbol, and by typing with the Symbol font on, and import it.**
   Checked against Word's own files (`check:word-symbols`); the table holds only codes it is sure of, so a rare sign may come in as
   the letter it is written with. The file says how many it was unsure of.
+- [ ] **Import a Word bank with a figure that cannot be kept (a cropped screenshot, say) and look at that question in the review.** It
+  should read as needing a look, with a note of its own that says how many pictures, equations or symbols are missing and where
+  the marker stands in the text (6 November 2026; before that only the file's own warnings said so and the question read as
+  parsed). Write the figure in words or add the picture in the editor and take the marker out: the note should go by itself.
+  Tried on invented files only.
+- [ ] **Import a Word bank with a table of data inside a question (scores, a schedule) and look at the question.** The table is
+  read cell by cell, a row after a row, into the stem, and the question now says its rows and columns were not kept. Do the
+  words still read as your table? A question that sits wholly in a table (a test item file with a question to a cell) must not
+  carry the note: one real file of that kind (375 questions) read the same before and after. Tried on invented files, and on
+  that one file; no real bank with data tables inside questions has been seen.
 - [ ] **Hide a whole numbered paragraph in Word and look at the numbers.** Triple-click one item of a numbered list, press
   Ctrl+Shift+H, and make sure Word is not set to show hidden text. Word's object model counted the hidden item (the item after
   it kept its number), and the reader does the same. What the page shows on screen is not something the check can see.
@@ -407,7 +417,10 @@ These change what the app does, and were made without asking. Each is one flag o
 - [ ] **A printed student copy shows no answer; the key shows only answers the bank records, and says "No answer is recorded
   for this question." for the rest.** It never fills one in. Matching and ordering are shuffled on the student copy, the same
   way every time for the same question.
-- [ ] **PDF uses the standard fonts and Latin-1 only.** A character outside it prints as `?` and is reported first.
+- [ ] **PDF uses the standard fonts, with the Symbol font for Greek letters and signs of mathematics.** A character outside
+  Latin-1 and that font (Cyrillic, Chinese) prints as `?` and is reported first. Print a test that has α, ≤, ∑ and → in a
+  stem and an option, and look at it in the PDF viewer you use: the letters should be there, at the size of the words round
+  them. It was seen once, in Windows' own renderer, and in no other viewer.
 - [ ] **The app keeps at most 12 open imports at once**, and the oldest is dropped. Nothing is stored until you accept one.
 - [ ] **A table is read by the names in its first row, and a table with none is read only if it starts with a question type.**
   Author reads any table with no names in the template's order. Here a layout nobody has told it is refused, because a

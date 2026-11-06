@@ -5,6 +5,10 @@
  * does not know, or a character from a picture font stood, and said so only in the file's own warnings. The question that held the marker
  * came out as parsed, with the figure it depends on gone. It now carries a warning of its own: it needs a look, it is never an error, the
  * note goes when the last marker is taken out of the text, and a person can dismiss it.
+ *
+ * A table inside a question's text is the same kind of thing: it is read cell by cell as lines of text, and nothing said so on the
+ * question, only on the file. The question now says it, unless the question stands in the table (a test item file that puts each
+ * question in a cell), which is the table's words and not a table that was flattened.
  */
 
 import { describe, test } from "node:test";
@@ -15,9 +19,11 @@ import { wordImporter } from "../src/import/word.ts";
 import { dismissFinding, editQuestion, withRecomputedFindings } from "../src/model/create.ts";
 import { FindingCode, liveFindings, verdictFrom } from "../src/model/findings.ts";
 import type { Question } from "../src/model/question.ts";
-import { plainToRich } from "../src/model/richtext.ts";
+import { plainToRich, richTextToPlain } from "../src/model/richtext.ts";
 import { unreadObjectFindings, unreadObjects } from "../src/model/unread-objects.ts";
-import { docx, paragraph, run } from "./support/docx-writer.ts";
+import { documentToBlocks } from "../src/import/docx/document.ts";
+import { openDocx } from "../src/import/docx/package.ts";
+import { docx, paragraph, run, table } from "./support/docx-writer.ts";
 import { drawing, png, pictureParts } from "./support/images.ts";
 
 const OPTIONS = { file: "t.docx", at: "2026-01-01T00:00:00.000Z", author: "test" };
@@ -72,6 +78,70 @@ describe("an equation the reader could not read", () => {
   test("a marker in an option flags the question as the one in the stem does", () => {
     const inOption = word([paragraph(run("1. Which one is it?")), paragraph(run("a) ") + oMath(r("x") + "<m:odd/>")), paragraph(run("b) 2")), paragraph(run("Answer: b"))]);
     assert.equal(noted(inOption[0] as Question).length, 1);
+  });
+});
+
+/** A document of paragraphs and tables, and what the reader made of it. */
+function wordWith(parts: string[]) {
+  const bytes = docx({ body: parts.join("") });
+  const pkg = openDocx(bytes);
+  return { questions: wordImporter.parseBytes(bytes, OPTIONS).questions as Question[], read: documentToBlocks(pkg.xml(pkg.mainDocument)!) };
+}
+const cells = (rows: string[][]): string => table(rows.map((row) => row.map((c) => paragraph(run(c)))));
+const flattened = (q: Question) => q.findings.filter((f) => f.code === FindingCode.TableFlattened);
+
+describe("a table inside a question", () => {
+  const stats = wordWith([
+    paragraph(run("1. Use the table to find the mean of the scores.")),
+    cells([["Student", "Score"], ["Ana", "80"], ["Ben", "90"]]),
+    ...OPTIONS_AND_KEY.map((p) => p),
+    paragraph(run("2. Next question?")),
+    paragraph(run("a) Yes")),
+    paragraph(run("b) No")),
+    paragraph(run("Answer: a")),
+  ]);
+
+  test("is read cell by cell, in order, and the question says its rows and columns were not kept", () => {
+    assert.deepEqual([stats.read.stats.tables, stats.read.stats.tablesPlain], [1, 1]);
+    const q = stats.questions[0] as Question;
+    assert.equal(richTextToPlain(q.stem).replace(/\s+/g, " "), "Use the table to find the mean of the scores. Student Score Ana 80 Ben 90");
+    assert.equal(flattened(q).length, 1);
+    assert.equal(flattened(q)[0]?.severity, "warn");
+    assert.match(flattened(q)[0]?.message ?? "", /read cell by cell, in order, as 6 lines of text, so its rows and columns are not kept/);
+    assert.equal(verdictFrom(q.findings), "needsReview");
+  });
+
+  test("leaves the answer key alone, and the question after the table is not flagged", () => {
+    const q = stats.questions[0] as Question;
+    assert.ok(!q.findings.some((f) => f.code === FindingCode.NoAnswerKey));
+    assert.deepEqual((q.body as { options: Array<{ correct?: boolean }> }).options.map((o) => o.correct === true), [true, false]);
+    assert.equal(flattened(stats.questions[1] as Question).length, 0);
+    assert.equal(verdictFrom((stats.questions[1] as Question).findings), "parsed");
+  });
+
+  test("a question that stands in a table, with no layout of ours to read it, is not flagged: its words are the table's", () => {
+    const home = wordWith([cells([["1. Which one is it?"], ["a) This"], ["b) That"], ["Answer: b"]]), cells([["2. And this one?"], ["a) Yes"], ["b) No"], ["Answer: a"]])]);
+    assert.deepEqual([home.read.stats.tables, home.read.stats.tablesPlain], [2, 2]);
+    assert.equal(home.questions.length, 2);
+    for (const q of home.questions) assert.equal(flattened(q).length, 0);
+  });
+
+  test("a second table in the same question is counted with the first, in one note", () => {
+    const two = wordWith([
+      paragraph(run("1. Compare the two tables.")),
+      cells([["A", "1"]]),
+      cells([["B", "2"]]),
+      paragraph(run("a) A is larger")),
+      paragraph(run("b) B is larger")),
+      paragraph(run("Answer: b")),
+    ]);
+    assert.equal(flattened(two.questions[0] as Question).length, 1);
+    assert.match(flattened(two.questions[0] as Question)[0]?.message ?? "", /as 4 lines of text/);
+  });
+
+  test("goes with the file's own count, which is unchanged", () => {
+    const result = wordImporter.parseBytes(docx({ body: [paragraph(run("1. Q?")), cells([["x", "y"]]), ...OPTIONS_AND_KEY].join("") }), OPTIONS);
+    assert.ok(result.fileFindings.some((f) => /1 table was read cell by cell/.test(f.message)));
   });
 });
 

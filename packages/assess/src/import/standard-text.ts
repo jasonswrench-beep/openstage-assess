@@ -1441,7 +1441,30 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
       );
     }
   }
-  const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints, profile }));
+  // A table that is none of the question layouts is read cell by cell, in order, as lines of text, so a question with a table inside its
+  // text has the words of the table and not its rows and columns. The file says how many tables were read so; the question says it too.
+  // A question that stands in the table (a test item file that puts each question in a cell, and no layout of ours) is not this: its
+  // words are the table's, and nothing was flattened, so only a table that is not the one the question begins in counts.
+  const tableOf = new Map(blocks.filter((b) => b.table?.plain).map((b) => [b.index, b.table?.table as number]));
+  const questions = scanned.questions.map((raw) => {
+    const built = buildQuestion(raw, file, { author, at, defaultPoints, profile });
+    const home = tableOf.get(raw.firstBlock);
+    let cells = 0;
+    for (let n = raw.firstBlock; n <= raw.lastBlock; n++) {
+      const table = tableOf.get(n);
+      if (table !== undefined && table !== home) cells++;
+    }
+    return cells === 0
+      ? built
+      : addFindings(built, [
+          finding(
+            FindingCode.TableFlattened,
+            "warn",
+            `A table in this question was read cell by cell, in order, as ${cells === 1 ? "one line" : `${cells} lines`} of text, so its rows and columns are not kept. The words are all there, a row after a row and each row left to right, and they are in the stem or the options where the table stood. Check that they still read as the table does, and write them out again if they do not.`,
+            { source: { file, firstBlock: raw.firstBlock, lastBlock: raw.lastBlock } },
+          ),
+        ]);
+  });
 
   return {
     profile,
