@@ -126,20 +126,34 @@ export function stripInvalidCharacters(text: string): string {
 }
 
 /**
- * Character noise that arrives from Word and breaks exact-match grading,
- * search and QTI output. Normalised once, on the way in.
+ * Character noise that arrives from Word and has no place in the text of a question: what XML forbids, a no-break space (a space),
+ * a soft hyphen and a zero-width space (nothing), and the three ways of ending a line. Cleaned once, on the way in.
+ *
+ * It does NOT touch typography. Curly quotes, the en dash, the em dash and the ellipsis are what the author wrote. They were once
+ * flattened here ("--" for a dash) on the grounds that they break exact-match grading, search and QTI, and the cost was that an
+ * instructor's em dash came out as "--" on the printed test and in every export, which nobody asked for. Where a comparison needs
+ * the flat form it asks for it with `foldTypography`, on both sides, and what is stored stays as written.
  */
 export function normalizeCharacters(text: string): string {
   return stripInvalidCharacters(text)
-    .replace(/[‘’‚‛]/g, "'")
-    .replace(/[“”„‟]/g, '"')
-    .replace(/–/g, "-")
-    .replace(/—/g, "--")
-    .replace(/…/g, "...")
     .replace(/ /g, " ")
     .replace(/­/g, "")
     .replace(/​/g, "")
     .replace(/\r\n?/g, "\n");
+}
+
+/**
+ * The flat form of typography, for comparing and never for storing: curly quotes to straight, the en dash to a hyphen, the em dash
+ * to two, the ellipsis to three dots. Two texts that differ only in how a quotation mark is drawn are the same text to a search, to
+ * the check for copies and to the accuracy gate, and are not the same to the person who wrote them.
+ */
+export function foldTypography(text: string): string {
+  return text
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[“”„‟]/g, '"')
+    .replace(/–/g, "-")
+    .replace(/—/g, "--")
+    .replace(/…/g, "...");
 }
 
 export interface SanitizeResult {

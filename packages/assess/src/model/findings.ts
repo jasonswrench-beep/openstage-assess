@@ -110,6 +110,7 @@ export const FindingCode = {
   NearDuplicateQuestion: "quality.near-duplicate-question",
   KeyImbalance: "quality.key-imbalance",
   ReadingLevelHigh: "quality.reading-level-high",
+  TypedAnswerTypography: "quality.typed-answer-typography",
 
   // Accessibility.
   MissingAltText: "a11y.missing-alt-text",

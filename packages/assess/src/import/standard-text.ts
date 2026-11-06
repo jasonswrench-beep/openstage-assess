@@ -914,8 +914,9 @@ function buildBody(
           return;
         }
         // The right side is a plain string, which the rich text the left side becomes is not, so
-        // the model's one character rule has to be applied to it here or it would be the only
-        // text of a question that kept its curly quotes.
+        // the model's one character rule (what XML forbids, a no-break space and so on) has to be
+        // applied to it here or it would be the only text of a question that kept those. Typography
+        // is kept on every side alike.
         pairs.push({ id: localId("p", pairs.length), left: plainToRich(left), right: normalizeCharacters(right) });
       });
 

@@ -498,10 +498,12 @@ describe("a matching exercise given as a table of rows", () => {
     assert.ok(result.questions.length >= 1);
   });
 
-  test("the characters of the right side follow the model's rule, as the left side's do", () => {
-    const curly = [rowOf(1, "Star", "A sun’s fire."), rowOf(2, "Planet", "A world."), rowOf(3, "Moon", "A smaller one.")];
+  test("the right side keeps the author's typography, as the left side does", () => {
+    const curly = [rowOf(1, "Sun’s core", "A sun’s fire — hot."), rowOf(2, "Planet", "A world."), rowOf(3, "Moon", "A smaller one.")];
     const q = inWord(paragraph(run("Matching")) + table(curly)).questions[0] as Question;
-    assert.equal((body(q)["pairs"] as Array<{ right: string }>)[0]?.right, "A sun's fire.");
+    const pairs = body(q)["pairs"] as Array<{ left: Parameters<typeof plain>[0]; right: string }>;
+    assert.equal(pairs[0]?.right, "A sun’s fire — hot.");
+    assert.equal(plain(pairs[0]!.left), "Sun’s core");
   });
 
   test("numbers that do not count up from one row to the next are not a matching exercise", () => {
@@ -522,9 +524,9 @@ describe("a matching exercise given as a table of rows", () => {
     assert.ok(!result.fileFindings.some((f) => f.message.includes("a term and its definition in each row")));
   });
 
-  test("a matching question typed as lines, with a word that has no pair, keeps the word as a distractor in the model's characters", () => {
+  test("a matching question typed as lines, with a word that has no pair, keeps the word as a distractor, typography as written", () => {
     const q = text(["Matching", "1) Match each body.", "a. Star = A sun.", "b. Planet = A world.", "c. Comet’s tail"]).questions[0] as Question;
-    assert.deepEqual(body(q)["distractors"], ["Comet's tail"]);
+    assert.deepEqual(body(q)["distractors"], ["Comet’s tail"]);
   });
 
   test("two rows are too few to be an exercise", () => {
