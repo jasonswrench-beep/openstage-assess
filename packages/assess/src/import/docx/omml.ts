@@ -501,6 +501,12 @@ const KEPT = new Set([
 const NS_M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
 
 function serialize(el: XmlElement, out: string[]): void {
+  // A tracked insertion is read as the text it inserted (the document is read with the changes accepted), so the copy holds that text
+  // without the wrapper. A deletion is not read, and is not kept.
+  if (el.name === "w:ins" || el.name === "w:moveTo") {
+    for (const c of el.children) if (typeof c !== "string") serialize(c, out);
+    return;
+  }
   if (!KEPT.has(el.name)) return; // not kept; its content was read or refused above, so a kept copy never holds what the reader did not
   const val = el.attrs["m:val"];
   // Text in an equation keeps its spaces; without this Word trims the ones at its ends.
@@ -516,6 +522,15 @@ function serialize(el: XmlElement, out: string[]): void {
 // The entry point
 // ---------------------------------------------------------------------------
 
+/** Whether the kept copy, read again, is the same LaTeX. */
+function keptReadsAs(omml: string, latex: string): boolean {
+  try {
+    return tex(new Reader().row(parseXml(omml), 0)).replace(/\s+/g, " ").trim() === latex;
+  } catch {
+    return false;
+  }
+}
+
 /** One `m:oMath` as LaTeX, MathML and the kept original, or the reason it was not read. */
 export function readEquation(el: XmlElement): MathResult {
   try {
@@ -525,6 +540,9 @@ export function readEquation(el: XmlElement): MathResult {
     const kept: string[] = [];
     serialize(el, kept);
     const omml = kept.join("").replace("<m:oMath>", `<m:oMath xmlns:m="${NS_M}">`);
+    // The copy is what a printed Word file will show, so it has to say what was read. Read again, it must give the same LaTeX; if it
+    // does not (a part was dropped that the reading used) the equation is not read, rather than kept as a different one.
+    if (!keptReadsAs(omml, latex)) return { ok: false, reason: "the copy of it that Word could be given does not read as it does" };
     return { ok: true, math: { latex, mathml: `<math xmlns="http://www.w3.org/1998/Math/MathML">${ml(node)}</math>`, omml } };
   } catch (error) {
     if (error instanceof Unread) return { ok: false, reason: error.message };
