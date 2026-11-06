@@ -36,6 +36,8 @@
     "update:word-authored": "node --experimental-strip-types --no-warnings test/tools/word-authored-check.ts --update-fixtures",
     "check:word-print": "node --experimental-strip-types --no-warnings test/tools/word-print-check.ts",
     "check:word-pictures": "node --experimental-strip-types --no-warnings test/tools/word-pictures-check.ts",
+    "check:word-symbols": "node --experimental-strip-types --no-warnings test/tools/word-symbols-check.ts",
+    "check:word-equations": "node --experimental-strip-types --no-warnings test/tools/word-equations-check.ts",
     "check:excel-authored": "node --experimental-strip-types --no-warnings test/tools/excel-authored-check.ts"
   },
   "dependencies": {},

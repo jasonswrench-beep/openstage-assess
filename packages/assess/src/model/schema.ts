@@ -422,12 +422,13 @@ function checkSidecars(c: Checker, raw: Record<string, unknown>): void {
     (raw["math"] as unknown[]).forEach((m, i) => {
       const p = `math.${i}`;
       if (!c.object(m, p)) return;
-      c.noUnknownKeys(m, p, new Set(["id", "latex", "mathml", "source"]));
+      c.noUnknownKeys(m, p, new Set(["id", "latex", "mathml", "omml", "source"]));
       c.string(m["id"], `${p}.id`);
       c.string(m["latex"], `${p}.latex`, { allowEmpty: true });
       // Both representations are stored, which is the whole accessibility
       // gain over an equation that arrives as a picture.
       c.string(m["mathml"], `${p}.mathml`, { allowEmpty: true });
+      if (m["omml"] !== undefined) c.string(m["omml"], `${p}.omml`, { allowEmpty: true });
       if (m["source"] !== undefined) {
         c.oneOf(m["source"], `${p}.source`, ["omml", "typed", "latex", "image"] as const);
       }

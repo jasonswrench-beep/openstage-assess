@@ -34,6 +34,7 @@ import { localId } from "../model/ids.ts";
 import {
   escapeHtml,
   normalizeCharacters,
+  mathPlaceholder,
   mediaPlaceholder,
   plainToRich,
   richTextToPlain,
@@ -44,6 +45,7 @@ import { addFindings, createQuestion, DEFAULT_POINTS, emptyMetadata } from "../m
 import { checkAnswerKey } from "../quality/answer-key.ts";
 import { PLACEHOLDER_TEXT } from "../quality/placeholders.ts";
 import { applyFormattingKey, SHARE } from "./standard-text-format.ts";
+import { equationsAsWords, MATH_TAG, mathFor, withMathTable } from "./math-tags.ts";
 import { relabelUnlabelledGroups } from "./standard-text-relabel.ts";
 import {
   MAX_POINTS,
@@ -51,6 +53,7 @@ import {
   titleFromStem,
   type BloomLevel,
   type Difficulty,
+  type MathRef,
   type MediaRef,
   type Metadata,
   type Option,
@@ -135,12 +138,14 @@ const BLOOM_WORDS: Record<string, BloomLevel> = {
 interface TextConversion {
   rich: RichText;
   media: MediaRef[];
+  math: MathRef[];
   findings: Finding[];
 }
 
-/** Turn source text into the restricted subset, pulling out images and raw HTML. */
+/** Turn source text into the restricted subset, pulling out images, equations and raw HTML. */
 function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextConversion {
   const media: MediaRef[] = [];
+  const math: MathRef[] = [];
   const findings: Finding[] = [];
   let text = normalizeCharacters(lines.join("\n")).trim();
 
@@ -185,6 +190,15 @@ function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextC
     return `\u0000IMG${media.length - 1}\u0000`;
   });
 
+  // An equation the reader found: a tag in the line, and the equation itself in the table the reader handed over. A tag that names
+  // nothing in the table (someone typed one into a text file) is only text and is left as written.
+  text = text.replace(MATH_TAG, (whole, name: string) => {
+    const read = mathFor(name);
+    if (!read) return whole;
+    math.push({ id: `${idPrefix}_e${math.length + 1}`, latex: read.latex, mathml: read.mathml, omml: read.omml, source: "omml" });
+    return `\u0000EQ${math.length - 1}\u0000`;
+  });
+
   const paragraphs = text
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -197,8 +211,12 @@ function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextC
     const ref = media[Number(i)];
     return ref ? mediaPlaceholder(ref.id) : "";
   });
+  html = html.replace(/\u0000EQ(\d+)\u0000/g, (_w, i: string) => {
+    const ref = math[Number(i)];
+    return ref ? mathPlaceholder(ref.id) : "";
+  });
 
-  return { rich: { format: "rich", content: html }, media, findings };
+  return { rich: { format: "rich", content: html }, media, math, findings };
 }
 
 function guessMime(fileName: string): string {
@@ -707,6 +725,7 @@ function buildOptions(
   correct: ReadonlySet<number>,
   file: string,
   idPrefix: string,
+  math: MathRef[],
 ): { options: Option[]; media: MediaRef[]; findings: Finding[] } {
   const options: Option[] = [];
   const media: MediaRef[] = [];
@@ -716,12 +735,14 @@ function buildOptions(
     const source: SourceRef = { file, firstBlock: option.firstBlock, lastBlock: option.lastBlock };
     const converted = toRichText(option.lines, source, `${idPrefix}o${i}`);
     media.push(...converted.media);
+    math.push(...converted.math);
     findings.push(...converted.findings);
 
     // An option with a letter and no text, or only an empty block of HTML. It is
     // kept in its place, so that the key's letters still point at the right
-    // options, and its content is a placeholder beside an error.
-    const empty = richTextToPlain(converted.rich).length === 0 && converted.media.length === 0;
+    // options, and its content is a placeholder beside an error. An option that is
+    // only a picture or only an equation has something to show and is not empty.
+    const empty = richTextToPlain(converted.rich).length === 0 && converted.media.length === 0 && converted.math.length === 0;
     if (empty) {
       findings.push(
         finding(FindingCode.EmptyOption, "error", `Option ${option.letter.toUpperCase()} has no text.`, {
@@ -737,7 +758,7 @@ function buildOptions(
       correct: correct.has(i),
     };
     if (option.feedback.length > 0) {
-      built.feedback = plainToRich(option.feedback.join("\n"));
+      built.feedback = plainToRich(equationsAsWords(option.feedback.join("\n")));
     }
     options.push(built);
   });
@@ -751,6 +772,7 @@ function buildBody(
   key: ResolvedKey,
   file: string,
   idPrefix: string,
+  math: MathRef[],
 ): { body: QuestionBody; media: MediaRef[]; findings: Finding[] } {
   const media: MediaRef[] = [];
   const findings: Finding[] = [];
@@ -816,7 +838,7 @@ function buildBody(
     case "essay": {
       const inline = raw.options.map((o) => o.lines.join("\n"));
       const answerText = [...inline, ...keyTexts(raw)].filter((a) => a.trim().length > 0).join("\n\n");
-      const body: QuestionBody = answerText.length > 0 ? { modelAnswer: plainToRich(answerText) } : {};
+      const body: QuestionBody = answerText.length > 0 ? { modelAnswer: plainToRich(equationsAsWords(answerText)) } : {};
       return { body, media, findings };
     }
 
@@ -829,7 +851,7 @@ function buildBody(
         ...raw.options.map((o) => richTextToPlain(plainToRich(o.lines.join(" ")))),
         ...keyTexts(raw),
       ]
-        .map((a) => a.trim())
+        .map((a) => equationsAsWords(a).trim())
         .filter((a) => a.length > 0);
       const blank = type === "fillInBlank";
       const field = blank ? "body.blanks" : "body.accepted";
@@ -920,7 +942,7 @@ function buildBody(
         // the model's one character rule (what XML forbids, a no-break space and so on) has to be
         // applied to it here or it would be the only text of a question that kept those. Typography
         // is kept on every side alike.
-        pairs.push({ id: localId("p", pairs.length), left: plainToRich(left), right: normalizeCharacters(right) });
+        pairs.push({ id: localId("p", pairs.length), left: plainToRich(equationsAsWords(left)), right: normalizeCharacters(equationsAsWords(right)) });
       });
 
       if (pairs.length < 2) {
@@ -951,7 +973,7 @@ function buildBody(
         };
       }
 
-      const built = buildOptions(raw, key.correct, file, idPrefix);
+      const built = buildOptions(raw, key.correct, file, idPrefix, math);
       media.push(...built.media);
       findings.push(...built.findings);
 
@@ -1237,7 +1259,8 @@ function buildQuestion(
 
   const key = resolveKey(raw);
   const stem = toRichText(raw.stemLines, source, idPrefix);
-  const body = buildBody(raw, type, key, file, idPrefix);
+  const bodyMath: MathRef[] = [];
+  const body = buildBody(raw, type, key, file, idPrefix, bodyMath);
   const meta = applyMetadata(raw, file);
 
   findings.push(...stem.findings, ...body.findings, ...meta.findings, ...layoutFindings(raw, type, source));
@@ -1264,20 +1287,23 @@ function buildQuestion(
   }
 
   const media = [...stem.media, ...body.media];
+  const math = [...stem.math, ...bodyMath];
 
   const question = createQuestion({
     type,
-    stem: richTextToPlain(stem.rich).length > 0 ? stem.rich : plainToRich("(no stem text in the source)"),
+    // A stem that is only a picture or only an equation has something to show; it is not a stem with no text.
+    stem: richTextToPlain(stem.rich).length > 0 || stem.media.length > 0 || stem.math.length > 0 ? stem.rich : plainToRich("(no stem text in the source)"),
     body: body.body,
     ...(title ? { title } : { title: titleFromStem(richTextToPlain(stem.rich)) }),
     points,
     feedback: {
-      ...(raw.generalFeedback.length > 0 ? { general: plainToRich(raw.generalFeedback.join("\n")) } : {}),
-      ...(raw.correctFeedback.length > 0 ? { correct: plainToRich(raw.correctFeedback.join("\n")) } : {}),
-      ...(raw.incorrectFeedback.length > 0 ? { incorrect: plainToRich(raw.incorrectFeedback.join("\n")) } : {}),
+      ...(raw.generalFeedback.length > 0 ? { general: plainToRich(equationsAsWords(raw.generalFeedback.join("\n"))) } : {}),
+      ...(raw.correctFeedback.length > 0 ? { correct: plainToRich(equationsAsWords(raw.correctFeedback.join("\n"))) } : {}),
+      ...(raw.incorrectFeedback.length > 0 ? { incorrect: plainToRich(equationsAsWords(raw.incorrectFeedback.join("\n"))) } : {}),
     },
     metadata: meta.metadata,
     media,
+    math,
     findings,
     origin: { kind: "import", source, profile: options.profile, at: options.at },
     by: options.author,
@@ -1351,71 +1377,76 @@ export const standardTextImporter: Importer = {
   extensions: [".txt", ".md"],
 
   parse(input: string | SourceBlock[], options: ImportOptions = {}): ImportResult {
-    const file = options.file ?? "input.txt";
-    // A block from a Word file keeps its list label apart from its text. The scanner
-    // reads what the page shows, which is the label then the text, so a question
-    // numbered by Word is read like one numbered by hand.
-    const raw = typeof input === "string" ? linesToBlocks(input) : input;
-    const blocks = raw.map(withListLabel);
-    const at = options.at ?? new Date().toISOString();
-    const author = options.author ?? "import";
-    const profile = options.profile ?? PROFILE_ID;
+    return withMathTable(options.math, () => parseWithMath(input, options));
+  },
+};
 
-    const defaultPoints = options.defaultPoints ?? DEFAULT_POINTS;
-    const keyMark = options.keyMark ?? "auto";
-    let scanned = scanStandardText(blocks, file, defaultPoints, keyMark !== "off");
-    // Formatting can supply a key where the file gave none in words. It is decided
-    // once for the whole file, after every question is known and before any is built.
-    let formatting = applyFormattingKey(blocks, scanned.questions, keyMark);
-    const relabelFindings: Finding[] = [];
+function parseWithMath(input: string | SourceBlock[], options: ImportOptions): ImportResult {
+  const file = options.file ?? "input.txt";
+  // A block from a Word file keeps its list label apart from its text. The scanner
+  // reads what the page shows, which is the label then the text, so a question
+  // numbered by Word is read like one numbered by hand.
+  const raw = typeof input === "string" ? linesToBlocks(input) : input;
+  const blocks = raw.map(withListLabel);
+  const at = options.at ?? new Date().toISOString();
+  const author = options.author ?? "import";
+  const profile = options.profile ?? PROFILE_ID;
 
-    // A bank that letters nothing, and numbers nothing or only its stems. It is read again with the labels the page does
-    // not show, and that reading is kept only when it found keys that the plain one did not.
-    // Not when the plain reading found a choice question: a file that is read as one has labels, or a type line, and what
-    // it did not read it reports; this is for the file that no question of which has its options.
-    const relabelled = scanned.questions.some((q) => q.options.length >= 2) ? undefined : relabelUnlabelledGroups(raw);
-    if (relabelled) {
-      const labelled = relabelled.blocks.map(withListLabel);
-      const again = scanStandardText(labelled, file, defaultPoints, keyMark !== "off");
-      const againFormatting = applyFormattingKey(labelled, again.questions, keyMark);
-      const keyedNow = again.questions.filter(hasAnyKey).length;
-      if (keyedNow > scanned.questions.filter(hasAnyKey).length && keyedNow >= SHARE * relabelled.groups) {
-        scanned = again;
-        formatting = againFormatting;
-        const suspect = new Set(relabelled.suspect);
-        for (const raw of scanned.questions) {
-          if (!suspect.has(raw.firstBlock)) continue;
-          raw.notes.push(
-            finding(
-              FindingCode.UnlabelledGroups,
-              "warn",
-              "The options of this question were not lettered in the file, and one of the lines read as an option is much longer than the others, or the stem ends in a colon. It may be more of the stem. Check where the stem ends.",
-              { field: "stem" },
-            ),
-          );
-        }
-        relabelFindings.push(
+  const defaultPoints = options.defaultPoints ?? DEFAULT_POINTS;
+  const keyMark = options.keyMark ?? "auto";
+  let scanned = scanStandardText(blocks, file, defaultPoints, keyMark !== "off");
+  // Formatting can supply a key where the file gave none in words. It is decided
+  // once for the whole file, after every question is known and before any is built.
+  let formatting = applyFormattingKey(blocks, scanned.questions, keyMark);
+  const relabelFindings: Finding[] = [];
+
+  // A bank that letters nothing, and numbers nothing or only its stems. It is read again with the labels the page does
+  // not show, and that reading is kept only when it found keys that the plain one did not.
+  // Not when the plain reading found a choice question: a file that is read as one has labels, or a type line, and what
+  // it did not read it reports; this is for the file that no question of which has its options.
+  const relabelled = scanned.questions.some((q) => q.options.length >= 2) ? undefined : relabelUnlabelledGroups(raw);
+  if (relabelled) {
+    const labelled = relabelled.blocks.map(withListLabel);
+    const again = scanStandardText(labelled, file, defaultPoints, keyMark !== "off");
+    const againFormatting = applyFormattingKey(labelled, again.questions, keyMark);
+    const keyedNow = again.questions.filter(hasAnyKey).length;
+    if (keyedNow > scanned.questions.filter(hasAnyKey).length && keyedNow >= SHARE * relabelled.groups) {
+      scanned = again;
+      formatting = againFormatting;
+      const suspect = new Set(relabelled.suspect);
+      for (const raw of scanned.questions) {
+        if (!suspect.has(raw.firstBlock)) continue;
+        raw.notes.push(
           finding(
             FindingCode.UnlabelledGroups,
             "warn",
-            (relabelled.stemsLabelled
-              ? `This file has no question numbers and no option letters. ${relabelled.groups} groups of lines were read as questions: the first line of each group as the stem and the lines under it, in order, as the options.`
-              : `This file has question numbers but no option letters. In ${relabelled.groups} questions the lines under the stem were read as the options, in order.`) +
-              (relabelled.preamble > 0 ? ` The first ${relabelled.preamble} lines of the file, a title and instructions, were left out of the first question and are listed as text no question claimed.` : "") +
-              " Check the first few questions against the file.",
+            "The options of this question were not lettered in the file, and one of the lines read as an option is much longer than the others, or the stem ends in a colon. It may be more of the stem. Check where the stem ends.",
+            { field: "stem" },
           ),
         );
       }
+      relabelFindings.push(
+        finding(
+          FindingCode.UnlabelledGroups,
+          "warn",
+          (relabelled.stemsLabelled
+            ? `This file has no question numbers and no option letters. ${relabelled.groups} groups of lines were read as questions: the first line of each group as the stem and the lines under it, in order, as the options.`
+            : `This file has question numbers but no option letters. In ${relabelled.groups} questions the lines under the stem were read as the options, in order.`) +
+            (relabelled.preamble > 0 ? ` The first ${relabelled.preamble} lines of the file, a title and instructions, were left out of the first question and are listed as text no question claimed.` : "") +
+            " Check the first few questions against the file.",
+        ),
+      );
     }
-    const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints, profile }));
+  }
+  const questions = scanned.questions.map((raw) => buildQuestion(raw, file, { author, at, defaultPoints, profile }));
 
-    return {
-      profile,
-      file,
-      questions,
-      orphans: scanned.orphans,
-      counts: countVerdicts(questions, scanned.orphans.length),
-      fileFindings: [...relabelFindings, ...scanned.fileFindings, ...formatting.fileFindings],
-    };
-  },
-};
+  return {
+    profile,
+    file,
+    questions,
+    // Text no question claimed is shown as it reads, so an equation in it is its words and not a tag.
+    orphans: scanned.orphans.map((o) => ({ ...o, text: equationsAsWords(o.text) })),
+    counts: countVerdicts(questions, scanned.orphans.length),
+    fileFindings: [...relabelFindings, ...scanned.fileFindings, ...formatting.fileFindings],
+  };
+}

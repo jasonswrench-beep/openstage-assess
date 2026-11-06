@@ -17,6 +17,7 @@
 import type { Finding, SourceRef, Verdict } from "../model/findings.ts";
 import { verdictFrom } from "../model/findings.ts";
 import type { Question } from "../model/question.ts";
+import type { MathReading } from "./docx/omml.ts";
 
 /**
  * One unit of source text with its position.
@@ -112,6 +113,11 @@ export interface ImportOptions {
    * none in words.
    */
   keyMark?: string;
+  /**
+   * The equations a reader found, by the name it wrote in the tag `[ eq: "name" ]` where each stood. Set by a reader that has
+   * equations (the Word reader) and not by a caller; the tags are turned into the question's equations while the lines are read.
+   */
+  math?: ReadonlyMap<string, MathReading>;
 }
 
 export interface Importer {

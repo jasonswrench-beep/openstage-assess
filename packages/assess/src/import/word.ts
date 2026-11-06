@@ -19,6 +19,7 @@ import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import { documentToBlocks, OBJECT_TEXT, type DocumentStats } from "./docx/document.ts";
 import { readFormatting } from "./docx/formatting.ts";
 import { readNumbering } from "./docx/numbering.ts";
+import type { MathReading } from "./docx/omml.ts";
 import { DocxError, openDocx, type DocxLimits, type DocxPackage } from "./docx/package.ts";
 import { pictureReader } from "./docx/pictures.ts";
 import { hasText, type XmlElement } from "./docx/xml.ts";
@@ -145,18 +146,53 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
       ),
     );
   }
+  if (stats.equationsRead > 0) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "info",
+        `${plural(stats.equationsRead, "equation was", "equations were")} read and kept as ${stats.equationsRead === 1 ? "an equation" : "equations"}, in the question each stood in, as LaTeX and MathML with Word's own copy. An equation is read only when every part of it is one this reader knows; check each against the Word file.`,
+      ),
+    );
+  }
   if (stats.equations > 0) {
+    const reasons = Object.entries(stats.equationReasons)
+      .map(([reason, count]) => `${count} because ${reason}`)
+      .join("; ");
     found.push(
       finding(
         FindingCode.UnreadContent,
         "warn",
-        `${plural(stats.equations, "equation was", "equations were")} not read. Each is marked [equation] in the text where it stood.`,
+        `${plural(stats.equations, "equation was", "equations were")} not read (${reasons}). Each is marked [equation] in the text where it stood, and nothing was guessed about it.`,
+      ),
+    );
+  }
+  if (stats.symbolsRead > 0) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "info",
+        `${plural(stats.symbolsRead, "character typed from the Symbol font was", "characters typed from the Symbol font were")} read as the Greek letter or sign it shows (the Insert Symbol characters, and text written in the Symbol font).`,
       ),
     );
   }
   if (stats.symbols > 0) {
+    const fonts = Object.entries(stats.symbolFonts).map(([font, count]) => `${count} from ${font}`).join(", ");
     found.push(
-      finding(FindingCode.UnreadContent, "warn", `${plural(stats.symbols, "symbol character was", "symbol characters were")} not read.`),
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `${plural(stats.symbols, "symbol character was", "symbol characters were")} not read (${fonts}). Each is marked [symbol] in the text where it stood, and nothing was guessed about it.`,
+      ),
+    );
+  }
+  if (stats.symbolsUnsure > 0) {
+    found.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `${plural(stats.symbolsUnsure, "character in the Symbol font is", "characters in the Symbol font are")} one this reader is not sure of (a piece of a large bracket, say), so ${stats.symbolsUnsure === 1 ? "it was" : "they were"} left as written and may show as a wrong letter. Look at ${stats.symbolsUnsure === 1 ? "it" : "them"} in Word.`,
+      ),
     );
   }
   if (stats.notes > 0) {
@@ -222,7 +258,7 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
 export function docxToBlocks(
   bytes: Uint8Array,
   limits?: DocxLimits,
-): { blocks: SourceBlock[]; findings: Finding[]; media: Map<string, Uint8Array> } {
+): { blocks: SourceBlock[]; findings: Finding[]; media: Map<string, Uint8Array>; math: Map<string, MathReading> } {
   const pkg = openDocx(bytes, limits);
   const root = pkg.xml(pkg.mainDocument);
   if (!root) throw new DocxError(`The main document part "${pkg.mainDocument}" could not be read.`);
@@ -230,10 +266,10 @@ export function docxToBlocks(
   const stylesPart = optionalPart(pkg, "styles", "word/styles.xml");
   const numbering = readNumbering({ numbering: numberingPart.root, styles: stylesPart.root, numberingDamaged: numberingPart.damaged });
   const pictures = pictureReader(pkg);
-  const { blocks, stats } = documentToBlocks(root, numbering, readFormatting(stylesPart.root), pictures);
+  const { blocks, stats, math } = documentToBlocks(root, numbering, readFormatting(stylesPart.root), pictures);
   const media = new Map<string, Uint8Array>();
   for (const [path, picture] of pictures.pictures) media.set(path, picture.bytes);
-  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged, pictures.refused), media };
+  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged, pictures.refused), media, math };
 }
 
 /** An importer whose bytes entry point is always there, which is what a caller of this one relies on. */
@@ -251,8 +287,8 @@ export const wordImporter: Importer & { parseBytes: NonNullable<Importer["parseB
   },
 
   parseBytes(bytes: Uint8Array, options: ImportOptions = {}): ImportResult {
-    const { blocks, findings, media } = docxToBlocks(bytes);
-    const result = standardTextImporter.parse(blocks, { ...options, profile: WORD_PROFILE_ID, file: options.file ?? "input.docx" });
+    const { blocks, findings, media, math } = docxToBlocks(bytes);
+    const result = standardTextImporter.parse(blocks, { ...options, math, profile: WORD_PROFILE_ID, file: options.file ?? "input.docx" });
     return { ...result, fileFindings: [...findings, ...result.fileFindings], ...(media.size > 0 ? { media } : {}) };
   },
 };

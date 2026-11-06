@@ -14,18 +14,21 @@
  * apart from the text). What is not: deleted text (tracked deletions), field
  * codes, and the formatting of runs, which a later stage reads for answer marks.
  *
- * Nothing is dropped silently. Pictures, shapes and equations are not read yet, so
- * each leaves a visible marker ("[picture]", "[equation]") in the text and is
- * counted. Anything else that holds text and was not read is counted by name. The
- * caller turns those counts into findings.
+ * Nothing is dropped silently. A picture or an equation that is read leaves a tag where it stood (`[ img: ... ]`, `[ eq: ... ]`)
+ * and is handed over beside the blocks; one that is not read leaves a visible marker ("[picture]", "[equation]") and is counted,
+ * with the reason. Anything else that holds text and was not read is counted by name. The caller turns those counts into findings.
  */
+
+import { createHash } from "node:crypto";
 
 import type { SourceBlock, SourceRun } from "../types.ts";
 import type { Formatting, RunFormat } from "./formatting.ts";
 import type { Numbering } from "./numbering.ts";
 import { readTable, type Cell, type Line as TableLine } from "./tables.ts";
 import { DocxError } from "./package.ts";
+import { readEquation, type MathReading } from "./omml.ts";
 import { isFloating, type PictureReader } from "./pictures.ts";
+import { inSymbolFont, isSymbolFont, symbolChar } from "./symbols.ts";
 import { allText, elements, first, hasText, holdsWords, wordsIn, type XmlElement } from "./xml.ts";
 
 export interface DocumentStats {
@@ -37,10 +40,20 @@ export interface DocumentStats {
   pictures: number;
   /** Pictures that were kept, each replaced by an image tag naming its file. */
   picturesRead: number;
-  /** Word equations, each replaced by "[equation]". */
+  /** Word equations that were not read, each replaced by "[equation]". */
   equations: number;
+  /** Why each of them was not read, with how many for each reason. */
+  equationReasons: Record<string, number>;
+  /** Word equations that were read, each replaced by a tag naming it. */
+  equationsRead: number;
   /** Symbol characters (a font glyph by code), which are not read. */
   symbols: number;
+  /** Symbol characters that were read as the characters they show (Greek letters, signs). */
+  symbolsRead: number;
+  /** Characters in a run in the Symbol font that the table of that font is not sure of: left as they were. */
+  symbolsUnsure: number;
+  /** The symbols that were not read, by the font they were in. */
+  symbolFonts: Record<string, number>;
   /** References to footnotes and endnotes. The notes themselves are not read. */
   notes: number;
   /** References to comments. The comments themselves are not read. */
@@ -68,6 +81,8 @@ export interface DocumentStats {
 export interface DocumentBlocks {
   blocks: SourceBlock[];
   stats: DocumentStats;
+  /** The equations read, by the name written in the tag where each stood. Equal equations are one entry. */
+  math: Map<string, MathReading>;
 }
 
 /** Elements that carry no text of their own and are skipped without comment. */
@@ -201,7 +216,12 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     pictures: 0,
     picturesRead: 0,
     equations: 0,
+    equationReasons: {},
+    equationsRead: 0,
     symbols: 0,
+    symbolsRead: 0,
+    symbolsUnsure: 0,
+    symbolFonts: {},
     notes: 0,
     comments: 0,
     unreadWithText: {},
@@ -218,6 +238,26 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   const unread = (name: string, element: XmlElement): void => {
     stats.unreadWithText[name] = (stats.unreadWithText[name] ?? 0) + 1;
     stats.unreadSamples[name] ??= quote(textOf(element));
+  };
+
+  const math = new Map<string, MathReading>();
+  /**
+   * An equation (`m:oMath`): read, and a tag where it stood; or not read, and the marker with the reason. The name in the tag is
+   * made from the equation's own XML, so the same equation written twice is one entry and a name is the same from one import to
+   * the next.
+   */
+  const equation = (el: XmlElement, add: (text: string) => void): void => {
+    const read = readEquation(el);
+    if (!read.ok) {
+      stats.equations++;
+      stats.equationReasons[read.reason] = (stats.equationReasons[read.reason] ?? 0) + 1;
+      add("[equation]");
+      return;
+    }
+    const name = `eq-${createHash("sha256").update(read.math.omml).digest("hex").slice(0, 16)}`;
+    math.set(name, read.math);
+    stats.equationsRead++;
+    add(`[ eq: "${name}" ]`);
   };
 
   /** While a table's cells are being read, their lines are gathered here and not yet blocks. */
@@ -287,9 +327,19 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     for (const child of r.children) {
       if (typeof child === "string") continue;
       switch (child.name) {
-        case "w:t":
-          add(b, allText(child), format);
+        case "w:t": {
+          // Text in the Symbol font shows as Greek letters and signs whatever letters it is written with.
+          const fonts = first(first(r, "w:rPr") ?? { name: "", attrs: {}, children: [] }, "w:rFonts")?.attrs;
+          if (fonts && (isSymbolFont(fonts["w:ascii"]) || isSymbolFont(fonts["w:hAnsi"]))) {
+            const shown = inSymbolFont(allText(child), { ascii: fonts["w:ascii"], hAnsi: fonts["w:hAnsi"] });
+            stats.symbolsRead += shown.changed;
+            stats.symbolsUnsure += shown.unsure;
+            add(b, shown.text, format);
+          } else {
+            add(b, allText(child), format);
+          }
           break;
+        }
         case "w:tab":
         case "w:ptab":
           add(b, "\t", format);
@@ -309,9 +359,27 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
           break;
         case "w:softHyphen":
           break;
-        case "w:sym":
-          stats.symbols++;
+        case "w:sym": {
+          // Insert Symbol: a font and a code. The Symbol font's codes are read through its table; a character of an ordinary font is
+          // the Unicode character it names; anything else (Wingdings, a code the table is not sure of) is marked where it stood.
+          const font = child.attrs["w:font"];
+          const code = Number.parseInt(child.attrs["w:char"] ?? "", 16);
+          let shown: string | undefined;
+          if (Number.isFinite(code)) {
+            if (isSymbolFont(font)) shown = symbolChar(code);
+            else if (code >= 0x20 && code < 0xf000 && !(code >= 0xd800 && code <= 0xdfff)) shown = String.fromCodePoint(code);
+          }
+          if (shown !== undefined) {
+            stats.symbolsRead++;
+            add(b, shown, format);
+          } else {
+            stats.symbols++;
+            const name = font && font.trim() !== "" ? font.trim() : "an unnamed font";
+            stats.symbolFonts[name] = (stats.symbolFonts[name] ?? 0) + 1;
+            add(b, "[symbol]", format);
+          }
           break;
+        }
         case "w:footnoteReference":
         case "w:endnoteReference":
           stats.notes++;
@@ -342,9 +410,14 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
         // document with the changes accepted. The count says that this happened.
         stats.trackedDeletions++;
       } else if (INLINE_CONTAINERS.has(name)) inline(child, b);
-      else if (name === "m:oMath" || name === "m:oMathPara") {
-        stats.equations++;
-        add(b, "[equation]");
+      else if (name === "m:oMath") equation(child, (text) => add(b, text));
+      else if (name === "m:oMathPara") {
+        // A display equation: the equations in it, one after another. Anything else in it (its alignment) says no words.
+        for (const inner of child.children) {
+          if (typeof inner === "string") continue;
+          if (inner.name === "m:oMath") equation(inner, (text) => add(b, text));
+          else if (inner.name !== "m:oMathParaPr" && hasText(inner)) unread(inner.name, inner);
+        }
       } else if (OBJECTS.has(name)) {
         object(child, b);
       } else if (!SILENT.has(name) && hasText(child)) unread(name, child);
@@ -463,5 +536,5 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   }
 
   container(body, undefined);
-  return { blocks, stats };
+  return { blocks, stats, math };
 }
