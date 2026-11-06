@@ -178,6 +178,14 @@ in the Symbol font are the Greek letters and signs they show (`import/docx/symbo
 written and counted in a warning, and a Wingdings or other symbol is marked `[symbol]` and counted by its font. The table leaves out
 the codes whose glyph is a piece of a bracket or is not certain, and a code is added only when Word (`check:word-symbols`) shows it.
 
+**A marker for something the reader could not read flags its question, and not only the file.** `[picture]`, `[equation]` and
+`[symbol]` (and the PDF reader's `[Picture]`) stand where something was not read, and a question that still holds one gets the
+warning `import.unread-object` (`model/unread-objects.ts`) at import: it needs a look, it is never an error, and it counts what is
+missing in the stem, the options and the feedback. Without it the question read as parsed with the figure it depends on gone.
+`withRecomputedFindings` takes the note away when the last marker is out of the text and never raises it (only an import leaves a
+marker that stands for something real), and a dismissal survives an edit. Only the exact words count: the editor's `[picture 2]` and
+`[equation 1]` name something the question carries.
+
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
 answer is recorded. A matching or ordering question is shown shuffled, never in
@@ -263,7 +271,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2379 engine tests and 271 app tests, Node's own runner
+npm test                       # 2390 engine tests and 271 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

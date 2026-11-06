@@ -577,17 +577,21 @@ picture could not be written by Word's automation here, so the turn (`rot`) is c
   `--` in Author, in an LMS and on a printed test. Decide whether the exporters
   should put the typography back on the way out, or whether the model should
   keep it and normalise only where a destination needs it.
-- **A picture or equation marker is reported for the file, not for the question.**
+- **(Fixed on 6 November 2026.) A picture or equation marker was reported for the file, not for the question.**
   The Word importer writes `[picture]` or `[equation]` where one stood and counts
-  them in a file-level finding, but nothing flags the question that holds the
-  marker, so it can come out `parsed` with the figure it depends on missing. Fine
-  for a first slice, wrong for the 95 percent target. Stages 6 and 7 read the
-  content, and until then the question should carry a finding of its own.
-  (Pictures and equations that are read are now in the question and say so. What
-  is still true is the same for the ones that are not read: a picture in a format
-  the reader refuses, and an equation with a part it does not know, leave their
-  marker and a file-level warning with the reason, and the question that holds one
-  is not itself flagged. It should be.)
+  them in a file-level finding, but nothing flagged the question that held the
+  marker, so it could come out `parsed` with the figure it depends on missing. Now
+  it carries a warning of its own (`import.unread-object`, `model/unread-objects.ts`):
+  it needs a look, it is never an error, it counts the pictures, equations and
+  symbols left as markers in the stem, the options and the feedback, the PDF
+  reader's `[Picture]` too, and it goes by itself when the last marker is taken out of
+  the text. A person can dismiss it (the question stands without the figure) and the
+  dismissal survives an edit. Only an import raises it. The editor's own
+  `[picture 2]` and `[equation 1]` name something the question does carry and are not
+  these. None of the real Word files kept on the build machine holds a picture or an
+  equation, so the gates did not move (1421 of 1421, 129 of 157 on the PDF banks, 61
+  of 61); a real chapter with figures would now read as needing review where it used
+  to read as parsed, which is the point.
 - **Equations: what is read and what is not.** The reader (6 November 2026) knows the
   constructs a test uses and refuses the whole equation for any other, so a rare one
   (a line break or an Insert Symbol character inside an equation's own run, a box with

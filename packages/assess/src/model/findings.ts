@@ -55,6 +55,7 @@ export const FindingCode = {
   TypeInferred: "import.type-inferred",
   UnsupportedType: "import.unsupported-type",
   UnreadContent: "import.unread-content",
+  UnreadObject: "import.unread-object",
   TableLayout: "import.table-layout",
   AmbiguousFeedback: "import.ambiguous-feedback",
   UnknownMetadataLabel: "import.unknown-metadata-label",
