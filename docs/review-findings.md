@@ -973,7 +973,7 @@ Open:
   footer and the header, from the same table the Word reader uses read the other way, so a character is never drawn as another.
   A line holding one is a single text object, in which the reader moves along by the real widths, so the widths in the file's
   table, written from memory of the font's metrics, decide only where a line breaks. Looked at once, in Windows' own PDF
-  renderer: nineteen letters and signs on a test page drew as written. Bold and italic do not apply to a Symbol character,
+  renderer: the Greek letters and signs on a one-page test (a dozen letters, and ≤ ≠ ≥ ≈ → ∞ ∑ ∫ ∈ ⊂) drew as written. Bold and italic do not apply to a Symbol character,
   which has one weight.) A character in neither (a Cyrillic or Chinese letter) still prints as `?` and the print check says
   which. A PDF with no tags is read poorly by a screen reader; the Word copy is the accessible one. Embedding a font is the
   repair for the rest, and was not done because it needs a font file that can be shipped.
