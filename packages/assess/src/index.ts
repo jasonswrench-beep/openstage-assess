@@ -77,6 +77,8 @@ export { COVERAGE_AXES, NONE as COVERAGE_NONE, coverage, facets, isCoverageAxis,
 export type { CoverageAxis, CoverageGrid, CoverageOptions, Facet } from "./bank/coverage.ts";
 export { MOST_PICKED, pickQuestions } from "./bank/pick.ts";
 export type { PickOptions, PickResult } from "./bank/pick.ts";
+export { BLUEPRINT_VERSION, LONGEST_NAME, LONGEST_VALUE, MOST_RULES, describeDraw, drawBlueprint, newBlueprint, validateBlueprint } from "./bank/blueprint.ts";
+export type { Blueprint, BlueprintCheck, BlueprintDraw, BlueprintRule, DrawOptions, RuleResult } from "./bank/blueprint.ts";
 
 // Quality
 export * from "./quality/answer-key.ts";
