@@ -85,6 +85,12 @@ export interface ImportResult {
    * by whoever shows them.
    */
   sourceLines?: string[];
+  /**
+   * The pictures the file held and the questions refer to, by the path each has inside a bank (media/p-<hash>.png), as the bytes to
+   * write there. A question's `media` entry names its file by the same path. Absent when the file had none that could be kept. A
+   * picture that no saved question refers to is not written to a bank.
+   */
+  media?: ReadonlyMap<string, Uint8Array>;
 }
 
 export interface ImportOptions {

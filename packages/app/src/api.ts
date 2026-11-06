@@ -31,6 +31,7 @@ import {
   QUESTION_TYPES,
   cleanFolderName,
   runImporter,
+  sniffImage,
   validateQuestion,
   verdictOf,
   type Bank,
@@ -121,6 +122,19 @@ function asBadRequest<T>(fn: () => T): T {
   }
 }
 
+/**
+ * A picture's bytes as an answer. The name is the part after `media/` and is checked before it is looked up, and the type sent is
+ * the one the bytes are (a PNG, a JPEG or a GIF), never one the name or a file claims: a bank can come from anywhere, and what is
+ * not a picture is not served. The server marks every answer nosniff, so the browser does not decide otherwise.
+ */
+function pictureResponse(name: string | undefined, held: ReadonlyMap<string, Uint8Array>): ApiResponse {
+  if (name === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(name) || name.includes("..")) throw notFound("There is no such picture.");
+  const bytes = held.get(`media/${name}`);
+  const info = bytes === undefined ? undefined : sniffImage(bytes);
+  if (bytes === undefined || info === undefined) throw notFound("There is no such picture.");
+  return { status: 200, bytes: { data: bytes, type: info.mime } };
+}
+
 function index(segment: string | undefined, length: number, what: string): number {
   const n = Number(segment);
   if (!Number.isInteger(n) || n < 0 || n >= length) throw notFound(`There is no ${what} ${segment ?? ""}.`.trim());
@@ -130,7 +144,17 @@ function index(segment: string | undefined, length: number, what: string): numbe
 /** The same question, as the screen would send it back: used to tell a save that changes nothing from one that does. */
 function inputOf(question: Question): EditorInput {
   const e = toEditor(question);
-  return { type: e.type, title: e.title, stem: e.stem, points: e.points, feedback: e.feedback, metadata: e.metadata, body: e.body };
+  return {
+    type: e.type,
+    title: e.title,
+    stem: e.stem,
+    points: e.points,
+    feedback: e.feedback,
+    metadata: e.metadata,
+    body: e.body,
+    // The key is left out for a question with no pictures, as the screen leaves it out, so the two compare the same.
+    ...(e.pictures.length > 0 ? { pictures: e.pictures.map((p) => ({ id: p.id, alt: p.alt, decorative: p.decorative })) } : {}),
+  };
 }
 
 const unchanged = (question: Question, input: EditorInput): boolean => JSON.stringify(inputOf(question)) === JSON.stringify(input);
@@ -206,6 +230,9 @@ async function sessionRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse>
   const session = ctx.sessions.get(id ?? "");
 
   if (what === undefined) return ok(ctx.sessions.view(session));
+
+  // A picture the file held, for the review to show beside the question that has it.
+  if (what === "media" && req.method === "GET") return pictureResponse(which, session.media);
 
   if (what === "questions") {
     const at = index(which, session.questions.length, "question");
@@ -313,7 +340,7 @@ async function saveSession(ctx: Context, session: ReturnType<Sessions["get"]>, b
     const folderId = folderName === undefined ? undefined : bank.ensureFolder(folderName).id;
     for (const [i, q] of chosen) {
       try {
-        bank.add(q, { folderId });
+        bank.add(q, { folderId, media: session.media });
         added++;
       } catch (error) {
         notSaved.push({ index: i, title: q.title, reason: (error as Error).message });
@@ -532,6 +559,9 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   }
 
   if (what === "folders") return folderRoute(ctx, req, name, id);
+
+  // A picture a question in this bank carries. The bank is opened for it like for any read.
+  if (what === "media" && req.method === "GET") return pictureResponse(id, (await ctx.banks.open(name)).media);
 
   if (what === "questions") {
     if (id === undefined && req.method === "POST") {

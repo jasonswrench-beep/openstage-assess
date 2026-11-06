@@ -34,7 +34,7 @@ describe("a bank that was read with nothing wrong", () => {
     await withApp(async (client) => {
       await client.post("/api/banks", { title: "Fine" });
       const reply = await client.get<Json>("/api/banks/Fine");
-      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null });
+      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null, pictures: null });
     });
   });
 });
@@ -138,7 +138,7 @@ describe("a bank whose question file is named for another question", () => {
       const reply = await client.get<Json>("/api/banks/Renamed");
       assert.equal(reply.status, 200, reply.text);
       assert.equal(reply.json["questions"].length, 3, "the question was read, so it is in the list");
-      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null }, "and the screen does not say a file could not be read");
+      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null, pictures: null }, "and the screen does not say a file could not be read");
     });
   });
 });

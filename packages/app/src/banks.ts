@@ -38,6 +38,8 @@ export interface BankProblems {
   unreadable: Array<{ id: string; message: string }>;
   /** Set when the bank opened with a different number of questions than it says it held. */
   count: string | null;
+  /** Set when questions name pictures that the bank file does not hold. */
+  pictures: string | null;
 }
 
 export class BankStore {
@@ -101,12 +103,18 @@ export class BankStore {
    * and are not in the list, and a count that did not match. Without this a bank with an unreadable question looks complete.
    */
   async problems(name: string): Promise<BankProblems> {
-    await this.open(name);
+    const bank = await this.open(name);
     const report = this.held.get(name)?.report;
+    const missing = bank.missingMedia();
+    const files = new Set(missing.map((m) => m.file)).size;
     return {
       // Not the questions that were read and only had the wrong file name: they are in the list.
       unreadable: (report?.invalid ?? []).filter((entry) => !entry.loaded).map((entry) => ({ id: entry.id, message: entry.issues[0]?.message ?? "It could not be read." })),
       count: report?.countMismatch ? countMismatchMessage(report.countMismatch) : null,
+      pictures:
+        missing.length === 0
+          ? null
+          : `${files === 1 ? "One picture" : `${files} pictures`} that ${missing.length === 1 ? "a question refers" : "questions refer"} to ${files === 1 ? "is" : "are"} not in this bank file, for instance because a copy of the file was cut short or was synced without ${files === 1 ? "it" : "them"}. ${missing.length === 1 ? "The question is" : "The questions are"} still here with ${missing.length === 1 ? "its" : "their"} description${missing.length === 1 ? "" : "s"}, and nothing else is lost.`,
     };
   }
 

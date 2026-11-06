@@ -150,6 +150,7 @@ export async function renderReview(host, params, shell) {
 
     editor = createEditor({
       question: loaded.question,
+      mediaBase: `${base}/media`,
       saveLabel: "Apply changes",
       notify: shell.notify,
       save: async (input, version) => {

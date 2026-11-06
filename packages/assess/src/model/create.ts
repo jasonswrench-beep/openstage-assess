@@ -192,7 +192,11 @@ export function withRecomputedFindings(question: Question, previous: readonly Fi
     if (f.dismissed) dismissals.set(`${f.code}|${f.field ?? ""}`, f);
   }
 
-  const kept = question.findings.filter((f) => !DERIVED_CODES.has(f.code));
+  // A note that a picture has no description goes when every picture in use has one (or is marked as decoration). It is only ever
+  // taken away here: it is raised when the picture comes in, and a description typed in later is what makes it stale.
+  const used = new Set(richTextFields({ stem: question.stem, feedback: question.feedback, body: question.body }).flatMap(([, text]) => collectRefs(text).media));
+  const stillWithout = question.media.some((m) => used.has(m.id) && m.alt.trim() === "" && m.decorative !== true);
+  const kept = question.findings.filter((f) => !DERIVED_CODES.has(f.code) && !(f.code === FindingCode.MissingAltText && !stillWithout));
   const fresh = [...checkAnswerKey(question), ...checkReferences(question)].map((f) => {
     const dismissal = dismissals.get(`${f.code}|${f.field ?? ""}`);
     return dismissal

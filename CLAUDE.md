@@ -132,6 +132,17 @@ comparison. A short answer's accepted answers are the author's own and are not r
 may not type (`typedAnswerTypography`) and asks for the plain form as well. `typography.test.ts` follows one question through every
 importer, a saved bank, the seven exports and both printed forms, and fails if the flattening comes back.
 
+**A picture is kept only when it can be shown exactly as the author placed it.** The Word reader (`import/docx/pictures.ts`) keeps a
+PNG, JPEG or GIF, told by its bytes and never its name (`model/image.ts`), under a name made from the bytes (`media/p-<hash>.<ext>`, so
+the same picture is one file and two questions cannot collide), with the description Word holds for it. A picture cropped, rotated or
+flipped in Word, with shapes drawn on it, grouped with others, in a text box, linked from outside the file, or in a format it does not
+read is not kept: it says why, one reason at a time, and `[picture]` stays where it stood. Showing a cropped picture whole would show
+what the author cut away, which may be the answer. A picture with no description flags its question (a warning, dismissable; the editor
+writes the description or marks the picture as decoration, and the flag goes). A bank stores a picture only for a question that was
+saved; a picture a question names that the bank does not hold is reported on the bank screen (`Bank.missingMedia`) and never makes the
+question go. The server serves a picture by the type its bytes have and not the type its name or file claims. In the editor a picture
+is the token `[picture 2]` in the text, moved or removed like words, and text the person leaves alone is kept exactly as stored.
+
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
 answer is recorded. A matching or ordering question is shown shuffled, never in
@@ -217,7 +228,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2202 engine tests and 210 app tests, Node's own runner
+npm test                       # 2229 engine tests and 233 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

@@ -46,6 +46,11 @@ export interface DocxPackage {
    * points at a part that is not in the file.
    */
   related(kind: string): string | undefined;
+  /**
+   * The part that the main document's relationship with this id points at, when it is an image kept inside the file. Undefined for an
+   * id with no relationship, one that points outside the file (a linked picture), one that is not an image, or one whose part is missing.
+   */
+  imagePart(id: string): string | undefined;
 }
 
 const OLE_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
@@ -158,6 +163,31 @@ export function openDocx(input: Uint8Array, limits: DocxLimits = {}): DocxPackag
     return undefined;
   };
 
+  // The image relationships of the main document, read once: a bank of figures asks for hundreds of them.
+  let images: Map<string, string | undefined> | undefined;
+  const imagePart = (id: string): string | undefined => {
+    if (images === undefined) {
+      images = new Map();
+      const slash = mainDocument.lastIndexOf("/");
+      const folder = slash === -1 ? "" : mainDocument.slice(0, slash + 1);
+      const rels = readXml(`${folder}_rels/${mainDocument.slice(slash + 1)}.rels`);
+      if (rels) {
+        for (const rel of elements(rels, "Relationship")) {
+          const relId = rel.attrs["Id"];
+          const target = rel.attrs["Target"];
+          if (!relId || images.has(relId)) continue;
+          if (!target || rel.attrs["TargetMode"] === "External" || !(rel.attrs["Type"] ?? "").endsWith("/image")) {
+            images.set(relId, undefined);
+            continue;
+          }
+          const name = resolveTarget(folder, target);
+          images.set(relId, name === undefined ? undefined : lookup(name));
+        }
+      }
+    }
+    return images.get(id);
+  };
+
   return {
     names: [...parts.keys()],
     mainDocument,
@@ -165,6 +195,7 @@ export function openDocx(input: Uint8Array, limits: DocxLimits = {}): DocxPackag
     bytes: read,
     xml: readXml,
     related,
+    imagePart,
   };
 }
 

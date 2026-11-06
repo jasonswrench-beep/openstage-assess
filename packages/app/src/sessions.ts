@@ -32,6 +32,8 @@ export interface ImportSession {
   fileFindings: Finding[];
   source: string[];
   sourceTruncated: boolean;
+  /** The pictures the file held, by the path each has in a bank. Kept in memory with the session and written only for the questions saved. */
+  media: ReadonlyMap<string, Uint8Array>;
   /** Set once the session has been saved, so that saving twice does not add every question twice. */
   savedTo?: { bank: string; added: number };
 }
@@ -90,6 +92,7 @@ export class Sessions {
       fileFindings: [...result.fileFindings],
       source: source.slice(0, MAX_SOURCE_LINES),
       sourceTruncated: source.length > MAX_SOURCE_LINES,
+      media: result.media ?? new Map(),
     };
     this.all.set(session.id, session);
     // A person who imports a dozen files in a sitting does not need the first one back. The oldest goes first.
