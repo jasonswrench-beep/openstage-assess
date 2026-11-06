@@ -62,6 +62,23 @@ try {
           $labels.Add(("{0}|{1}|{2}|{3}" -f $om.Type, $om.Functions.Count, $first, ([string]$om.Range.Text).TrimEnd([char]13, [char]7)))
         }
       }
+      if ($What -eq 'tables') {
+        # What Word makes of the tables: for each row of each table, whether it repeats as a header (H) or not (R), and the text of
+        # the cells it has, joined by a tilde (a line break inside a cell is shown as a vertical bar). A joined cell is one cell.
+        $labels.Clear()
+        $cellMark = [string][char]13 + [string][char]7
+        for ($k = 1; $k -le $doc.Tables.Count; $k++) {
+          $table = $doc.Tables.Item($k)
+          $r = 0
+          foreach ($row in $table.Rows) {
+            $r++
+            $cells = @()
+            foreach ($cell in $row.Cells) { $cells += ([string]$cell.Range.Text).Replace($cellMark, "").Replace([string][char]11, "|").Replace([string][char]13, "|") }
+            $kind = if ($row.HeadingFormat) { "H" } else { "R" }
+            $labels.Add(("{0}|{1}|{2}|{3}" -f $k, $r, $kind, ($cells -join "~")))
+          }
+        }
+      }
       if ($What -eq 'text') {
         # The running header of the first section as Word holds it: empty when the document has none.
         $labels.Add("HEADER:" + ([string]$doc.Sections.Item(1).Headers.Item(1).Range.Text).TrimEnd([char]13, [char]7))

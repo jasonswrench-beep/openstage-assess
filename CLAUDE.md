@@ -206,9 +206,15 @@ dropped), and a title is made from the words outside the tables (`titleText`). I
 text, on a line of its own, moved or removed like words, shown drawn from its rows and cells and not edited (`tables` in
 `EditorQuestion`; text that holds only tables is not "formatting" that editing would flatten); a table that is not in the text any
 more is not in the question, since it lives in the text. A table that is not kept is read as it always was and flagged. A printed
-test draws a table as lines, a row to a line with the cells between bars, and says so against the question; Moodle XML, GIFT and
-the Brightspace CSV carry it as markup, and the others write its words and say tables became plain text. Real Word wrote five
-tables and agreed with the reader on every row, cell and header mark (`check:word-tables`).
+Word file draws a table of the stem as a table (`TableBlock` in `print/layout.ts`, `tableXml` in `print/docx.ts`: a thin rule round
+every cell, equal columns across the room the text has, a header row marked to repeat only where every cell of the row is a header
+cell, a row never split across a page, a cell that spans keeps its span, a short row has its last cell spread over the rest); a PDF
+and a table in an option, in a table or in feedback print as lines, a row to a line with the cells between bars, and say so against
+the question. A `TableBlock` is made only for a Word file (the PDF writer refuses one), and a printed Word file with a table is
+read back by the importer as the same table. Moodle XML, GIFT and the Brightspace CSV carry a table as markup, and the others write
+its words and say tables became plain text. Real Word wrote five tables and agreed with the reader on every row, cell and header
+mark (`check:word-tables`), and opened a printed test with three tables without repair and showed their rows, header marks and
+cell text as laid out (`check:word-print`).
 
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
@@ -295,7 +301,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2440 engine tests and 285 app tests, Node's own runner
+npm test                       # 2448 engine tests and 285 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

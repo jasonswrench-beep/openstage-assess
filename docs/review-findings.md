@@ -1417,8 +1417,10 @@ not show or what was decided on one file's evidence.
   numbers, answers or feedback, is read cell by cell as before and flagged. Real Word wrote five tables and agreed with the
   reader on every row, cell and header mark (`check:word-tables`); the gates did not move. Still open: **a table in an option, in
   feedback or in a matching question** (only the stem keeps one; the others read cell by cell and flag); **bold, italics and
-  colour in a cell** are not kept; **a table is not edited in the app**, only moved or removed with its token; **a printed test
-  draws a table as lines of text** with the cells between bars, and not as a table (a table in the Word file is not built); **a
+  colour in a cell** are not kept; **a table is not edited in the app**, only moved or removed with its token; **a printed PDF
+  draws a table as lines of text** with the cells between bars (a printed Word file draws the stem's table as a table, and Word
+  showed three of them as laid out, with the header row repeating); a table in an option, in feedback or in a table is lines in
+  both; **a cell that spans down (`rowspan`)** is printed as spanning one row; **a
   table with cells joined the older way (`w:hMerge`) or joined down (`w:vMerge`)** is read cell by cell, since a grid of spans
   down is not kept; a table in a table keeps the grid inside and reads the outer by cells; **shading as a header** is not read.
   Nothing has been imported into a learning system with a table in a question: Moodle XML, GIFT and the Brightspace CSV carry the

@@ -12,7 +12,7 @@
 
 import { textEntry, zipSync } from "../container/zip.ts";
 import { stripInvalidCharacters } from "../model/richtext.ts";
-import type { Block, Para, PictureBlock, PrintDocument, Run } from "./layout.ts";
+import type { Block, Para, PictureBlock, PrintDocument, Run, TableBlock } from "./layout.ts";
 
 const NUMBER_INDENT = 28;
 
@@ -90,9 +90,47 @@ function pictureXml(block: PictureBlock, pictures: Pictures): string {
   );
 }
 
+/**
+ * A table of the question, as a table: a thin grey rule round every cell, columns of equal width across the room the text has, a
+ * header row (marked to repeat at the top of a page, which is what makes it a header in Word) in bold, and a row that is never split
+ * across a page. A row with fewer cells than the widest has its last cell spread over the rest, as Word writes a ragged row. A table
+ * must be followed by a paragraph in Word, so a small one ends it, which also keeps two tables from running into one.
+ */
+function tableXml(block: TableBlock, textWidth: number, fontSize: number): string {
+  const columns = Math.max(1, ...block.table.rows.map((row) => row.reduce((sum, c) => sum + c.colspan, 0)));
+  const room = Math.max(72, textWidth - block.indent);
+  const width = tw(room / columns);
+  const rule = (side: string): string => `<w:${side} w:val="single" w:sz="4" w:space="0" w:color="808080"/>`;
+  const properties =
+    `<w:tblPr><w:tblW w:w="${width * columns}" w:type="dxa"/><w:tblInd w:w="${tw(block.indent)}" w:type="dxa"/>` +
+    `<w:tblBorders>${["top", "left", "bottom", "right", "insideH", "insideV"].map(rule).join("")}</w:tblBorders>` +
+    `<w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>`;
+  const keep = block.keepNext ? "<w:keepNext/>" : "";
+  const rows = block.table.rows
+    .map((row) => {
+      const used = row.reduce((sum, c) => sum + c.colspan, 0);
+      const header = row.length > 0 && row.every((c) => c.header);
+      const cells = row
+        .map((cell, i) => {
+          const span = cell.colspan + (i === row.length - 1 ? Math.max(0, columns - used) : 0);
+          return (
+            `<w:tc><w:tcPr><w:tcW w:w="${width * span}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ""}</w:tcPr>` +
+            `<w:p><w:pPr>${keep}<w:spacing w:before="20" w:after="20"/></w:pPr>${runXml({ text: cell.text, ...(cell.header ? { bold: true } : {}) }, fontSize, false)}</w:p></w:tc>`
+          );
+        })
+        .join("");
+      return `<w:tr><w:trPr><w:cantSplit/>${header ? "<w:tblHeader/>" : ""}</w:trPr>${cells}</w:tr>`;
+    })
+    .join("");
+  const grid = `<w:tblGrid>${`<w:gridCol w:w="${width}"/>`.repeat(columns)}</w:tblGrid>`;
+  const gap = `<w:p><w:pPr>${keep}<w:spacing w:before="0" w:after="${tw(block.after)}" w:line="120" w:lineRule="exact"/><w:rPr><w:sz w:val="4"/><w:szCs w:val="4"/></w:rPr></w:pPr></w:p>`;
+  return `<w:tbl>${properties}${grid}${rows}</w:tbl>${gap}`;
+}
+
 function blockXml(block: Block, textWidth: number, fontSize: number, pictures: Pictures): string {
   if (block.kind === "para") return paraXml(block);
   if (block.kind === "picture") return pictureXml(block, pictures);
+  if (block.kind === "table") return tableXml(block, textWidth, fontSize);
   if (block.kind === "pagebreak") return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
   // A line to write on: a tab that is drawn as an underscore to the right margin.
   const line = `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:leader="underscore" w:pos="${tw(textWidth)}"/></w:tabs><w:spacing w:before="${tw(fontSize * 1.9)}" w:after="0"/><w:ind w:left="${tw(NUMBER_INDENT)}"/></w:pPr><w:r><w:tab/></w:r></w:p>`;

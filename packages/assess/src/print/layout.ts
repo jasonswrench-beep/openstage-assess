@@ -21,7 +21,8 @@ import type { DestinationReport, ReportItem } from "../export/types.ts";
 import { buildReport, hasText, plural, TYPE_NAMES } from "../export/text.ts";
 import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
 import { shuffledFor } from "../model/random.ts";
-import { type RichText } from "../model/richtext.ts";
+import { escapeHtml, type RichText } from "../model/richtext.ts";
+import { readTableHtml, replaceTables } from "../model/table.ts";
 import { sniffImage, type ImageInfo } from "../model/image.ts";
 import type { MediaRef } from "../model/question.ts";
 import { deflateSync } from "node:zlib";
@@ -56,6 +57,26 @@ export interface Run {
    * reader of the run uses its text, which is the equation written out as `[Equation: LaTeX]`.
    */
   equation?: string;
+  /**
+   * A table that stands here, in a Word file: a paragraph of one run that holds it is a table of the document. The run's text is the
+   * table as lines, a row to a line with the cells between bars, which is what every other reader of the run uses.
+   */
+  table?: PrintedTable;
+}
+
+/** The cells of a table as printed in a Word file: each cell's words (a line break inside a cell is a newline), whether it is a header, and its span. */
+export interface PrintedTable {
+  rows: Array<Array<{ text: string; header: boolean; colspan: number }>>;
+}
+
+/** A table drawn as a table, at the size the page allows: Word files only. A PDF draws a table as lines of text. */
+export interface TableBlock {
+  kind: "table";
+  table: PrintedTable;
+  indent: number;
+  before: number;
+  after: number;
+  keepNext?: boolean;
 }
 
 /** A picture ready to print: its bytes, what they are, its description, and for a PDF the pixels or JPEG data it is drawn from. */
@@ -109,7 +130,7 @@ export interface Para {
   rule?: boolean;
 }
 
-export type Block = Para | PictureBlock | { kind: "lines"; count: number } | { kind: "pagebreak" };
+export type Block = Para | PictureBlock | TableBlock | { kind: "lines"; count: number } | { kind: "pagebreak" };
 
 export interface PrintDocument {
   title: string;
@@ -260,7 +281,7 @@ function pictureFor(media: MediaRef, source: PictureSource): { picture: PrintedP
  * a list becomes lines that begin with a bullet or a number; a table becomes a line for each row, the cells between bars;
  * a picture or an equation becomes the words that stand for it, and is counted.
  */
-export function paragraphsOf(text: RichText, question: Question, losses: Losses, pictures?: PictureSource): Run[][] {
+export function paragraphsOf(text: RichText, question: Question, losses: Losses, pictures?: PictureSource, tables = false): Run[][] {
   if (text.format === "plain") {
     return text.content
       .trim()
@@ -291,7 +312,19 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
     (cell ?? current).push(run);
   };
 
-  const tokens = text.content.match(/<[^>]+>|[^<]+/g) ?? [];
+  // In a Word file a table of the question is a table. It is set aside before the text is read, so that the rest is read as it always
+  // was; a table that cannot be read into rows (one inside another) is left in the text and is lines of text as in a PDF.
+  let content = text.content;
+  const kept: PrintedTable[] = [];
+  if (tables && pictures?.format === "docx") {
+    content = replaceTables(content, (html) => {
+      const view = readTableHtml(wordsForObjects(html, question, losses));
+      if (view.rows.length === 0) return html;
+      kept.push({ rows: view.rows.map((r) => r.map((c) => ({ text: c.text, header: c.header, colspan: c.colspan }))) });
+      return `<oa-table n="${kept.length - 1}"></oa-table>`;
+    });
+  }
+  const tokens = content.match(/<[^>]+>|[^<]+/g) ?? [];
   for (const token of tokens) {
     if (!token.startsWith("<")) {
       add(decode(token.replace(/\s*\n\s*/g, " ")));
@@ -354,6 +387,13 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
           cell = undefined;
         } else if (!closing) cell = [];
         break;
+      case "oa-table": {
+        if (closing) break;
+        flush();
+        const table = kept[Number(/n="(\d+)"/.exec(token)?.[1])];
+        if (table) paragraphs.push([{ text: table.rows.map((r) => r.map((c) => c.text.replace(/\s*\n\s*/g, " ")).join(" | ")).join("\n"), table }]);
+        break;
+      }
       case "oa-media": {
         if (closing) break;
         const ref = /ref\s*=\s*"([^"]*)"/.exec(token)?.[1];
@@ -395,6 +435,22 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
   }
   flush();
   return paragraphs;
+}
+
+/** A table's markup with each picture and equation in it written as the words that stand for it, and counted, since a cell holds words. */
+function wordsForObjects(html: string, question: Question, losses: Losses): string {
+  return html
+    .replace(/<oa-media\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-media>/gi, (_whole, ref: string) => {
+      const media = question.media.find((m) => m.id === ref);
+      if (media?.decorative) return " ";
+      losses.pictures++;
+      return media && media.alt.trim() !== "" ? ` [Picture: ${escapeHtml(media.alt.trim())}] ` : " [Picture] ";
+    })
+    .replace(/<oa-math\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi, (_whole, ref: string) => {
+      losses.equations++;
+      const math = question.math.find((m) => m.id === ref);
+      return math && math.latex.trim() !== "" ? ` [Equation: ${escapeHtml(math.latex.trim())}] ` : " [Equation] ";
+    });
 }
 
 const asText = (paragraphs: Run[][]): string => paragraphs.map((p) => p.map((r) => r.text).join("")).join(" ").replace(/\s+/g, " ").trim();
@@ -447,6 +503,42 @@ function expandPictures(blocks: Block[], paper: Paper): Block[] {
   return out;
 }
 
+/**
+ * A table stands as a block of its own, between the words round it. The paragraph that held it keeps its number (a stem that begins
+ * with a table is still question 1) and whatever words came after it, such as the points, go on a line under it.
+ */
+function expandTables(blocks: Block[]): Block[] {
+  const out: Block[] = [];
+  for (const block of blocks) {
+    if (block.kind !== "para" || !block.runs.some((r) => r.table !== undefined)) {
+      out.push(block);
+      continue;
+    }
+    const { marker, ...rest } = block;
+    let pending: Run[] = [];
+    let first = true;
+    const flushText = (): void => {
+      const words = pending.some((r) => r.text.trim() !== "");
+      if (words || (first && marker !== undefined)) {
+        out.push({ ...rest, ...(first && marker !== undefined ? { marker } : {}), runs: pending, ...(first ? {} : { before: 2 }), after: 2 });
+        first = false;
+      }
+      pending = [];
+    };
+    for (const run of block.runs) {
+      if (run.table === undefined) {
+        pending.push(run);
+        continue;
+      }
+      flushText();
+      out.push({ kind: "table", table: run.table, indent: block.indent, before: first ? block.before : 2, after: 4 });
+      first = false;
+    }
+    flushText();
+  }
+  return out;
+}
+
 interface Built {
   blocks: Block[];
   notes: string[];
@@ -470,7 +562,7 @@ function buildQuestion(question: Question, number: number, o: PrintOptions, pict
     return { leftOut: `A ${name} question cannot be printed: it needs a screen.` };
   }
 
-  const stem = paragraphsOf(question.stem, question, losses, pictures);
+  const stem = paragraphsOf(question.stem, question, losses, pictures, true);
   if (stem.length === 0) return { leftOut: "It has no question text." };
 
   const usable = hasUsableKey(question);
@@ -598,11 +690,13 @@ function buildQuestion(question: Question, number: number, o: PrintOptions, pict
 
   // A picture stands on a line of its own under the words it was in, at the size it is printed.
   out.splice(0, out.length, ...expandPictures(out, PAPERS[o.paper]));
+  // A table of the question stands as a table in a Word file, between the words round it.
+  out.splice(0, out.length, ...expandTables(out));
 
   if (!key && question.type !== "essay") {
     // The answer sheet's own spacing: a little room after each question.
     const last = out[out.length - 1];
-    if (last && (last.kind === "para" || last.kind === "picture")) last.after = 6;
+    if (last && (last.kind === "para" || last.kind === "picture" || last.kind === "table")) last.after = 6;
   }
 
   // A question stays on one page when it fits on one: every part of it but the last stays with the part after it. Only the
@@ -611,9 +705,9 @@ function buildQuestion(question: Question, number: number, o: PrintOptions, pict
   // than a page is still broken, because Word and the PDF writer both give up on a chain that cannot fit. The last part is
   // never tied: a question made of its wording alone (a blank in the text and nothing to write under it) used to be tied to the
   // question after it, and a run of those would have been one chain.
-  for (const block of out) if (block.kind === "para" || block.kind === "picture") block.keepNext = true;
+  for (const block of out) if (block.kind === "para" || block.kind === "picture" || block.kind === "table") block.keepNext = true;
   const lastBlock = out.at(-1);
-  if (lastBlock?.kind === "para" || lastBlock?.kind === "picture") delete lastBlock.keepNext;
+  if (lastBlock?.kind === "para" || lastBlock?.kind === "picture" || lastBlock?.kind === "table") delete lastBlock.keepNext;
 
   if (losses.pictures > 0) {
     const why = Object.entries(losses.why ?? {}).map(([reason, count]) => `${plural(count, "time", "times")}: ${reason}`);
