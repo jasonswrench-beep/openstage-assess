@@ -14,7 +14,8 @@ import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { buildReport, exportable, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
-import { stripInvalidCharacters, type RichText } from "../model/richtext.ts";
+import { escapeHtml, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
+import { sniffImage } from "../model/image.ts";
 
 export const MOODLE_XML_ID = "moodle-xml";
 export const MOODLE_XML_LABEL = "Moodle XML";
@@ -34,7 +35,36 @@ interface Planned {
   xml?: string;
 }
 
-function plan(question: Question, position: number): Planned {
+/** A name Moodle can keep a file under, and that is safe inside a file name and an attribute. */
+const SAFE_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
+
+/**
+ * The pictures in the text of a question, written the way Moodle XML carries them: an image tag that points at `@@PLUGINFILE@@/name`
+ * and the file itself, in base64, beside the text. A picture whose bytes are not offered, or are not a PNG, JPEG or GIF, or whose
+ * name Moodle could not keep, is left where it is and is written as words by the usual path, and counted. The file is named for
+ * what its bytes are, whatever the bank called it, so Moodle does not take a JPEG for a PNG.
+ */
+function carryPictures(text: RichText, question: Question, media: ReadonlyMap<string, Uint8Array> | undefined): { text: RichText; files: Array<{ name: string; bytes: Uint8Array }> } {
+  if (media === undefined || text.format === "plain") return { text, files: [] };
+  const files = new Map<string, Uint8Array>();
+  const content = text.content.replace(/<oa-media\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-media>/gi, (whole, ref: string) => {
+    const entry = question.media.find((m) => m.id === ref);
+    const bytes = entry ? media.get(entry.file) : undefined;
+    const info = bytes ? sniffImage(bytes) : undefined;
+    if (!entry || !bytes || !info || !entry.file.startsWith("media/")) return whole;
+    const base = entry.file.slice("media/".length).replace(/\.[A-Za-z0-9]+$/, "");
+    const name = `${base}.${info.ext}`;
+    if (!SAFE_FILE.test(name)) return whole;
+    const held = files.get(name);
+    if (held !== undefined && held !== bytes && Buffer.compare(Buffer.from(held), Buffer.from(bytes)) !== 0) return whole; // two different pictures under one name
+    files.set(name, bytes);
+    const alt = entry.decorative ? "" : entry.alt.trim();
+    return `<img src="@@PLUGINFILE@@/${name}" alt="${escapeHtml(alt)}" />`;
+  });
+  return { text: { ...text, content }, files: [...files].map(([name, bytes]) => ({ name, bytes })) };
+}
+
+function plan(question: Question, position: number, media?: ReadonlyMap<string, Uint8Array>): Planned {
   const base = { position, questionId: question.id, title: question.title };
   const leftOut = (why: string): Planned => ({ item: { ...base, outcome: "leftOut", notes: [why] } });
 
@@ -53,7 +83,8 @@ function plan(question: Question, position: number): Planned {
   const html = (text: RichText): string => htmlText(text, question, losses);
   const text = (value: RichText | undefined, tag: string): string =>
     `<${tag} format="html"><text>${value && hasText(value) ? cdata(html(value)) : ""}</text></${tag}>`;
-  const stem = html(question.stem);
+  const carried = carryPictures(question.stem, question, media);
+  const stem = html(carried.text);
   if (plainText(question.stem, question, newLosses(), true) === "") return leftOut("It has no question text.");
 
   const fb = (value: RichText | undefined): string => (value && hasText(value) ? `<feedback format="html"><text>${cdata(html(value))}</text></feedback>` : "<feedback format=\"html\"><text></text></feedback>");
@@ -157,7 +188,7 @@ function plan(question: Question, position: number): Planned {
 
   const xml =
     `<question type="${type}"><name><text>${escapeXml(question.title)}</text></name>` +
-    `<questiontext format="html"><text>${cdata(stem)}</text></questiontext>` +
+    `<questiontext format="html"><text>${cdata(stem)}</text>${carried.files.map((f) => `<file name="${escapeXml(f.name)}" path="/" encoding="base64">${Buffer.from(f.bytes).toString("base64")}</file>`).join("")}</questiontext>` +
     text(question.feedback.general, "generalfeedback") +
     `<defaultgrade>${question.points}</defaultgrade><hidden>0</hidden>${body}</question>`;
   return { item: { ...base, outcome: notes.length > 0 ? "exportedWithLosses" : "exported", ...(asType ? { asType } : {}), notes }, xml };
@@ -166,6 +197,8 @@ function plan(question: Question, position: number): Planned {
 export interface MoodleXmlOptions {
   /** What to call the file, and the category the questions go into. Usually the bank's title. */
   name?: string;
+  /** The bank's pictures by path (`Bank.media`). With it, a picture in a question's text is written into the file; without it, as words. */
+  media?: ReadonlyMap<string, Uint8Array>;
 }
 
 export function checkMoodleXml(questions: readonly Question[], options: MoodleXmlOptions = {}): ExportResult["report"] {
@@ -177,7 +210,7 @@ export function exportMoodleXml(questions: readonly Question[], options: MoodleX
   const items: ReportItem[] = [];
   const blocks: string[] = [];
   questions.forEach((question, i) => {
-    const planned = plan(question, i + 1);
+    const planned = plan(question, i + 1, options.media);
     items.push(planned.item);
     if (planned.xml) blocks.push(planned.xml);
   });
@@ -190,6 +223,7 @@ export function exportMoodleXml(questions: readonly Question[], options: MoodleX
   const general = [
     `The questions go into a category called "${name}" in the course, which Moodle makes if it is not there.`,
     "Titles, tags, objectives, difficulty and history are not part of Moodle XML.",
+    ...(options.media ? ["A picture in the text of a question is written into the file with it. A picture in an answer, in feedback or in a matching question is written as words."] : []),
     "Attempts and penalties are delivery settings, not part of a question, so none is written and Moodle applies its own.",
   ];
   const report = buildReport(MOODLE_XML_ID, MOODLE_XML_LABEL, questions.length, items, blocks.length > 0 ? [file] : [], general);

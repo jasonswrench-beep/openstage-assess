@@ -25,8 +25,8 @@ import type { Formatting, RunFormat } from "./formatting.ts";
 import type { Numbering } from "./numbering.ts";
 import { readTable, type Cell, type Line as TableLine } from "./tables.ts";
 import { DocxError } from "./package.ts";
-import type { PictureReader } from "./pictures.ts";
-import { allText, elements, first, hasText, type XmlElement } from "./xml.ts";
+import { isFloating, type PictureReader } from "./pictures.ts";
+import { allText, elements, first, hasText, holdsWords, wordsIn, type XmlElement } from "./xml.ts";
 
 export interface DocumentStats {
   paragraphs: number;
@@ -127,9 +127,10 @@ export const OBJECT_TEXT = "a picture, shape or text box";
 function textOf(element: XmlElement): string {
   if (element.name === "mc:AlternateContent") {
     const shown = first(element, "mc:Choice") ?? first(element, "mc:Fallback");
-    return shown ? allText(shown) : "";
+    return shown ? wordsIn(shown) : "";
   }
-  return allText(element);
+  // A drawing's text is the words in it, not its offsets and names; anything else the whole text.
+  return OBJECTS.has(element.name) ? wordsIn(element) : allText(element);
 }
 
 /** A few words of a text, on one line, for a finding to quote. */
@@ -240,6 +241,8 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
     style: string | undefined;
     /** The text of the runs that Word hides, which are not read. */
     hidden: string;
+    /** Objects anchored to the paragraph that float on the page: their place in the text means nothing, so they follow it. */
+    floating: string[];
   }
   const add = (b: Lines, text: string, format: RunFormat = NO_FORMAT): void => {
     if (text === "") return;
@@ -251,6 +254,26 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   };
   const newLine = (b: Lines): void => {
     b.lines.push({ text: "", runs: [] });
+  };
+
+  /**
+   * An object in a paragraph: the picture kept as its image tag, or the marker that stands for what is not read. A picture that
+   * floats on the page is anchored to the paragraph at a place that means nothing in the text (Word anchors it where the cursor was),
+   * and the tag at the start of a numbered line made the line stop being a question. It is put after the paragraph's words instead.
+   */
+  const object = (child: XmlElement, b: Lines, format: RunFormat = NO_FORMAT): void => {
+    const tag = pictures?.tagFor(child);
+    let text: string;
+    if (tag !== undefined) {
+      stats.picturesRead++;
+      text = tag;
+    } else {
+      stats.pictures++;
+      text = "[picture]";
+      if (holdsWords(child)) unread(OBJECT_TEXT, child);
+    }
+    if (isFloating(child)) b.floating.push(text);
+    else add(b, text, format);
   };
 
   function run(r: XmlElement, b: Lines): void {
@@ -298,15 +321,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
           break;
         default:
           if (OBJECTS.has(child.name)) {
-            const tag = pictures?.tagFor(child);
-            if (tag !== undefined) {
-              stats.picturesRead++;
-              add(b, tag, format);
-            } else {
-              stats.pictures++;
-              add(b, "[picture]", format);
-              if (hasText(child)) unread(OBJECT_TEXT, child);
-            }
+            object(child, b, format);
           } else if (!SILENT.has(child.name) && hasText(child)) {
             unread(child.name, child);
           }
@@ -331,15 +346,7 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
         stats.equations++;
         add(b, "[equation]");
       } else if (OBJECTS.has(name)) {
-        const tag = pictures?.tagFor(child);
-        if (tag !== undefined) {
-          stats.picturesRead++;
-          add(b, tag);
-        } else {
-          stats.pictures++;
-          add(b, "[picture]");
-          if (hasText(child)) unread(OBJECT_TEXT, child);
-        }
+        object(child, b);
       } else if (!SILENT.has(name) && hasText(child)) unread(name, child);
     }
   }
@@ -347,8 +354,13 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   function paragraph(p: XmlElement, where: Location | undefined): void {
     stats.paragraphs++;
     const properties = first(p, "w:pPr");
-    const b: Lines = { lines: [{ text: "", runs: [] }], style: properties ? first(properties, "w:pStyle")?.attrs["w:val"] : undefined, hidden: "" };
+    const b: Lines = { lines: [{ text: "", runs: [] }], style: properties ? first(properties, "w:pStyle")?.attrs["w:val"] : undefined, hidden: "", floating: [] };
     inline(p, b);
+    // What floats is written after the words, each on a line of its own.
+    for (const text of b.floating) {
+      if ((b.lines[b.lines.length - 1] as Line).text !== "") newLine(b);
+      add(b, text);
+    }
     if (b.hidden.trim() !== "") {
       stats.hiddenText++;
       stats.hiddenSample ??= quote(b.hidden);

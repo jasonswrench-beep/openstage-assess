@@ -327,3 +327,29 @@ export function hasText(element: XmlElement): boolean {
   }
   return false;
 }
+
+/** The elements that hold words a person reads: a Word run's text, a drawing's text, and an equation's. Everything else in a drawing is numbers and names. */
+const WORD_ELEMENTS = new Set(["w:t", "a:t", "m:t"]);
+
+/**
+ * The words inside an element, and nothing else. A drawing's XML is full of text that is not words (the offset of a floating
+ * picture from the margin, the name of a shape, an alignment), so asking whether it "has text" took every floating picture for a
+ * text box. Only the elements that hold what a person reads are counted.
+ */
+export function wordsIn(element: XmlElement): string {
+  let text = "";
+  for (const child of element.children) {
+    if (typeof child === "string") continue;
+    text += WORD_ELEMENTS.has(child.name) ? allText(child) : wordsIn(child);
+  }
+  return text;
+}
+
+/** Whether an element holds any words, as `wordsIn` counts them, other than white space. */
+export function holdsWords(element: XmlElement): boolean {
+  for (const child of element.children) {
+    if (typeof child === "string") continue;
+    if (WORD_ELEMENTS.has(child.name) ? hasText(child) : holdsWords(child)) return true;
+  }
+  return false;
+}

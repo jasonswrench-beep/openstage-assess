@@ -10,7 +10,8 @@
 
 import { unzipSync } from "../../src/container/zip.ts";
 import { createQuestion } from "../../src/model/create.ts";
-import { plainToRich } from "../../src/model/richtext.ts";
+import { mediaPlaceholder, plainToRich, rich } from "../../src/model/richtext.ts";
+import { png } from "../support/images.ts";
 import type { Question, QuestionBody, QuestionType } from "../../src/model/question.ts";
 import { layoutTest, printOptions, writeDocx, type Block, type PrintOptions } from "../../src/print/index.ts";
 import { longTest, questionSpans } from "../support/long-test.ts";
@@ -43,6 +44,15 @@ interface Case {
   header: string;
 }
 
+/** What Word should say each paragraph holds, from the layout: a picture is the one character Word shows for it in the text, a slash. */
+const expectedOf = (blocks: Block[]): string[] =>
+  blocks.flatMap((b: Block): string[] => {
+    if (b.kind === "para") return [`${b.marker ? `${b.marker}\t` : ""}${b.runs.map((r) => r.text.replace(/\n/g, "\u000b")).join("")}`];
+    if (b.kind === "lines") return Array.from({ length: b.count }, () => "\t");
+    if (b.kind === "picture") return ["/"];
+    return [""];
+  });
+
 const cases: Case[] = [];
 // A test of one version, and a version of a test of several: the second has a running header and a line about the answer sheet,
 // and on the key a strip of letters, and Word has to open it without offering to repair it and show the header.
@@ -52,15 +62,48 @@ for (const [label, more] of [["", {}], ["-version-B", { versionLabel: "B", answe
       const options = printOptions({ title: "Check test", kind, paper, instructions: "Use a pen.", ...more });
       const { document } = layoutTest(SET, options);
       const bytes = writeDocx(document);
-      const expected = document.blocks.flatMap((b: Block): string[] => {
-        if (b.kind === "para") return [`${b.marker ? `${b.marker}\t` : ""}${b.runs.map((r) => r.text.replace(/\n/g, "\u000b")).join("")}`];
-        if (b.kind === "lines") return Array.from({ length: b.count }, () => "\t");
-        return [""];
-      });
+      const expected = expectedOf(document.blocks);
       cases.push({ name: `${kind}-${paper}${label}`, options, bytes, expected, paragraphs: expected.length, header: document.header ?? "" });
     }
   }
 }
+
+// A test with pictures: Word has to open it without offering to repair it, keep the picture where it was put, draw it at the size it
+// was printed and carry its description. The pictures are real PNGs (one with half-clear pixels), so Word can read them.
+const PICTURE_A = png(60, 40);
+const PICTURE_B = png(300, 200, { colorType: 6, alpha: 128 });
+const pictureQuestions: Question[] = [
+  createQuestion({
+    type: "multipleChoice",
+    stem: rich(`<p>What colour is this?</p><p>${mediaPlaceholder("m1")}</p>`),
+    body: { shuffle: false, options: [opt("o1", "Blue", true), opt("o2", "Red")] },
+    media: [{ id: "m1", file: "media/p-1111111111111111.png", mime: "image/png", alt: "A blue box" }],
+    by: "t",
+    at: AT,
+    id: "q_picture_1",
+  }),
+  createQuestion({
+    type: "multipleChoice",
+    stem: plainToRich("Which is larger?"),
+    body: { shuffle: false, options: [{ id: "o1", content: rich(`<p>The left ${mediaPlaceholder("m1")}</p>`), correct: true }, opt("o2", "The right")] },
+    media: [{ id: "m1", file: "media/p-2222222222222222.png", mime: "image/png", alt: "Two bars, the left one taller" }],
+    by: "t",
+    at: AT,
+    id: "q_picture_2",
+  }),
+];
+const pictureOptions = printOptions({
+  title: "Pictures",
+  kind: "student",
+  media: new Map([
+    ["media/p-1111111111111111.png", PICTURE_A],
+    ["media/p-2222222222222222.png", PICTURE_B],
+  ]),
+});
+const pictureLayout = layoutTest(pictureQuestions, { ...pictureOptions, format: "docx" });
+const pictureExpected = expectedOf(pictureLayout.document.blocks);
+const pictureCase: Case = { name: "pictures", options: pictureOptions, bytes: writeDocx(pictureLayout.document), expected: pictureExpected, paragraphs: pictureExpected.length, header: "" };
+cases.push(pictureCase);
 
 function main(): void {
   if (!wordIsAvailable()) {
@@ -110,6 +153,32 @@ function main(): void {
   }
   console.log(`${cases.length} documents, ${paragraphs} paragraphs, ${disagreements} disagreements with Word.`);
   if (disagreements > 0) process.exitCode = 1;
+
+  // The pictures themselves: Word is asked for each picture's size in points, its description and its type, in the order of the text.
+  const seen = askWord(new Map([["pictures", pictureCase.bytes]]), "pictures")["pictures"] ?? [];
+  const drawn = pictureLayout.document.blocks.flatMap((b: Block) => (b.kind === "picture" ? [b] : []));
+  const floating = seen.at(-1)?.startsWith("SHAPES:") ? Number((seen.pop() as string).slice(7)) : -1;
+  let pictureProblems = 0;
+  if (seen.length !== drawn.length) {
+    console.log(`pictures: Word shows ${seen.length} pictures, the layout has ${drawn.length}${seen[0]?.startsWith("ERROR") ? `. ${seen[0]}` : ""}`);
+    pictureProblems++;
+  } else {
+    drawn.forEach((b, i) => {
+      const [w, h, alt, type] = (seen[i] as string).split("|");
+      const sized = Math.abs(Number(w) - b.w) < 0.6 && Math.abs(Number(h) - b.h) < 0.6;
+      // Type 3 is wdInlineShapePicture: a picture held in the file, not a linked one and not an object Word could not read.
+      if (!sized || alt !== b.picture.alt || type !== "3") {
+        console.log(`picture ${i + 1}: Word has ${w} by ${h} points, description ${JSON.stringify(alt)}, type ${type}; the layout meant ${b.w.toFixed(1)} by ${b.h.toFixed(1)}, ${JSON.stringify(b.picture.alt)}, type 3`);
+        pictureProblems++;
+      }
+    });
+  }
+  if (floating !== 0) {
+    console.log(`pictures: Word reports ${floating} floating shapes, and there should be none`);
+    pictureProblems++;
+  }
+  console.log(`${drawn.length} pictures, ${pictureProblems} disagreements with Word.`);
+  if (pictureProblems > 0) process.exitCode = 1;
 
   // Where Word breaks the pages: a question that begins on one page and goes on over the next is a question a student has to turn
   // the page in the middle of. Word is asked what page each paragraph starts and ends on, in a long test, student copy and key.

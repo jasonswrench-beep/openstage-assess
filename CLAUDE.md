@@ -142,6 +142,11 @@ writes the description or marks the picture as decoration, and the flag goes). A
 saved; a picture a question names that the bank does not hold is reported on the bank screen (`Bank.missingMedia`) and never makes the
 question go. The server serves a picture by the type its bytes have and not the type its name or file claims. In the editor a picture
 is the token `[picture 2]` in the text, moved or removed like words, and text the person leaves alone is kept exactly as stored.
+A floating picture's tag goes after the words of its paragraph, never in front of a question number. A printed test draws a picture
+under the words it was in (`print/layout.ts`, `expandPictures`): in the Word file as an embedded picture with its description, in the
+PDF as an image (a PNG is decoded and laid on white, a JPEG is handed on; a GIF, a CMYK JPEG, an interlaced PNG or damaged data is
+words with the reason against the question, never dropped). Moodle XML carries a picture in the text of a question and no other
+export has a place for one, so those write words and say so.
 
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
@@ -228,7 +233,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2229 engine tests and 233 app tests, Node's own runner
+npm test                       # 2270 engine tests and 236 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -250,6 +255,7 @@ npm run check:word --workspace packages/assess   # asks Word itself what its lis
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks
 npm run check:word-authored --workspace packages/assess   # has Word write sample documents and reads them
 npm run check:word-print --workspace packages/assess   # has Word open the printed tests, read back every paragraph, and say what page each question of a long test lands on
+npm run check:word-pictures --workspace packages/assess   # has Word write documents with pictures (placed, cropped, floating, flipped, in a text box) and reads them
 npm run check:excel-authored --workspace packages/assess   # has Excel write a workbook and CSV and compares every cell with what Excel says
 npm run check:generated --workspace packages/assess -- check <folder> --piece N   # holds a generated bank to its plan
 ```
@@ -269,6 +275,13 @@ writes in `fixtures/word-authored`, where `npm test` reads them on any machine.
 repair it, is a test that cannot be handed out. (The PDF is checked by taking it
 apart in `print.test.ts` and by opening it in a browser's own viewer, since no Word
 is involved.)
+
+`check:word-pictures` is run after any change to `import/docx/pictures.ts` or to how `import/docx/document.ts` meets a drawing, and
+`check:word-print` also opens a printed test with pictures and asks Word for each one's size and description. Real Word found two
+faults the tests from our own writer could not: a floating picture's offsets (numbers in the XML) were taken for the words of a
+text box, so every floating picture was refused, and its tag at the start of a numbered line stopped the line being a question.
+`npm run check:word-pictures -- --update-fixtures` keeps what Word wrote in `fixtures/word-authored/pictures`, where `npm test` reads it.
+Word's automation would not turn a picture here, so a turned one (`rot` on the drawing's transform) is only tried with our own writer.
 
 `check:excel-authored` is the fifth, and is run after any change to `import/table-xlsx.ts`
 or `import/table-csv.ts`: a cell the reader takes for something other than what Excel stored

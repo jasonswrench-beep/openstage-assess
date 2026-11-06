@@ -11,6 +11,9 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describeUnreadImage, MAX_PICTURE_BYTES, sniffImage } from "../src/model/image.ts";
 import { wordImporter } from "../src/import/word.ts";
@@ -289,3 +292,70 @@ describe("what a picture's bytes are", () => {
     assert.equal(describeUnreadImage(new Uint8Array([1, 2, 3, 4]), "x.zzz"), "an unknown format");
   });
 });
+
+describe("documents that Word itself wrote, with pictures in them (fixtures/word-authored/pictures)", () => {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "fixtures", "word-authored", "pictures");
+  const bytesOf = (name: string): Uint8Array => new Uint8Array(readFileSync(join(dir, `${name}.docx`)));
+  const refusal = (r: ReturnType<typeof read>): string => r.fileFindings.filter((f) => /not kept|not read/.test(f.message)).map((f) => f.message).join(" | ");
+
+  test("placed pictures keep their description, a missing description is flagged, and the same picture is one file", () => {
+    const r = read(bytesOf("pictures-placed"));
+    const qs = r.questions as Question[];
+    assert.equal(qs.length, 3);
+    assert.equal(qs[0]!.media[0]?.alt, "A solid blue rectangle");
+    assert.equal(qs[1]!.media[0]?.alt, "");
+    assert.ok(has(qs[1]!, FindingCode.MissingAltText));
+    assert.equal(new Set(qs.map((q) => q.media[0]?.file)).size, 1);
+    assert.equal(r.media?.size, 1);
+    assert.equal(qs[0]!.media[0]?.mime, "image/png");
+    assert.deepEqual(qs.map((q) => verdictFrom(q.findings)), ["parsed", "needsReview", "parsed"]);
+  });
+
+  test("a picture cropped in Word (the crop Word writes is a srcRect) is not kept, and says it was cropped", () => {
+    const r = read(bytesOf("pictures-cropped"));
+    assert.equal((r.questions[0] as Question).media.length, 0);
+    assert.match(refusal(r), /1 picture was not kept: a picture cropped in Word/);
+    assert.match(plain((r.questions[0] as Question).stem), /\[picture\]/);
+  });
+
+  test("floating pictures are not lost and do not stop a question from being a question; a flipped one is not kept", () => {
+    const r = read(bytesOf("pictures-floating"));
+    assert.equal(r.questions.length, 2, "both questions are still read, with the picture tag after their words and not in front of the number");
+    const everything = [...(r.questions as Question[]).flatMap((q) => q.media.map((m) => m.alt)), ...r.orphans.map((o) => o.text)].join(" | ");
+    assert.match(everything, /A floating picture/);
+    assert.doesNotMatch(everything, /"A flipped picture"/);
+    assert.match(refusal(r), /rotated or flipped/);
+    assert.equal(r.media?.size, 1);
+    assert.doesNotMatch(refusal(r), /Text in a picture, shape or text box/, "and no offsets are mistaken for the words of a text box");
+  });
+
+  test("a text box is a text box, with the words in it reported as unread", () => {
+    const r = read(bytesOf("pictures-text-box"));
+    assert.equal((r.questions[0] as Question).media.length, 0);
+    assert.match(r.fileFindings.map((f) => f.message).join(" | "), /Text in a picture, shape or text box was not read \(1 place\), for example "A label in a box"/);
+  });
+});
+
+describe("a picture that floats, written by our own writer", () => {
+  test("is put after the words of its paragraph, so that the number of the question is still first on its line", () => {
+    const lines = [
+      `<w:p><w:r>${drawing("rId10", { alt: "float", anchor: true })}</w:r><w:r><w:t>1. Look at the figure. Which colour is it?</w:t></w:r></w:p>`,
+      paragraph(run("a) Blue")),
+      paragraph(run("b) Red")),
+      paragraph(run("Answer: a")),
+    ].join("");
+    const r = read(docx({ body: lines, ...pictureParts([spec("rId10", "image1.png", BLUE)]) }));
+    assert.equal(r.questions.length, 1);
+    assert.equal((r.questions[0] as Question).media[0]?.alt, "float");
+    assert.equal(verdictFrom((r.questions[0] as Question).findings), "parsed");
+  });
+
+  test("an offset in the drawing is not words: a floating picture refused for being turned does not say that a text box was not read", () => {
+    const offsets = '<wp:positionH relativeFrom="column"><wp:posOffset>1270000</wp:posOffset></wp:positionH>';
+    const r = read(document([FIGURE[0], { draw: drawing("rId10", { alt: "x", anchor: true, rotation: 5400000, inside: offsets }) }, FIGURE[2], FIGURE[3], FIGURE[4]], [spec("rId10", "image1.png", BLUE)]));
+    assert.match(refusal2(r), /rotated or flipped/);
+    assert.doesNotMatch(r.fileFindings.map((f) => f.message).join(" | "), /Text in a picture, shape or text box/);
+  });
+});
+
+const refusal2 = (r: ReturnType<typeof read>): string => r.fileFindings.map((f) => f.message).join(" | ");

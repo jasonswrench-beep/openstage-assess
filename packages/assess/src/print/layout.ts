@@ -21,6 +21,10 @@ import { buildReport, hasText, plural, TYPE_NAMES } from "../export/text.ts";
 import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
 import { shuffledFor } from "../model/random.ts";
 import { type RichText } from "../model/richtext.ts";
+import { sniffImage, type ImageInfo } from "../model/image.ts";
+import type { MediaRef } from "../model/question.ts";
+import { deflateSync } from "node:zlib";
+import { decodePng } from "./png.ts";
 
 export const PRINT_ID = "print";
 export const PRINT_LABEL = "A printed test (Word or PDF)";
@@ -44,6 +48,38 @@ export interface Run {
   italic?: boolean;
   underline?: boolean;
   mono?: boolean;
+  /** A picture that stands here. The paragraph's text is printed and the picture under it; a run holding one has no text. */
+  picture?: PrintedPicture;
+}
+
+/** A picture ready to print: its bytes, what they are, its description, and for a PDF the pixels or JPEG data it is drawn from. */
+export interface PrintedPicture {
+  file: string;
+  bytes: Uint8Array;
+  info: ImageInfo;
+  alt: string;
+  pdf?: PdfImage;
+}
+
+export interface PdfImage {
+  width: number;
+  height: number;
+  colorSpace: "DeviceGray" | "DeviceRGB";
+  filter: "DCTDecode" | "FlateDecode";
+  data: Uint8Array;
+}
+
+/** A picture on a page of its own line, at the size it is printed. */
+export interface PictureBlock {
+  kind: "picture";
+  picture: PrintedPicture;
+  /** The size on the page, in points. */
+  w: number;
+  h: number;
+  indent: number;
+  before: number;
+  after: number;
+  keepNext?: boolean;
 }
 
 export interface Para {
@@ -67,7 +103,7 @@ export interface Para {
   rule?: boolean;
 }
 
-export type Block = Para | { kind: "lines"; count: number } | { kind: "pagebreak" };
+export type Block = Para | PictureBlock | { kind: "lines"; count: number } | { kind: "pagebreak" };
 
 export interface PrintDocument {
   title: string;
@@ -101,6 +137,10 @@ export interface PrintOptions {
   answerOnSheet?: boolean;
   /** On the key: the right letters in one line, in the order of the sheet, for scoring by hand. */
   keyStrip?: boolean;
+  /** The bank's pictures by path (`Bank.media`), so that a picture in a question is printed and not named. Without it every picture is printed as words. */
+  media?: ReadonlyMap<string, Uint8Array>;
+  /** The file the layout is for, since what a PDF can draw is less than what a Word file can. Set by `printTest`. */
+  format?: "docx" | "pdf";
 }
 
 export const DEFAULT_OPTIONS: Omit<PrintOptions, "title"> = {
@@ -142,6 +182,65 @@ interface Losses {
   pictures: number;
   equations: number;
   tables: number;
+  /** Why pictures were printed as words, when the bank's pictures were offered and one could not be drawn. */
+  why?: Record<string, number>;
+}
+
+/** What a picture needs to be drawn: the bank's files, the format being made, and the PDF forms already worked out. */
+export interface PictureSource {
+  media: ReadonlyMap<string, Uint8Array>;
+  format: "docx" | "pdf" | undefined;
+  /** What each file turned out to be for this format, worked out once: the PDF form to draw, or the reason it cannot be printed. */
+  prepared: Map<string, { image?: PdfImage } | { why: string }>;
+}
+
+export function pictureSource(options: PrintOptions): PictureSource | undefined {
+  return options.media ? { media: options.media, format: options.format, prepared: new Map() } : undefined;
+}
+
+/** A PNG, JPEG or GIF as the form a PDF draws, or the reason it cannot be: the Word file can hold more than a PDF writer without a decoder. */
+function prepareForPdf(bytes: Uint8Array, info: ImageInfo): { image: PdfImage } | { why: string } {
+  if (info.mime === "image/jpeg") {
+    const components = info.jpeg?.components ?? 3;
+    if (components !== 1 && components !== 3) return { why: "a CMYK JPEG cannot be drawn in a PDF here (the Word file can)" };
+    return { image: { width: info.width, height: info.height, colorSpace: components === 1 ? "DeviceGray" : "DeviceRGB", filter: "DCTDecode", data: bytes } };
+  }
+  if (info.mime === "image/png") {
+    const decoded = decodePng(bytes);
+    if (!decoded.ok) return { why: `a PNG that ${decoded.reason}` };
+    const { pixels } = decoded;
+    return { image: { width: pixels.width, height: pixels.height, colorSpace: pixels.channels === 1 ? "DeviceGray" : "DeviceRGB", filter: "FlateDecode", data: deflateSync(pixels.data) } };
+  }
+  return { why: "a GIF cannot be drawn in a PDF here (the Word file can)" };
+}
+
+/**
+ * A Word file takes a PNG, JPEG or GIF as it is, so the bytes are only checked: a PNG whose data does not decode would show in Word as a
+ * broken picture without a word said, and is words with the reason instead. (An interlaced PNG is fine here; only the PDF refuses it.)
+ */
+function checkForWord(bytes: Uint8Array, info: ImageInfo): { image?: PdfImage } | { why: string } {
+  if (info.mime === "image/png") {
+    const decoded = decodePng(bytes);
+    if (!decoded.ok && !decoded.reason.startsWith("it is interlaced")) return { why: `a PNG that ${decoded.reason}` };
+  }
+  return {};
+}
+
+/** The picture a question's media entry names, ready for the format being made, or why it cannot be printed as one. */
+function pictureFor(media: MediaRef, source: PictureSource): { picture: PrintedPicture } | { why: string } {
+  const bytes = source.media.get(media.file);
+  if (bytes === undefined) return { why: "the bank does not hold its file" };
+  const info = sniffImage(bytes);
+  if (info === undefined) return { why: "its file is not a PNG, JPEG or GIF" };
+  const picture: PrintedPicture = { file: media.file, bytes, info, alt: media.alt.trim() };
+  let prepared = source.prepared.get(media.file);
+  if (prepared === undefined) {
+    prepared = source.format === "pdf" ? prepareForPdf(bytes, info) : checkForWord(bytes, info);
+    source.prepared.set(media.file, prepared);
+  }
+  if ("why" in prepared) return prepared;
+  if (prepared.image !== undefined) picture.pdf = prepared.image;
+  return { picture };
 }
 
 /**
@@ -149,7 +248,7 @@ interface Losses {
  * a list becomes lines that begin with a bullet or a number; a table becomes a line for each row, the cells between bars;
  * a picture or an equation becomes the words that stand for it, and is counted.
  */
-export function paragraphsOf(text: RichText, question: Question, losses: Losses): Run[][] {
+export function paragraphsOf(text: RichText, question: Question, losses: Losses, pictures?: PictureSource): Run[][] {
   if (text.format === "plain") {
     return text.content
       .trim()
@@ -165,7 +264,7 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses)
   let cell: Run[] | undefined;
 
   const flush = (): void => {
-    if (current.some((r) => r.text.trim() !== "")) paragraphs.push(current);
+    if (current.some((r) => r.text.trim() !== "" || r.picture !== undefined)) paragraphs.push(current);
     current = [];
   };
   const add = (value: string): void => {
@@ -245,9 +344,20 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses)
         break;
       case "oa-media": {
         if (closing) break;
-        losses.pictures++;
         const ref = /ref\s*=\s*"([^"]*)"/.exec(token)?.[1];
         const media = question.media.find((m) => m.id === ref);
+        // A picture is printed when the bank's files were offered and this one can be drawn in this format, and not inside a table
+        // cell, whose text is joined into a line. Otherwise it is words, and counted.
+        if (pictures !== undefined && media !== undefined && cell === undefined) {
+          const choice = pictureFor(media, pictures);
+          if ("picture" in choice) {
+            current.push({ text: "", picture: choice.picture });
+            break;
+          }
+          const why = (losses.why ??= {});
+          why[choice.why] = (why[choice.why] ?? 0) + 1;
+        }
+        losses.pictures++;
         if (!media?.decorative) add(media && media.alt.trim() !== "" ? `[Picture: ${media.alt.trim()}]` : "[Picture]");
         break;
       }
@@ -277,6 +387,46 @@ const asText = (paragraphs: Run[][]): string => paragraphs.map((p) => p.map((r) 
 export const NUMBER_INDENT = 28;
 const OPTION_INDENT = 58;
 
+/** The most a picture may be tall on a page, in points. A figure taller than this is scaled down to fit it. */
+const MAX_PICTURE_HEIGHT = 288;
+/** What a pixel is on paper, in points: a picture is drawn at the size its pixels are at 96 to the inch, and never larger. */
+const POINTS_PER_PIXEL = 0.75;
+
+/**
+ * A paragraph that holds a picture becomes the paragraph without it and the picture on a line under it. A picture is not placed
+ * inside a line of text: two writers (Word and the PDF) would have to agree on where a line breaks around it, and a figure under the
+ * words it belongs to is where a figure in a test goes. The words keep their marker, so an option that is only a picture is still
+ * a lettered option with its picture under the letter.
+ */
+function expandPictures(blocks: Block[], paper: Paper): Block[] {
+  const out: Block[] = [];
+  for (const block of blocks) {
+    if (block.kind !== "para" || !block.runs.some((r) => r.picture !== undefined)) {
+      out.push(block);
+      continue;
+    }
+    const pictures = block.runs.flatMap((r) => (r.picture ? [r.picture] : []));
+    const runs = block.runs.filter((r) => r.picture === undefined);
+    const textual = runs.some((r) => r.text.trim() !== "") || block.marker !== undefined;
+    if (textual) out.push({ ...block, runs, after: 2 });
+    const room = paper.width - 2 * paper.margin - block.indent;
+    pictures.forEach((picture, i) => {
+      const scale = Math.min(1, room / (picture.info.width * POINTS_PER_PIXEL), MAX_PICTURE_HEIGHT / (picture.info.height * POINTS_PER_PIXEL));
+      const last = i === pictures.length - 1;
+      out.push({
+        kind: "picture",
+        picture,
+        w: Math.max(1, picture.info.width * POINTS_PER_PIXEL * scale),
+        h: Math.max(1, picture.info.height * POINTS_PER_PIXEL * scale),
+        indent: block.indent,
+        before: textual || i > 0 ? 2 : block.before,
+        after: last ? block.after : 2,
+      });
+    });
+  }
+  return out;
+}
+
 interface Built {
   blocks: Block[];
   notes: string[];
@@ -288,7 +438,7 @@ function para(runs: Run[], more: Partial<Para> & { indent: number }, size: numbe
 
 const has = (text: RichText | undefined): text is RichText => text !== undefined && hasText(text);
 
-function buildQuestion(question: Question, number: number, o: PrintOptions): Built | { leftOut: string } {
+function buildQuestion(question: Question, number: number, o: PrintOptions, pictures?: PictureSource): Built | { leftOut: string } {
   const losses: Losses = { pictures: 0, equations: 0, tables: 0 };
   const notes: string[] = [];
   const size = o.fontSize;
@@ -300,7 +450,7 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
     return { leftOut: `A ${name} question cannot be printed: it needs a screen.` };
   }
 
-  const stem = paragraphsOf(question.stem, question, losses);
+  const stem = paragraphsOf(question.stem, question, losses, pictures);
   if (stem.length === 0) return { leftOut: "It has no question text." };
 
   const usable = hasUsableKey(question);
@@ -327,7 +477,7 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
       const options = body["options"] as Array<{ content: RichText; correct: boolean }>;
       if (question.type === "multipleResponse") out.push(note("Select all that apply.", { keepNext: true }));
       options.forEach((opt, i) => {
-        const runs = paragraphsOf(opt.content, question, losses).flat();
+        const runs = paragraphsOf(opt.content, question, losses, pictures).flat();
         const marker = `${String.fromCharCode(65 + (i % 26))}.`;
         if (key && usable && opt.correct) out.push(option(marker, [...runs.map((r) => ({ ...r, bold: true })), { text: "  (correct)", bold: true }]));
         else out.push(option(marker, runs));
@@ -389,12 +539,12 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
       });
       if (!key) {
         out.push(note("Write the letter of the match on the line.", { keepNext: true }));
-        pairs.forEach((p, i) => out.push(option("______", [{ text: `${i + 1}. ` }, ...paragraphsOf(p.left, question, losses).flat()], { indent: OPTION_INDENT + 18, hang: 46, keepNext: true })));
+        pairs.forEach((p, i) => out.push(option("______", [{ text: `${i + 1}. ` }, ...paragraphsOf(p.left, question, losses, pictures).flat()], { indent: OPTION_INDENT + 18, hang: 46, keepNext: true })));
         rights.forEach((r, i) => out.push(option(`${String.fromCharCode(65 + (i % 26))}.`, [{ text: r }], { before: i === 0 ? 4 : 0 })));
       } else if (usable) {
         pairs.forEach((p, i) => {
           const letter = String.fromCharCode(65 + ((letterOf.get(`${i}`) ?? 0) % 26));
-          out.push(option(`${i + 1}.`, [...paragraphsOf(p.left, question, losses).flat(), { text: `  ${letter}. ${p.right}`, bold: true }]));
+          out.push(option(`${i + 1}.`, [...paragraphsOf(p.left, question, losses, pictures).flat(), { text: `  ${letter}. ${p.right}`, bold: true }]));
         });
       }
       break;
@@ -403,9 +553,9 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
       const items = [...(body["items"] as Array<{ content: RichText; position: number }>)].sort((a, b) => a.position - b.position);
       if (!key) {
         out.push(note(`Number the items 1 to ${items.length} in the right order.`, { keepNext: true }));
-        for (const item of shuffledFor(items, `${question.id}:ordering`)) out.push(option("____", paragraphsOf(item.content, question, losses).flat(), { indent: OPTION_INDENT - 8, hang: 36 }));
+        for (const item of shuffledFor(items, `${question.id}:ordering`)) out.push(option("____", paragraphsOf(item.content, question, losses, pictures).flat(), { indent: OPTION_INDENT - 8, hang: 36 }));
       } else if (usable) {
-        items.forEach((item, i) => out.push(option(`${i + 1}.`, paragraphsOf(item.content, question, losses).flat())));
+        items.forEach((item, i) => out.push(option(`${i + 1}.`, paragraphsOf(item.content, question, losses, pictures).flat())));
       }
       break;
     }
@@ -426,10 +576,13 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
     notes.push("Its feedback is not printed on the key. Tick Feedback to print it.");
   }
 
+  // A picture stands on a line of its own under the words it was in, at the size it is printed.
+  out.splice(0, out.length, ...expandPictures(out, PAPERS[o.paper]));
+
   if (!key && question.type !== "essay") {
     // The answer sheet's own spacing: a little room after each question.
     const last = out[out.length - 1];
-    if (last && last.kind === "para") last.after = 6;
+    if (last && (last.kind === "para" || last.kind === "picture")) last.after = 6;
   }
 
   // A question stays on one page when it fits on one: every part of it but the last stays with the part after it. Only the
@@ -438,11 +591,14 @@ function buildQuestion(question: Question, number: number, o: PrintOptions): Bui
   // than a page is still broken, because Word and the PDF writer both give up on a chain that cannot fit. The last part is
   // never tied: a question made of its wording alone (a blank in the text and nothing to write under it) used to be tied to the
   // question after it, and a run of those would have been one chain.
-  for (const block of out) if (block.kind === "para") block.keepNext = true;
+  for (const block of out) if (block.kind === "para" || block.kind === "picture") block.keepNext = true;
   const lastBlock = out.at(-1);
-  if (lastBlock?.kind === "para") delete lastBlock.keepNext;
+  if (lastBlock?.kind === "para" || lastBlock?.kind === "picture") delete lastBlock.keepNext;
 
-  if (losses.pictures > 0) notes.push(`${plural(losses.pictures, "picture", "pictures")} cannot be printed. Each is printed as [Picture: its alternative text], so that the question still reads; add it back by hand.`);
+  if (losses.pictures > 0) {
+    const why = Object.entries(losses.why ?? {}).map(([reason, count]) => `${plural(count, "time", "times")}: ${reason}`);
+    notes.push(`${plural(losses.pictures, "picture", "pictures")} cannot be printed${why.length > 0 ? ` (${why.join("; ")})` : ""}. Each is printed as [Picture: its alternative text], so that the question still reads; add it back by hand.`);
+  }
   if (losses.equations > 0) notes.push(`${plural(losses.equations, "equation", "equations")} printed as [Equation: LaTeX]. Check how it reads.`);
   if (losses.tables > 0) notes.push(`${plural(losses.tables, "table", "tables")} printed as lines of text, a row to a line with the cells between bars.`);
   return { blocks: out, notes };
@@ -480,9 +636,10 @@ export function layoutTest(questions: readonly Question[], options: PrintOptions
   let number = 0;
   let total = 0;
   const strip: string[] = [];
+  const source = pictureSource(options);
   questions.forEach((question, i) => {
     const base = { position: i + 1, questionId: question.id, title: question.title };
-    const built = buildQuestion(question, number + 1, options);
+    const built = buildQuestion(question, number + 1, options, source);
     if ("leftOut" in built) {
       items.push({ ...base, outcome: "leftOut", notes: [built.leftOut] });
       return;

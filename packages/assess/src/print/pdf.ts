@@ -14,7 +14,7 @@
 
 import { deflateSync } from "node:zlib";
 
-import type { Block, Para, PrintDocument, Run } from "./layout.ts";
+import type { Block, Para, PdfImage, PrintDocument, PrintedPicture, Run } from "./layout.ts";
 
 const NUMBER_INDENT = 28;
 
@@ -186,9 +186,22 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
   const items: Item[] = doc.blocks.map((block): Item => {
     if (block.kind === "pagebreak") return { block, lines: [], height: 0, keepNext: false };
     if (block.kind === "lines") return { block, lines: [], height: block.count * doc.fontSize * 1.9, keepNext: false };
+    if (block.kind === "picture") return { block, lines: [], height: block.before + block.h + block.after, keepNext: block.keepNext === true };
     const lines = breakLines(atomsOf(block.runs, block.size, block.bold === true, replaced), textWidth - block.indent);
     return { block, lines, height: block.before + lines.length * block.size * LEADING + block.after + (block.rule ? 4 : 0), keepNext: block.keepNext === true };
   });
+
+  // The pictures drawn, each file once, under the name the pages draw it by.
+  const images = new Map<string, { name: string; image: PdfImage }>();
+  const imageName = (picture: PrintedPicture): string => {
+    const held = images.get(picture.file);
+    if (held) return held.name;
+    // The layout worked out the pixels or the JPEG data when it was made for a PDF. One made for Word has none, and is not drawn here.
+    if (picture.pdf === undefined) throw new Error("A picture was laid out for a Word file and cannot be drawn in a PDF.");
+    const name = `Im${images.size + 1}`;
+    images.set(picture.file, { name, image: picture.pdf });
+    return name;
+  };
 
   interface Page {
     ops: string[];
@@ -260,6 +273,14 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
       continue;
     }
 
+    if (block.kind === "picture") {
+      if (y + block.before + block.h > bottom && y > top) newPage();
+      y += y > top ? block.before : 0;
+      page().ops.push(`q ${num(block.w)} 0 0 ${num(block.h)} ${num(paper.margin + block.indent)} ${num(paper.height - (y + block.h))} cm /${imageName(block.picture)} Do Q`);
+      y += block.h + block.after;
+      continue;
+    }
+
     const lineHeight = block.size * LEADING;
     if (y + block.before + lineHeight > bottom && y > top) newPage();
     y += y > top ? block.before : 0;
@@ -328,7 +349,10 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
   const title = Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(doc.title, "utf16le").swap16()]).toString("hex").toUpperCase();
   object(infoId, `<< /Title <${title}> /Producer (OpenAssess) /Creator (OpenAssess) /CreationDate (D:${date}) >>`);
 
-  const resources = `<< /Font << ${(Object.keys(fontIds) as FontKey[]).map((k) => `/${RESOURCE[k]} ${fontIds[k]} 0 R`).join(" ")} >> >>`;
+  const imageBase = firstPage + 2 * pages.length;
+  const imageList = [...images.values()];
+  const xobjects = imageList.length > 0 ? ` /XObject << ${imageList.map((entry, k) => `/${entry.name} ${imageBase + k} 0 R`).join(" ")} >>` : "";
+  const resources = `<< /Font << ${(Object.keys(fontIds) as FontKey[]).map((k) => `/${RESOURCE[k]} ${fontIds[k]} 0 R`).join(" ")} >>${xobjects} >>`;
   pages.forEach((p, i) => {
     const pageId = pageIds[i] as number;
     const content = deflateSync(Buffer.from(p.ops.join("\n"), "latin1"));
@@ -339,7 +363,15 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
     write("\nendstream\nendobj\n");
   });
 
-  const count = firstPage + 2 * pages.length;
+  imageList.forEach((entry, k) => {
+    const { image } = entry;
+    offsets[imageBase + k] = length;
+    write(`${imageBase + k} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /${image.colorSpace} /BitsPerComponent 8 /Filter /${image.filter} /Length ${image.data.length} >>\nstream\n`);
+    write(Buffer.from(image.data));
+    write("\nendstream\nendobj\n");
+  });
+
+  const count = imageBase + imageList.length;
   const xref = length;
   write(`xref\n0 ${count}\n0000000000 65535 f \n`);
   for (let id = 1; id < count; id++) write(`${String(offsets[id]).padStart(10, "0")} 00000 n \n`);

@@ -11,7 +11,7 @@ import { DEFAULT_OPTIONS, layoutTest, type PrintOptions } from "./layout.ts";
 import { writePdf } from "./pdf.ts";
 
 export { DEFAULT_OPTIONS, layoutTest, PAPERS, paragraphsOf, PRINT_ID, PRINT_LABEL, shuffledFor } from "./layout.ts";
-export type { Block, Layout, Paper, Para, PrintDocument, PrintOptions, Run } from "./layout.ts";
+export type { Block, Layout, Paper, Para, PictureBlock, PrintDocument, PrintedPicture, PrintOptions, Run } from "./layout.ts";
 export { writeDocx } from "./docx.ts";
 export { writePdf } from "./pdf.ts";
 export type { PdfResult } from "./pdf.ts";
@@ -78,7 +78,7 @@ export function printVersions(
 
 /** A student copy or an answer key, as a file, and the report of what it holds. */
 export function printTest(questions: readonly Question[], options: PrintOptions, format: PrintFormat, at: Date = new Date()): PrintResult {
-  const { document, report } = layoutTest(questions, options);
+  const { document, report } = layoutTest(questions, { ...options, format });
   const kind = options.kind === "key" ? "Answer key" : "Student copy";
   const version = options.versionLabel && options.versionLabel.trim() !== "" ? ` - Version ${safeName(options.versionLabel, "")}` : "";
   const name = `${safeName(options.title, "Test")}${version} - ${kind}.${format}`;

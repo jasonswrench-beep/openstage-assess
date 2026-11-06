@@ -24,6 +24,8 @@ export interface PaperOptions {
   nameBox: boolean;
   /** What the booklets and keys are made as. */
   formats: readonly PrintFormat[];
+  /** The bank's pictures by path, so that a picture in a question is printed in the booklet and not named. */
+  media?: ReadonlyMap<string, Uint8Array>;
 }
 
 export const DEFAULT_PAPER: PaperOptions = { paper: "letter", large: false, sheet: "shared", booklets: true, keys: true, nameBox: true, formats: ["pdf"] };
@@ -70,7 +72,7 @@ export function printTestPaper(record: TestRecord, given: Partial<PaperOptions> 
   const unprinted: string[] = [];
   if (kinds.length > 0) {
     for (const format of options.formats) {
-      for (const piece of printVersions(record, format, { paper: options.paper, answerOnSheet: options.sheet !== "none" }, kinds, at)) {
+      for (const piece of printVersions(record, format, { paper: options.paper, answerOnSheet: options.sheet !== "none", ...(options.media ? { media: options.media } : {}) }, kinds, at)) {
         const { file, report } = piece.result;
         for (const general of report.general) if (!notes.includes(general)) notes.push(general);
         for (const item of report.items) if (item.outcome === "leftOut") unprinted.push(`Version ${piece.label}: ${item.notes.join(" ")}`);

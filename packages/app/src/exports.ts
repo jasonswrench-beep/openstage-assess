@@ -43,7 +43,7 @@ interface Destination {
   id: string;
   label: string;
   blurb: string;
-  run: (questions: Question[], options: { name: string }) => ExportResult;
+  run: (questions: Question[], options: { name: string; media?: ReadonlyMap<string, Uint8Array> }) => ExportResult;
 }
 
 export const DESTINATIONS: Destination[] = [
@@ -126,7 +126,7 @@ export async function exportRoute(ctx: Context, req: ApiRequest, rawName: string
   const bank = await ctx.banks.open(name);
   const questions = chosen(bank.sortedQuestions(), input["statuses"]);
   // The file is named for the bank's title, made safe: a title such as CON is a name Windows will not give a file.
-  const result = destination.run(questions, { name: cleanName(bank.manifest.title, "Questions") });
+  const result = destination.run(questions, { name: cleanName(bank.manifest.title, "Questions"), media: bank.media });
 
   if (action === "check") return { status: 200, json: { report: result.report, questions: questions.length } };
 

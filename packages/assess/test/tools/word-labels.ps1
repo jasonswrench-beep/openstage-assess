@@ -43,6 +43,15 @@ try {
           $labels.Add([string]$paragraph.Range.ListFormat.ListString)
         }
       }
+      if ($What -eq 'pictures') {
+        # What Word makes of the pictures: width|height in points|description|type, one for each picture in the text, then how many
+        # floating shapes there are. A picture Word could not read is still counted, and shows as a different type or a size of zero.
+        $labels.Clear()
+        foreach ($s in $doc.InlineShapes) {
+          $labels.Add(("{0}|{1}|{2}|{3}" -f [Math]::Round($s.Width, 1), [Math]::Round($s.Height, 1), [string]$s.AlternativeText, $s.Type))
+        }
+        $labels.Add("SHAPES:" + $doc.Shapes.Count)
+      }
       if ($What -eq 'text') {
         # The running header of the first section as Word holds it: empty when the document has none.
         $labels.Add("HEADER:" + ([string]$doc.Sections.Item(1).Headers.Item(1).Range.Text).TrimEnd([char]13, [char]7))

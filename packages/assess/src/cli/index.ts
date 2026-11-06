@@ -336,7 +336,7 @@ async function cmdPrint(args: string[]): Promise<number> {
   const out = arg(args, "out");
   let wrote = 0;
   for (const kind of kindArg === "both" ? (["student", "key"] as const) : [kindArg as "student" | "key"]) {
-    const result = printTest(questions, printOptions({ title: bank.manifest.title, kind, paper }), format);
+    const result = printTest(questions, printOptions({ title: bank.manifest.title, kind, paper, media: bank.media }), format);
     const report = result.report;
     console.log(`${kind === "key" ? "Answer key" : "Student copy"}: ${report.total} question(s), ${report.exported} print as written, ${report.exportedWithLosses} with a note, ${report.leftOut} cannot be printed.`);
     for (const item of report.items) for (const note of item.notes) console.log(`  #${item.position} ${note}`);
@@ -388,7 +388,7 @@ async function cmdReview(args: string[]): Promise<number> {
 }
 
 /** Where a bank can be exported to: each takes the questions and a name, and answers with the files and the destination check. */
-const EXPORTERS: Record<string, (questions: Question[], options: { name: string }) => ExportResult> = {
+const EXPORTERS: Record<string, (questions: Question[], options: { name: string; media?: ReadonlyMap<string, Uint8Array> }) => ExportResult> = {
   [DESTINATION_ID]: exportOpenStageSpreadsheet,
   [GIFT_ID]: exportGift,
   [MOODLE_XML_ID]: exportMoodleXml,
@@ -406,7 +406,7 @@ async function cmdExport(args: string[]): Promise<number> {
   if (!exporter) return fail(`Unknown destination "${to}". The destinations are ${Object.keys(EXPORTERS).join(", ")}.`);
 
   const { bank } = await Bank.open(resolve(path));
-  const result = exporter(bank.list(), { name: bank.manifest.title });
+  const result = exporter(bank.list(), { name: bank.manifest.title, media: bank.media });
   for (const line of formatReport(result.report)) console.log(line);
 
   const out = arg(args, "out");
@@ -694,7 +694,7 @@ async function cmdSheets(args: string[]): Promise<number> {
     const { bank } = await Bank.open(resolve(bankPath));
     const chosen = pickTest(bank, rest);
     if ("error" in chosen) return fail(chosen.error);
-    const made = printTestPaper(chosen.test, { paper, sheet, large: has(rest, "large"), booklets: !has(rest, "no-booklets"), keys: !has(rest, "no-keys"), nameBox: !has(rest, "no-name-box"), formats: has(rest, "docx") ? ["docx"] : ["pdf"] });
+    const made = printTestPaper(chosen.test, { paper, sheet, large: has(rest, "large"), booklets: !has(rest, "no-booklets"), keys: !has(rest, "no-keys"), nameBox: !has(rest, "no-name-box"), formats: has(rest, "docx") ? ["docx"] : ["pdf"], media: bank.media });
     if (!made.ok) return fail(made.reason);
     const folder = resolve(out);
     await mkdir(folder, { recursive: true });

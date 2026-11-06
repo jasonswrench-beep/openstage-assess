@@ -7,12 +7,12 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
 import { drawing, emf, gif, jpeg, pictureParts, png } from "../../assess/test/support/images.ts";
-import { Bank } from "../src/engine.ts";
+import { Bank, unzipSync } from "../src/engine.ts";
 import { withApp, type Client } from "./support/app.ts";
 
 type Json = Record<string, any>;
@@ -320,6 +320,63 @@ describe("what is served as a picture", () => {
       assert.equal(photo.headers.get("content-type"), "image/jpeg", "the type is the bytes', not the name's");
       assert.equal((await get("real.gif")).headers.get("content-type"), "image/gif");
       assert.ok(readdirSync(home).length > 0);
+    });
+  });
+});
+
+describe("a bank's pictures in print and export", () => {
+  async function bankWithFigures(client: Client): Promise<string> {
+    const view = await importFigures(client);
+    const reply = await client.post<Json>(`/api/sessions/${view["id"]}/save`, { title: "Printed" });
+    return reply.json["bank"];
+  }
+
+  test("the print route puts them in the Word file and the PDF", async () => {
+    await withApp(async (client) => {
+      const bank = await bankWithFigures(client);
+      const reply = await client.post<Json>(`/api/banks/${encodeURIComponent(bank)}/print`, { kinds: ["student"], formats: ["docx", "pdf"] });
+      assert.equal(reply.status, 200, reply.text);
+      const written = reply.json["written"] as Array<{ path: string; format: string }>;
+      const word = written.find((w) => w.format === "docx");
+      const pdf = written.find((w) => w.format === "pdf");
+      assert.ok(word && pdf);
+      const parts = unzipSync(new Uint8Array(readFileSync(word.path)));
+      assert.deepEqual(parts.get("word/media/image1.png"), BLUE);
+      assert.deepEqual(parts.get("word/media/image2.png"), RED);
+      const drawn = readFileSync(pdf.path).toString("latin1");
+      assert.equal([...drawn.matchAll(/\/Subtype \/Image/g)].length, 2, "both pictures are in the PDF");
+      assert.ok(!(reply.json["reports"] as Json)["student"].items.some((i: Json) => i.notes.some((n: string) => /cannot be printed/.test(n))), "and nothing is said to be lost");
+    });
+  });
+
+  test("the export route writes them into the Moodle file, and says plainly that the other formats cannot", async () => {
+    await withApp(async (client) => {
+      const bank = await bankWithFigures(client);
+      const moodle = await client.post<Json>(`/api/banks/${encodeURIComponent(bank)}/export`, { destination: "moodle-xml" });
+      assert.equal(moodle.status, 200, moodle.text);
+      const text = readFileSync(moodle.json["written"][0].path, "utf8");
+      assert.equal([...text.matchAll(/<file name="p-[0-9a-f]{16}\.png" path="\/" encoding="base64">/g)].length, 2);
+      const check = await client.post<Json>(`/api/banks/${encodeURIComponent(bank)}/export/check`, { destination: "gift" });
+      assert.ok((check.json["report"].items as Json[]).some((i) => i.notes.some((n: string) => /picture cannot be carried/.test(n))));
+    });
+  });
+
+  test("the answer-sheet booklets carry them too", async () => {
+    await withApp(async (client) => {
+      const bank = await bankWithFigures(client);
+      const base = `/api/banks/${encodeURIComponent(bank)}`;
+      const listing = await client.get<Json>(base);
+      const ids = (listing.json["questions"] as Json[]).map((q) => q.id);
+      const sheets = `/api/sheets/${encodeURIComponent(bank)}/tests`;
+      const made = await client.post<Json>(sheets, { name: "Quiz", questionIds: ids, versions: 1 });
+      assert.equal(made.status, 200, made.text);
+      const testId = made.json["test"].id;
+      const printed = await client.post<Json>(`${sheets}/${testId}/print`, { paper: "letter", sheet: "none", booklets: true, keys: false, formats: ["docx"] });
+      assert.equal(printed.status, 200, printed.text);
+      const file = (printed.json["written"] as Array<{ path: string }>)[0];
+      assert.ok(file);
+      const parts = unzipSync(new Uint8Array(readFileSync(file.path)));
+      assert.ok([...parts.keys()].some((n) => n.startsWith("word/media/")), "the booklet has the pictures");
     });
   });
 });

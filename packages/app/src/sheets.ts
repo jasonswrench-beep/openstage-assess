@@ -152,7 +152,7 @@ const PAPERS = ["letter", "a4"] as const;
 const FORMATS = ["pdf", "docx"] as const;
 
 /** The paper is made by the engine, the same function the command line uses; what is done here is to read the request and to write the files. */
-async function printTestPaperRoute(ctx: Context, req: ApiRequest, record: TestRecord): Promise<ApiResponse> {
+async function printTestPaperRoute(ctx: Context, req: ApiRequest, record: TestRecord, media: ReadonlyMap<string, Uint8Array>): Promise<ApiResponse> {
   const input = jsonObject(req);
   onlyFields(input, ["paper", "large", "sheet", "booklets", "keys", "formats", "nameBox"], "The request");
   const paper = oneOf(input["paper"], PAPERS, "the paper", "letter");
@@ -170,7 +170,7 @@ async function printTestPaperRoute(ctx: Context, req: ApiRequest, record: TestRe
             throw badRequest("Say what to print the booklets and keys as, from pdf and docx.");
           })();
 
-  const made = printTestPaper(record, { paper, large, sheet, booklets, keys, nameBox, formats });
+  const made = printTestPaper(record, { paper, large, sheet, booklets, keys, nameBox, formats, media });
   if (!made.ok) throw badRequest(made.reason);
   const written: Array<{ name: string; path: string; kind: string; version?: string; format: string; pages?: number }> = [];
   for (const file of made.files) {
@@ -249,7 +249,7 @@ export async function sheetsRoute(ctx: Context, req: ApiRequest): Promise<ApiRes
       return ok({ removed: record.id });
     }
   }
-  if (action === "print" && req.method === "POST") return printTestPaperRoute(ctx, req, record);
+  if (action === "print" && req.method === "POST") return printTestPaperRoute(ctx, req, record, bank.media);
   if (action === "printing-check" && req.method === "POST") return checkPrintingRoute(req, record);
   if (action === "score" && req.method === "POST") return ok(view(ctx.scoring.create(bankName, record)));
   throw notFound("There is no such page.");

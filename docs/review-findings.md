@@ -504,7 +504,23 @@ and moved in the editor, and a bank that lacks a picture a question names says s
 reader refuses, with the reason, a picture it cannot show as placed (cropped, rotated, flipped, drawn on, grouped, in a text box, in
 a format other than PNG, JPEG and GIF). Still so: the `[ img: ... ]` tag typed into a text file still names a file that nothing
 supplies, so it is reported as missing; the read contract still has no operation for a picture's bytes; a picture no question refers
-to any more is not removed from a bank. Print and the exports are below, in the entry for the day they were done.
+to any more is not removed from a bank.
+
+**Print and exports, the same day.** A printed test draws a picture under the words it was in: in the Word file as an embedded
+picture with its description (asked of real Word, which opened it without repair and reported the size and the description of each),
+in the PDF as an image (a PNG is decoded, its transparency laid on white, and handed on as pixels; a JPEG as it is). A GIF, a CMYK
+JPEG, an interlaced PNG or damaged data cannot be drawn in a PDF and is printed as words with the reason against the question; a
+PNG whose data does not decode is words in both files, since Word would show it as a broken picture without a word said. Moodle XML
+carries a picture in the text of a question (an image tag and the file in base64, as Moodle documents; not tried in a Moodle). The
+other formats have no place for a picture file and say so.
+
+**What real Word found that our own writer could not**, from `npm run check:word-pictures`: a floating picture's XML holds numbers
+(its offset from the margin), which "this object holds text" took for the words of a text box, so every floating picture was
+refused and each was reported as a text box with the text "1270000254000000". And a floating picture is anchored where the cursor
+was, which is often the start of a numbered paragraph, so its tag stood in front of "1." and the question stopped being one (the
+same fault the old `[picture]` marker had). Both are fixed: only text runs count as words, and a floating picture's tag follows
+the words of its paragraph. Placed pictures, a crop (`srcRect`), a flip (`flipH`) and a text box were read as expected. A turned
+picture could not be written by Word's automation here, so the turn (`rot`) is checked only with our own writer.
 
 ### 7. Smaller open items
 
