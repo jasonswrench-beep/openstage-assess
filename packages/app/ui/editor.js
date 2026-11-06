@@ -24,7 +24,8 @@ let counter = 0;
  *   findings: Array<{ index: number, code: string, severity: "error" | "warn" | "info", message: string, dismissed?: boolean, field?: string }>,
  *   formatted: string[], locked: string[], media: number, math: number, readOnly?: string, origin?: any,
  *   pictures: Array<{ id: string, number: number, file: string, alt: string, decorative: boolean, placed: boolean, width?: number, height?: number }>,
- *   equations?: Array<{ id: string, number: number, latex: string, mathml: string, placed: boolean }> }} EditorQuestion
+ *   equations?: Array<{ id: string, number: number, latex: string, mathml: string, placed: boolean }>,
+ *   tables?: Array<{ number: number, text: string, rows: Array<Array<{ header: boolean, text: string, colspan: number, rowspan: number }>> }> }} EditorQuestion
  */
 
 /**
@@ -492,6 +493,7 @@ export function createEditor(options) {
       question.origin?.source && question.origin.profile === "spreadsheet" ? h("span", { class: "meta", text: "From your spreadsheet" }) : question.origin?.source && question.origin.profile === "pdf" ? h("span", { class: "meta", text: "From your PDF" }) : question.origin?.source ? h("span", { class: "meta", text: `From your file, line${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : "s"} ${question.origin.source.firstBlock + 1}${question.origin.source.firstBlock === question.origin.source.lastBlock ? "" : ` to ${question.origin.source.lastBlock + 1}`}` }) : null,
       question.media > 0 ? h("span", { class: "meta", text: question.media === 1 ? "1 picture" : `${question.media} pictures` }) : null,
       question.math > 0 ? h("span", { class: "meta", text: question.math === 1 ? "1 equation" : `${question.math} equations` }) : null,
+      (question.tables ?? []).length > 0 ? h("span", { class: "meta", text: question.tables?.length === 1 ? "1 table" : `${question.tables?.length} tables` }) : null,
     );
   }
 
@@ -630,6 +632,53 @@ export function createEditor(options) {
     );
   }
 
+  /**
+   * The tables of the question: each drawn from its rows and cells, as a table of the screen's own making (every cell is set as
+   * text, never as markup). A table stands in the text where its token, like [table 1], is, and is moved or removed with its words.
+   * It is shown and not edited.
+   */
+  function tablesPanel() {
+    const tables = question.tables ?? [];
+    if (tables.length === 0) return null;
+    return h(
+      "section",
+      { class: "tables", attrs: { "aria-label": "Tables in this question" } },
+      h("h3", { text: tables.length === 1 ? "Table" : "Tables" }),
+      h("p", { class: "hint", text: "A table stands where its number is written in the text, like [table 1]. Move the words in brackets to move the table; take them out and the table is taken out of the question. A table cannot be changed here: change it in your Word file and import again, or write its words into the text." }),
+      ...tables.map((t) => {
+        const rows = t.rows ?? [];
+        return h(
+          "div",
+          { class: "data-table" },
+          h("strong", { text: `Table ${t.number}` }),
+          rows.length > 0
+            ? h(
+                "div",
+                { class: "data-table-scroll" },
+                h(
+                  "table",
+                  { attrs: { "aria-label": `Table ${t.number}` } },
+                  h(
+                    "tbody",
+                    null,
+                    ...rows.map((row) =>
+                      h(
+                        "tr",
+                        null,
+                        ...row.map((cell) =>
+                          h(cell.header ? "th" : "td", { ...(cell.header ? { scope: "col" } : {}), attrs: { ...(cell.colspan > 1 ? { colspan: String(cell.colspan) } : {}), ...(cell.rowspan > 1 ? { rowspan: String(cell.rowspan) } : {}) }, text: cell.text }),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : h("pre", { class: "data-table-words", text: t.text }),
+        );
+      }),
+    );
+  }
+
   async function changeType(/** @type {string} */ type) {
     if (type === draft.type) return;
     const keepOptions = (draft.type === "multipleChoice" || draft.type === "multipleResponse") && (type === "multipleChoice" || type === "multipleResponse");
@@ -737,6 +786,7 @@ export function createEditor(options) {
       stem,
       picturesPanel(),
       equationsPanel(),
+      tablesPanel(),
       bodyHost,
       feedback,
       details,

@@ -15,7 +15,7 @@
 
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, titleFromStem, type Question } from "../model/question.ts";
-import { richTextToPlain } from "../model/richtext.ts";
+import { titleText } from "../model/table.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
 
@@ -61,7 +61,7 @@ function plan(question: Question, position: number): Planned {
   const stemText = formatted ? `[html]${giftEscape(htmlText(question.stem, question, newLosses()).replace(/\n/g, ""))}` : giftEscape(stem);
   // A title that is only the start of the question text, which is what an untitled question is given, says nothing the text
   // does not, and Moodle makes the same name from the text. Only a title someone wrote is written.
-  const automatic = question.title === titleFromStem(richTextToPlain(question.stem));
+  const automatic = question.title === titleFromStem(titleText(question.stem));
   const title = automatic ? "" : question.title.replace(/::/g, ":").replace(/\s+/g, " ").trim();
 
   const lines: string[] = [];

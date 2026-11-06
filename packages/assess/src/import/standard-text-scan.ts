@@ -36,6 +36,7 @@
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
 import type { Metadata } from "../model/question.ts";
 import { AT_LEAST, CHOICE_HINTS, SHARE } from "./standard-text-format.ts";
+import { gridFor, tableTag } from "./table-tags.ts";
 import type { Orphan, SourceBlock } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -473,6 +474,11 @@ export interface RawQuestion {
   ambiguousKeyValues: string[];
   /** Stem text continued after a blank line. */
   stemAfterBlank: boolean;
+  /**
+   * The tables (by the number the Word reader gave them) that stand in the stem as a table of the question: each is a tag line in
+   * `stemLines`, and its cells are read as claimed and are not lines of the stem.
+   */
+  keptTables?: number[];
   /** The question stands after a heading that says the questions below it are the copy with the answers. */
   keyed: boolean;
   /** Its answer was a line under the question with no label, which a true or false, fill in the blank or essay question has in such a copy. */
@@ -723,6 +729,27 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     if (j === -1) return false;
     const text = textAt(j);
     return OPTION_START.test(text) || CORRECT_FEEDBACK.test(text) || INCORRECT_FEEDBACK.test(text);
+  };
+
+  /**
+   * A data table inside a stem: the block is a cell of a table that is a grid and none of the question layouts, it is met where a line
+   * is about to be added to the stem, and the table is not the one the question stands in (a test item file with a question to a cell
+   * is not a table inside a stem). The table's blocks run on from this one to the last that is in it. Not when any cell of the table
+   * is a line the scanner reads as something else (an option, a number that starts a question, an answer, feedback, a type or title
+   * line): such a table is options or a key laid out in a grid, and it is read as it always was.
+   */
+  const dataTableAt = (i: number, question: RawQuestion): { table: number; last: number } | undefined => {
+    const place = blocks[i]?.table;
+    if (!place?.plain || gridFor(place.table) === undefined) return undefined;
+    if (place.table === blocks[question.firstBlock]?.table?.table) return undefined;
+    let last = i;
+    for (let j = i; j < count && blocks[j]?.table?.table === place.table; j++) {
+      last = j;
+      const text = textAt(j);
+      if (text.trim() === "") continue;
+      if (QUESTION_START.test(text) || OPTION_START.test(text) || OPTION_START_ORDERED.test(text) || ANSWER_LINE.test(text) || CORRECT_FEEDBACK.test(text) || INCORRECT_FEEDBACK.test(text) || isDirective(text)) return undefined;
+    }
+    return { table: place.table, last };
   };
 
   const claim = (block: SourceBlock, question?: RawQuestion): void => {
@@ -1749,6 +1776,16 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
             mode = { kind: "tail", question };
             break;
           }
+        }
+        // A data table inside the stem stays a table: one tag line where it stood, and its cells are claimed with it.
+        const dataTable = dataTableAt(i, question);
+        if (dataTable) {
+          (question.keptTables ??= []).push(dataTable.table);
+          question.stemLines.push(tableTag(dataTable.table));
+          for (let j = i; j <= dataTable.last; j++) claim(blocks[j] as SourceBlock, question);
+          i = dataTable.last;
+          prevContent = i;
+          break;
         }
         // A stem whose first line was the number alone has no earlier line to span a blank from.
         if (afterBlank && question.stemLines.length > 0) question.stemAfterBlank = true;

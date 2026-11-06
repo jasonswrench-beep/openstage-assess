@@ -10,7 +10,7 @@ import { newQuestionId } from "./ids.ts";
 import type { Finding } from "./findings.ts";
 import { checkAnswerKey, replaceFileKeyProblems } from "../quality/answer-key.ts";
 import { replacePlaceholderProblems } from "../quality/placeholders.ts";
-import { collectRefs, plainToRich, richTextFields, richTextToPlain, sanitizeDeep, type RichText } from "./richtext.ts";
+import { collectRefs, plainToRich, richTextFields, sanitizeDeep, type RichText } from "./richtext.ts";
 import {
   MAX_TITLE_LENGTH,
   titleFromStem,
@@ -22,6 +22,7 @@ import {
 } from "./question.ts";
 import { FindingCode, finding } from "./findings.ts";
 import { unreadObjects } from "./unread-objects.ts";
+import { titleText } from "./table.ts";
 
 export interface CreateQuestionInput {
   type: QuestionType;
@@ -60,7 +61,7 @@ export function createQuestion(input: CreateQuestionInput): Question {
 
   const at = input.at ?? new Date().toISOString();
   const by = input.by ?? "unknown";
-  const title = (input.title ?? titleFromStem(richTextToPlain(clean.value.stem))).slice(0, MAX_TITLE_LENGTH);
+  const title = (input.title ?? titleFromStem(titleText(clean.value.stem))).slice(0, MAX_TITLE_LENGTH);
 
   return {
     id: input.id ?? newQuestionId(),

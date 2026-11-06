@@ -31,6 +31,7 @@
 
 import { finding, FindingCode, type Finding, type SourceRef } from "../model/findings.ts";
 import { unreadObjectFindings } from "../model/unread-objects.ts";
+import { titleText } from "../model/table.ts";
 import { localId } from "../model/ids.ts";
 import {
   escapeHtml,
@@ -47,6 +48,8 @@ import { checkAnswerKey } from "../quality/answer-key.ts";
 import { PLACEHOLDER_TEXT } from "../quality/placeholders.ts";
 import { applyFormattingKey, SHARE } from "./standard-text-format.ts";
 import { equationsAsWords, MATH_TAG, mathFor, withMathTable } from "./math-tags.ts";
+import { gridFor, TABLE_TAG, withTableGrids } from "./table-tags.ts";
+import type { ReadTable } from "./types.ts";
 import { relabelUnlabelledGroups } from "./standard-text-relabel.ts";
 import {
   MAX_POINTS,
@@ -143,6 +146,50 @@ interface TextConversion {
   findings: Finding[];
 }
 
+// A table of the question is written into the text between control characters, which no text holds (normalizeCharacters takes them
+// out first) and which the picture and equation tags inside its cells pass through, and is made into markup once the text is in
+// paragraphs. Each marker is one control character, a letter and a control character.
+const TABLE_MARKS = {
+  table: ["\u0002T\u0002", "\u0002/T\u0002", "<table>", "</table>"],
+  head: ["\u0002H\u0002", "\u0002/H\u0002", "<thead>", "</thead>"],
+  body: ["\u0002B\u0002", "\u0002/B\u0002", "<tbody>", "</tbody>"],
+  row: ["\u0002R\u0002", "\u0002/R\u0002", "<tr>", "</tr>"],
+} as const;
+const CELL_START = /\u0002([DE])(\d{1,3})\u0002/g;
+const CELL_END = /\u0002\/([DE])\u0002/g;
+
+/** A grid as text with the markers in it, never with a blank line in it, so that it stays one paragraph of its own. */
+function gridMarked(grid: ReadTable): string {
+  const part = (mark: keyof typeof TABLE_MARKS, inner: string): string => `${TABLE_MARKS[mark][0]}${inner}${TABLE_MARKS[mark][1]}`;
+  const row = (r: ReadTable["rows"][number]): string =>
+    part(
+      "row",
+      r.cells
+        .map((c) => {
+          const words = normalizeCharacters(c.text).replace(/\u0002/g, "").split("\n").filter((l) => l.trim() !== "").join("\n").trim();
+          const kind = r.header ? "E" : "D";
+          return `\u0002${kind}${Math.min(Math.max(c.span, 1), 100)}\u0002${words}\u0002/${kind}\u0002`;
+        })
+        .join(""),
+    );
+  // The rows marked as headers that come first are the head of the table, and the rest its body. A header row after a body row is a
+  // row of the body, since a head is at the top.
+  let heads = 0;
+  while (heads < grid.rows.length && (grid.rows[heads] as ReadTable["rows"][number]).header) heads++;
+  const head = grid.rows.slice(0, heads).map(row).join("");
+  const body = grid.rows.slice(heads).map(row).join("");
+  return part("table", `${head === "" ? "" : part("head", head)}${part("body", body)}`);
+}
+
+/** The marked text made into markup. The text between the markers has been escaped and its line breaks made into `<br>`. */
+function gridMarkup(marked: string): string {
+  let html = marked
+    .replace(CELL_START, (_whole, kind: string, span: string) => `<${kind === "E" ? 'th scope="col"' : "td"}${span === "1" ? "" : ` colspan="${span}"`}>`)
+    .replace(CELL_END, (_whole, kind: string) => (kind === "E" ? "</th>" : "</td>"));
+  for (const [open, close, openTag, closeTag] of Object.values(TABLE_MARKS)) html = html.split(open).join(openTag).split(close).join(closeTag);
+  return html;
+}
+
 /** Turn source text into the restricted subset, pulling out images, equations and raw HTML. */
 function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextConversion {
   const media: MediaRef[] = [];
@@ -165,6 +212,13 @@ function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextC
     }
     htmlBlocks.push(cleaned.html);
     return `\u0000HTML${htmlBlocks.length - 1}\u0000`;
+  });
+
+  // A table the reader found stands where its tag was, as a paragraph of its own. Its cells are text for now, so that the picture and
+  // equation tags in them are read with the rest. A tag that names no table (typed into a text file) is only text and is left alone.
+  text = text.replace(TABLE_TAG, (whole, n: string) => {
+    const grid = gridFor(Number(n));
+    return grid ? `\n\n${gridMarked(grid)}\n\n` : whole;
   });
 
   let imageCount = 0;
@@ -204,7 +258,7 @@ function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextC
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0)
-    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`);
+    .map((p) => (p.startsWith(TABLE_MARKS.table[0]) ? gridMarkup(escapeHtml(p).replace(/\n/g, "<br>")) : `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`));
 
   let html = paragraphs.join("");
   html = html.replace(/\u0000HTML(\d+)\u0000/g, (_w, i: string) => htmlBlocks[Number(i)] ?? "");
@@ -1296,7 +1350,7 @@ function buildQuestion(
     type,
     stem: stemHasContent ? stem.rich : plainToRich("(no stem text in the source)"),
     body: body.body,
-    ...(title ? { title } : { title: titleFromStem(richTextToPlain(stem.rich)) }),
+    ...(title ? { title } : { title: titleFromStem(titleText(stem.rich)) }),
     points,
     feedback: {
       ...(raw.generalFeedback.length > 0 ? { general: plainToRich(equationsAsWords(raw.generalFeedback.join("\n"))) } : {}),
@@ -1380,7 +1434,7 @@ export const standardTextImporter: Importer = {
   extensions: [".txt", ".md"],
 
   parse(input: string | SourceBlock[], options: ImportOptions = {}): ImportResult {
-    return withMathTable(options.math, () => parseWithMath(input, options));
+    return withMathTable(options.math, () => withTableGrids(options.tables, () => parseWithMath(input, options)));
   },
 };
 
@@ -1452,7 +1506,8 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
     let cells = 0;
     for (let n = raw.firstBlock; n <= raw.lastBlock; n++) {
       const table = tableOf.get(n);
-      if (table !== undefined && table !== home) cells++;
+      // A table the question keeps as a table was not flattened, so its cells are not counted.
+      if (table !== undefined && table !== home && !(raw.keptTables ?? []).includes(table)) cells++;
     }
     return cells === 0
       ? built
@@ -1466,6 +1521,18 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
         ]);
   });
 
+  const kept = scanned.questions.reduce((n, q) => n + (q.keptTables?.length ?? 0), 0);
+  const keptFindings =
+    kept === 0
+      ? []
+      : [
+          finding(
+            FindingCode.TableLayout,
+            "info",
+            `${kept === 1 ? "1 table" : `${kept} tables`} inside the text of a question ${kept === 1 ? "was" : "were"} kept as ${kept === 1 ? "a table" : "tables"}: a grid of two or more rows and columns that is none of the question layouts. Each shows as [table N] in the text of its question. What is in the cells is words, pictures and equations; bold, italics and colour in a cell are not kept.`,
+          ),
+        ];
+
   return {
     profile,
     file,
@@ -1473,6 +1540,6 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
     // Text no question claimed is shown as it reads, so an equation in it is its words and not a tag.
     orphans: scanned.orphans.map((o) => ({ ...o, text: equationsAsWords(o.text) })),
     counts: countVerdicts(questions, scanned.orphans.length),
-    fileFindings: [...relabelFindings, ...scanned.fileFindings, ...formatting.fileFindings],
+    fileFindings: [...relabelFindings, ...scanned.fileFindings, ...formatting.fileFindings, ...keptFindings],
   };
 }

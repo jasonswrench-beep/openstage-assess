@@ -319,6 +319,8 @@ export function richTextToPlain(value: RichText | string): string {
   const withBreaks = content
     .replace(/<\s*br\s*\/?\s*>/gi, "\n")
     .replace(/<\s*\/\s*(p|li|tr|div|blockquote|h[1-6])\s*>/gi, "\n")
+    // The cells of a row are words apart, or a table of two columns reads as one word to a row.
+    .replace(/<\s*\/\s*(td|th)\s*>/gi, " ")
     .replace(/<oa-media[^>]*>\s*<\/oa-media>/gi, " ")
     .replace(/<oa-math[^>]*>\s*<\/oa-math>/gi, " ")
     .replace(/<[^>]*>/g, "");

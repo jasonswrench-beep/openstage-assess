@@ -38,6 +38,7 @@
     "check:word-pictures": "node --experimental-strip-types --no-warnings test/tools/word-pictures-check.ts",
     "check:word-symbols": "node --experimental-strip-types --no-warnings test/tools/word-symbols-check.ts",
     "check:word-equations": "node --experimental-strip-types --no-warnings test/tools/word-equations-check.ts",
+    "check:word-tables": "node --experimental-strip-types --no-warnings test/tools/word-tables-check.ts",
     "check:excel-authored": "node --experimental-strip-types --no-warnings test/tools/excel-authored-check.ts"
   },
   "dependencies": {},

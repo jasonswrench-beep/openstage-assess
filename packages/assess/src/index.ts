@@ -15,6 +15,8 @@ export * from "./naming.ts";
 // Model
 export * from "./model/ids.ts";
 export * from "./model/richtext.ts";
+export { replaceTables, tablesIn, readTableHtml, titleText } from "./model/table.ts";
+export type { TableCell, TableView } from "./model/table.ts";
 export { sniffImage, describeUnreadImage, MAX_PICTURE_BYTES } from "./model/image.ts";
 export { addPicture, replacePicture, removePicture, placedPictures, PictureError, MAX_PICTURES_PER_QUESTION } from "./model/picture-edit.ts";
 export type { PictureEdit } from "./model/picture-edit.ts";

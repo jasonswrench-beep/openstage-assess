@@ -122,6 +122,16 @@ export interface ImportOptions {
    * equations (the Word reader) and not by a caller; the tags are turned into the question's equations while the lines are read.
    */
   math?: ReadonlyMap<string, MathReading>;
+  /**
+   * The grids a reader found among the tables that are none of the question layouts, by the table's number (the `table` of a block's
+   * place). A question with one inside its text keeps it as a table; one that is not here is read cell by cell, as lines of text.
+   */
+  tables?: ReadonlyMap<number, ReadTable>;
+}
+
+/** A table that is a grid of two or more rows and columns, as the reader found it. Cell text is lines joined by a line break. */
+export interface ReadTable {
+  rows: Array<{ header: boolean; cells: Array<{ text: string; span: number }> }>;
 }
 
 export interface Importer {

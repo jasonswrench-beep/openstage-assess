@@ -1409,9 +1409,20 @@ not show or what was decided on one file's evidence.
   The words are all there and the rows and columns are not, and until now only the file said it, so the question read as parsed.
   It now carries `import.table-flattened` (a warning) when a table other than the one it begins in lies inside its text. The first
   version counted every question that touched a plain table and flagged 373 of the 375 questions of a real test item file that puts
-  a question in each cell and reads perfectly, so the rule is only the table that is not the question's own. Still open: keeping the
-  table as a table. The rich text subset has `table`, the printer already draws one as lines with the cells between bars, and the
-  editor would need a token for it as it has for a picture and an equation.
+  a question in each cell and reads perfectly, so the rule is only the table that is not the question's own.
+  **Then kept as a table (the same day).** A table that is a grid (two or more rows, a row of two or more cells, no table in a
+  cell, nothing joined the older way, at most 100 rows and 1000 cells) and lies in the stem is now a table of the question: markup in
+  the stem, a `[table N]` token in the editor, drawn from its rows and cells, a header row only where Word marked one, a spanning
+  cell with its `colspan`, pictures and equations in cells kept. One that is not a grid, or whose cells the scanner reads as options,
+  numbers, answers or feedback, is read cell by cell as before and flagged. Real Word wrote five tables and agreed with the
+  reader on every row, cell and header mark (`check:word-tables`); the gates did not move. Still open: **a table in an option, in
+  feedback or in a matching question** (only the stem keeps one; the others read cell by cell and flag); **bold, italics and
+  colour in a cell** are not kept; **a table is not edited in the app**, only moved or removed with its token; **a printed test
+  draws a table as lines of text** with the cells between bars, and not as a table (a table in the Word file is not built); **a
+  table with cells joined the older way (`w:hMerge`) or joined down (`w:vMerge`)** is read cell by cell, since a grid of spans
+  down is not kept; a table in a table keeps the grid inside and reads the outer by cells; **shading as a header** is not read.
+  Nothing has been imported into a learning system with a table in a question: Moodle XML, GIFT and the Brightspace CSV carry the
+  markup, QTI 1.2 and Common Cartridge were not looked at.
 - **Matching questions as a two-column table are not read**, and neither is a question that
   spreads over several rows of a grid or whose options are the rows below it with a
   stem cell merged down. Those tables are read cell by cell, and the file says so.

@@ -24,7 +24,7 @@ import { DocxError, openDocx, type DocxLimits, type DocxPackage } from "./docx/p
 import { pictureReader } from "./docx/pictures.ts";
 import { hasText, type XmlElement } from "./docx/xml.ts";
 import { standardTextImporter } from "./standard-text.ts";
-import type { Importer, ImportOptions, ImportResult, SourceBlock } from "./types.ts";
+import type { Importer, ImportOptions, ImportResult, ReadTable, SourceBlock } from "./types.ts";
 
 export const WORD_PROFILE_ID = "word-docx";
 
@@ -258,7 +258,7 @@ function findingsFrom(stats: DocumentStats, headersAndFooters: number, stylesDam
 export function docxToBlocks(
   bytes: Uint8Array,
   limits?: DocxLimits,
-): { blocks: SourceBlock[]; findings: Finding[]; media: Map<string, Uint8Array>; math: Map<string, MathReading> } {
+): { blocks: SourceBlock[]; findings: Finding[]; media: Map<string, Uint8Array>; math: Map<string, MathReading>; tables: Map<number, ReadTable> } {
   const pkg = openDocx(bytes, limits);
   const root = pkg.xml(pkg.mainDocument);
   if (!root) throw new DocxError(`The main document part "${pkg.mainDocument}" could not be read.`);
@@ -266,10 +266,10 @@ export function docxToBlocks(
   const stylesPart = optionalPart(pkg, "styles", "word/styles.xml");
   const numbering = readNumbering({ numbering: numberingPart.root, styles: stylesPart.root, numberingDamaged: numberingPart.damaged });
   const pictures = pictureReader(pkg);
-  const { blocks, stats, math } = documentToBlocks(root, numbering, readFormatting(stylesPart.root), pictures);
+  const { blocks, stats, math, tables } = documentToBlocks(root, numbering, readFormatting(stylesPart.root), pictures);
   const media = new Map<string, Uint8Array>();
   for (const [path, picture] of pictures.pictures) media.set(path, picture.bytes);
-  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged, pictures.refused), media, math };
+  return { blocks, findings: findingsFrom(stats, headersAndFootersWithText(pkg), stylesPart.damaged, pictures.refused), media, math, tables };
 }
 
 /** An importer whose bytes entry point is always there, which is what a caller of this one relies on. */
@@ -287,8 +287,8 @@ export const wordImporter: Importer & { parseBytes: NonNullable<Importer["parseB
   },
 
   parseBytes(bytes: Uint8Array, options: ImportOptions = {}): ImportResult {
-    const { blocks, findings, media, math } = docxToBlocks(bytes);
-    const result = standardTextImporter.parse(blocks, { ...options, math, profile: WORD_PROFILE_ID, file: options.file ?? "input.docx" });
+    const { blocks, findings, media, math, tables } = docxToBlocks(bytes);
+    const result = standardTextImporter.parse(blocks, { ...options, math, tables, profile: WORD_PROFILE_ID, file: options.file ?? "input.docx" });
     return { ...result, fileFindings: [...findings, ...result.fileFindings], ...(media.size > 0 ? { media } : {}) };
   },
 };
