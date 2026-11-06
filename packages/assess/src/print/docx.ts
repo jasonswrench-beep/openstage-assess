@@ -24,6 +24,8 @@ const esc = (text: string): string =>
 const tw = (points: number): number => Math.round(points * 20);
 
 function runXml(run: Run, size: number, bold: boolean): string {
+  // An equation is written as the equation it is. The layout has already read it again and kept only what it understands.
+  if (run.equation !== undefined) return run.equation;
   const props =
     (run.mono ? '<w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:cs="Courier New"/>' : "") +
     (bold || run.bold ? "<w:b/>" : "") +

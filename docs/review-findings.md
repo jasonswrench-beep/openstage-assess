@@ -583,6 +583,36 @@ picture could not be written by Word's automation here, so the turn (`rot`) is c
   marker, so it can come out `parsed` with the figure it depends on missing. Fine
   for a first slice, wrong for the 95 percent target. Stages 6 and 7 read the
   content, and until then the question should carry a finding of its own.
+  (Pictures and equations that are read are now in the question and say so. What
+  is still true is the same for the ones that are not read: a picture in a format
+  the reader refuses, and an equation with a part it does not know, leave their
+  marker and a file-level warning with the reason, and the question that holds one
+  is not itself flagged. It should be.)
+- **Equations: what is read and what is not.** The reader (6 November 2026) knows the
+  constructs a test uses and refuses the whole equation for any other, so a rare one
+  (a line break or an Insert Symbol character inside an equation's own run, a box with
+  a line struck through it, a bracket made of a character Word offers that the table
+  does not map) shows as `[equation]` with its reason. Nothing has been tried on a real chapter of equations: the twenty kinds Word
+  can build were read as built, and that is a test of the reader on Word's own XML
+  and not of what instructors write. Equations that arrive as pictures (pasted from a
+  web page, or from a program that draws them) are pictures and are kept as such;
+  nothing reads the equation out of one. An equation in a PDF is its text, as it was.
+  Display versus inline is not kept: a display equation is read as the equations in
+  it, in the line it stood in.
+- **An equation is not edited in the app.** It is drawn, shown with its LaTeX, and moved
+  or removed in the text by its token. To change one, the instructor changes it in the
+  Word file and imports again, or writes the question in words. Writing LaTeX would need
+  a LaTeX reader that makes MathML, and a wrong one would show a different equation from
+  the one that is stored.
+- **Moodle XML writes an equation as `\(LaTeX\)` and nobody has imported such a file into
+  Moodle.** It shows as an equation only if the site's MathJax filter is on. The other
+  exports write `[Equation: LaTeX]`, as before; QTI and Common Cartridge could carry
+  MathML and have not been taught to, because no Brightspace or Canvas import has been
+  seen to work yet.
+- **Symbols.** A character from the Symbol font is read by a table of the codes it is
+  sure of (6 November 2026). A code it is not sure of is left as written and counted, so it
+  can still show as a wrong letter in a stem; the count is in the file's warnings. Wingdings
+  and the like are pictures in letter form and are marked `[symbol]`.
 - **(Fixed on 5 November 2026: a Rich Text file, by name or by what it begins with, goes to the Word importer, which does not
   read it and says to save it from Word as a `.docx`; the text importer no longer claims `.rtf`.) The text importer claims `.rtf`.** Its extensions are `.txt`, `.rtf` and `.md`,
   so an RTF file is read as plain text and its control words come in as stray

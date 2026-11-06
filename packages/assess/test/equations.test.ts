@@ -22,7 +22,7 @@ import { openDocx } from "../src/import/docx/package.ts";
 import { parseXml } from "../src/import/docx/xml.ts";
 import { standardTextImporter } from "../src/import/standard-text.ts";
 import { wordImporter } from "../src/import/word.ts";
-import { FindingCode } from "../src/model/findings.ts";
+import { FindingCode, verdictFrom } from "../src/model/findings.ts";
 import type { Question } from "../src/model/question.ts";
 import { collectRefs, richTextToPlain } from "../src/model/richtext.ts";
 import { docx, paragraph, run } from "./support/docx-writer.ts";
@@ -345,6 +345,8 @@ describe("an equation in a question", () => {
     assert.equal(only.math.length, 1);
     assert.ok(!plain(only.stem).includes("no stem text"), plain(only.stem));
     assert.deepEqual(collectRefs(only.stem).math, ["q1_e1"]);
+    assert.ok(!only.findings.some((f) => f.code === FindingCode.EmptyStem), "and it is not called a question with no stem text");
+    assert.equal(verdictFrom(only.findings), "parsed");
   });
 
   test("an option that is only an equation is an option, with an equation of its own", () => {

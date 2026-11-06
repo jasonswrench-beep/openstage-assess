@@ -33,6 +33,26 @@ const share = (n: number): number => Math.round((100 / n) * 100000) / 100000;
 interface Planned {
   item: ReportItem;
   xml?: string;
+  /** How many equations were written as LaTeX in the text of the question. */
+  equations?: number;
+}
+
+const MATH_ELEMENT = /<oa-math\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi;
+
+/**
+ * The equations in a text, written the way Moodle reads them: LaTeX between \( and \), which its MathJax filter turns into the
+ * equation. Nothing is lost, since the LaTeX is what the equation is. An equation with no LaTeX, or LaTeX that holds the characters
+ * that would end the delimiters early, is left where it is and written as words by the usual path, and counted.
+ */
+function carryEquations(text: RichText, question: Question, carried: { count: number }): RichText {
+  if (text.format === "plain") return text;
+  const content = text.content.replace(MATH_ELEMENT, (whole, ref: string) => {
+    const latex = question.math.find((m) => m.id === ref)?.latex.trim() ?? "";
+    if (latex === "" || latex.includes("\\)") || latex.includes("$$")) return whole;
+    carried.count++;
+    return ` \\(${escapeHtml(latex)}\\) `;
+  });
+  return { ...text, content };
 }
 
 /** A name Moodle can keep a file under, and that is safe inside a file name and an attribute. */
@@ -80,7 +100,8 @@ function plan(question: Question, position: number, media?: ReadonlyMap<string, 
   const notes: string[] = [];
   let asType: string | undefined;
 
-  const html = (text: RichText): string => htmlText(text, question, losses);
+  const equations = { count: 0 };
+  const html = (text: RichText): string => htmlText(carryEquations(text, question, equations), question, losses);
   const text = (value: RichText | undefined, tag: string): string =>
     `<${tag} format="html"><text>${value && hasText(value) ? cdata(html(value)) : ""}</text></${tag}>`;
   const carried = carryPictures(question.stem, question, media);
@@ -191,7 +212,7 @@ function plan(question: Question, position: number, media?: ReadonlyMap<string, 
     `<questiontext format="html"><text>${cdata(stem)}</text>${carried.files.map((f) => `<file name="${escapeXml(f.name)}" path="/" encoding="base64">${Buffer.from(f.bytes).toString("base64")}</file>`).join("")}</questiontext>` +
     text(question.feedback.general, "generalfeedback") +
     `<defaultgrade>${question.points}</defaultgrade><hidden>0</hidden>${body}</question>`;
-  return { item: { ...base, outcome: notes.length > 0 ? "exportedWithLosses" : "exported", ...(asType ? { asType } : {}), notes }, xml };
+  return { item: { ...base, outcome: notes.length > 0 ? "exportedWithLosses" : "exported", ...(asType ? { asType } : {}), notes }, xml, equations: equations.count };
 }
 
 export interface MoodleXmlOptions {
@@ -209,10 +230,14 @@ export function exportMoodleXml(questions: readonly Question[], options: MoodleX
   questions = exportable(questions);
   const items: ReportItem[] = [];
   const blocks: string[] = [];
+  let equations = 0;
   questions.forEach((question, i) => {
     const planned = plan(question, i + 1, options.media);
     items.push(planned.item);
-    if (planned.xml) blocks.push(planned.xml);
+    if (planned.xml) {
+      blocks.push(planned.xml);
+      equations += planned.equations ?? 0;
+    }
   });
 
   const name = safeName(options.name);
@@ -224,6 +249,9 @@ export function exportMoodleXml(questions: readonly Question[], options: MoodleX
     `The questions go into a category called "${name}" in the course, which Moodle makes if it is not there.`,
     "Titles, tags, objectives, difficulty and history are not part of Moodle XML.",
     ...(options.media ? ["A picture in the text of a question is written into the file with it. A picture in an answer, in feedback or in a matching question is written as words."] : []),
+    ...(equations > 0
+      ? [`${equations === 1 ? "1 equation is" : `${equations} equations are`} written as LaTeX between \\( and \\), which Moodle shows as an equation when its MathJax filter is on and as that text when it is off. Check how one reads after the import.`]
+      : []),
     "Attempts and penalties are delivery settings, not part of a question, so none is written and Moodle applies its own.",
   ];
   const report = buildReport(MOODLE_XML_ID, MOODLE_XML_LABEL, questions.length, items, blocks.length > 0 ? [file] : [], general);

@@ -140,6 +140,15 @@ describe("a picture that can be kept", () => {
     assert.ok(!oq.findings.some((f) => f.code === FindingCode.DuplicateOption), "two picture options are not the same option");
   });
 
+  test("is a stem on its own when it is the whole of the stem, and the question is not called one with no stem text", () => {
+    const lines = [{ text: "1. ", draw: drawing("rId10", { alt: "A blue box" }) }, "a) Blue", "b) Red", "Answer: a"];
+    const only = read(document(lines, [spec("rId10", "image1.png", BLUE)])).questions[0] as Question;
+    assert.equal(only.media.length, 1);
+    assert.deepEqual(collectRefs(only.stem).media, [only.media[0]!.id]);
+    assert.ok(!only.findings.some((f) => f.code === FindingCode.EmptyStem));
+    assert.equal(verdictFrom(only.findings), "parsed");
+  });
+
   test("reads a JPEG and a GIF as well, and names each by its own type", () => {
     const j = jpeg(64, 48);
     const g = gif(10, 12);

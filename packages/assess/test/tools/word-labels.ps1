@@ -52,6 +52,16 @@ try {
         }
         $labels.Add("SHAPES:" + $doc.Shapes.Count)
       }
+      if ($What -eq 'equations') {
+        # What Word makes of the equations: type (0 display, 1 inline) | how many functions are in it | the type of its first function
+        # (7 fraction, 19 superscript, 16 radical and so on) | its text, one for each equation in the document.
+        $labels.Clear()
+        for ($k = 1; $k -le $doc.OMaths.Count; $k++) {
+          $om = $doc.OMaths.Item($k)
+          $first = if ($om.Functions.Count -gt 0) { $om.Functions.Item(1).Type } else { -1 }
+          $labels.Add(("{0}|{1}|{2}|{3}" -f $om.Type, $om.Functions.Count, $first, ([string]$om.Range.Text).TrimEnd([char]13, [char]7)))
+        }
+      }
       if ($What -eq 'text') {
         # The running header of the first section as Word holds it: empty when the document has none.
         $labels.Add("HEADER:" + ([string]$doc.Sections.Item(1).Headers.Item(1).Range.Text).TrimEnd([char]13, [char]7))

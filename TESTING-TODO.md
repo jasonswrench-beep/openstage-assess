@@ -35,6 +35,24 @@ item says what has been run and what has not. Items are removed when done, with 
 - [ ] **Import the Moodle XML of a bank with figures into a Moodle course.** A picture in the text of a question is written as
   Moodle documents it (an image tag and the file in base64). Not tried in a Moodle. A picture in an answer, in feedback or in a
   matching question is written as words, and so is a picture in every other format.
+- [ ] **Import a real Word test bank that has equations in it, and read every one against the Word file.** Equations are read now
+  (they used to be the word [equation]): `npm run check:word-equations` has Word build twenty kinds and the reader found what it
+  was given in all of them (6 November 2026), and none of the real banks kept here holds an equation, so how a real chapter's
+  come through is not known. An equation with a part the reader does not know stays `[equation]` and the file says why; one that
+  is read is shown drawn, with its LaTeX under it. Look for a wrong one: that is the bad case, and the reader is built to
+  refuse before it guesses.
+- [ ] **Look at the equations panel in the app's own window, with a screen reader if you use one.** The equation is drawn from MathML the
+  engine wrote, by the window's own engine (built-in browser checked: a fraction was drawn; the Tauri window was not). Its LaTeX is
+  written under it as text. Is the drawn equation read aloud sensibly, or only the LaTeX under it?
+- [ ] **Print a test with equations as Word and as PDF, and look.** Word opened the printed test without repair and reported three
+  inline equations of the right kinds (`check:word-print`); the equations are Word's own XML as the import kept it, drawn in
+  Word's math font at the size of the paragraph. The PDF has no font for one and prints `[Equation: LaTeX]` with a note. Does the
+  Word equation sit on the line and size you expect?
+- [ ] **Import the Moodle XML of a bank with equations into a Moodle course.** An equation is written as `\(LaTeX\)`, which shows as
+  an equation only if the site's MathJax filter is on. Not tried in a Moodle. Every other format writes `[Equation: LaTeX]`.
+- [ ] **Put a Greek letter and a sign in a Word question by Insert Symbol, and by typing with the Symbol font on, and import it.**
+  Checked against Word's own files (`check:word-symbols`); the table holds only codes it is sure of, so a rare sign may come in as
+  the letter it is written with. The file says how many it was unsure of.
 - [ ] **Hide a whole numbered paragraph in Word and look at the numbers.** Triple-click one item of a numbered list, press
   Ctrl+Shift+H, and make sure Word is not set to show hidden text. Word's object model counted the hidden item (the item after
   it kept its number), and the reader does the same. What the page shows on screen is not something the check can see.

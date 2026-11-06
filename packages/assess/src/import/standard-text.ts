@@ -1269,7 +1269,9 @@ function buildQuestion(
   }
   for (const note of raw.notes) findings.push({ ...note, source });
 
-  if (richTextToPlain(stem.rich).length === 0) {
+  // A stem that is only a picture or only an equation has something to show; it is not a stem with no text.
+  const stemHasContent = richTextToPlain(stem.rich).length > 0 || stem.media.length > 0 || stem.math.length > 0;
+  if (!stemHasContent) {
     findings.push(finding(FindingCode.EmptyStem, "error", "This question has no stem text.", { source, field: "stem" }));
   }
 
@@ -1291,8 +1293,7 @@ function buildQuestion(
 
   const question = createQuestion({
     type,
-    // A stem that is only a picture or only an equation has something to show; it is not a stem with no text.
-    stem: richTextToPlain(stem.rich).length > 0 || stem.media.length > 0 || stem.math.length > 0 ? stem.rich : plainToRich("(no stem text in the source)"),
+    stem: stemHasContent ? stem.rich : plainToRich("(no stem text in the source)"),
     body: body.body,
     ...(title ? { title } : { title: titleFromStem(richTextToPlain(stem.rich)) }),
     points,

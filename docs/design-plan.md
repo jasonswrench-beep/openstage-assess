@@ -138,7 +138,10 @@ lost by writing CSV.
 - **A picture or an equation** cannot be carried. It is written into the text as
   `[Picture: its alternative text]` or `[Equation: LaTeX]`, so the question still
   makes sense and the author can see where to put it back, and it is counted in
-  the report.
+  the report. (Moodle XML is the exception for an equation: it is written as LaTeX
+  between `\(` and `\)`, which Moodle shows as an equation when its MathJax filter
+  is on, and the file says so. A printed Word file carries an equation as an
+  equation, from the copy of Word's own XML the bank keeps.)
 
 **Reading the same table in.** A list of questions kept in Excel is the other common way an instructor holds a bank, so
 the same columns are read back (`src/import/spreadsheet.ts`), from `.xlsx` as well as CSV and Unicode text. Author's

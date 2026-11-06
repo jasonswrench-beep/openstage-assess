@@ -119,8 +119,8 @@ it had to fill with `(missing)` go only when the words are written in where the 
 they are dismissed and kept like the others.
 
 **The editor never writes back what the person did not change.** An edit keeps
-every field it was not given as stored, formatting and all; text that holds a
-picture or an equation is refused, not rewritten without it; a new answer row is
+every field it was not given as stored, formatting and all; text that refers to a
+picture or an equation the question does not carry is refused, not rewritten without it; a new answer row is
 not marked right, and a true or false question starts with neither chosen. A
 question made in the app is checked for its answer key before it is kept, or it
 would show as parsed with no answer.
@@ -153,6 +153,30 @@ under the words it was in (`print/layout.ts`, `expandPictures`): in the Word fil
 PDF as an image (a PNG is decoded and laid on white, a JPEG is handed on; a GIF, a CMYK JPEG, an interlaced PNG or damaged data is
 words with the reason against the question, never dropped). Moodle XML carries a picture in the text of a question and no other
 export has a place for one, so those write words and say so.
+
+**A Word equation is read only when every part of it is one the reader knows, and otherwise it keeps its marker with the reason.**
+`import/docx/omml.ts` reads an equation into one small tree and writes the LaTeX, the MathML and a copy of Word's own XML from
+that tree, so the three cannot disagree. It knows fractions, roots, scripts on either side, sums and integrals with limits,
+brackets, functions, accents, bars, limits, matrices, arrays of equations, braces and boxes. An element it does not know, a
+bracket or separator it cannot map, a bar that does not say which side, a box with a strike, loose text, an equation nested past
+60 deep or past 5000 parts, or one with nothing in it, makes the whole equation unread: `[equation]` stays where it stood and the
+file says why, once for each reason. It is never read with a part left out, because a wrong equation that looks right is worse than
+a marker. Every table lookup goes through `own`, so a run of the word "constructor" is a word; the MathML is generated and escaped,
+never copied; the kept XML holds only the elements the reader understands. The reader leaves a tag `[ eq: "eq-<hash>" ]` in the
+line and hands the equations over beside the blocks (`import/math-tags.ts`, held for one `parse` and no longer); the builder turns
+a tag in a stem or an option into an equation of the question (`q1_e1`, `q1o0_e1`), and an equation in feedback, a matching pair, a
+model answer or text no question claimed is written as `[Equation: LaTeX]`. A stem or an option that is only an equation (or only
+a picture) is a stem or an option and not an empty one. In the editor an equation is the token `[equation 2]`, moved or removed like
+words, and is shown drawn and with its LaTeX but not edited (`ui/math.js` builds each element from a list, never from the string).
+A printed Word file carries the equation as an equation, from the stored XML read again by the same reader (`cleanOmml`, because a
+bank can be edited by hand); a PDF prints the words and says so. Moodle XML writes the LaTeX between `\(` and `\)`. Everything else
+writes `[Equation: LaTeX]` and counts it. Asked of real Word, all twenty kinds it can build were read as the parts it was given
+(`check:word-equations`), and Word opens a printed test with three of them as three inline equations (`check:word-print`).
+
+**A character typed from the Symbol font is read by a table that holds only the codes it is sure of.** Insert Symbol and text set
+in the Symbol font are the Greek letters and signs they show (`import/docx/symbols.ts`); a code the table is not sure of is left as
+written and counted in a warning, and a Wingdings or other symbol is marked `[symbol]` and counted by its font. The table leaves out
+the codes whose glyph is a piece of a bracket or is not certain, and a code is added only when Word (`check:word-symbols`) shows it.
 
 **A printed test shows no answer on the student copy and invents none on the
 key.** A question with no usable key is printed, and the key says in bold that no
@@ -239,7 +263,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2296 engine tests and 252 app tests, Node's own runner
+npm test                       # 2378 engine tests and 269 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -262,6 +286,8 @@ npm run check:word-formatting --workspace packages/assess   # asks Word itself h
 npm run check:word-authored --workspace packages/assess   # has Word write sample documents and reads them
 npm run check:word-print --workspace packages/assess   # has Word open the printed tests, read back every paragraph, and say what page each question of a long test lands on
 npm run check:word-pictures --workspace packages/assess   # has Word write documents with pictures (placed, cropped, floating, flipped, in a text box) and reads them
+npm run check:word-symbols --workspace packages/assess   # has Word write characters from the Symbol font (Insert Symbol, and typed in that font) and reads them
+npm run check:word-equations --workspace packages/assess   # has Word build twenty kinds of equation and reads them back as the parts it was given
 npm run check:excel-authored --workspace packages/assess   # has Excel write a workbook and CSV and compares every cell with what Excel says
 npm run check:generated --workspace packages/assess -- check <folder> --piece N   # holds a generated bank to its plan
 ```
@@ -288,6 +314,15 @@ faults the tests from our own writer could not: a floating picture's offsets (nu
 text box, so every floating picture was refused, and its tag at the start of a numbered line stopped the line being a question.
 `npm run check:word-pictures -- --update-fixtures` keeps what Word wrote in `fixtures/word-authored/pictures`, where `npm test` reads it.
 Word's automation would not turn a picture here, so a turned one (`rot` on the drawing's transform) is only tried with our own writer.
+
+`check:word-symbols` is run after any change to `import/docx/symbols.ts` or to how `w:sym` and a Symbol-font run are read: a code the
+table maps to the wrong sign is a wrong word in a stem and, in an option, a wrong answer. `check:word-equations` is run after any change
+to `import/docx/omml.ts`: it has Word build each kind of equation through its object model (a fraction, a root with and without a
+degree, scripts, a sum, an integral, a function, an accent, a bar, limits, a bracket, an array, a brace, a prescript, a box, a matrix and
+typed Greek letters), one in a question, and holds the LaTeX the reader finds to the parts Word was given. Hand-written XML is only as
+good as what its author believes Word writes; the first run found one fault in the check itself (Word puts the text it replaced into
+the degree of a root) and none in the reader. `npm run check:word-symbols -- --update-fixtures` and `npm run check:word-equations --
+--update-fixtures` keep what Word wrote in `fixtures/word-authored/symbols` and `fixtures/word-authored/equations`.
 
 `check:excel-authored` is the fifth, and is run after any change to `import/table-xlsx.ts`
 or `import/table-csv.ts`: a cell the reader takes for something other than what Excel stored
