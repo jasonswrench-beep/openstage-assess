@@ -866,6 +866,33 @@ export class Bank {
     this.folderOf.delete(questionId);
   }
 
+  /**
+   * File several questions in one folder, or in none (`folderId` undefined), at once. All or nothing: every question and the folder are
+   * checked before any is moved, so an id that is not in the bank leaves every question where it was. Each ends up in one folder, as
+   * ever, and one that is already there is counted and left alone. Like filing one, it is not an edit of any question: no version, no
+   * history entry and no change of notes.
+   */
+  moveManyToFolder(questionIds: readonly string[], folderId: string | undefined): { filed: number; alreadyThere: number } {
+    const ids = [...new Set(questionIds)];
+    const missing = ids.filter((id) => !this.questions.has(id));
+    if (missing.length > 0) {
+      throw new Error(`No question with the id ${missing[0]} is in this bank.${missing.length > 1 ? ` (${missing.length - 1} more are not either.)` : ""}`);
+    }
+    if (folderId !== undefined) this.folderNamed(folderId);
+    let filed = 0;
+    let alreadyThere = 0;
+    for (const id of ids) {
+      if (this.folderIdOf(id) === folderId) {
+        alreadyThere++;
+        continue;
+      }
+      if (folderId === undefined) this.unfile(id);
+      else this.moveToFolder(id, folderId);
+      filed++;
+    }
+    return { filed, alreadyThere };
+  }
+
   /** Every place it is listed, not the first: a damaged file can list one question twice, and it would stay in the second. */
   private takeOutOfFolders(questionId: string): void {
     for (const node of this.allFolders()) {

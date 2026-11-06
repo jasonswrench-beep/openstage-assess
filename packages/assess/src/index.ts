@@ -16,6 +16,8 @@ export * from "./naming.ts";
 export * from "./model/ids.ts";
 export * from "./model/richtext.ts";
 export { sniffImage, describeUnreadImage, MAX_PICTURE_BYTES } from "./model/image.ts";
+export { addPicture, replacePicture, removePicture, placedPictures, PictureError, MAX_PICTURES_PER_QUESTION } from "./model/picture-edit.ts";
+export type { PictureEdit } from "./model/picture-edit.ts";
 export type { ImageInfo, ImageMime } from "./model/image.ts";
 export * from "./model/findings.ts";
 export * from "./model/question.ts";

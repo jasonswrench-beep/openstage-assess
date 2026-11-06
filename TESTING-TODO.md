@@ -24,6 +24,10 @@ item says what has been run and what has not. Items are removed when done, with 
   so how a real chapter's figures come through is not known. Open Check quality's partner, the bank, and look: is each figure
   there, in the right question, with a description? A figure that was cropped, turned, drawn on or grouped in Word is not kept and
   says why (the file's findings); tell me which of those your figures are, since cropping a screenshot is common.
+- [ ] **Add a picture to a question by hand, and put back one an import refused.** The editor has Add a picture, Replace and Remove,
+  and a cropped picture that an import will not keep can be saved from Word as a picture and added in the review. The buttons were
+  clicked in the built-in browser with a picture standing in for the computer's file chooser, which was not opened. Try the real
+  chooser, a large photograph, and a picture that is not a PNG, JPEG or GIF.
 - [ ] **Print a test with figures, as Word and as PDF, and look.** Word opened the printed test without repair and reported each
   picture's size and description (`check:word-print`); the PDF was taken apart (`print-pictures.test.ts`) and not looked at
   in a viewer. Are the figures the right size, under the right words, not split from their question across a page? A GIF, a CMYK
@@ -300,9 +304,10 @@ Everything a program can check is in `folders.test.ts` (engine and app), the fuz
 built-in browser at desktop and phone width. What is left needs a real bank and a person.
 
 - [ ] **Sort a real bank into folders by chapter and see whether it feels right.** Make a folder per chapter, put questions in from
-  the choice beside each one, and see whether filing a few hundred questions this way is bearable. If it is not, the likely
-  addition is filing several at once (select, then move), which is not built. An import can already be saved into a folder
-  named for the file: try that with a real chapter first.
+  the choice beside each one, or narrow the list (by chapter, say) and use "File these N in…" to file everything shown at once, and
+  see whether that is bearable for a few hundred questions. Filing several at once was built on 6 November 2026 and looked at in
+  the built-in browser, not on a real bank. An import can also be saved into a folder named for the file: try that with a real
+  chapter first.
 - [ ] **Delete a folder that has questions and folders in it, and read the words.** The box says the questions stay in the bank in
   no folder and the folders inside move up one level. Is that what you expected from Delete, and is "Delete" the right word for
   something that keeps everything?
@@ -419,8 +424,10 @@ These change what the app does, and were made without asking. Each is one flag o
   press Check quality or save a question in it.
 - [ ] **What looks across questions (copies, the spread of right answers) is shown and never kept.** A note about two questions goes
   stale when either changes, so it is worked out each time. The cost is that "these two are meant to be alike" cannot be remembered.
-- [ ] **A picture's description is not edited in the app, so a missing one is only an import warning.** `a11y.missing-alt-text` is
-  raised by the importers and stays; a note here would have nothing to fix it with. An equation that is a picture is the same.
+- [ ] **A picture's description is written in the editor, and a missing one is a warning that goes when it is written.** It is raised
+  by the importers and by adding a picture by hand, and dismissed or cleared by a description or a mark as decoration. Is a warning
+  (which makes a question "needs review") the right weight for a missing description on every figure of a bank? An equation that is
+  a picture is not covered.
 - [ ] **The samples are about the planets, and are in the repository** (`packages/app/samples`, made by `tools/make-samples.ts`),
   so they are offered on the first screen of any install. Saving one writes it to the Exports folder, never over a file.
 

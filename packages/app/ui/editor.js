@@ -7,7 +7,7 @@
  * right, and a true or false question starts with neither chosen.
  */
 
-import { get } from "./api.js";
+import { api, get } from "./api.js";
 import { badge, clear, EDITABLE_TYPES, grow, h, put, SEVERITY_NAMES, TYPE_NAMES } from "./dom.js";
 
 /** The importer's errors about options it had to make up, which words written in the place of the placeholder replace. */
@@ -54,7 +54,9 @@ function inputOf(q) {
  *   notify: (message: string, kind?: "ok" | "error") => void,
  *   actions?: Node[],
  *   mediaBase?: string,
- * }} options  `mediaBase` is the address (after /api/) that a picture's name is added to, to show it: banks/<name>/media or sessions/<id>/media.
+ *   picturesBase?: string,
+ *   onPictureChanged?: (result: any) => void,
+ * }} options  `mediaBase` is the address (after /api/) that a picture's name is added to, to show it: banks/<name>/media or sessions/<id>/media. `picturesBase` is the question's own address for adding, replacing and removing a picture (.../questions/<id>/pictures), absent when the question is not saved yet.
  */
 export function createEditor(options) {
   const id = `ed${++counter}`;
@@ -495,15 +497,62 @@ export function createEditor(options) {
    * The pictures of the question: each shown, with the words a screen reader says for it. A picture stands in the text where its
    * token, [picture 2], is written, and the token is moved or removed like any words.
    */
+  /** The most a picture may be, as the server holds it. */
+  const MAX_PICTURE_BYTES = 25 * 1024 * 1024;
+
+  /**
+   * A change to the question's pictures, made on the server at once. It is the whole saved question that changes, so unsaved changes in
+   * the editor are asked to be saved first and are never carried across.
+   * @param {string} method
+   * @param {string} suffix  what follows /pictures
+   * @param {Blob | undefined} file
+   * @param {string} done  what to say when it worked
+   */
+  async function changePictures(method, suffix, file, done) {
+    if (isDirty()) {
+      options.notify("Save your changes to the question first, and then change its pictures.", "error");
+      return;
+    }
+    try {
+      const result = await api(method, `${options.picturesBase}${suffix}`, file);
+      question = result.question;
+      original = inputOf(question);
+      draft = inputOf(question);
+      render();
+      options.onPictureChanged?.(result);
+      options.notify(done, "ok");
+    } catch (error) {
+      options.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
+
+  /** Asks for a picture from the computer, and gives it to `then` when one is chosen. @param {(file: File) => void} then */
+  function choosePicture(then) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/png,image/jpeg,image/gif";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > MAX_PICTURE_BYTES) {
+        options.notify("That picture is larger than 25 MB. Save it smaller, as a PNG, JPEG or GIF, and try again.", "error");
+        return;
+      }
+      then(file);
+    });
+    input.click();
+  }
+
   function picturesPanel() {
     const shown = question.pictures ?? [];
-    if (shown.length === 0) return null;
+    const editable = Boolean(options.picturesBase) && !question.readOnly;
+    if (shown.length === 0 && !editable) return null;
     const entries = draft.pictures ?? [];
     return h(
       "section",
       { class: "pictures", attrs: { "aria-label": "Pictures in this question" } },
       h("h3", { text: shown.length === 1 ? "Picture" : "Pictures" }),
-      h("p", { class: "hint", text: "A picture stands where its number is written in the text, like [picture 1]. Move the words in brackets to move the picture; take them out and the picture is kept but not shown." }),
+      shown.length > 0 ? h("p", { class: "hint", text: "A picture stands where its number is written in the text, like [picture 1]. Move the words in brackets to move the picture; take them out and the picture is kept but not shown." }) : null,
       ...shown.map((p, i) => {
         const entry = entries[i];
         if (!entry) return null;
@@ -532,9 +581,21 @@ export function createEditor(options) {
               render();
             }),
             p.placed ? null : h("p", { class: "hint", text: `Not in the text yet. Write [picture ${p.number}] where it should stand.` }),
+            editable
+              ? h(
+                  "div",
+                  { class: "picture-actions" },
+                  h("button", { type: "button", text: `Replace picture ${p.number}…`, on: { click: () => choosePicture((file) => void changePictures("POST", `/${encodeURIComponent(p.id)}/replace`, file, `Picture ${p.number} was replaced. Its place in the text and its description are as they were.`)) } }),
+                  h("button", { type: "button", text: `Remove picture ${p.number}`, disabled: p.placed, attrs: p.placed ? { "aria-describedby": `${id}-remove-${p.number}` } : {}, on: { click: () => void changePictures("DELETE", `/${encodeURIComponent(p.id)}`, undefined, `Picture ${p.number} was removed.`) } }),
+                  p.placed ? h("span", { class: "hint", id: `${id}-remove-${p.number}`, text: "To remove it, take its [picture] words out of the text and save." }) : null,
+                )
+              : null,
           ),
         );
       }),
+      editable
+        ? h("div", { class: "picture-actions" }, h("button", { type: "button", text: "Add a picture…", on: { click: () => choosePicture((file) => void changePictures("POST", "", file, "The picture was added at the end of the question. Write what it shows in its description.")) } }))
+        : null,
     );
   }
 

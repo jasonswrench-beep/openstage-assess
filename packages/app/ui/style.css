@@ -299,3 +299,4 @@ table.results tr.current { background: var(--note-bg); }
 .picture-frame { flex: 0 1 260px; max-width: 100%; display: flex; align-items: flex-start; }
 .picture-image { display: block; max-width: 100%; max-height: 18rem; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #ffffff; }
 .picture-fields { flex: 1 1 260px; min-width: 0; }
+.picture-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 0; }

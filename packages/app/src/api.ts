@@ -31,10 +31,15 @@ import {
   QUESTION_TYPES,
   cleanFolderName,
   runImporter,
+  addPicture,
+  PictureError,
+  removePicture,
+  replacePicture,
   sniffImage,
   validateQuestion,
   verdictOf,
   type Bank,
+  type PictureEdit,
   type QualityRun,
   type Question,
   type QuestionType,
@@ -133,6 +138,26 @@ function pictureResponse(name: string | undefined, held: ReadonlyMap<string, Uin
   const info = bytes === undefined ? undefined : sniffImage(bytes);
   if (bytes === undefined || info === undefined) throw notFound("There is no such picture.");
   return { status: 200, bytes: { data: bytes, type: info.mime } };
+}
+
+/**
+ * What a request to /pictures asks of a question: POST the picture's bytes to add one (put at the end of the text unless ?place=0), POST
+ * the bytes to .../<id>/replace to give a picture other bytes, DELETE .../<id> to take one away that no text has in place. The same
+ * for a question in a bank and one in an import under review: the address is /banks/<name>/questions/<id>/pictures... or
+ * /sessions/<id>/questions/<n>/pictures..., so the picture's id and what follows it are the sixth and seventh parts either way.
+ */
+function pictureEdit(question: Question, req: ApiRequest): PictureEdit | undefined {
+  const pictureId = req.segments[5];
+  const sub = req.segments[6];
+  try {
+    if (pictureId === undefined && req.method === "POST") return addPicture(question, new Uint8Array(req.body), { place: req.query.get("place") !== "0" });
+    if (pictureId !== undefined && sub === "replace" && req.method === "POST") return replacePicture(question, pictureId, new Uint8Array(req.body));
+    if (pictureId !== undefined && sub === undefined && req.method === "DELETE") return removePicture(question, pictureId);
+  } catch (error) {
+    if (error instanceof PictureError) throw badRequest(error.message);
+    throw error;
+  }
+  throw notFound("There is no such page.");
 }
 
 function index(segment: string | undefined, length: number, what: string): number {
@@ -261,6 +286,20 @@ async function sessionRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse>
     if (action === "dismiss" && req.method === "POST") {
       const next = dismiss(question, jsonBody(req));
       session.questions[at] = next;
+      return ok({ question: toEditor(next), summary: summarise(next, at), counts: ctx.sessions.view(session)["counts"] });
+    }
+
+    if (action === "pictures") {
+      const made = pictureEdit(question, req);
+      if (made === undefined) return ok({ question: toEditor(question), summary: summarise(question, at), counts: ctx.sessions.view(session)["counts"] });
+      const next = asBadRequest(() => {
+        const edited = editQuestion(question, made.edit, { by: BY, change: made.change });
+        const checked = validateQuestion(edited);
+        if (!checked.ok) throw badRequest(`That change would leave the question invalid, so nothing was changed: ${checked.issues.map((i) => `${i.path || "question"}: ${i.message}`).join("; ")}`);
+        return edited;
+      });
+      session.questions[at] = next;
+      if (req.method === "POST" && !session.media.has(made.file)) session.media.set(made.file, new Uint8Array(req.body));
       return ok({ question: toEditor(next), summary: summarise(next, at), counts: ctx.sessions.view(session)["counts"] });
     }
 
@@ -560,6 +599,22 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
 
   if (what === "folders") return folderRoute(ctx, req, name, id);
 
+  // Filing several questions at once: POST { folderId: <a folder, or null for none>, questionIds: [...] }. All or nothing, and not an
+  // edit of any question. The screen sends the questions the list is showing, so a bank is filed by what was searched or narrowed to.
+  if (what === "filing" && id === undefined && req.method === "POST") {
+    const body = jsonBody(req);
+    const folderId = body["folderId"];
+    if (folderId !== null && (typeof folderId !== "string" || folderId === "")) throw badRequest("Say which folder, or null for none.");
+    const ids = body["questionIds"];
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100_000 || ids.some((q) => typeof q !== "string")) throw badRequest("Say which questions, as a list of their ids.");
+    return ok(
+      await ctx.banks.change(name, (bank) => {
+        const done = asBadRequest(() => bank.moveManyToFolder(ids as string[], folderId === null ? undefined : (folderId as string)));
+        return { ...done, folderId, folders: bank.folderList(), unfiled: bank.unfiledIds().size };
+      }),
+    );
+  }
+
   // A picture a question in this bank carries. The bank is opened for it like for any read.
   if (what === "media" && req.method === "GET") return pictureResponse(id, (await ctx.banks.open(name)).media);
 
@@ -613,6 +668,17 @@ async function bankRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
       if (action === undefined && req.method === "DELETE") {
         await ctx.banks.change(name, (b) => b.remove(id));
         return ok({ removed: id });
+      }
+
+      if (action === "pictures") {
+        const made = pictureEdit(question, req);
+        if (made === undefined) return ok({ question: toEditor(question), summary: summarise(question, 0) });
+        const next = await ctx.banks.change(name, (b) => {
+          const updated = asBadRequest(() => b.update(id, made.edit, { by: BY, change: made.change }));
+          if (req.method === "POST" && !b.media.has(made.file)) b.media.set(made.file, new Uint8Array(req.body));
+          return updated;
+        });
+        return ok({ question: toEditor(next), summary: summarise(next, 0) });
       }
 
       if (action === "dismiss" && req.method === "POST") {

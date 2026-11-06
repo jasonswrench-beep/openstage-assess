@@ -73,6 +73,8 @@ export async function renderBank(host, params, shell) {
   const tools = h("div", { class: "tools" });
   const facetBar = h("div", { class: "facets" });
   const clearButton = h("button", { type: "button", class: "small-button", text: "Clear filters", on: { click: () => void clearFilters() } });
+  /** The control that files every question the list shows in one folder, or in none. It is rebuilt each time the list is. */
+  const filingHost = h("div", { class: "facets" });
   /** The choices the facet selects were built from, so that they are built again only when the bank's own values change (a select rebuilt under a person's hands loses their place). */
   let facetsKey = "";
   const list = h("ul", { class: "qlist", attrs: { "aria-label": "Questions" } });
@@ -173,7 +175,8 @@ export async function renderBank(host, params, shell) {
     });
     facetsKey = "";
     renderFacets();
-    tools.append(search, kinds, facetBar, checks, clearButton, add);
+    tools.append(search, kinds, facetBar, checks, clearButton, filingHost, add);
+    renderFiling();
   }
 
   /** The selects for narrowing the list to a chapter, an objective, a tag and so on: only those the bank has values for. */
@@ -296,6 +299,49 @@ export async function renderBank(host, params, shell) {
     renderHead();
     renderList();
     renderFacets();
+    renderFiling();
+  }
+
+  /**
+   * Filing the questions the list shows, all at once, in a folder or in none. The list is whatever was searched or narrowed to, so a
+   * chapter is filed by choosing the chapter and then the folder. Filing is not an edit of any question.
+   */
+  function renderFiling() {
+    clear(filingHost);
+    const shown = bank.questions.length;
+    if (shown === 0 || (bank.folders ?? []).length === 0) return;
+    const select = h(
+      "select",
+      { attrs: { "aria-label": `File the ${shown === 1 ? "question" : `${shown} questions`} shown in a folder` } },
+      h("option", { value: "", text: shown === 1 ? "File this question in…" : `File these ${shown} in…` }),
+      h("option", { value: NONE, text: "Not in a folder" }),
+      ...folderChoices("", new Set(), false),
+    );
+    select.addEventListener("change", () => {
+      const wanted = select.value;
+      select.value = "";
+      if (wanted) void fileShown(wanted === NONE ? "" : wanted);
+    });
+    filingHost.append(select);
+  }
+
+  /** @param {string} wanted  a folder's id, or "" for none */
+  async function fileShown(wanted) {
+    const ids = bank.questions.map(/** @param {any} q */ (q) => q.id);
+    const where = wanted ? `the folder "${folderName(wanted)}"` : "no folder";
+    // Every question of the bank is a lot to move by one choice in a list, so it is asked first. A list that was narrowed is what the person chose.
+    if (!filtersActive() && query.trim() === "" && ids.length > 1) {
+      const sure = await confirmAction(`File all ${ids.length} questions?`, `Every question in the bank would be put in ${where}, out of the folder each is in now. Nothing is deleted, and each can be filed again.`, { yes: "File them all", no: "Cancel" });
+      if (!sure) return;
+    }
+    try {
+      const result = await post(`${base}/filing`, { folderId: wanted || null, questionIds: ids });
+      await reload();
+      const said = [result.filed === 1 ? "1 question was" : `${result.filed} questions were`, wanted ? `put in ${where}` : "taken out of their folders"].join(" ");
+      shell.notify(`${said}.${result.alreadyThere > 0 ? ` ${result.alreadyThere} ${result.alreadyThere === 1 ? "was" : "were"} already there.` : ""}`, "ok");
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
   }
 
   /** @param {string} id */
@@ -330,6 +376,8 @@ export async function renderBank(host, params, shell) {
     editor = createEditor({
       question: loaded.question,
       mediaBase: `${base}/media`,
+      picturesBase: `${base}/questions/${encodeURIComponent(id)}/pictures`,
+      onPictureChanged: () => void reload(),
       notify: shell.notify,
       save: async (input, version) => {
         const result = await put(`${base}/questions/${encodeURIComponent(id)}`, { input, expectVersion: version });

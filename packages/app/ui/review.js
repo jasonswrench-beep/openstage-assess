@@ -151,6 +151,12 @@ export async function renderReview(host, params, shell) {
     editor = createEditor({
       question: loaded.question,
       mediaBase: `${base}/media`,
+      picturesBase: `${base}/questions/${index}/pictures`,
+      onPictureChanged: (result) => {
+        replaceSummary(result.summary);
+        session.counts = result.counts;
+        refresh();
+      },
       saveLabel: "Apply changes",
       notify: shell.notify,
       save: async (input, version) => {

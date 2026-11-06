@@ -82,6 +82,18 @@ function main(): void {
       }
     }
 
+    // Decorative: kept with no description and no flag for lacking one, and marked as decoration.
+    const decorative = read("pictures-decorative");
+    if (decorative) {
+      const dq = decorative.questions[0] as Question | undefined;
+      if (dq?.media.length !== 1) say("pictures-decorative", `the picture should be kept (${refusals(decorative) || "no reason given"})`);
+      else {
+        if (dq.media[0]!.decorative !== true) say("pictures-decorative", "the picture should be marked as decoration");
+        if (dq.media[0]!.alt !== "") say("pictures-decorative", "a decorative picture has no description");
+        if (dq.findings.some((f) => f.code === FindingCode.MissingAltText)) say("pictures-decorative", "a decorative picture should not be flagged for having no description");
+      }
+    }
+
     // Cropped: not kept, and the reason is the crop.
     const cropped = read("pictures-cropped");
     if (cropped) {

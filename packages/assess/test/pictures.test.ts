@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describeUnreadImage, MAX_PICTURE_BYTES, sniffImage } from "../src/model/image.ts";
+import { standardTextImporter } from "../src/import/standard-text.ts";
 import { wordImporter } from "../src/import/word.ts";
 import { FindingCode, verdictFrom } from "../src/model/findings.ts";
 import type { Question } from "../src/model/question.ts";
@@ -359,3 +360,39 @@ describe("a picture that floats, written by our own writer", () => {
 });
 
 const refusal2 = (r: ReturnType<typeof read>): string => r.fileFindings.map((f) => f.message).join(" | ");
+
+describe("a picture marked as decoration", () => {
+  test("is kept with no description and not flagged for lacking one, as read from the XML Word itself wrote", () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "fixtures", "word-authored", "pictures");
+    const r = read(new Uint8Array(readFileSync(join(dir, "pictures-decorative.docx"))));
+    const q = r.questions[0] as Question;
+    assert.equal(q.media.length, 1);
+    assert.equal(q.media[0]!.decorative, true);
+    assert.equal(q.media[0]!.alt, "");
+    assert.ok(!has(q, FindingCode.MissingAltText));
+    assert.equal(verdictFrom(q.findings), "parsed");
+  });
+
+  test("a description given to a decorative picture is not kept, since the author said it carries no meaning", () => {
+    const r = read(document([FIGURE[0], { draw: drawing("rId10", { alt: "ignored words", decorative: true }) }, FIGURE[2], FIGURE[3], FIGURE[4]], [spec("rId10", "image1.png", BLUE)]));
+    const q = r.questions[0] as Question;
+    assert.deepEqual([q.media[0]!.decorative, q.media[0]!.alt], [true, ""]);
+  });
+
+  test("an ordinary picture with no description is still flagged", () => {
+    const r = read(document([FIGURE[0], { draw: drawing("rId10") }, FIGURE[2], FIGURE[3], FIGURE[4]], [spec("rId10", "image1.png", BLUE)]));
+    const q = r.questions[0] as Question;
+    assert.ok(!q.media[0]!.decorative);
+    assert.ok(has(q, FindingCode.MissingAltText));
+  });
+
+  test("the typed image tag takes the word decorative after the description, or in its place", () => {
+    for (const tag of ['[ img: "x.png" "" decorative ]', '[ img: "x.png" decorative ]', '[img:"x.png" "a words" decorative]']) {
+      const result = standardTextImporter.parse(`1. See ${tag} this.\na) A\n*b) B\n`, { file: "t.txt", at: "2026-01-01T00:00:00.000Z", author: "test" });
+      const q = result.questions[0] as Question;
+      assert.deepEqual([q.media[0]?.decorative, q.media[0]?.alt, has(q, FindingCode.MissingAltText)], [true, "", false], tag);
+    }
+    const plainTag = standardTextImporter.parse('1. See [ img: "x.png" "a words" ] this.\na) A\n*b) B\n', { file: "t.txt", at: "2026-01-01T00:00:00.000Z", author: "test" });
+    assert.equal((plainTag.questions[0] as Question).media[0]?.decorative, undefined);
+  });
+});

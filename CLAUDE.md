@@ -68,7 +68,9 @@ keep it is a bug (two were found). Do not add a path that drops a file the reade
 **A folder is a way of finding questions and never a place one can be lost.** Taking a folder away (`Bank.removeFolder`) leaves its
 questions in the bank, in no folder, and moves the folders inside it up (a name that would clash is numbered, never merged); a folder
 cannot go inside itself, two side by side cannot share a name, and a question is in one folder at a time even when a damaged file
-listed it in two. Filing a question is not an edit of it (no version, no history entry, no change of notes). What a folder names that
+listed it in two. Filing a question is not an edit of it (no version, no history entry, no change of notes), and filing several at once
+(`Bank.moveManyToFolder`, the "File these N in…" control, the `/filing` route) is all or nothing: every id and the folder are checked
+before one is moved. What a folder names that
 the bank could not read is said in the history. The folder rules are held by `folders.test.ts` (engine, with a seeded run of random
 changes that checks them after every step, and the app's) and `mutate`-style runs; do not add a path that deletes a question with
 its folder.
@@ -142,7 +144,11 @@ writes the description or marks the picture as decoration, and the flag goes). A
 saved; a picture a question names that the bank does not hold is reported on the bank screen (`Bank.missingMedia`) and never makes the
 question go. The server serves a picture by the type its bytes have and not the type its name or file claims. In the editor a picture
 is the token `[picture 2]` in the text, moved or removed like words, and text the person leaves alone is kept exactly as stored.
-A floating picture's tag goes after the words of its paragraph, never in front of a question number. A printed test draws a picture
+Word's own "mark as decorative" is read (`adec:decorative val="1"`, seen in a file real Word wrote) and a decorative picture needs no
+description. A picture is added, replaced or removed by hand in the editor (`model/picture-edit.ts`, the `/pictures` routes): told by
+its bytes, put at the end of the text, added without a description and flagged for it, never removed from under the words that show it
+(the person takes its `[picture N]` out first), and a picture added in a review is stored only if its question is saved. A floating
+picture's tag goes after the words of its paragraph, never in front of a question number. A printed test draws a picture
 under the words it was in (`print/layout.ts`, `expandPictures`): in the Word file as an embedded picture with its description, in the
 PDF as an image (a PNG is decoded and laid on white, a JPEG is handed on; a GIF, a CMYK JPEG, an interlaced PNG or damaged data is
 words with the reason against the question, never dropped). Moodle XML carries a picture in the text of a question and no other
@@ -233,7 +239,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2270 engine tests and 236 app tests, Node's own runner
+npm test                       # 2296 engine tests and 252 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

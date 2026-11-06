@@ -295,6 +295,61 @@ describe("saving", () => {
   });
 });
 
+describe("filing several questions at once", () => {
+  test("puts each in the folder, counts the ones that were already there, and leaves the rest alone", () => {
+    const { bank, ids } = bankOf("a", "b", "c", "d");
+    const one = bank.addFolder("One").id;
+    const two = bank.addFolder("Two").id;
+    bank.moveToFolder(ids[0] as string, one);
+    bank.moveToFolder(ids[1] as string, two);
+    assert.deepEqual(bank.moveManyToFolder([ids[0] as string, ids[1] as string, ids[2] as string], one), { filed: 2, alreadyThere: 1 });
+    assert.deepEqual(ids.map((q) => bank.folderIdOf(q)), [one, one, one, undefined]);
+    assert.deepEqual([...bank.questionIdsUnder(two)], []);
+    holds(bank);
+  });
+
+  test("takes several out of their folders when asked for none, and counts the ones that were in none", () => {
+    const { bank, ids } = bankOf("a", "b", "c");
+    const one = bank.addFolder("One").id;
+    bank.moveManyToFolder(ids.slice(0, 2), one);
+    assert.deepEqual(bank.moveManyToFolder(ids, undefined), { filed: 2, alreadyThere: 1 });
+    assert.deepEqual(ids.map((q) => bank.folderIdOf(q)), [undefined, undefined, undefined]);
+    assert.equal(bank.unfiledIds().size, 3);
+    holds(bank);
+  });
+
+  test("is all or nothing: a question the bank does not have, or a folder it does not have, moves none", () => {
+    const { bank, ids } = bankOf("a", "b", "c");
+    const one = bank.addFolder("One").id;
+    bank.moveToFolder(ids[2] as string, one);
+    const before = ids.map((q) => bank.folderIdOf(q));
+    assert.throws(() => bank.moveManyToFolder([ids[0] as string, "q_ghost", "q_other"], one), /No question with the id q_ghost is in this bank\. \(1 more are not either\.\)/);
+    assert.throws(() => bank.moveManyToFolder([ids[0] as string, ids[1] as string], "f_nothing"), /No folder with the id f_nothing/);
+    assert.deepEqual(ids.map((q) => bank.folderIdOf(q)), before);
+    holds(bank);
+  });
+
+  test("a question named twice is filed once, and one a damaged file listed in two folders ends in one", () => {
+    const { bank, ids } = bankOf("a", "b");
+    const one = bank.addFolder("One").id;
+    const two = bank.addFolder("Two").id;
+    bank.allFolders().find((f) => f.id === one)!.questionIds.push(ids[0] as string);
+    bank.allFolders().find((f) => f.id === two)!.questionIds.push(ids[0] as string);
+    assert.deepEqual(bank.moveManyToFolder([ids[0] as string, ids[0] as string, ids[1] as string], two), { filed: 2, alreadyThere: 0 });
+    assert.deepEqual(ids.map((q) => bank.folderIdOf(q)), [two, two]);
+    assert.equal(bank.allFolders().filter((f) => f.questionIds.includes(ids[0] as string)).length, 1);
+    holds(bank);
+  });
+
+  test("is not an edit of any question: no version, no history entry, no change of notes", () => {
+    const { bank, ids } = bankOf("a", "b");
+    const before = ids.map((q) => JSON.stringify(bank.get(q)));
+    const one = bank.addFolder("One").id;
+    bank.moveManyToFolder(ids, one);
+    assert.deepEqual(ids.map((q) => JSON.stringify(bank.get(q))), before);
+  });
+});
+
 describe("any run of changes", () => {
   test("keeps every rule, and loses no question, from a fixed seed", () => {
     let seed = 20261105;
@@ -311,7 +366,23 @@ describe("any run of changes", () => {
         const question = () => ids[next(ids.length)] as string;
         const parent = () => (next(3) === 0 || folders.length === 0 ? undefined : folder());
         try {
-          switch (next(7)) {
+          switch (next(9)) {
+            case 7: {
+              // Several at once, sometimes with an id the bank does not have: all or nothing, so nothing is moved when one is wrong.
+              const some = ids.filter(() => next(2) === 0);
+              const before = ids.map((q) => bank.folderIdOf(q));
+              const wrong = next(4) === 0;
+              try {
+                bank.moveManyToFolder(wrong ? [...some, "q_ghost"] : some, folder());
+              } catch (error) {
+                assert.deepEqual(ids.map((q) => bank.folderIdOf(q)), before, "a refusal moved nothing");
+                throw error;
+              }
+              break;
+            }
+            case 8:
+              bank.moveManyToFolder(ids.filter(() => next(2) === 0), undefined);
+              break;
             case 0:
               bank.addFolder(names[next(names.length)] as string, parent());
               break;

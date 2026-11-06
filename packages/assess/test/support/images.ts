@@ -152,6 +152,8 @@ export interface DrawingOptions {
   inside?: string;
   /** Mark it anchored (floating) and not inline. */
   anchor?: boolean;
+  /** Mark it as decoration, as Word's "Mark as decorative" does (an extension of the drawing's properties). */
+  decorative?: boolean;
 }
 
 /** The run content for a picture placed in the text: a w:drawing that holds one image. */
@@ -166,7 +168,7 @@ export function drawing(rId: string, options: DrawingOptions = {}): string {
   const title = options.title !== undefined ? ` title="${options.title}"` : "";
   return (
     `<w:drawing><${tag}${options.anchor ? ' simplePos="0" relativeHeight="0" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"' : ""}>` +
-    `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="Picture ${id}"${attrs}${title}/>` +
+    `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="Picture ${id}"${attrs}${title}${options.decorative ? `><a:extLst><a:ext uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"><adec:decorative xmlns:adec="http://schemas.microsoft.com/office/drawing/2017/decorative" val="1"/></a:ext></a:extLst></wp:docPr>` : "/>"}` +
     `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
     `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${id}" name="image"/><pic:cNvPicPr/></pic:nvPicPr>` +
     `<pic:blipFill><a:blip r:embed="${rId}"/>${crop}<a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +

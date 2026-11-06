@@ -133,9 +133,12 @@ export function pictureReader(pkg: DocxPackage): PictureReader {
       // Word's description is `descr`. The older Title field is next, then the older drawing format's own two. `||` and not `??`:
       // an empty description is no description, and the next one is looked at.
       const alt = tidyAlt(docPr?.attrs["descr"] || docPr?.attrs["title"] || shape?.attrs["alt"] || imagedata?.attrs["o:title"] || "");
+      // "Mark as decorative", which Word keeps in an extension of the drawing's properties (adec:decorative val="1"): the author has said
+      // the picture carries no meaning, so it needs no description, and is not flagged for lacking one.
+      const decorative = docPr !== undefined && descendants(docPr, (e) => /(^|:)decorative$/.test(e.name) && (e.attrs["val"] === "1" || e.attrs["val"] === "true")).length > 0;
 
       pictures.set(read.file, read);
-      return `[ img: "${read.file.slice("media/".length)}" "${alt}" ]`;
+      return `[ img: "${read.file.slice("media/".length)}" "${decorative ? "" : alt}"${decorative ? " decorative" : ""} ]`;
     },
   };
 }
