@@ -158,6 +158,9 @@ function longestIsRight(question: Question, options: Option[]): Finding | undefi
   );
 }
 
+/** A sentence that tells the student what to do, which is the question of a stem that has no question mark. */
+const INSTRUCTION = /^\s*(?:select|choose|identify|pick|mark|indicate|circle|name|find|determine|decide|which|what|who)\b/i;
+
 /** "not", "except", "least" in a stem, not set apart. A student who reads past it answers the opposite question. */
 function negativeStem(question: Question): Finding | undefined {
   if (!isChoice(question) && !isMultipleResponse(question)) return undefined;
@@ -173,13 +176,15 @@ function negativeStem(question: Question): Finding | undefined {
     .replace(/\bnot (?:only|just)\b/gi, " ")
     .replace(/\bleast (?:common|squares?)\b/gi, " ")
     // Words in quotation marks are an example the question is about, not the question: “If you do not use lotion, you will burn!” is
-    // an example of which aspect of style?
-    .replace(/“[^”]*”|"[^"]*"/g, " ");
+    // an example of which aspect of style? A straight quote is a quotation mark only where it opens a group of words and where it
+    // closes one, and not as an inch mark ('a 2" pipe is not true for a 4" pipe' is a question, not a quotation).
+    .replace(/“[^”]*”|(?<![\p{L}\p{N}])"[^"]*"(?![\p{L}\p{N}])/gu, " ");
   // A story before the question can say not as much as it likes ("Darlene is concerned that she will not appear honest. What aspect of
-  // credibility ..."), so with more than one sentence only the ones that ask (end in a question mark) and the last are looked at.
-  // A sentence ends at a stop and a capital, so that "e.g. a method" is not cut in two.
+  // credibility ..."), so with more than one sentence only the ones that ask are looked at: those that end in a question mark, the
+  // last, and an instruction ("Select the statement that is not true. Choose one answer."). A sentence ends at a stop and a capital,
+  // so that "e.g. a method" is not cut in two.
   const sentences = text.split(/(?<=[.!?])\s+(?=[\p{Lu}(])/u);
-  const asked = sentences.length > 1 ? sentences.filter((s, i) => i === sentences.length - 1 || /\?\s*$/.test(s)) : sentences;
+  const asked = sentences.length > 1 ? sentences.filter((s, i) => i === sentences.length - 1 || /\?\s*$/.test(s) || INSTRUCTION.test(s)) : sentences;
   for (const sentence of asked) {
     // "Why can't sound waves travel through a vacuum?" explains a negative fact and does not pick the one that is not true.
     if (/^\s*why\b/i.test(sentence)) continue;
@@ -191,7 +196,13 @@ function negativeStem(question: Question): Finding | undefined {
       // words since the last comma, colon or bracket, so "When receiving criticism, which of these should you not do?" is still noted.
       const before = sentence.slice(0, match.index);
       const clause = before.slice(Math.max(before.lastIndexOf(","), before.lastIndexOf(";"), before.lastIndexOf(":"), before.lastIndexOf("(")) + 1);
-      if (/\b(?:if|when|whenever|where|while|unless|because|although|though)\b/i.test(clause)) continue;
+      if (/\b(?:if|when|whenever|where|while|unless|because|although|though)\b/i.test(clause)) {
+        // A when, where or while that opens a question is not a condition: "Where in the cell is ATP not produced?", "When should a
+        // nurse not administer this drug?". It is one when a comma closes it before the question goes on ("When the object is not near
+        // the focus, what image is formed?") or the sentence is not a question at all.
+        const opensQuestion = /^\s*(?:when|whenever|where|while)\b/i.test(sentence) && /\?\s*$/.test(sentence) && !/[,;:]/.test(sentence.slice((match.index ?? 0) + word.length));
+        if (!opensQuestion) continue;
+      }
       return note(
         FindingCode.NegativeStemNotEmphasised,
         `The stem asks for the opposite of what is usual ("${word}") and the word is not set apart. A student who reads past it answers the other question. Write it in capitals or bold: NOT, EXCEPT, LEAST.`,

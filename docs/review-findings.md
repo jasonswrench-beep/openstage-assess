@@ -1224,13 +1224,29 @@ held back. It is a warning only when an Answers entry was held back for a repeat
 because two pasted chapters look the same). Every other warning on those files was read and is accurate: the joined page references,
 the heading used as a stem, the question with no type line, the formatting that was not often enough to be a key.
 
+**A reader who had not seen the code reviewed these changes** (the commits from alpha 11 to 1c2f06d, the day alpha 12 was cut) and proved
+eight points, of which seven were real and are fixed, each with a test and planted faults. They are worth keeping because every one is
+a place where a rule made quieter on real banks went quiet on a case it should not have:
+the negative stem rule was silent for a "when", "where" or "while" that opens a question ("When should a nurse not administer this
+drug?"), for a question that is an instruction after a sentence ("Select the statement that is not true. Choose one answer."), and for
+a 2" pipe and a 4" pipe (two inch marks were taken for a quotation); the "alike" rule let a near-copy hide behind a small word and a
+reworded answer ("Which one of" against "Which of", "Nitrogen" against "Nitrogen gas"), so stems that differ only in small words are
+one stem now; the repeated-number note said "no answer was held back" for an Answers list placed before its questions, which holds
+the entries back without marking a question, so it is information only when the file has no Answers list at all; a confirmation
+the score review had said could be written back after a later one cleared it (the timer was not cancelled); and in forced colours the
+chosen row lost its focus ring. One point was kept as a trade-off and not changed: options that differ only in a capital inside them
+are not called copies ("Sodium Chloride" and "Sodium chloride" are not reported), because a calorie and a Calorie cannot be told from
+that by a program, and the rule is silent when it is unsure.
+
 A table of 5000 questions was also pushed through the app to see where size hurts (7 November 2026, in the built-in browser). The
 server took 0.8 seconds to read it and send 3.8 MB; the review drew its 5000 rows (40,000 elements) in about 1.5 seconds; opening the
 saved bank took 0.8 seconds and a search 0.4 seconds. What was slow was choosing a question: every choice drew the whole list again,
 0.5 to 0.9 seconds each, and threw away the row a keyboard user was on. A choice now changes the two rows that differ (`markSelected` in
 `ui/list.js`): 84 to 140 milliseconds with the question's own load, one row marked, focus kept. 5000 is a size a publisher's bank can
 reach; nothing has been tried above it, and the list still holds every row at once (no windowing), so a bank of 20,000 would take
-several seconds to open and is untried.
+several seconds to open and is untried. The engine at 5000 questions: a Word file read in 0.36 seconds (500 took 0.06, 2000 took 0.16,
+so it is linear), Check quality in 3.5 seconds, each of the seven exports in about 2 seconds, and a student copy and key printed as PDF
+in 2.5 seconds.
 
 ### Found by reading the first real learning-system file (7 November 2026)
 

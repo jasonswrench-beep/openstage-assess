@@ -216,6 +216,32 @@ describe("a negative stem that is not set apart", () => {
     assert.equal(stemNoted("What do people who may or may not be interested in a topic want to hear?"), false);
   });
 
+  // Found by an independent reader of the changes above: genuine negative stems that the first version of the rules above went quiet on.
+  test("is noted for a when, where or while that opens the question, and not for one that is only a condition", () => {
+    for (const stem of ["Where in the cell is ATP not produced?", "When is a contract not enforceable?", "When should a nurse not administer this drug?", "While giving an injection which of these should a nurse not do?", "When a gas is compressed which of the following is not true?"]) {
+      assert.ok(stemNoted(stem), stem);
+    }
+    // A comma that closes the condition before the question goes on, or a sentence that is not a question, keeps it a condition.
+    assert.equal(stemNoted("When the object is not near the focal point, what type of image is formed?"), false);
+    assert.equal(stemNoted("While the patient is not breathing, the nurse should first"), false);
+    assert.equal(stemNoted("When the transmitter is not modulated the carrier has a frequency of its own."), false, "not a question, so a condition even with no comma");
+  });
+
+  test("is noted when the question is an instruction and the stem has more than one sentence", () => {
+    for (const stem of ["Select the statement that is not true. Choose one answer.", "Which cell cannot divide. Select one.", "Choose the answer that is not correct. Be careful: only one is."]) {
+      assert.ok(stemNoted(stem), stem);
+    }
+    assert.ok(stemNoted(rich("<p>Select the statement that is not true.</p><p>Choose one answer.</p>")), "in paragraphs");
+    // A story that merely begins with a word like these is still a story.
+    assert.equal(stemNoted("The manager did not greet anyone. What does this show?"), false);
+  });
+
+  test("an inch mark is not a quotation mark", () => {
+    assert.ok(stemNoted('Which of these statements about a 2" pipe is not true for a 4" pipe?'));
+    assert.equal(stemNoted('"It does not seem right" is an example of which kind of doubt?'), false, "a real quotation is still left alone");
+    assert.equal(stemNoted('He said "no, it is not so" and left. What did he mean?'), false);
+  });
+
   test("is only for questions with options to choose from", () => {
     const essay = createQuestion({ type: "essay", stem: plainToRich("Why is it not a fruit?"), body: {} });
     assert.equal(codes(essay).includes(FindingCode.NegativeStemNotEmphasised), false);

@@ -76,6 +76,7 @@ export async function renderScoring(host, params, shell) {
   /** @type {Array<{ sheet: number, kind: "answer" | "version", question?: number }>} */
   const trail = [];
   let said = "";
+  let sayTimer = 0;
 
   clear(host);
   const headHost = h("div", { class: "page-head" });
@@ -236,8 +237,11 @@ export async function renderScoring(host, params, shell) {
    */
   function say(text) {
     said = text;
+    // The last call is the one heard: a timer left running by an earlier one would write its older words back after a later call
+    // had cleared them (found by an independent reader: a confirmation, then an arrow key within 50 milliseconds).
+    window.clearTimeout(sayTimer);
     announcer.textContent = "";
-    if (text) window.setTimeout(() => (announcer.textContent = text), 50);
+    if (text) sayTimer = window.setTimeout(() => (announcer.textContent = text), 50);
   }
 
   function renderReview() {
