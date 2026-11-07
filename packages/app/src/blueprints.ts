@@ -9,7 +9,7 @@
 
 import { randomBytes } from "node:crypto";
 
-import { COVERAGE_AXES, describeDraw, drawBlueprint, LONGEST_NAME, LONGEST_VALUE, MOST_PICKED, MOST_RULES, newBlueprint, type Blueprint, type BlueprintRule } from "./engine.ts";
+import { COVERAGE_AXES, describeDraw, drawBlueprint, LONGEST_NAME, LONGEST_VALUE, MOST_CONDITIONS, MOST_PICKED, MOST_RULES, newBlueprint, type Blueprint, type BlueprintCondition, type BlueprintRule } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { jsonObject, oneOf, onlyFields, text, whole } from "./request.ts";
@@ -17,7 +17,19 @@ import { jsonObject, oneOf, onlyFields, text, whole } from "./request.ts";
 const ok = (json: unknown): ApiResponse => ({ status: 200, json });
 
 function show(bp: Blueprint): Record<string, unknown> {
-  return { id: bp.id, name: bp.name, rules: bp.rules.map((r) => ({ axis: r.axis, value: r.value, count: r.count })), created: bp.created, modified: bp.modified };
+  // A rule of one value is shown as it always was; the other values appear only when it has some.
+  return { id: bp.id, name: bp.name, rules: bp.rules.map((r) => ({ axis: r.axis, value: r.value, count: r.count, ...(r.and && r.and.length > 0 ? { and: r.and.map((c) => ({ axis: c.axis, value: c.value })) } : {}) })), created: bp.created, modified: bp.modified };
+}
+
+/** One axis and value as the screen sends it, a blank value refused here as well as in the engine. */
+function conditionOf(raw: unknown, what: string): BlueprintCondition {
+  const sentence = `${what.slice(0, 1).toUpperCase()}${what.slice(1)}`;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw badRequest(`${sentence} must be an object.`);
+  const condition = raw as Record<string, unknown>;
+  onlyFields(condition, ["axis", "value"], sentence);
+  const found = (text(condition["value"], `The value in ${what}`, LONGEST_VALUE, true) as string).trim();
+  if (found === "") throw badRequest(`${sentence} needs a value.`);
+  return { axis: oneOf(condition["axis"], COVERAGE_AXES, `what ${what} is by`), value: found };
 }
 
 function nameOf(value: unknown): string {
@@ -31,12 +43,14 @@ function rulesOf(value: unknown): BlueprintRule[] {
   return value.map((raw: unknown, i: number) => {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw badRequest(`Rule ${i + 1} must be an object.`);
     const rule = raw as Record<string, unknown>;
-    onlyFields(rule, ["axis", "value", "count"], `Rule ${i + 1}`);
-    const found = (text(rule["value"], `The value in rule ${i + 1}`, LONGEST_VALUE, true) as string).trim();
+    onlyFields(rule, ["axis", "value", "count", "and"], `Rule ${i + 1}`);
     // A blank value is refused here as well as in the engine: the question filter reads a blank as "no filter", and a rule that
     // seemed to ask for something and took from the whole bank would be a test nobody chose.
-    if (found === "") throw badRequest(`Rule ${i + 1} needs a value.`);
-    return { axis: oneOf(rule["axis"], COVERAGE_AXES, `what rule ${i + 1} is by`), value: found, count: whole(rule["count"], `How many in rule ${i + 1}`, 1, MOST_PICKED) };
+    const first = conditionOf({ axis: rule["axis"], value: rule["value"] }, `rule ${i + 1}`);
+    const others = rule["and"];
+    if (others !== undefined && (!Array.isArray(others) || others.length > MOST_CONDITIONS - 1)) throw badRequest(`The other values of rule ${i + 1} must be a list of at most ${MOST_CONDITIONS - 1}.`);
+    const and = (others ?? []).map((c: unknown, j: number) => conditionOf(c, `value ${j + 2} of rule ${i + 1}`));
+    return { ...first, count: whole(rule["count"], `How many in rule ${i + 1}`, 1, MOST_PICKED), ...(and.length > 0 ? { and } : {}) };
   });
 }
 
@@ -108,7 +122,7 @@ export async function blueprintsRoute(ctx: Context, req: ApiRequest, bankName: s
       wanted: draw.wanted,
       short: draw.short,
       notes: describeDraw(draw),
-      rules: draw.rules.map((r) => ({ axis: r.rule.axis, value: r.rule.value, count: r.rule.count, taken: r.ids.length, short: r.short, left: r.pick.left })),
+      rules: draw.rules.map((r) => ({ axis: r.rule.axis, value: r.rule.value, ...(r.rule.and && r.rule.and.length > 0 ? { and: r.rule.and } : {}), count: r.rule.count, taken: r.ids.length, short: r.short, left: r.pick.left })),
       seed,
     });
   }

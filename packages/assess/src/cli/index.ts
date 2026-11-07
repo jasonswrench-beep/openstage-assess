@@ -68,9 +68,9 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess new <bank${BANK_EXTENSION}> --title "Course bank"
       Create an empty bank.
 
-  openassess import <file.txt|file.docx|file.gift|file.aiken|file.xml|file.zip> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
-      Read a file (the standard test-bank format, Aiken or GIFT as text, Moodle XML, a QTI file or package, or a
-      Word .docx) and report the verdicts. A .txt file is told apart by what is
+  openassess import <file.txt|file.docx|file.gift|file.aiken|file.xml|file.zip|file.imscc> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
+      Read a file (the standard test-bank format, Aiken or GIFT as text, Moodle XML, a QTI file or package, a
+      Common Cartridge .imscc, or a Word .docx) and report the verdicts. A .txt file is told apart by what is
       in it. With --out, write the questions into a new bank.
       A Word file may mark the correct option by formatting it. The file is
       read to see whether it does, and the report says what was decided.
@@ -83,7 +83,7 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       --out, write it as a Word file or a PDF. The student copy shows no answer.
       The key marks only what the bank records, and says when it records none.
 
-  openassess review <file> [--out <review.html>] [--key-mark <mark>]   (a .docx, .xlsx, .csv, .pdf, .txt, .aiken, .gift Moodle .xml or QTI .xml or .zip file)
+  openassess review <file> [--out <review.html>] [--key-mark <mark>]   (a .docx, .xlsx, .csv, .pdf, .txt, .aiken, .gift Moodle .xml or QTI .xml, .zip or .imscc file)
       Read a file as import does and write one web page that shows each question
       with its answer, its checks and the lines of the file it came from, then
       the text no question used. Open the page in any browser. Nothing is
@@ -116,7 +116,9 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess blueprint <bank${BANK_EXTENSION}> remove <name>
       A blueprint is a recipe for a test that the bank keeps: each rule is a value on one axis (objective, chapter,
       section, tag, bloom, difficulty or type) and how many questions to take that have it, as in
-      --rule "chapter=Chapter 1:5" --rule bloom=apply:2. "draw" shows the questions the recipe takes (the same seed
+      --rule "chapter=Chapter 1:5" --rule bloom=apply:2. A rule may ask for values on several axes together, joined
+      with "and": --rule "chapter=Chapter 2 and bloom=apply:3" takes three from chapter 2 that are at the apply level
+      (a cell of the grid "assess coverage" shows). "draw" shows the questions the recipe takes (the same seed
       takes the same ones) and, for a rule that found fewer than it wanted, how many short and why; it writes nothing
       and never fills a rule up from another value. "add" and "remove" change the bank. A retired question, one with
       no usable answer key and a copy of one already taken are never taken.
@@ -504,18 +506,39 @@ async function cmdCoverage(args: string[]): Promise<number> {
   return 0;
 }
 
-/** A rule as written on the command line: axis=value:count. The value may hold a colon or an equals sign, so the count is after the last colon. */
-function parseRule(text: string): { axis: string; value: string; count: number } | string {
-  const eq = text.indexOf("=");
+/**
+ * A rule as written on the command line: axis=value:count, or several values that must all hold, joined with "and" (axis=value and
+ * axis=value:count). The value may hold a colon or an equals sign, so the count is after the last colon, and the word "and" splits
+ * only where an axis name and an equals sign follow it, so "type=Rock and Roll:2" is one value.
+ */
+function parseRule(text: string): { axis: string; value: string; count: number; and?: Array<{ axis: string; value: string }> } | string {
   const colon = text.lastIndexOf(":");
-  if (eq < 1 || colon < eq + 1) return `"${text}" is not a rule. Write it as axis=value:count, such as chapter=Chapter 1:5.`;
-  const axis = text.slice(0, eq).trim();
-  const value = text.slice(eq + 1, colon).trim();
+  const bad = `"${text}" is not a rule. Write it as axis=value:count, such as chapter=Chapter 1:5, or chapter=Chapter 2 and bloom=apply:3.`;
+  if (colon < 1) return bad;
   const countText = text.slice(colon + 1).trim();
-  if (!isCoverageAxis(axis)) return `"${axis}" is not something a rule can be by. Choose from ${COVERAGE_AXES.join(", ")}.`;
-  if (value === "") return `The rule "${text}" has no value. A blank value would match every question.`;
   if (!/^[0-9]+$/.test(countText)) return `The rule "${text}" has no number of questions after the last colon.`;
-  return { axis, value, count: Number(countText) };
+  const split = new RegExp(`\\s+and\\s+(?=(?:${COVERAGE_AXES.join("|")})\\s*=)`, "i");
+  const pairs: Array<{ axis: string; value: string }> = [];
+  for (const part of text.slice(0, colon).split(split)) {
+    const eq = part.indexOf("=");
+    if (eq < 1) return bad;
+    const axis = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (!isCoverageAxis(axis)) return `"${axis}" is not something a rule can be by. Choose from ${COVERAGE_AXES.join(", ")}.`;
+    if (value === "") return `The rule "${text}" has no value. A blank value would match every question. (The blank one is the value for ${axis}.)`;
+    // "and" splits only before a known axis name, so a mistyped one (colour=red) would stay inside the value and match nothing, and
+    // read as a bank that was short. It is refused instead, by the word that was not an axis.
+    const odd = /\s+and\s+([A-Za-z]+)\s*=/.exec(value);
+    if (odd) return `The rule "${text}" joins values with "and", and "${odd[1]}" is not something a rule can be by. Choose from ${COVERAGE_AXES.join(", ")}.`;
+    pairs.push({ axis, value });
+  }
+  const [first, ...rest] = pairs as [{ axis: string; value: string }, ...Array<{ axis: string; value: string }>];
+  return { ...first, count: Number(countText), ...(rest.length > 0 ? { and: rest } : {}) };
+}
+
+/** A rule in a line for a person: "5 where chapter is Chapter 1", or "3 where chapter is Chapter 2 and bloom is apply". */
+function ruleLine(rule: { axis: string; value: string; count: number; and?: ReadonlyArray<{ axis: string; value: string }> }): string {
+  return `${rule.count} where ${[{ axis: rule.axis, value: rule.value }, ...(rule.and ?? [])].map((c) => `${c.axis} is ${c.value}`).join(" and ")}`;
 }
 
 /** A blueprint is found by its name, in any case, or by its id. */
@@ -535,7 +558,7 @@ async function cmdBlueprint(args: string[]): Promise<number> {
     if (kept.length === 0) console.log("This bank holds no blueprint.");
     for (const b of kept) {
       console.log(`${b.name}  (${b.id})`);
-      for (const r of b.rules) console.log(`    ${r.count} where ${r.axis} is ${r.value}`);
+      for (const r of b.rules) console.log(`    ${ruleLine(r)}`);
     }
     return 0;
   }
@@ -546,7 +569,7 @@ async function cmdBlueprint(args: string[]): Promise<number> {
   if (action === "add") {
     const given = all(args, "rule");
     if (given.length === 0) return fail("Give at least one rule, such as --rule chapter=Chapter 1:5.");
-    const rules: Array<{ axis: string; value: string; count: number }> = [];
+    const rules: Array<NonNullable<Exclude<ReturnType<typeof parseRule>, string>>> = [];
     for (const text of given) {
       const rule = parseRule(text);
       if (typeof rule === "string") return fail(rule);
@@ -579,7 +602,7 @@ async function cmdBlueprint(args: string[]): Promise<number> {
     const byId = new Map(questions.map((q) => [q.id, q] as const));
     console.log(`${found.name}, seed ${seed}`);
     for (const r of draw.rules) {
-      console.log(`\n${r.rule.count} where ${r.rule.axis} is ${r.rule.value}:`);
+      console.log(`\n${ruleLine(r.rule)}:`);
       for (const id of r.ids) console.log(`    ${id}  ${byId.get(id)?.title ?? ""}`);
       if (r.ids.length === 0) console.log("    (none)");
     }

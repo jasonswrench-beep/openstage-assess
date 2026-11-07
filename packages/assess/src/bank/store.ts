@@ -55,7 +55,7 @@ import { validateAdministration, type Administration, type AdministrationItem } 
 import { checkBankQuality, type BankQualityReport } from "../quality/bank.ts";
 import { QUALITY_CODES, withFreshQuality } from "../quality/items.ts";
 import { SearchIndex, matchesQuery } from "./search.ts";
-import { validateBlueprint, type Blueprint, type BlueprintRule } from "./blueprint.ts";
+import { tidyRule, validateBlueprint, type Blueprint, type BlueprintRule } from "./blueprint.ts";
 
 export interface OpenReport {
   /** Questions that failed validation, with their issues. Never silently dropped. */
@@ -629,7 +629,7 @@ export class Bank {
     const next: Blueprint = {
       ...current,
       ...(change.name !== undefined ? { name: change.name.trim() } : {}),
-      ...(change.rules !== undefined ? { rules: change.rules.map((r) => ({ axis: r.axis, value: r.value.trim(), count: r.count })) } : {}),
+      ...(change.rules !== undefined ? { rules: change.rules.map(tidyRule) } : {}),
       modified: at,
     };
     const checked = validateBlueprint(next);

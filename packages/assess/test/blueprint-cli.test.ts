@@ -140,3 +140,72 @@ describe("openassess blueprint", () => {
     assert.equal(JSON.stringify(after.sortedQuestions()), questionsBefore);
   });
 });
+
+describe("openassess blueprint, a rule for several values together", () => {
+  let dir = "";
+  let path = "";
+  const digest = () => createHash("sha256").update(readFileSync(path)).digest("hex");
+
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "openassess-blueprint-cells-"));
+    path = join(dir, "grid.openassess");
+    const bank = Bank.createEmpty("Grid", { at: "2026-01-01T00:00:00.000Z" });
+    for (let i = 0; i < 6; i++) bank.add(essay("Chapter 1", i < 2 ? "apply" : "remember"));
+    for (let i = 0; i < 2; i++) bank.add(essay("Part 2: Cells", "apply"));
+    for (let i = 0; i < 3; i++) bank.add(essay("Rock and Roll", "apply"));
+    await bank.save(path);
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  test("values joined with and are one rule, kept with the others, and listed in one line", async () => {
+    const r = run(path, "add", "Cells", "--rule", "chapter=Chapter 1 and bloom=apply:2", "--rule", "chapter=Chapter 1 and bloom=remember:5", "--rule", "bloom=apply:1");
+    assert.equal(r.code, 0, r.err);
+    const { bank, report } = await Bank.open(path);
+    assert.deepEqual(report.invalid, []);
+    assert.deepEqual(bank.listBlueprints()[0]?.rules, [
+      { axis: "chapter", value: "Chapter 1", count: 2, and: [{ axis: "bloom", value: "apply" }] },
+      { axis: "chapter", value: "Chapter 1", count: 5, and: [{ axis: "bloom", value: "remember" }] },
+      { axis: "bloom", value: "apply", count: 1 },
+    ]);
+    assert.match(run(path, "list").out, / {4}2 where chapter is Chapter 1 and bloom is apply\n {4}5 where chapter is Chapter 1 and bloom is remember\n {4}1 where bloom is apply\n/);
+  });
+
+  test("draw takes each cell from its own and says which cell came out short", () => {
+    const before = digest();
+    const r = run(path, "draw", "cells", "--seed", "abc");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /\n2 where chapter is Chapter 1 and bloom is apply:\n( {4}q_[0-9A-Z]{26} {2}Matter \d+\n){2}/, "the two at the apply level in chapter one");
+    assert.match(r.out, /\n5 where chapter is Chapter 1 and bloom is remember:\n( {4}q_[0-9A-Z]{26} {2}Matter \d+\n){4}\n/, "four at the remember level, and no more in chapter one");
+    assert.match(r.out, /chapter Chapter 1 and bloom remember: wanted 5, took 4; the bank has no more\./);
+    assert.match(r.out, /7 of 8 questions taken, 1 short\./, "two, four and one: the third rule is a plain one and takes from any chapter");
+    assert.equal(digest(), before, "drawing wrote nothing");
+  });
+
+  test("the word and inside a value is part of the value, and splits only where an axis name and an equals sign follow", async () => {
+    const r = run(path, "add", "Rock", "--rule", "chapter=Rock and Roll:2", "--rule", "chapter=Rock and Roll and bloom=apply:1");
+    assert.equal(r.code, 0, r.err);
+    const { bank } = await Bank.open(path);
+    assert.deepEqual(bank.listBlueprints().find((b) => b.name === "Rock")?.rules, [
+      { axis: "chapter", value: "Rock and Roll", count: 2 },
+      { axis: "chapter", value: "Rock and Roll", count: 1, and: [{ axis: "bloom", value: "apply" }] },
+    ]);
+  });
+
+  test("a set that could never be met, a blank, a mistyped axis and a missing count are refused in words and the file is not touched", () => {
+    const before = digest();
+    const bad: Array<[string[], RegExp]> = [
+      [["add", "Two chapters", "--rule", "chapter=Chapter 1 and chapter=Part 2: Cells:1"], /one chapter.*could never take a question/],
+      [["add", "Blank", "--rule", "chapter=Chapter 1 and bloom=:2"], /has no value\..*value for bloom/],
+      [["add", "Mistyped", "--rule", "chapter=Chapter 1 and colour=red:2"], /"colour" is not something a rule can be by/],
+      [["add", "Twice", "--rule", "chapter=Chapter 1 and bloom=apply:2", "--rule", "bloom=apply and chapter=Chapter 1:1"], /same thing/],
+      [["add", "No count", "--rule", "chapter=Chapter 1 and bloom=apply"], /is not a rule\.|has no number of questions/],
+      [["add", "Six values", "--rule", "tag=a and tag=b and tag=c and tag=d and tag=e and tag=f:1"], /list of 1 to 4/],
+    ];
+    for (const [args, message] of bad) {
+      const r = run(path, ...args);
+      assert.equal(r.code, 2, `${args.join(" ")}: ${r.out}`);
+      assert.match(r.err, message, args.join(" "));
+    }
+    assert.equal(digest(), before, "nothing was kept");
+  });
+});

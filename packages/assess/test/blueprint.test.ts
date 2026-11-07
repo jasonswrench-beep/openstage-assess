@@ -11,9 +11,9 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { Bank } from "../src/bank/store.ts";
-import { describeDraw, drawBlueprint, newBlueprint, validateBlueprint, MOST_RULES, type Blueprint, type BlueprintRule } from "../src/bank/blueprint.ts";
-import type { CoverageAxis } from "../src/bank/coverage.ts";
-import { MOST_PICKED } from "../src/bank/pick.ts";
+import { conditionsOf, conditionsText, describeDraw, drawBlueprint, impossible, newBlueprint, validateBlueprint, MOST_CONDITIONS, MOST_RULES, type Blueprint, type BlueprintRule } from "../src/bank/blueprint.ts";
+import { matchesFacets, type CoverageAxis } from "../src/bank/coverage.ts";
+import { MOST_PICKED, pickQuestions } from "../src/bank/pick.ts";
 import { blueprintPath } from "../src/container/layout.ts";
 import { unzipSync, zipSync } from "../src/container/zip.ts";
 import { createQuestion } from "../src/model/create.ts";
@@ -36,7 +36,7 @@ function mc(meta: Partial<Metadata> = {}, keyed = true): Question {
 const many = (meta: Partial<Metadata>, count: number, keyed = true): Question[] => Array.from({ length: count }, () => mc(meta, keyed));
 
 const AT = "2026-11-06T12:00:00.000Z";
-const recipe = (rules: Array<{ axis: string; value: string; count: number }>, name = "Midterm"): Blueprint => newBlueprint({ name, rules }, AT);
+const recipe = (rules: Array<{ axis: string; value: string; count: number; and?: Array<{ axis: string; value: string }> }>, name = "Midterm"): Blueprint => newBlueprint({ name, rules }, AT);
 const rule = (axis: CoverageAxis, value: string, count: number): BlueprintRule => ({ axis, value, count });
 const rejected = (value: unknown): string => {
   const checked = validateBlueprint(value);
@@ -308,5 +308,200 @@ describe("a blueprint file the bank cannot read is kept, reported and not used",
     assert.equal(bank.getBlueprint(good.id)?.name, "Quiz 1");
     assert.match(report.invalid.map((i) => i.issues[0]?.message).join("\n"), /already holds the blueprint/);
     assert.equal(text(kept.get("blueprints/copy.json")), copy);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// A rule for a cell of the grid a test is planned on: a chapter and a level together
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe("a rule that asks for values on more than one axis", () => {
+  /** "Chapter 2 and the Apply level": a cell of the grid `assess coverage` shows. */
+  const cell = (chapter: string, bloom: string, count: number): BlueprintRule => ({ axis: "chapter", value: chapter, count, and: [{ axis: "bloom", value: bloom }] });
+  const grid = [...many({ chapter: "1", bloom: "apply" }, 4), ...many({ chapter: "1", bloom: "remember" }, 4), ...many({ chapter: "2", bloom: "apply" }, 2), ...many({ chapter: "2", bloom: "remember" }, 4)];
+  const lookup = new Map(grid.map((q) => [q.id, q] as const));
+  const where = (ids: readonly string[]): string[] => ids.map((id) => `${lookup.get(id)?.metadata.chapter}/${lookup.get(id)?.metadata.bloom}`).sort();
+  const withAnd = (and: unknown): unknown => ({ ...recipe([cell("1", "apply", 2)]), rules: [{ axis: "chapter", value: "1", count: 2, and }] });
+
+  describe("the record", () => {
+    test("is tidied, and a rule with nothing else has no field for it, so it reads in an older program", () => {
+      const bp = newBlueprint({ name: "Grid", rules: [{ axis: "chapter", value: " 2 ", count: 3, and: [{ axis: "bloom", value: " apply " }] }, { axis: "chapter", value: "1", count: 2, and: [] }, { axis: "tag", value: "lab", count: 1 }] }, AT);
+      assert.deepEqual(bp.rules[0]?.and, [{ axis: "bloom", value: "apply" }], "its values are trimmed, as the questions' are");
+      assert.equal(bp.rules[0]?.value, "2");
+      assert.equal("and" in (bp.rules[1] as object), false, "an empty list is not written");
+      assert.equal("and" in (bp.rules[2] as object), false);
+      assert.equal(validateBlueprint(bp).ok, true);
+      assert.ok(!JSON.stringify(bp.rules[2]).includes("and"), "the file of a recipe that never used it is what it always was");
+    });
+
+    test("is held to: a list of one to four, objects with an axis and a value and nothing else, no blank", () => {
+      assert.equal(validateBlueprint(withAnd([{ axis: "bloom", value: "apply" }])).ok, true);
+      assert.match(rejected(withAnd([])), /rules\.0\.and.*list of 1 to 4/);
+      assert.match(rejected(withAnd("bloom")), /rules\.0\.and/);
+      assert.match(rejected(withAnd(["bloom"])), /rules\.0\.and\.0.*object/);
+      assert.match(rejected(withAnd([{ axis: "bloom", value: "" }])), /rules\.0\.and\.0\.value.*would match every question/);
+      assert.match(rejected(withAnd([{ axis: "bloom", value: "   " }])), /rules\.0\.and\.0\.value/);
+      assert.match(rejected(withAnd([{ axis: "bloom", value: " apply" }])), /rules\.0\.and\.0\.value.*no space at either end/);
+      assert.match(rejected(withAnd([{ axis: "colour", value: "red" }])), /rules\.0\.and\.0\.axis/);
+      assert.match(rejected(withAnd([{ axis: "bloom", value: "apply", weight: 1 }])), /weight is not a field of a condition/);
+      assert.match(rejected(withAnd([{ axis: "bloom", value: "x".repeat(201) }])), /at most 200/);
+      const tags = (n: number): unknown => withAnd(Array.from({ length: n }, (_, i) => ({ axis: "tag", value: `t${i}` })));
+      assert.equal(validateBlueprint(tags(MOST_CONDITIONS - 1)).ok, true, "four others and the first make five");
+      assert.match(rejected(tags(MOST_CONDITIONS)), /rules\.0\.and/);
+    });
+
+    test("a set that could never be had by one question is refused, in words", () => {
+      assert.match(rejected(withAnd([{ axis: "chapter", value: "2" }])), /one chapter.*could never take a question/, "a question has one chapter");
+      assert.match(rejected(withAnd([{ axis: "chapter", value: "1" }])), /chapter 1 twice/);
+      const tagged = (...tags: string[]): unknown => ({ ...recipe([rule("tag", tags[0] as string, 2)]), rules: [{ axis: "tag", value: tags[0], count: 2, and: tags.slice(1).map((value) => ({ axis: "tag", value })) }] });
+      assert.equal(validateBlueprint(tagged("lab", "exam")).ok, true, "a question may have several tags");
+      assert.match(rejected(tagged("lab", "lab")), /tag lab twice/);
+      assert.match(rejected(tagged("lab", "(none)")), /no tag/);
+      assert.match(rejected(tagged("(none)", "lab")), /no tag/);
+      assert.equal(validateBlueprint({ ...recipe([rule("chapter", "(none)", 1)]), rules: [{ axis: "chapter", value: "(none)", count: 1, and: [{ axis: "bloom", value: "apply" }] }] }).ok, true, "no chapter at the apply level is a cell like any other");
+      assert.equal(impossible([{ axis: "chapter", value: "1" }, { axis: "bloom", value: "apply" }]), undefined);
+    });
+
+    test("the same values in another order are one rule, and a rule with more is another", () => {
+      const swapped: BlueprintRule = { axis: "bloom", value: "apply", count: 1, and: [{ axis: "chapter", value: "1" }] };
+      assert.match(rejected({ ...recipe([rule("chapter", "1", 1)]), rules: [cell("1", "apply", 2), swapped] }), /same thing/);
+      assert.equal(validateBlueprint({ ...recipe([rule("chapter", "1", 1)]), rules: [cell("1", "apply", 2), rule("chapter", "1", 3), rule("bloom", "apply", 1)] }).ok, true, "chapter 1, and chapter 1 at apply, are different rules");
+    });
+
+    test("conditionsOf and conditionsText give the first value and then the others", () => {
+      assert.deepEqual(conditionsOf(cell("2", "apply", 1)), [{ axis: "chapter", value: "2" }, { axis: "bloom", value: "apply" }]);
+      assert.equal(conditionsText(cell("2", "apply", 1)), "chapter 2 and bloom apply");
+      assert.equal(conditionsText(rule("chapter", "2", 1)), "chapter 2", "a rule of one value reads as it always did");
+    });
+  });
+
+  describe("drawing", () => {
+    test("takes only the questions that have every value, and is short when the cell is thin, never made up from a neighbour", () => {
+      const draw = drawBlueprint(grid, recipe([cell("2", "apply", 5)]), { seed: "s" });
+      assert.deepEqual(where(draw.ids), ["2/apply", "2/apply"], "chapter 2 has four at the remember level and chapter 1 has four at apply, and none of them was taken");
+      assert.equal(draw.short, 3);
+      assert.match(describeDraw(draw).join("\n"), /chapter 2 and bloom apply: wanted 5, took 2; the bank has no more/);
+    });
+
+    test("a plan on both axes takes each cell from its own", () => {
+      const draw = drawBlueprint(grid, recipe([cell("1", "apply", 3), cell("1", "remember", 2), cell("2", "remember", 4), cell("2", "apply", 1)]), { seed: "s" });
+      assert.equal(draw.short, 0);
+      assert.deepEqual(draw.rules.map((r) => where(r.ids).join(",")), ["1/apply,1/apply,1/apply", "1/remember,1/remember", "2/remember,2/remember,2/remember,2/remember", "2/apply"]);
+    });
+
+    test("a wider rule after a narrow one finds the narrow one's questions taken, and says so", () => {
+      const draw = drawBlueprint(grid, recipe([cell("1", "apply", 4), rule("chapter", "1", 6)]), { seed: "s" });
+      assert.equal(draw.rules[1]?.ids.length, 4, "the four at the remember level");
+      assert.equal(draw.rules[1]?.short, 2);
+      assert.equal(draw.rules[1]?.pick.left.chosen, 4);
+      assert.match(describeDraw(draw).join("\n"), /chapter 1: wanted 6, took 4; left out 4 already in the test/);
+    });
+
+    test("a question must have both tags, and no more tags than that are asked for", () => {
+      const qs = [mc({ tags: ["lab", "exam"] }), mc({ tags: ["lab", "exam", "x"] }), mc({ tags: ["lab"] }), mc({ tags: ["exam"] }), mc({ tags: [] })];
+      const draw = drawBlueprint(qs, { ...recipe([rule("tag", "lab", 9)]), rules: [{ axis: "tag", value: "lab", count: 9, and: [{ axis: "tag", value: "exam" }] }] }, { seed: "s" });
+      assert.deepEqual([...draw.ids].sort(), [qs[0]?.id, qs[1]?.id].sort(), "the two that have both");
+    });
+
+    test("no value on one axis with a value on another takes the questions that have the second and not the first", () => {
+      const qs = [mc({ bloom: "apply" }), mc({ bloom: "apply", chapter: "1" }), mc({ chapter: "1" }), mc({})];
+      const draw = drawBlueprint(qs, { ...recipe([rule("chapter", "(none)", 1)]), rules: [{ axis: "chapter", value: "(none)", count: 9, and: [{ axis: "bloom", value: "apply" }] }] }, { seed: "s" });
+      assert.deepEqual(draw.ids, [qs[0]?.id]);
+    });
+
+    test("a rule of one value takes what it took before, and so does an empty list of others", () => {
+      // One blueprint id for both: the id is part of the seed, and recipe() makes a new one each time.
+      const base = recipe([rule("chapter", "1", 5)]);
+      const plain = drawBlueprint(grid, base, { seed: "s" });
+      const empty = drawBlueprint(grid, { ...base, rules: [{ axis: "chapter", value: "1", count: 5, and: [] }] }, { seed: "s" });
+      assert.deepEqual(empty.ids, plain.ids);
+      const picked = pickQuestions(grid, { axis: "chapter", value: "1", count: 5, seed: "x" });
+      assert.deepEqual(pickQuestions(grid, { axis: "chapter", value: "1", count: 5, seed: "x", also: [] }), picked, "no further condition, the same pick");
+    });
+
+    test("the same seed takes the same questions, in any order the bank is held, and other seeds reach the whole cell and nothing outside it", () => {
+      const bp = recipe([cell("1", "apply", 2)]);
+      const a = drawBlueprint(grid, bp, { seed: "one" });
+      assert.deepEqual(drawBlueprint([...grid].reverse(), bp, { seed: "one" }).ids, a.ids);
+      const reached = new Set<string>();
+      for (const seed of ["two", "three", "four", "five", "six", "seven", "eight", "nine"]) for (const id of drawBlueprint(grid, bp, { seed }).ids) reached.add(id);
+      assert.deepEqual(where([...reached]), ["1/apply", "1/apply", "1/apply", "1/apply"]);
+    });
+
+    test("pick refuses a blank condition, since a blank filter would take from the whole bank", () => {
+      assert.throws(() => pickQuestions(grid, { axis: "chapter", value: "1", count: 1, also: [{ axis: "bloom", value: "  " }] }), /needs a value.*match every question/);
+      assert.equal(pickQuestions(grid, { axis: "chapter", value: "1", count: 9, also: [{ axis: "bloom", value: "apply" }] }).candidates, 4);
+    });
+
+    test("a hundred random banks and recipes of several values: each taken question has every value, none twice, never more than asked", () => {
+      const random = seededRandom("blueprint-cells-20261107");
+      const pickOf = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)] as T;
+      for (let run = 0; run < 100; run++) {
+        const qs: Question[] = [];
+        for (let i = 0, total = 10 + Math.floor(random() * 50); i < total; i++) {
+          qs.push(mc({ chapter: pickOf(["1", "2", "3", undefined] as const), bloom: pickOf(["apply", "remember", undefined] as const), difficulty: pickOf(["easy", "hard", undefined] as const), tags: random() < 0.5 ? ["lab"] : random() < 0.5 ? ["lab", "exam"] : [], status: random() < 0.1 ? "retired" : "draft" }, random() > 0.15));
+        }
+        const rules: BlueprintRule[] = [];
+        for (let i = 0, wanted = 1 + Math.floor(random() * 4); i < wanted; i++) {
+          const and: Array<{ axis: CoverageAxis; value: string }> = [{ axis: "bloom", value: pickOf(["apply", "remember", "(none)"]) }];
+          if (random() < 0.4) and.push({ axis: "difficulty", value: pickOf(["easy", "hard"]) });
+          rules.push({ axis: "chapter", value: pickOf(["1", "2", "3", "(none)"]), count: 1 + Math.floor(random() * 6), and });
+        }
+        // Two random rules can be the same cell; that is the engine refusing a recipe, so a run that made one draws the unique ones.
+        const unique = [...new Map(rules.map((r) => [conditionsText(r), r] as const)).values()];
+        const bp = recipe(unique);
+        assert.equal(validateBlueprint(bp).ok, true, `run ${run}: a recipe of cells holds together`);
+        const draw = drawBlueprint(qs, bp, { seed: `run${run}` });
+        assert.equal(new Set(draw.ids).size, draw.ids.length, `run ${run}: none twice`);
+        assert.equal(draw.ids.length + draw.short, draw.wanted, `run ${run}: taken and short add up`);
+        const found = new Map(qs.map((q) => [q.id, q] as const));
+        for (const r of draw.rules) {
+          assert.ok(r.ids.length <= r.rule.count, `run ${run}: no more than asked`);
+          for (const id of r.ids) {
+            const q = found.get(id) as Question;
+            for (const c of conditionsOf(r.rule)) assert.ok(matchesFacets(q, { [c.axis]: c.value }), `run ${run}: ${conditionsText(r.rule)}`);
+            assert.notEqual(q.metadata.status, "retired", `run ${run}: not retired`);
+            assert.ok(hasUsableKey(q), `run ${run}: has a key`);
+          }
+        }
+        assert.deepEqual(drawBlueprint(qs, bp, { seed: `run${run}` }).ids, draw.ids, `run ${run}: the same again`);
+      }
+    });
+  });
+
+  describe("kept in a bank", () => {
+    test("survives a save and an open, a change keeps and tidies its other values, and a refused change leaves it as it was", () => {
+      const bank = Bank.createEmpty("Recipes", { at: AT });
+      const a = bank.addBlueprint(recipe([cell("2", "apply", 3), rule("chapter", "1", 2)], "Midterm"));
+      const { bank: again, report } = Bank.fromBytes(bank.toBytes({ at: AT }));
+      assert.deepEqual(again.getBlueprint(a.id), a);
+      assert.deepEqual(report.invalid, []);
+      const changed = bank.updateBlueprint(a.id, { rules: [{ axis: "chapter", value: " 2 ", count: 4, and: [{ axis: "bloom", value: " apply " }] }] }, "2026-11-08T12:00:00.000Z");
+      assert.deepEqual(changed.rules, [cell("2", "apply", 4)], "the other value was kept, and trimmed");
+      assert.throws(() => bank.updateBlueprint(a.id, { rules: [{ axis: "chapter", value: "2", count: 4, and: [{ axis: "chapter", value: "3" }] }] }), /does not hold together[\s\S]*one chapter/);
+      assert.deepEqual(bank.getBlueprint(a.id), changed, "a refused change left it as it was");
+    });
+
+    test("a file with a field of a condition this program does not know is kept byte for byte, reported and not used", () => {
+      const bank = Bank.createEmpty("Recipes", { at: AT });
+      const entries = unzipSync(bank.toBytes({ at: AT }));
+      const made = recipe([cell("1", "apply", 1)], "Odd");
+      const odd = JSON.stringify({ ...made, rules: [{ axis: "chapter", value: "1", count: 1, and: [{ axis: "bloom", value: "apply", level: 2 }] }] });
+      const path = blueprintPath(made.id);
+      entries.set(path, new Uint8Array(Buffer.from(odd, "utf8")));
+      const opened = Bank.fromBytes(zipSync([...entries].map(([name, data]) => ({ name, data }))));
+      assert.equal(opened.bank.blueprints.size, 0);
+      assert.match(opened.report.invalid.map((i) => i.issues.map((m) => m.message).join(" ")).join("\n"), /level is not a field of a condition/);
+      assert.equal(Buffer.from(unzipSync(opened.bank.toBytes({ at: AT })).get(path) as Uint8Array).toString("utf8"), odd);
+    });
+
+    test("it still holds no question: the file names values and counts only", () => {
+      const bank = Bank.createEmpty("Recipes", { at: AT });
+      const q = bank.add(mc({ chapter: "2", bloom: "apply" }));
+      bank.addBlueprint(recipe([cell("2", "apply", 1)], "Quiz"));
+      const file = [...unzipSync(bank.toBytes({ at: AT })).entries()].find(([name]) => name.startsWith("blueprints/"));
+      assert.ok(file);
+      assert.ok(!Buffer.from(file[1]).toString("utf8").includes(q.id));
+    });
   });
 });
