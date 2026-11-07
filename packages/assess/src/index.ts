@@ -93,6 +93,7 @@ export { standardTextImporter, PROFILE_ID as STANDARD_TEXT_PROFILE } from "./imp
 export { wordImporter, docxToBlocks, WORD_PROFILE_ID } from "./import/word.ts";
 export { DocxError, openDocx } from "./import/docx/package.ts";
 export { IMPORTERS, importerFor, importerForContent, runImporter } from "./import/registry.ts";
+export { cannotRead } from "./import/cannot-read.ts";
 export { aikenImporter, AIKEN_PROFILE_ID, looksLikeAiken } from "./import/aiken.ts";
 export { giftImporter, GIFT_PROFILE_ID, looksLikeGift, giftUnescape } from "./import/gift.ts";
 export { moodleXmlImporter, MOODLE_XML_PROFILE_ID, looksLikeMoodleXml } from "./import/moodle-xml.ts";

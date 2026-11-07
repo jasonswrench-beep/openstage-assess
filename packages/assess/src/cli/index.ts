@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import { BANK_EXTENSION, PRODUCT_NAME, ENGINE_VERSION } from "../naming.ts";
 import { Bank, countMismatchMessage } from "../bank/store.ts";
+import { cannotRead } from "../import/cannot-read.ts";
 import { importerForContent, runImporter } from "../import/registry.ts";
 import { linesToBlocks, verdictOf } from "../import/types.ts";
 import { docxToBlocks } from "../import/word.ts";
@@ -291,9 +292,8 @@ async function cmdImport(args: string[]): Promise<number> {
   const path = positional(args)[0];
   if (!path) return fail("Name a file to import.");
   const full = resolve(path);
-  if (extname(full).toLowerCase() === ".doc") {
-    return fail("This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).");
-  }
+  const cannot = cannotRead(full);
+  if (cannot) return fail(cannot);
   // A .txt file may be the Standard Format, Aiken or GIFT, and is told by what is in it. A file with an extension no importer
   // claims is read as the plain-text format, as it always was.
   const bytes = await readFile(full);
@@ -377,9 +377,8 @@ async function cmdReview(args: string[]): Promise<number> {
   if (!path) return fail("Name a file to review.");
   const full = resolve(path);
   const extension = extname(full).toLowerCase();
-  if (extension === ".doc") {
-    return fail("This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).");
-  }
+  const cannot = cannotRead(full);
+  if (cannot) return fail(cannot);
   const bytes = await readFile(full);
   const importer = importerForContent(full, bytes);
   const keyMark = arg(args, "key-mark");
