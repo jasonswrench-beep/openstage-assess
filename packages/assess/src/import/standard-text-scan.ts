@@ -2345,12 +2345,26 @@ function reportRepeatedNumbers(questions: RawQuestion[], fileFindings: Finding[]
   }
   if (repeated.size === 0) return;
 
-  const listed = [...repeated].slice(0, 10).join(", ");
+  const listed = `${[...repeated].slice(0, 10).join(", ")}${repeated.size > 10 ? ", and more" : ""}`;
+  // It is a warning only when it cost something: an Answers entry for one of the repeated numbers was held back (`resolveKeys` has
+  // already run). Four of twenty-one real files started their numbering again in each section (multiple choice 1 to 10, then true
+  // or false 1 to 10) and marked their answers another way, and were told that "an Answers entry is not applied" when there was no
+  // Answers list at all. Said as information, it is still said.
+  if (questions.some((q) => q.keyAmbiguous)) {
+    fileFindings.push(
+      finding(
+        FindingCode.DuplicateQuestionNumber,
+        "warn",
+        `Question numbers repeat with no Answers list between them: ${listed}. An Answers entry cannot tell repeated numbers apart, so it is not applied to them. Answers marked with an asterisk are still read.`,
+      ),
+    );
+    return;
+  }
   fileFindings.push(
     finding(
       FindingCode.DuplicateQuestionNumber,
-      "warn",
-      `Question numbers repeat with no Answers list between them: ${listed}${repeated.size > 10 ? ", and more" : ""}. An Answers entry cannot tell repeated numbers apart, so it is not applied to them. Answers marked with an asterisk are still read.`,
+      "info",
+      `Question numbers repeat with no Answers list between them: ${listed}. No Answers entry was waiting on them, so no answer was held back. If the file is in sections that each start again at 1 that is expected; if two chapters were pasted together, check that every question is there.`,
     ),
   );
 }

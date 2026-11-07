@@ -254,14 +254,35 @@ describe("repeated question numbers do not share a key", () => {
 
   test("the file says that numbers repeat", () => {
     const result = parse(twice);
-    assert.ok(result.fileFindings.some((f) => f.code === FindingCode.DuplicateQuestionNumber && /3/.test(f.message)));
+    const said = result.fileFindings.find((f) => f.code === FindingCode.DuplicateQuestionNumber && /3/.test(f.message));
+    assert.ok(said);
+    assert.equal(said.severity, "warn", "an Answers entry was held back, so it cost something");
+    assert.match(said.message, /cannot tell repeated numbers apart/);
   });
 
   test("a repeat is harmless when each question carries its own asterisk", () => {
     const result = parse(`3) A?\n*a. x\nb. y\n\n3) B?\na. x\n*b. y\n`);
     assert.deepEqual(result.questions.map(correctIndexes), [[0], [1]]);
     assert.deepEqual(result.questions.map(verdictOf), ["parsed", "parsed"]);
-    assert.ok(result.fileFindings.some((f) => f.code === FindingCode.DuplicateQuestionNumber));
+    const said = result.fileFindings.find((f) => f.code === FindingCode.DuplicateQuestionNumber);
+    assert.ok(said, "it is still said");
+    assert.equal(said.severity, "info", "no Answers entry was waiting, so nothing was held back and it is not a warning");
+    assert.match(said.message, /No Answers entry was waiting on them/);
+  });
+
+  test("sections that each start again at 1, with answers marked another way, are said as information and keep every answer", () => {
+    // A section numbered 1 and 2, then another numbered 1 and 2: the real files that were told an Answers entry was not applied.
+    const result = parse(`1) First?\n*a. x\nb. y\n2) Second?\na. x\n*b. y\n\n1) Third?\n*a. p\nb. q\n2) Fourth?\na. p\n*b. q\n`);
+    assert.deepEqual(result.questions.map(correctIndexes), [[0], [1], [0], [1]]);
+    const said = result.fileFindings.filter((f) => f.code === FindingCode.DuplicateQuestionNumber);
+    assert.equal(said.length, 1);
+    assert.equal(said[0]?.severity, "info");
+    assert.equal(result.fileFindings.filter((f) => f.severity === "warn").length, 0);
+  });
+
+  test("it is a warning when only some of the repeated numbers had an Answers entry", () => {
+    const result = parse(`3) A?\na. x\nb. y\n\n3) B?\na. x\nb. y\n\nAnswers:\n3. B\n\n4) C?\n*a. x\nb. y\n\n4) D?\na. x\n*b. y\n`);
+    assert.equal(result.fileFindings.find((f) => f.code === FindingCode.DuplicateQuestionNumber)?.severity, "warn");
   });
 });
 

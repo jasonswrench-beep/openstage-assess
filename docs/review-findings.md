@@ -1211,6 +1211,19 @@ misbehaves. It proved eight, all fixed, each with a test and a planted-fault run
 What it checked and found sound: the right-answer-first layout (four runs of 2000 questions, no wrong key, the key follows its
 words), the registry, the list of files that are refused, the zip message, and typography through every path.
 
+### Found by reading what the program says about real files (7 November 2026, after alpha 11)
+
+Real banks were run through the quality notes and the import's own warnings and the results read by eye, which is the only way to
+learn what a rule's false alarms are. Check quality's rules were corrected from it (the "alike" rule for parallel questions, the
+negative stem rule for stories, quotations, why questions and conditions, and the repeated option rule for capitals that carry the
+meaning; the numbers are in `docs/design-plan.md`). The import's warnings, read the same way over the 1421 questions of the 21 real
+Word banks, gave one more: "Question numbers repeat with no Answers list between them ... An Answers entry cannot tell repeated numbers
+apart, so it is not applied" was a warning on 4 of the 21 files, and in each the numbering simply started again in each section
+(multiple choice 1 to 10, then true or false 1 to 10) and the answers were marked another way, so there was no Answers list and nothing was
+held back. It is a warning only when an Answers entry was held back for a repeated number, and information otherwise (it is still said,
+because two pasted chapters look the same). Every other warning on those files was read and is accurate: the joined page references,
+the heading used as a stem, the question with no type line, the formatting that was not often enough to be a key.
+
 ### Found by reading the first real learning-system file (7 November 2026)
 
 Three test banks had been in `Downloads/testbanks` since 30 October and had not been tried against the importers: a Moodle GIFT export,
