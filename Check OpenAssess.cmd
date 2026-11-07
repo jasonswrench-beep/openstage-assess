@@ -35,7 +35,7 @@ echo.
 echo ----------------------------------------------------------------
 echo  2 of 5  App tests
 echo ----------------------------------------------------------------
-%RUN% --test "packages\app\test\editor.test.ts" "packages\app\test\samples.test.ts" "packages\app\test\import-lms-files.test.ts" "packages\app\test\server.test.ts" "packages\app\test\sheets.test.ts" "packages\app\test\quality.test.ts" "packages\app\test\coverage.test.ts" "packages\app\test\pick.test.ts" "packages\app\test\problems.test.ts" "packages\app\test\folders.test.ts" "packages\app\test\pictures.test.ts" "packages\app\test\pictures-by-hand.test.ts" "packages\app\test\filing.test.ts" "packages\app\test\equations.test.ts" "packages\app\test\math-draw.test.ts" "packages\app\test\tables.test.ts" "packages\app\test\blueprints.test.ts" "packages\app\test\accessible-names.test.ts"
+%RUN% --test "packages\app\test\editor.test.ts" "packages\app\test\samples.test.ts" "packages\app\test\import-lms-files.test.ts" "packages\app\test\server.test.ts" "packages\app\test\sheets.test.ts" "packages\app\test\quality.test.ts" "packages\app\test\coverage.test.ts" "packages\app\test\pick.test.ts" "packages\app\test\problems.test.ts" "packages\app\test\folders.test.ts" "packages\app\test\pictures.test.ts" "packages\app\test\pictures-by-hand.test.ts" "packages\app\test\filing.test.ts" "packages\app\test\equations.test.ts" "packages\app\test\math-draw.test.ts" "packages\app\test\tables.test.ts" "packages\app\test\blueprints.test.ts" "packages\app\test\accessible-names.test.ts" "packages\app\test\list-selection.test.ts"
 if errorlevel 1 goto failed
 echo.
 

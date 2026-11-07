@@ -1224,6 +1224,14 @@ held back. It is a warning only when an Answers entry was held back for a repeat
 because two pasted chapters look the same). Every other warning on those files was read and is accurate: the joined page references,
 the heading used as a stem, the question with no type line, the formatting that was not often enough to be a key.
 
+A table of 5000 questions was also pushed through the app to see where size hurts (7 November 2026, in the built-in browser). The
+server took 0.8 seconds to read it and send 3.8 MB; the review drew its 5000 rows (40,000 elements) in about 1.5 seconds; opening the
+saved bank took 0.8 seconds and a search 0.4 seconds. What was slow was choosing a question: every choice drew the whole list again,
+0.5 to 0.9 seconds each, and threw away the row a keyboard user was on. A choice now changes the two rows that differ (`markSelected` in
+`ui/list.js`): 84 to 140 milliseconds with the question's own load, one row marked, focus kept. 5000 is a size a publisher's bank can
+reach; nothing has been tried above it, and the list still holds every row at once (no windowing), so a bank of 20,000 would take
+several seconds to open and is untried.
+
 ### Found by reading the first real learning-system file (7 November 2026)
 
 Three test banks had been in `Downloads/testbanks` since 30 October and had not been tried against the importers: a Moodle GIFT export,
