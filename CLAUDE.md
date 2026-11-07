@@ -113,6 +113,21 @@ as the names only if it names two known columns, so a note with the word Questio
 is not mistaken for them. A cell that holds an error, or a formula with no stored result,
 is read as empty and named, never as text that could be taken for a letter.
 
+**A table can name the right answer by the column it stands in, and then the order of its answers is not the author's.** A column
+called Correct or Correct answer beside columns called Incorrect answer 1, 2, 3 (or Wrong, Distractor) holds the words of the right
+answer, and the key is that column (`readHeader` in `import/spreadsheet.ts` reads the Correct column that way only when wrong-answer
+columns are there and answer columns A, B, C are not; with both, or with wrong-answer columns and no right-answer column, the
+wrong-answer columns are left out and said, because the letters are the key the file gave). The right answer is first in every row,
+so the answers are mixed at import (`shuffledFor`, seeded from the question's words, so the same every time; the right answer goes
+with its own words; a question with an answer that depends on its place keeps the file's order) and the file says how many. Left as
+it came, the key would be A throughout, and so would version A of every printed test. A language name after a separator is taken off
+a column's name ("question_english"), so the columns of a second language repeat the first and are reported as not read; the first
+language in the file is the one read. A question's own number in the file is kept in `metadata.custom["Question ID"]`. An empty
+right-answer cell leaves no answer marked. Do not mix the answers of a table that has letters, and do not fill an empty cell from
+anything. The real bank behind this (550 questions, one right answer first, two languages) is held to a plain split of its own lines
+in `spreadsheet-right-first.test.ts` when it is in `fixtures/publisher/tables`. A zip that holds no questions but holds a text file,
+spreadsheet or Word file names those files and says to unzip and import them on their own.
+
 **A Moodle XML file's key is the weights it gives, and nothing else.** `import/moodle-xml.ts` reads an answer as right only where its
 `fraction` is the whole of the points (99.99 or more). A single answer question where none is has no key and says so; two leaves both
 marked as the file has them and fails the key check; part credit on a single answer, credit for a wrong answer in a short answer, and
@@ -341,7 +356,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2663 engine tests and 308 app tests, Node's own runner
+npm test                       # 2685 engine tests and 308 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

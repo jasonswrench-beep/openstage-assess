@@ -25,6 +25,8 @@ import { addFindings, createQuestion, DEFAULT_POINTS, withRecomputedFindings } f
 import { finding, FindingCode, type Finding, type Severity } from "../model/findings.ts";
 import { localId } from "../model/ids.ts";
 import { plainToRich } from "../model/richtext.ts";
+import { shuffledFor } from "../model/random.ts";
+import { dependsOnPlace } from "../model/test.ts";
 import type { Feedback, Question, QuestionBody } from "../model/question.ts";
 import type { TableFile, TableRow, TableSheet } from "./table.ts";
 import { decodeTableText, parseDelimited, readCsv } from "./table-csv.ts";
@@ -42,12 +44,22 @@ const HEADER_SEARCH = 10;
 // The columns
 // ---------------------------------------------------------------------------
 
-type Column = "type" | "question" | "correct" | "points" | "attempts" | "right" | "wrong" | "general" | "category" | `a${number}`;
+type Column = "type" | "question" | "id" | "correct" | "rightText" | "points" | "attempts" | "right" | "wrong" | "general" | "category" | `a${number}` | `w${number}`;
 
 const squash = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+/**
+ * A table made for two languages names a column for each ("question_english", "question_french"). The language is not part of
+ * what the column is, so it is taken off the name; the second column of a kind then repeats the first, and is reported as
+ * not used, which says what was left out. Only whole language names after a separator count: "Question English" is a column
+ * for English, and a column called "Penguin" or "Spanish Inquisition essay" is not touched.
+ */
+const LANGUAGES = "english|french|spanish|german|italian|portuguese|dutch|swedish|norwegian|danish|finnish|polish|czech|russian|greek|turkish|arabic|hebrew|hindi|chinese|japanese|korean|welsh|irish|latin";
+const LANGUAGE_SUFFIX = new RegExp(`(?<=[a-z0-9])[\\s_\\-.(]+(?:${LANGUAGES})\\)?\\s*$`, "i");
+
 const NAMES: Record<string, Column> = {
   type: "type", questiontype: "type", kind: "type",
+  id: "id", questionid: "id", itemid: "id", qid: "id", questionidentifier: "id", itemidentifier: "id",
   question: "question", questiontext: "question", text: "question", prompt: "question", stem: "question",
   correct: "correct", correctanswer: "correct", correctanswers: "correct", answer: "correct", key: "correct", rightanswer: "correct", answerkey: "correct",
   points: "points", score: "points", weight: "points",
@@ -81,10 +93,22 @@ const TYPE_CODES: Record<string, Kind> = {
 const TRUE_WORDS = new Set(["true", "t", "yes", "y", "1"]);
 const FALSE_WORDS = new Set(["false", "f", "no", "n", "0"]);
 
+/**
+ * "Incorrect answer 2", "Wrong option 3", "Distractor 1": a column for one wrong answer. The numbers count from 1 and are the
+ * order of the answers; a number past the last answer column is not understood (and so is reported as not used).
+ */
+const WRONG_ANSWER = /^(?:(?:incorrect|wrong|distractor|distracter)(?:answer|option|choice|response)?|(?:answer|option|choice|response)(?:incorrect|wrong))(\d+)$/;
+
 /** A column named "Question #" or "Question No." numbers the questions; it is not their words. */
 function columnOf(cell: string): Column | null {
   if (cell.includes("#")) return null;
-  return NAMES[squash(cell)] ?? null;
+  const name = squash(cell.replace(LANGUAGE_SUFFIX, ""));
+  const wrong = WRONG_ANSWER.exec(name);
+  if (wrong) {
+    const n = Number(wrong[1]);
+    return n >= 1 && n < MAX_ANSWERS ? (`w${n - 1}` as Column) : null;
+  }
+  return NAMES[name] ?? null;
 }
 
 /**
@@ -102,6 +126,8 @@ interface Header {
   /** The names of columns that were not understood, or that repeat one that was. */
   unused: string[];
   repeated: string[];
+  /** Columns that were understood but cannot be used with the others (see below). */
+  conflicting: string[];
 }
 
 function readHeader(cells: readonly string[]): Header {
@@ -121,7 +147,24 @@ function readHeader(cells: readonly string[]): Header {
     seen.add(column);
     return column;
   });
-  return { order, unused, repeated };
+  // A table can say which answer is right in two ways, and they do not mix. With answer columns (A, B, C...) the Correct column
+  // names a letter, or the words of one answer. With columns for the wrong answers ("Incorrect answer 1"...), the column called
+  // Correct (or Correct answer) holds the words of the right answer itself, and the key is which column it stands in. If a file
+  // has both kinds of answer column the wrong-answer columns are the ones left out, and said, because the letters are the
+  // key the file gave. If it has wrong-answer columns and no column for the right answer, there is no key to read them with.
+  const wrongAt = order.map((c, i) => (c !== null && /^w\d$/.test(c) ? i : -1)).filter((i) => i !== -1);
+  const conflicting: string[] = [];
+  if (wrongAt.length > 0) {
+    const lettered = order.some((c) => c !== null && /^a\d$/.test(c));
+    const correctAt = order.indexOf("correct");
+    if (lettered || correctAt === -1) {
+      for (const i of wrongAt) {
+        conflicting.push(cells[i] as string);
+        order[i] = null;
+      }
+    } else order[correctAt] = "rightText";
+  }
+  return { order, unused, repeated, conflicting };
 }
 
 /**
@@ -139,7 +182,7 @@ export function looksLikeQuestionTable(bytes: Uint8Array): boolean {
   const first = rows[0];
   if (!first || !isHeader(first.cells)) return false;
   const columns = new Set(first.cells.map(columnOf));
-  return columns.has("correct") || columns.has("a0") || columns.has("a1");
+  return columns.has("correct") || columns.has("a0") || columns.has("a1") || columns.has("w0");
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +194,9 @@ interface Ctx {
   at: string;
   author: string;
   profile: string;
+  /** In a table that puts the right answer first: how many questions had their answers mixed, and how many kept the file's order. */
+  mixed: number;
+  kept: number;
 }
 
 const isTrue = (s: string): boolean => TRUE_WORDS.has(s.trim().toLowerCase());
@@ -213,16 +259,24 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   const note = (code: string, severity: Severity, message: string): void => void findings.push(finding(code, severity, message));
 
   const typeCell = get("type").trim();
-  const correctCell = get("correct").trim();
-  const answerCells = Array.from({ length: MAX_ANSWERS }, (_, i) => words(get(`a${i}` as Column)));
+  // In a table with columns for the wrong answers, the right answer's words are in one column of its own and the key is that
+  // column. It is put first among the answers, and the other columns follow in their order; there is no letter to read.
+  const rightFirst = order.includes("rightText");
+  const rightWords = rightFirst ? words(get("rightText")) : "";
+  const correctCell = get("correct").trim(); // empty when the Correct column was read as the right answer's words (see readHeader)
+  const answerCells = rightFirst
+    ? [rightWords, ...Array.from({ length: MAX_ANSWERS - 1 }, (_, i) => words(get(`w${i}` as Column)))]
+    : Array.from({ length: MAX_ANSWERS }, (_, i) => words(get(`a${i}` as Column)));
   const letterOf: number[] = [];
   const answers: string[] = [];
   answerCells.forEach((a, i) => {
     if (a === "") return;
-    letterOf.push(i);
+    // With no letters to keep to, the answers that are filled in are A, B, C in turn, so a message names the one a person will see.
+    letterOf.push(rightFirst ? answers.length : i);
     answers.push(a);
   });
   const quotedAnswers = (): string => answers.map((a, i) => `${LETTERS[letterOf[i] as number]}: ${a}`).join("; ");
+  const rightIsFirst = rightFirst && rightWords !== "";
 
   // The type: as the cell says, or from what the row holds when it says nothing. A type that is stated is believed.
   const code = squash(typeCell);
@@ -259,7 +313,13 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
 
   if (kind === "mc" || kind === "mr") {
     let marked: number[] = [];
-    if (correctCell !== "") {
+    if (rightFirst) {
+      if (rightIsFirst) marked = [0];
+      else note(FindingCode.KeyLetterMissing, "info", "The cell for the right answer is empty, so no answer is marked.");
+      if (kind === "mr") {
+        note(FindingCode.UnreadContent, "warn", "This table has one column for the right answer, so only that answer is marked. If another is also right, mark it in the editor.");
+      }
+    } else if (correctCell !== "") {
       const named = positionsNamed(correctCell, letterOf, answers);
       if ("bad" in named) {
         const filled = letterOf.map((i) => LETTERS[i]).join(", ");
@@ -277,10 +337,26 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
     if (gaps.length > 0) {
       note(FindingCode.OptionLetterGap, "warn", `${gaps.length === 1 ? `Answer ${gaps[0]} is` : `Answers ${gaps.join(", ")} are`} empty, so ${gaps.length === 1 ? "it was" : "they were"} left out. The letters in the Correct cell still mean the columns.`);
     }
-    const texts = [...answers];
+    let texts = [...answers];
     if (texts.length < 2) {
       note(FindingCode.TooFewOptions, "error", `A ${kind === "mr" ? "multiple response" : "multiple choice"} question needs at least two answers, and this has ${texts.length}. A placeholder was added; write the answers in.`);
       while (texts.length < 2) texts.push("(missing)");
+    }
+    // The right answer's column comes first in every row of such a table, so left as it is the key of the whole bank would be A,
+    // and so would version A of every printed test (a printed version A keeps the bank's order). The order is not something the
+    // author chose; it is where the column stood. So the answers are mixed, the same way every time for the same question, and the
+    // right answer goes with its own words. An answer that depends on its place ("None of the above") keeps the order of the file.
+    if (rightIsFirst && answers.length > 1) {
+      if (texts.some((t) => dependsOnPlace(t))) ctx.kept++;
+      else {
+        const was = shuffledFor(
+          texts.map((_, i) => i),
+          `right answer first:${stem}`,
+        );
+        texts = was.map((i) => texts[i] as string);
+        marked = marked.map((m) => was.indexOf(m));
+        ctx.mixed++;
+      }
     }
     const options = texts.map((text, i) => ({ id: localId("o", i), content: plainToRich(text), correct: marked.includes(i) }));
     if (kind === "mr") {
@@ -293,7 +369,7 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   } else if (kind === "tf") {
     type = "trueFalse";
     let value: boolean | undefined;
-    let said = correctCell;
+    let said = rightFirst ? rightWords : correctCell;
     // True and False written in the answer columns, and the Correct cell naming one by its letter: the answer is the word.
     if (/^[A-Ha-h]$/.test(correctCell)) {
       const at = letterOf.indexOf(correctCell.toUpperCase().charCodeAt(0) - 65);
@@ -301,15 +377,21 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
     }
     if (isTrue(said)) value = true;
     else if (isFalse(said)) value = false;
-    else if (correctCell !== "") note(FindingCode.KeyLetterMissing, "error", `The Correct cell says "${correctCell}", which is not True or False. No answer is marked.`);
-    else note(FindingCode.KeyLetterMissing, "info", "The Correct cell is empty, so neither True nor False is marked.");
+    else if (said !== "") note(FindingCode.KeyLetterMissing, "error", `The ${rightFirst ? "right answer" : "Correct"} cell says "${said}", which is not True or False. No answer is marked.`);
+    else note(FindingCode.KeyLetterMissing, "info", `The ${rightFirst ? "cell for the right answer" : "Correct cell"} is empty, so neither True nor False is marked.`);
     const plain = answers.every((a) => isTrue(a) || isFalse(a)) && answers.length <= 2;
     if (answers.length > 0 && !plain) note(FindingCode.UnreadContent, "warn", `A true or false question has no answers of its own, so the answer cells were not used (${quotedAnswers()}).`);
     body = value === undefined ? {} : { correct: value };
   } else if (kind === "sa") {
     type = "shortAnswer";
     let accepted = answers;
-    if (accepted.length === 0) accepted = correctCell.split("|").map((s) => s.trim()).filter((s) => s !== "");
+    if (rightFirst) {
+      // The right answer's column holds what is accepted (several, with a bar between them); the wrong answers are not accepted.
+      accepted = rightWords.split("|").map((s) => s.trim()).filter((s) => s !== "");
+      if (answers.length > (rightIsFirst ? 1 : 0)) {
+        note(FindingCode.UnreadContent, "warn", `A short answer takes what is typed, so the wrong answers were not used (${answers.slice(rightIsFirst ? 1 : 0).map((a) => `"${a}"`).join("; ")}).`);
+      }
+    } else if (accepted.length === 0) accepted = correctCell.split("|").map((s) => s.trim()).filter((s) => s !== "");
     else if (correctCell !== "") note(FindingCode.UnreadContent, "warn", `The answers that are accepted are in the answer cells, so the Correct cell was not used ("${correctCell}").`);
     if (accepted.length === 0) note(FindingCode.KeyLetterMissing, "info", "The answer cells and the Correct cell are all empty, so no answer is accepted.");
     body = { caseSensitive: false, accepted };
@@ -336,13 +418,16 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   if (get("general").trim() !== "") feedback.general = plainToRich(words(get("general")));
 
   const category = words(get("category")).replace(/\s+/g, " ");
+  // A question's number in the list it came from (an official bank's "A-001-001-001") is the thing a person looks a question
+  // up by, so it is kept where the bank can search it, and not dropped as an unknown column.
+  const sourceId = words(get("id")).replace(/\s+/g, " ");
   const made = createQuestion({
     type,
     stem: plainToRich(stem),
     body,
     feedback,
     points,
-    metadata: { status: "draft", tags: category !== "" ? [category] : [] },
+    metadata: { status: "draft", tags: category !== "" ? [category] : [], ...(sourceId !== "" ? { custom: { "Question ID": sourceId } } : {}) },
     by: ctx.author,
     at: ctx.at,
     origin: { kind: "import", source, profile: ctx.profile, at: ctx.at },
@@ -407,7 +492,7 @@ function plan(file: TableFile): { read: SheetPlan[]; skipped: TableSheet[]; head
 }
 
 function importTable(file: TableFile, options: ImportOptions): ImportResult {
-  const ctx: Ctx = { file: options.file ?? "questions.xlsx", at: options.at ?? new Date().toISOString(), author: options.author ?? "import", profile: options.profile ?? SPREADSHEET_PROFILE_ID };
+  const ctx: Ctx = { file: options.file ?? "questions.xlsx", at: options.at ?? new Date().toISOString(), author: options.author ?? "import", profile: options.profile ?? SPREADSHEET_PROFILE_ID, mixed: 0, kept: 0 };
   const questions: Question[] = [];
   const orphans: Orphan[] = [];
   const fileFindings: Finding[] = file.notes.map((n) => finding(FindingCode.UnreadContent, n.severity, n.message));
@@ -430,6 +515,8 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
 
   const unused = new Set<string>();
   const repeated: string[] = [];
+  const conflicting: string[] = [];
+  const rightColumns: string[] = [];
   let attemptsColumn = false;
   let hiddenRows = 0;
   let hiddenSheets = 0;
@@ -439,6 +526,8 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
     if (label !== "" && read.length > 1) lines.push(`Sheet: ${label}`);
     for (const u of p.header?.unused ?? []) unused.add(u);
     for (const r of p.header?.repeated ?? []) repeated.push(r);
+    for (const c of p.header?.conflicting ?? []) conflicting.push(c);
+    if (p.order.includes("rightText")) rightColumns.push(p.names[p.order.indexOf("rightText")] as string);
     if (p.order.includes("attempts")) attemptsColumn = true;
     hiddenRows += p.sheet.hiddenRows;
     if (p.sheet.hidden) hiddenSheets++;
@@ -460,6 +549,18 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
 
   if (unused.size > 0) say("warn", `These columns were not used: ${[...unused].join(", ")}. ${unused.size === 1 ? "Its" : "Their"} contents are not in the questions.`);
   if (repeated.length > 0) say("warn", `${repeated.length === 1 ? "A column" : "Columns"} named ${repeated.join(", ")} repeat${repeated.length === 1 ? "s" : ""} one already read, and ${repeated.length === 1 ? "was" : "were"} not used.`);
+  if (conflicting.length > 0) {
+    say("warn", `${conflicting.length === 1 ? "A column that names" : "Columns that name"} wrong answers (${conflicting.join(", ")}) ${conflicting.length === 1 ? "was" : "were"} not used. The right answer cannot be told from them when the table also has answer columns A, B, C, or has no column called Correct or Correct answer for the right answer itself.`);
+  }
+  if (rightColumns.length > 0 && (ctx.mixed > 0 || ctx.kept > 0)) {
+    const where = [...new Set(rightColumns)].map((c) => `"${c}"`).join(" and ");
+    say(
+      "info",
+      `The right answer is in a column of its own (${where}) and the wrong answers are in the columns after it, so it is first in every row. The answers of ${plural(ctx.mixed, "question was", "questions were")} mixed, the same way each time this file is read and with the right answer kept with its own words, so that the key is not A throughout${
+        ctx.kept > 0 ? `; ${plural(ctx.kept, "question keeps", "questions keep")} the order of the file, because an answer depends on its place (such as None of the above)` : ""
+      }.`,
+    );
+  }
   if (attemptsColumn) say("info", "The Attempts column was not used. Attempts are set by the course that uses a question, not stored in the question.");
   if (hiddenRows > 0) say("info", `${plural(hiddenRows, "row is", "rows are")} hidden in the workbook (by a filter or by hand). ${hiddenRows === 1 ? "It was" : "They were"} read all the same.`);
   if (hiddenSheets > 0) say("info", `${plural(hiddenSheets, "sheet is", "sheets are")} hidden in the workbook. ${hiddenSheets === 1 ? "It was" : "They were"} read all the same.`);

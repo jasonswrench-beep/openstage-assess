@@ -921,7 +921,21 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
     const n = found.unreadQti;
     fileFindings.push(finding(FindingCode.UnreadContent, questions.length === 0 ? "warn" : "info", `${n === 1 ? "One file" : `${n} files`} of the package end${n === 1 ? "s" : ""} in .qti and ${n === 1 ? "was" : "were"} not read, so a question that is only in ${n === 1 ? "it" : "them"} is not here.`));
   }
-  if (questions.length === 0) fileFindings.push(finding(FindingCode.UnreadContent, "warn", "No question was found in this file. A QTI file holds item elements (1.2) or assessmentItem files (2.1)."));
+  if (questions.length === 0) {
+    // A zip that is only a download wrapper (a bank saved as text or a spreadsheet and zipped to send) is not a learning-system
+    // package. Say which files it holds that this program does read on their own, so the next step is plain.
+    const readable = [...found.files.keys()].filter((n) => /\.(txt|csv|tsv|xlsx|xlsm|docx|pdf|gift|aiken)$/i.test(n) && !n.split("/").some((part) => part.startsWith("__MACOSX") || part.startsWith("._")));
+    const shown = readable.slice(0, 5).join(", ") + (readable.length > 5 ? ` and ${readable.length - 5} more` : "");
+    fileFindings.push(
+      finding(
+        FindingCode.UnreadContent,
+        "warn",
+        `No question was found in this file. A QTI file holds item elements (1.2) or assessmentItem files (2.1).${
+          readable.length > 0 ? ` This zip holds ${shown}, which ${readable.length === 1 ? "is a file" : "are files"} of another kind. Unzip it and import ${readable.length === 1 ? "that file" : "those files"} on ${readable.length === 1 ? "its" : "their"} own.` : ""
+        }`,
+      ),
+    );
+  }
   return {
     profile: options.profile ?? QTI_PROFILE_ID,
     file,
