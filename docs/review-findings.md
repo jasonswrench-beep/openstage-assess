@@ -1249,6 +1249,15 @@ a question, and the reader never takes a line that begins like a question for a 
 number and the same words, with a different number inside (the page's), are at the edge of three pages; three different question
 numbers or the same text each time are still questions. The five real PDF banks read the same (129 of 157).
 
+The same sweep over the other kinds in that folder: 341 Word files, 600 spreadsheets, text files, zips and XML files. None crashed or
+hung, the slowest took 4 seconds (a 960 MB zip), and the few with parsed questions were the user's own exports read back, correctly
+(the Brightspace CSVs of the real banks read 36 of 36 and 28 of 28). Three small faults of words, not of reading: 31 of the 341 "Word
+files" were the 162-byte `~$name.docx` files Word keeps beside an open document, refused with "not a zip: no end-of-central-directory
+record", which says nothing to a person, and are now said to be what they are (`cannot-read.ts`); seven zips of 2 to 6 GB were refused on
+the command line with Node's own "File size (6651950811) is greater than 2 GiB", and now say how many GB and that a file of questions is
+far smaller (the app takes at most 80 MB and had said only "That file is too large."; it says how large the file is, what the most is
+and what to do). The command line's wording was checked on the real 6 GB zip, not in a test, which would need a multi-gigabyte file.
+
 A table of 5000 questions was also pushed through the app to see where size hurts (7 November 2026, in the built-in browser). The
 server took 0.8 seconds to read it and send 3.8 MB; the review drew its 5000 rows (40,000 elements) in about 1.5 seconds; opening the
 saved bank took 0.8 seconds and a search 0.4 seconds. What was slow was choosing a question: every choice drew the whole list again,

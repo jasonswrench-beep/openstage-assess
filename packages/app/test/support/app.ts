@@ -129,3 +129,21 @@ export async function withApp(fn: (client: Client, home: string, revealed: strin
     rmSync(home, { recursive: true, force: true });
   }
 }
+
+/** Like `liarPost`, but returns what was said as well as the status: a request that claims to be 999,999,999 bytes. */
+export function liarPostReply(port: number, path: string, headers: Record<string, string>): Promise<{ status: number; text: string }> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ status: -1, text: "" }), 3000);
+    const req = httpRequest({ host: "127.0.0.1", port, path, method: "POST", headers: { ...headers, "content-length": "999999999" } }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => {
+        clearTimeout(timer);
+        resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString("utf8") });
+        req.destroy();
+      });
+    });
+    req.on("error", () => undefined);
+    req.write("{");
+  });
+}

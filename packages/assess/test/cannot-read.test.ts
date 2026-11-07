@@ -55,6 +55,19 @@ describe("a file of a kind that is not read", () => {
     }
   });
 
+  // Word and Excel's own file beside an open document. Found by running the importer over 341 real Word files: 31 were these.
+  test("the small file Word and Excel keep beside an open document is said to hold nothing, whatever it ends in and wherever it is", () => {
+    for (const name of ["~$ratComm_Handoff.docx", "~$exam.docx", "~$book.xlsx", "~$old.doc", "~$notes.txt", "C:\\Users\\Someone\\Downloads\\~$exam.docx", "/home/someone/~$exam.docx"]) {
+      const said = cannotRead(name);
+      assert.match(said ?? "", /not a document.*"~\$".*beside a document while it is open.*import the document itself/, name);
+    }
+  });
+
+  test("a name with ~ or $ anywhere but the start of the file's own name is a document, and the older-file messages still apply under a folder", () => {
+    for (const name of ["a~$b.docx", "~exam.docx", "$exam.docx", "~$".slice(0, 1) + "x.docx", "C:\\~$folder\\exam.docx", "/tmp/~$dir/exam.docx", "my ~$ exam.docx"]) assert.equal(cannotRead(name), undefined, name);
+    assert.match(cannotRead("C:\\~$folder\\exam.doc") ?? "", /older Word file/, "the folder's name is not the file's");
+  });
+
   test("an extension that is a property of every object is not a message", () => {
     for (const name of ["a.constructor", "a.__proto__", "a.toString", "a.hasOwnProperty"]) assert.equal(cannotRead(name), undefined, name);
   });

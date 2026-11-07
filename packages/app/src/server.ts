@@ -121,14 +121,27 @@ function cookieOf(req: IncomingMessage, name: string): string | undefined {
   return undefined;
 }
 
+/** A size a person can read: 4.0 MB, 80 MB. */
+const megabytes = (bytes: number): string => (bytes >= 10 * 1048576 ? `${Math.round(bytes / 1048576)} MB` : `${(bytes / 1048576).toFixed(1)} MB`);
+
+/**
+ * What is said when a request is bigger than its route takes. It used to be "That file is too large.", which says neither how large
+ * nor what to do. A bank of questions is far smaller than the most a file may be, so the likelier mistake is the wrong file.
+ */
+function tooLarge(limit: number, size?: number): HttpError {
+  const is = size === undefined ? "That is more than this takes" : `That is ${megabytes(size)}, and the most this takes at once is ${megabytes(limit)}`;
+  const hint = limit === MAX_UPLOAD ? " A file of questions is far smaller than that, so check it is the one you meant; if it holds large pictures, save a copy with smaller ones." : limit === MAX_PICTURE_UPLOAD ? " Save the picture again at a smaller size." : "";
+  return new HttpError(413, `${size === undefined ? `${is} (${megabytes(limit)}).` : `${is}.`}${hint}`);
+}
+
 async function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
   const declared = Number(req.headers["content-length"] ?? 0);
-  if (declared > limit) throw new HttpError(413, "That file is too large.");
+  if (declared > limit) throw tooLarge(limit, declared);
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > limit) throw new HttpError(413, "That file is too large.");
+    if (size > limit) throw tooLarge(limit);
     chunks.push(chunk as Buffer);
   }
   return Buffer.concat(chunks);
