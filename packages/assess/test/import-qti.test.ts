@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { textEntry, unzipSync, zipSync, type ZipEntry } from "../src/container/zip.ts";
+import { exportCommonCartridge } from "../src/export/common-cartridge.ts";
 import { exportQti12 } from "../src/export/qti12.ts";
 import { exportQti21 } from "../src/export/qti21.ts";
 import { looksLikeQtiXml, qtiImporter } from "../src/import/qti.ts";
@@ -514,6 +515,7 @@ describe("what this program exports, read back", () => {
   for (const [label, run, partial] of [
     ["QTI 1.2", exportQti12, false],
     ["QTI 2.1", exportQti21, true],
+    ["Common Cartridge", exportCommonCartridge, false],
   ] as const) {
     test(`every question of every fixture bank that ${label} can hold comes back as what it was`, () => {
       let checked = 0;
@@ -551,6 +553,7 @@ describe("what this program exports, read back", () => {
   for (const [label, run, partial] of [
     ["QTI 1.2", exportQti12, false],
     ["QTI 2.1", exportQti21, true],
+    ["Common Cartridge", exportCommonCartridge, false],
   ] as const) {
     test(`every real bank in fixtures/publisher, when there are some, comes back from ${label} as what it was`, { skip: hasReal ? false : "none there; the folder is git-ignored and local" }, () => {
       let questions = 0;
@@ -597,6 +600,57 @@ describe("what this program exports, read back", () => {
     assert.equal(m.alt, "A blue box");
     assert.deepEqual(back.media?.get(m.file), PNG);
     assert.equal(verdictOf(back.questions[0] as Question), "parsed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A Common Cartridge package (.imscc), and the files of a course export that end in .qti
+// ---------------------------------------------------------------------------
+
+describe("a Common Cartridge package", () => {
+  const quiz = assessment12([mc12("2"), mc12("1", ["X", "Y"])], "Unit 1");
+
+  test("a .imscc is read as a package, as the .zip it is, and the importer is told by the name", () => {
+    const sample = zipOf({ "imsmanifest.xml": "<manifest/>", "quiz/qti-assessment.xml": quiz });
+    assert.equal(importerForContent("course-export.imscc", sample).id, "qti");
+    assert.equal(importerForContent("COURSE.IMSCC", sample).id, "qti", "whatever the case of the extension");
+    const result = read(sample, "course-export.imscc");
+    assert.equal(result.questions.length, 2);
+    assert.deepEqual(result.fileFindings.filter((f) => f.severity !== "info"), []);
+  });
+
+  test("this program's own Common Cartridge file is read back with each question's points, which the format keeps as a weighting", () => {
+    const source = read(zipOf({ "imsmanifest.xml": "<manifest/>", "quiz/qti-assessment.xml": assessment12([item12("multiple_choice_question", `${mat("Which?")}<response_lid ident="response1" rcardinality="Single"><render_choice>${label("1", "A")}${label("2", "B")}</render_choice></response_lid>`, when(eq("response1", "2"), 100), "", "Weighted", "2.5")]) }));
+    const out = exportCommonCartridge(source.questions, { name: "Weighted" });
+    const name = out.files[0]?.name ?? "";
+    assert.match(name, /\.imscc$/);
+    const back = runImporter(importerForContent(name, out.files[0]?.bytes as Uint8Array), out.files[0]?.bytes as Uint8Array, { file: name, at: AT, author: "test" });
+    assert.equal(back.questions.length, 1);
+    assert.equal(back.questions[0]?.points, 2.5, "the weighting, and not the 100 that a right answer scores");
+    assert.deepEqual(options(back.questions[0] as Question), [{ text: "A", correct: false }, { text: "B", correct: true }]);
+  });
+
+  test("a points_possible still wins where there is one, and an item with neither is worth the default", () => {
+    const both = item12("multiple_choice_question", `${mat("Which?")}<response_lid ident="response1" rcardinality="Single"><render_choice>${label("1", "A")}${label("2", "B")}</render_choice></response_lid>`, when(eq("response1", "1"), 100), "", "Both", "4.0").replace("</qtimetadata>", "<qtimetadatafield><fieldlabel>cc_weighting</fieldlabel><fieldentry>9</fieldentry></qtimetadatafield></qtimetadata>");
+    assert.equal(read(assessment12([both]), "quiz.xml").questions[0]?.points, 4);
+    assert.equal(read(assessment12([mc12("2")].map((x) => x.replace("points_possible", "something_else"))), "quiz.xml").questions[0]?.points, 1, "neither: the default");
+  });
+
+  test("files that end in .qti are counted and said, never read as a second copy of the questions", () => {
+    const withBoth = zipOf({ "imsmanifest.xml": "<manifest/>", "g1/assessment_qti.xml": quiz, "non_cc_assessments/g1.xml.qti": quiz, "non_cc_assessments/g2.xml.qti": quiz });
+    const result = read(withBoth, "course.imscc");
+    assert.equal(result.questions.length, 2, "the two questions of the XML file, and none again from the copies");
+    const said = result.fileFindings.find((f) => /end in \.qti/.test(f.message));
+    assert.ok(said, result.fileFindings.map((f) => f.message).join(" | "));
+    assert.equal(said.severity, "info");
+    assert.match(said.message, /2 files of the package end in \.qti and were not read, so a question that is only in them is not here/);
+
+    const only = read(zipOf({ "imsmanifest.xml": "<manifest/>", "non_cc_assessments/g1.xml.qti": quiz }), "bank.imscc");
+    assert.equal(only.questions.length, 0);
+    const warned = only.fileFindings.find((f) => /ends in \.qti/.test(f.message));
+    assert.equal(warned?.severity, "warn", "a package that holds nothing else is warned, because it came in empty");
+    assert.match(warned?.message ?? "", /One file of the package ends in \.qti and was not read/);
+    assert.ok(only.fileFindings.some((f) => /No question was found/.test(f.message)));
   });
 });
 

@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Bank, exportQti12, exportQti21, createQuestion, plainToRich } from "../src/engine.ts";
+import { Bank, exportCommonCartridge, exportQti12, exportQti21, createQuestion, plainToRich } from "../src/engine.ts";
 import { withApp, type Client } from "./support/app.ts";
 
 type Json = Record<string, any>;
@@ -113,6 +113,19 @@ describe("a QTI package or file", () => {
       assert.equal(reply.status, 200, reply.text);
       assert.equal(reply.json["profile"], "qti");
       assert.equal(reply.json["counts"].parsed, 1);
+    });
+  });
+
+  test("a Common Cartridge file (.imscc), such as this program writes for Brightspace, is read as a package with every key", async () => {
+    await withApp(async (client) => {
+      const out = exportCommonCartridge(questions(), { name: "Cartridge" });
+      const file = out.files[0];
+      assert.match(file?.name ?? "", /\.imscc$/);
+      const reply = await send(client, file?.name ?? "", file?.bytes as Uint8Array);
+      assert.equal(reply.status, 200, reply.text);
+      assert.equal(reply.json["profile"], "qti");
+      assert.equal(reply.json["counts"].total, 3, JSON.stringify(reply.json["counts"]));
+      assert.equal(reply.json["counts"].failed, 0);
     });
   });
 

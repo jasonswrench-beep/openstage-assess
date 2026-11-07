@@ -52,14 +52,14 @@ export async function renderHome(host, _params, shell) {
     }
   }
 
-  const fileInput = h("input", { type: "file", id: "import-file", accept: ".docx,.xlsx,.xlsm,.csv,.tsv,.txt,.text,.aiken,.gift,.xml,.zip,.doc,.xls,.pdf", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void bringIn(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
+  const fileInput = h("input", { type: "file", id: "import-file", accept: ".docx,.xlsx,.xlsm,.csv,.tsv,.txt,.text,.aiken,.gift,.xml,.zip,.imscc,.doc,.xls,.pdf", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void bringIn(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
   const bankInput = h("input", { type: "file", id: "bank-file", accept: ".openassess", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void openBankFile(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
 
   const zone = h(
     "div",
     { class: "dropzone" },
     h("h2", { text: "Bring in questions from a file" }),
-    h("p", { text: "Drop a Word, Excel, CSV, PDF, text, Aiken, GIFT, Moodle XML or QTI file here, or choose one. Your file is read and never changed. You see what was found, fix anything that needs it, and then save it into a bank." }),
+    h("p", { text: "Drop a Word, Excel, CSV, PDF, text, Aiken, GIFT, Moodle XML, QTI or Common Cartridge file here, or choose one. Your file is read and never changed. You see what was found, fix anything that needs it, and then save it into a bank." }),
     h("label", { class: "button primary", for: "import-file", text: "Choose a file" }),
     h("p", { class: "hint", text: "An older Word (.doc) or Excel (.xls) file has to be saved in the newer form first. A PDF is read from its text alone, so check its answers; a scan, which is a picture of a page, cannot be read." }),
   );
