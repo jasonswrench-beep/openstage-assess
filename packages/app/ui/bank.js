@@ -10,7 +10,7 @@ import { del, get, post, put } from "./api.js";
 import { ask, askText, confirmAction } from "./dialogs.js";
 import { clear, EDITABLE_TYPES, h, plural, TYPE_NAMES, when } from "./dom.js";
 import { createEditor } from "./editor.js";
-import { arrowKeys, questionRow } from "./list.js";
+import { arrowKeys, markSelected, questionRow } from "./list.js";
 
 /** What each kind of note is about, in the words the screen uses. */
 const NOTE_NAMES = {
@@ -274,7 +274,7 @@ export async function renderBank(host, params, shell) {
       list.append(h("li", { class: "empty", text: bank.total === 0 ? "This bank has no questions yet. Write one, or import a file." : "No question matches." }));
     }
     bank.questions.forEach(/** @param {any} summary @param {number} i */ (summary, i) => {
-      list.append(questionRow({ number: i + 1, summary, selected: selected === summary.id, onSelect: () => void select(summary.id) }));
+      list.append(questionRow({ number: i + 1, key: summary.id, summary, selected: selected === summary.id, onSelect: () => void select(summary.id) }));
     });
   }
 
@@ -349,7 +349,7 @@ export async function renderBank(host, params, shell) {
     if (selected === id) return;
     if (!(await canLeave())) return;
     selected = id;
-    renderList();
+    markSelected(list, id);
     await renderDetail();
   }
 

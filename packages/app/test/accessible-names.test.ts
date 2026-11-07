@@ -16,37 +16,11 @@ import { join } from "node:path";
 
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
 import { checkRow, h } from "../ui/dom.js";
+import { FakeNode, findById, installFakeDocument } from "./support/fake-dom.ts";
 
-/** Just enough of a page for `h` and `checkRow` to build into: elements that remember their attributes and children. */
-class Node_ {
-  id = "";
-  className = "";
-  textContent = "";
-  htmlFor = "";
-  children: Node_[] = [];
-  attrs: Record<string, string> = {};
-  readonly tag: string;
-  constructor(tag: string) {
-    this.tag = tag;
-  }
-  setAttribute(name: string, value: string): void {
-    this.attrs[name] = value;
-  }
-  getAttribute(name: string): string | undefined {
-    return this.attrs[name];
-  }
-  addEventListener(): void {}
-  append(...kids: Node_[]): void {
-    this.children.push(...kids);
-  }
-  /** The words under this element, the way a reader of the page would take them. */
-  get words(): string {
-    return this.textContent + this.children.map((c) => c.words).join("");
-  }
-}
-(globalThis as unknown as { document: unknown }).document = { createElement: (tag: string) => new Node_(tag), createTextNode: (text: string) => Object.assign(new Node_("#text"), { textContent: text }) };
-
-const find = (root: Node_, id: string): Node_ | undefined => (root.id === id ? root : root.children.map((c) => find(c, id)).find((f) => f !== undefined));
+installFakeDocument();
+const find = findById;
+type Node_ = FakeNode;
 
 const UI = join(import.meta.dirname, "..", "ui");
 const scripts = readdirSync(UI).filter((f) => f.endsWith(".js"));

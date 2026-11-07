@@ -12,7 +12,7 @@ import { badge, h, TYPE_NAMES } from "./dom.js";
 
 /**
  * One row. A row is a button, so that it can be reached and chosen with the keyboard.
- * @param {{ number: number, summary: Summary, selected: boolean, onSelect: () => void }} options
+ * @param {{ number: number, key: string | number, summary: Summary, selected: boolean, onSelect: () => void }} options  `key` names the row for `markSelected`
  */
 export function questionRow(options) {
   const { summary } = options;
@@ -21,7 +21,7 @@ export function questionRow(options) {
     {
       type: "button",
       class: `qrow v-${summary.verdict}${summary.skipped ? " skipped" : ""}`,
-      attrs: { "aria-current": options.selected ? "true" : "false" },
+      attrs: { "aria-current": options.selected ? "true" : "false", "data-key": String(options.key) },
       on: { click: options.onSelect },
     },
     h("span", { class: "n", text: String(options.number) }),
@@ -33,6 +33,21 @@ export function questionRow(options) {
     ),
   );
   return h("li", null, button);
+}
+
+/**
+ * Shows which row is chosen, by changing the rows that are there. Choosing a question used to draw the whole list again, which for
+ * 5000 questions (40,000 elements) took half a second to nearly a second, once for each question looked at, and left a keyboard user's
+ * focus on a row that had been thrown away.
+ * @param {HTMLElement} list
+ * @param {string | number | null} key  the `key` of the chosen row, or null for none
+ */
+export function markSelected(list, key) {
+  const want = key === null ? null : String(key);
+  for (const row of /** @type {NodeListOf<HTMLElement>} */ (list.querySelectorAll("button.qrow"))) {
+    const on = row.dataset["key"] === want;
+    if ((row.getAttribute("aria-current") === "true") !== on) row.setAttribute("aria-current", String(on));
+  }
 }
 
 /**

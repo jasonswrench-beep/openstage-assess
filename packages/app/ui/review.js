@@ -8,7 +8,7 @@ import { get, post, put } from "./api.js";
 import { ask } from "./dialogs.js";
 import { clear, h, plural, SEVERITY_NAMES } from "./dom.js";
 import { createEditor } from "./editor.js";
-import { arrowKeys, questionRow } from "./list.js";
+import { arrowKeys, markSelected, questionRow } from "./list.js";
 
 /**
  * @param {HTMLElement} host
@@ -111,7 +111,7 @@ export async function renderReview(host, params, shell) {
     clear(list);
     const items = shown();
     if (items.length === 0) list.append(h("li", { class: "empty", text: session.questions.length === 0 ? "No question was found in this file. Look at the text no question used." : "Nothing here." }));
-    for (const summary of items) list.append(questionRow({ number: summary.index + 1, summary, selected: selected === summary.index, onSelect: () => void select(summary.index) }));
+    for (const summary of items) list.append(questionRow({ number: summary.index + 1, key: summary.index, summary, selected: selected === summary.index, onSelect: () => void select(summary.index) }));
   }
 
   /** @param {number} index */
@@ -119,7 +119,7 @@ export async function renderReview(host, params, shell) {
     if (selected === index) return;
     if (!(await canLeave())) return;
     selected = index;
-    renderList();
+    markSelected(list, index);
     await renderDetail();
   }
 
