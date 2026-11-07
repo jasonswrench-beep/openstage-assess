@@ -55,8 +55,6 @@ import {
   MAX_POINTS,
   MAX_TITLE_LENGTH,
   titleFromStem,
-  type BloomLevel,
-  type Difficulty,
   type MathRef,
   type MediaRef,
   type Metadata,
@@ -74,6 +72,7 @@ import {
   type RawOption,
   type RawQuestion,
 } from "./standard-text-scan.ts";
+import { BLOOM_WORDS, DIFFICULTY_WORDS } from "./metadata-words.ts";
 import {
   countVerdicts,
   linesToBlocks,
@@ -97,43 +96,6 @@ const PLACEHOLDER = PLACEHOLDER_TEXT;
 // reader writes it when Word's own "mark as decorative" is set on the picture.
 const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?(?:\s+(decorative))?\s*\]/gi;
 const HTML_BLOCK = /\[HTML\]([\s\S]*?)\[\/HTML\]/gi;
-
-const DIFFICULTY_WORDS: Record<string, Difficulty> = {
-  easy: "easy",
-  simple: "easy",
-  low: "easy",
-  "1": "easy",
-  moderate: "medium",
-  medium: "medium",
-  average: "medium",
-  "2": "medium",
-  hard: "hard",
-  difficult: "hard",
-  challenging: "hard",
-  high: "hard",
-  "3": "hard",
-};
-
-const BLOOM_WORDS: Record<string, BloomLevel> = {
-  remember: "remember",
-  remembering: "remember",
-  knowledge: "remember",
-  recall: "remember",
-  understand: "understand",
-  understanding: "understand",
-  comprehension: "understand",
-  apply: "apply",
-  application: "apply",
-  applying: "apply",
-  analyze: "analyze",
-  analyse: "analyze",
-  analysis: "analyze",
-  evaluate: "evaluate",
-  evaluation: "evaluate",
-  synthesis: "create",
-  create: "create",
-  creating: "create",
-};
 
 // ---------------------------------------------------------------------------
 // Pass two: raw questions to the model

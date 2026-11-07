@@ -234,10 +234,10 @@ describe("the columns of a table", () => {
   });
 
   test("columns that were not understood are named, and what they hold is said not to be in the questions", () => {
-    const r = csv(["Question,A,B,Correct,Difficulty,Chapter", "Q?,a,b,A,hard,3"].join("\n"));
+    const r = csv(["Question,A,B,Correct,Reviewer,Date written", "Q?,a,b,A,Sam,3 May"].join("\n"));
     const note = fileNotes(r).find((n) => /not used/.test(n)) ?? "";
-    assert.match(note, /Difficulty/);
-    assert.match(note, /Chapter/);
+    assert.match(note, /Reviewer/);
+    assert.match(note, /Date written/);
   });
 
   test("a column that repeats one already read is not read, and is named", () => {
