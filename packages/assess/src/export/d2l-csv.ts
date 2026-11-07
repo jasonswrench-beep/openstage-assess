@@ -115,7 +115,11 @@ function plan(question: Question, position: number): Planned {
       head("MS");
       // The partial credit of a multiple response is Brightspace's scoring setting for the question: a share for each right
       // answer chosen and each wrong one left alone, and the same taken away for a wrong one chosen, or nothing unless all are right.
-      rows.push(row("Scoring", question.body.partialCredit ? "RightMinusWrong" : "All or nothing"));
+      // The words are the ones a faculty guide to the template lists (AllOrNothing, RightAnswers, RightMinusWrong,
+      // CorrectAnswersLimitedSelections). Brightspace's own article gives display names ("All or nothing", "Correct Selections"), and
+      // people report that the display name for the second is not accepted and the question comes in with the default. All or nothing
+      // is that default, so it comes out the same either way; the token is written the way the importer is reported to read it.
+      rows.push(row("Scoring", question.body.partialCredit ? "RightMinusWrong" : "AllOrNothing"));
       options.forEach((o, i) => rows.push(row("Option", o.correct ? "1" : "0", texts[i] as string)));
     } else {
       head("MC");

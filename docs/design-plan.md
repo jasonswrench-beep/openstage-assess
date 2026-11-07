@@ -233,7 +233,10 @@ decided from it:
   blank is.
 - **A right answer is 100 for a multiple choice and 1 for a multiselect.** The article gives the two different values, which is
   the kind of thing that would pass a quick look and import wrongly, so a test of the file reads the article's rules
-  separately from the exporter. A multiselect's partial credit is its `Scoring` row (`RightMinusWrong`, or `All or nothing`).
+  separately from the exporter. A multiselect's partial credit is its `Scoring` row (`RightMinusWrong`, or `AllOrNothing`: until 7 November 2026 this wrote the
+  article's display name `All or nothing`, and a faculty guide to the template and a thread of people who tried it say the importer
+  reads `AllOrNothing`, `RightAnswers`, `RightMinusWrong` and `CorrectAnswersLimitedSelections`, and that a display name such as
+  "Correct Selections" is not accepted and the question comes in with the default, which is all or nothing).
 - **True or false has two rows,** `TRUE` and `FALSE`, one worth 100 and the other 0. A question with neither chosen is left
   out and never written as false.
 - **An ordering's items are written in the right order,** with the text in the second cell. A matching question is `Choice,n`
