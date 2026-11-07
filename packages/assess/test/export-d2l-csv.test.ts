@@ -51,7 +51,7 @@ function specProblems(content: string): string[] {
   if (!content.endsWith("\r\n")) problems.push("the last line has no line ending");
   const rows = rowsOf(content);
   const KEYWORDS = new Set(["NewQuestion", "QuestionText", "Title", "Points", "Scoring", "Option", "Answer", "TRUE", "FALSE", "Choice", "Match", "Item", "Feedback"]);
-  const SCORING = new Set(["EquallyWeighted", "RightMinusWrong", "All or nothing", "Correct Selections"]);
+  const SCORING = new Set(["EquallyWeighted", "RightMinusWrong", "AllOrNothing", "RightAnswers", "CorrectAnswersLimitedSelections"]);
   let at = -1;
   let type = "";
   let block: string[][] = [];
@@ -157,7 +157,7 @@ describe("a Brightspace question library file", () => {
     assert.deepEqual(rows.filter((r) => r[0] === "Option").map((r) => r[1]), ["1", "0", "1"]);
     assert.deepEqual(rows.find((r) => r[0] === "Scoring"), ["Scoring", "RightMinusWrong", ""]);
     const allOrNothing = make("multipleResponse", { shuffle: true, partialCredit: false, options: [opt("o1", "A", true), opt("o2", "B")] }, "Pick A.");
-    assert.deepEqual(rowsOf(csvOf([allOrNothing])).find((r) => r[0] === "Scoring"), ["Scoring", "All or nothing", ""]);
+    assert.deepEqual(rowsOf(csvOf([allOrNothing])).find((r) => r[0] === "Scoring"), ["Scoring", "AllOrNothing", ""]);
   });
 
   test("true or false: a TRUE row and a FALSE row, 100 for the right one", () => {
