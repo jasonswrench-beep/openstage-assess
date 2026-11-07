@@ -47,10 +47,17 @@ describe("the columns a bank is organised by", () => {
   });
 
   test("the words people use for a difficulty and a Bloom level are the ones the text reader knows", () => {
-    const rows = [["Easy", "Remember"], ["moderate", "Understanding"], ["DIFFICULT", "Application"], ["1", "Analysis"], ["2", "Evaluation"], ["3", "Synthesis"]];
+    const rows = [["Easy", "Remember"], ["moderate", "Understanding"], ["DIFFICULT", "Application"], ["simple", "Analysis"], ["average", "Evaluation"], ["challenging", "Synthesis"]];
     const r = csv(`Question,A,B,Correct,Difficulty,Bloom\n${rows.map(([d, b], i) => `Q${i}?,a,b,A,${d},${b}`).join("\n")}`);
     assert.deepEqual(r.questions.map((q) => q.metadata.difficulty), ["easy", "medium", "hard", "easy", "medium", "hard"]);
     assert.deepEqual(r.questions.map((q) => q.metadata.bloom), ["remember", "understand", "apply", "analyze", "evaluate", "create"]);
+  });
+
+  test("a difficulty that is a number is not turned into easy, medium or hard, because a number could be a place on any scale", () => {
+    const r = csv("Question,A,B,Correct,Difficulty\nOne?,a,b,A,1\nTwo?,a,b,A,3\nThree?,a,b,A,5");
+    assert.deepEqual(r.questions.map((q) => q.metadata.difficulty), [undefined, undefined, undefined]);
+    assert.deepEqual(r.questions.map((q) => q.metadata.custom?.["Difficulty"]), ["1", "3", "5"]);
+    assert.match(said(r.questions[1] as Question), /Difficulty "3" is a number, and a number could be a place on any scale \(1 to 3, 1 to 5\)/);
   });
 
   test("a difficulty or a level that is not known is kept as written, under its own name, and said", () => {
@@ -88,7 +95,8 @@ describe("the columns a bank is organised by", () => {
     const bytes = writeXlsx([{ name: "Questions", rows: [["Question", "A", "B", "Correct", "Chapter", "Difficulty"], ["Which?", "a", "b", "A", 3, 2]] }]);
     const q = first(spreadsheetImporter.parseBytes?.(bytes, { file: "questions.xlsx", at: AT, author: "test" }) as ImportResult);
     assert.equal(q.metadata.chapter, "3");
-    assert.equal(q.metadata.difficulty, "medium");
+    assert.equal(q.metadata.difficulty, undefined, "a number is not a difficulty");
+    assert.equal(q.metadata.custom?.["Difficulty"], "2");
   });
 
   test("Coverage can count by them, which is what they were wanted for", () => {

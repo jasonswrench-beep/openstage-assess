@@ -122,7 +122,13 @@ may be named by number ("Option 1" to "Option 4"); a number in the Correct cell 
 column with that number, and a letter names none, while in a table with lettered columns it is
 the other way about, and a table that mixes the two reads no number as a place (`numbered` in
 `readHeader`). A number that is both a column's number and the words of another answer ("2" in a
-table of sums) is an error that says so, never a guess (`spreadsheet-numbered-answers.test.ts`).
+table of sums) is an error that says so, never a guess (`spreadsheet-numbered-answers.test.ts`), and so is a number that names a column
+of the sheet which has no answer in that row, and a 1 or 0 in a true or false row of a numbered table (it names a column, and it is
+also yes and no). The row of names is the first row that names two or more known columns, so a lone title such as "Questions" above
+the names is a title. A difficulty that is a number is kept as written and said, never turned into easy, medium or hard, because it
+could be a place on any scale. A word from a file is looked up only among a table's own entries (`own`, `difficultyOf`), so
+"constructor" is not a column, a type or a level. `createQuestion` keeps every imported question storable: a short answer with no
+accepted answer is one empty entry (its missing key is still flagged), and points above 1000 are cut to 1000 and said.
 Columns for chapter, section, objective, page, Bloom level, difficulty and tags are the question's
 own fields (`spreadsheet-metadata-columns.test.ts`), so Coverage and a blueprint can use a table
 already organised that way; the words for a difficulty or a Bloom level are the text reader's own
@@ -385,7 +391,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2773 engine tests and 309 app tests, Node's own runner
+npm test                       # 2796 engine tests and 309 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

@@ -281,6 +281,51 @@ describe("the kinds of question", () => {
   });
 });
 
+describe("what an independent review found, and what is now said", () => {
+  test("a short answer row that is worth less than the whole of the points is not an accepted answer, and is said; a blank weight is accepted", () => {
+    const q = first(read("NewQuestion,SA,\r\nQuestionText,Capital?,\r\nAnswer,100,Paris,\r\nAnswer,0,London,\r\nAnswer,50,Lyon,\r\nAnswer,,Rome,\r\nAnswer,lots,Nice,\r\n"));
+    assert.deepEqual(body(q).accepted, ["Paris", "Rome"]);
+    assert.match(said(q), /The answer "London" has the weight "0", which is not the whole of the points\. It was not read as an accepted answer/);
+    assert.match(said(q), /The answer "Lyon" has the weight "50"/);
+    assert.match(said(q), /The answer "Nice" has the weight "lots"/);
+  });
+
+  test("a row with no keyword is said, with its words, and is not dropped without a word", () => {
+    const q = first(read("NewQuestion,MC,\r\nQuestionText,Which?,\r\nOption,100,A,\r\n,0,B text,\r\nOption,0,C,\r\n"));
+    assert.deepEqual(options(q), [["A", true], ["C", false]]);
+    assert.match(said(q), /A row was not read: "\(no keyword\) 0, B text"/);
+  });
+
+  test("a word in the cell where HTML goes is said, and the text before it is plain", () => {
+    const q = first(read("NewQuestion,MC,\r\nQuestionText,Which?,\r\nOption,100,A,This is feedback\r\nOption,0,B,\r\n"));
+    assert.deepEqual(options(q), [["A", true], ["B", false]]);
+    assert.match(said(q), /info: The cell after a text is where the word HTML goes, and it holds "This is feedback", which is not read/);
+    assert.equal(verdictFrom(q.findings), "parsed", "it is a note, and does not make the question need review");
+  });
+
+  test("a row given twice is read once and the second is said", () => {
+    const q = first(read("NewQuestion,MC,\r\nTitle,First,\r\nTitle,Second,\r\nQuestionText,One?,\r\nQuestionText,Two?,\r\nPoints,2,\r\nPoints,9,\r\nOption,100,A,\r\nOption,0,B,\r\n"));
+    assert.equal(q.title, "First");
+    assert.equal(plain(q.stem), "One?");
+    assert.equal(q.points, 2);
+    assert.match(said(q), /A second Title row was not read: "Second"/);
+    assert.match(said(q), /A second QuestionText row was not read: "Two\?"/);
+    assert.match(said(q), /A second Points row was not read: "9"/);
+  });
+
+  test("a matching question of thousands of pairs is read in a moment", () => {
+    const n = 5000;
+    const rows = ["NewQuestion,M,", "QuestionText,Match.,"];
+    for (let i = 1; i <= n; i++) rows.push(`Choice,${i},Left ${i}`);
+    for (let i = 1; i <= n; i++) rows.push(`Match,${i},Right ${i}`);
+    const started = performance.now();
+    const q = first(read(rows.join("\r\n") + "\r\n"));
+    const took = performance.now() - started;
+    assert.equal(body(q).pairs.length, n);
+    assert.ok(took < 1500, `${Math.round(took)} ms`);
+  });
+});
+
 describe("what a file carries that a question here cannot hold", () => {
   test("an image the file names is said, and a picture in the HTML of a text stays as [picture] with the question flagged", () => {
     const q = first(read('NewQuestion,MC,\r\nQuestionText,"<p>Look: <img src=""images/map.png"" alt=""A map""></p>",HTML\r\nImage,images/map.png,\r\nOption,100,North,\r\nOption,0,South,\r\n'));

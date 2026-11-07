@@ -87,7 +87,13 @@ class Reader {
   rich(value: string | undefined, flag: string | undefined): RichText | undefined {
     const raw = (value ?? "").trim();
     if (raw === "") return undefined;
-    if ((flag ?? "").trim().toLowerCase() !== "html") return plainToRich(raw);
+    if ((flag ?? "").trim().toLowerCase() !== "html") {
+      // Brightspace reads anything but HTML in this cell as plain text, so the text is plain. What is there is said, because an author
+      // who put feedback or a note in the cell would otherwise lose it without a word.
+      const stray = (flag ?? "").trim();
+      if (stray !== "") this.note(FindingCode.UnreadContent, "info", `The cell after a text is where the word HTML goes, and it holds "${quoted(stray)}", which is not read. The text before it is plain text.`);
+      return plainToRich(raw);
+    }
     // A picture of a CSV file is named by a path in the file's own folder, which the file does not carry.
     const html = modelTags(this.pictures.replaceImages(raw, (src) => ({ label: src, why: "a CSV file does not carry pictures, and this one names a file beside it" })));
     for (const tag of sanitizeRichText(html).removedTags) if (tag !== "div" && tag !== "span") this.removed.add(tag);
@@ -169,8 +175,14 @@ function build(block: TableRow[], first: number, last: number, ctx: Ctx, file: s
   for (const row of ofKind("initialtext")) if (cell(row, 1) !== "") r.dropped("The text to start the answer box with", cell(row, 1));
   if (ofKind("inputbox").length > 0) ctx.unkept.set("InputBox", (ctx.unkept.get("InputBox") ?? 0) + 1);
   const KNOWN = new Set(["id", "title", "questiontext", "points", "difficulty", "image", "hint", "feedback", "scoring", "option", "answer", "true", "false", "choice", "match", "item", "inputbox", "initialtext", "answerkey"]);
-  const unknown = [...new Set(rows.filter((row) => !KNOWN.has(keywordOf(row))).map((row) => cell(row, 0)))].filter((k) => k !== "");
-  if (unknown.length > 0) r.dropped(unknown.length === 1 ? "A row" : "Some rows", unknown.join(", "));
+  // A row with no keyword is a row too, and is said: its words are not read.
+  const unknown = [...new Set(rows.filter((row) => !KNOWN.has(keywordOf(row))).map((row) => (cell(row, 0) === "" ? `(no keyword) ${row.cells.filter((c) => c !== "").join(", ")}` : cell(row, 0))))];
+  if (unknown.length > 0) r.dropped(unknown.length === 1 ? "A row" : "Some rows", unknown.join("; "));
+  // A row that a question has one of, given twice: the first is read, and the second is said and not read.
+  for (const keyword of ["id", "title", "questiontext", "points", "difficulty", "scoring", "feedback", "answerkey", "initialtext"]) {
+    const again = ofKind(keyword)[1];
+    if (again) r.dropped(`A second ${cell(again, 0)} row`, cell(again, 1));
+  }
 
   const feedback: { general?: RichText; correct?: RichText; incorrect?: RichText } = {};
   const feedbackRow = one("feedback");
@@ -197,7 +209,7 @@ function build(block: TableRow[], first: number, last: number, ctx: Ctx, file: s
   // A kind this importer does not read, or a question it cannot read the key of: the whole of what it says is kept as an essay, and
   // it fails so that someone looks.
   const unsupported = (why: string): Built => {
-    const asked = stemText ?? plainToRich(title);
+    const asked = stemText ?? plainToRich(title !== "" ? title : "(no question text in the source)");
     const words = rows
       .filter((row) => ANSWER_KEYWORDS.has(keywordOf(row)))
       .map((row) => (["true", "false"].includes(keywordOf(row)) ? cell(row, 0) : keywordOf(row) === "item" ? cell(row, 1) : cell(row, 2)))
@@ -306,6 +318,17 @@ function build(block: TableRow[], first: number, last: number, ctx: Ctx, file: s
       const text = cell(row, 2);
       const how = cell(row, 3).toLowerCase();
       if (how !== "") mode = how;
+      // Brightspace says the weight of an answer row is no longer used, and may be left blank. A weight that is there and is not the
+      // whole of the points is a sign that the author meant this answer to be worth less or nothing, so it is not read as an accepted
+      // answer, and is said: nothing is guessed about it.
+      const weight = cell(row, 1);
+      if (weight !== "") {
+        const n = Number(weight);
+        if (!Number.isFinite(n) || n < WHOLE) {
+          r.note(FindingCode.UnreadContent, "warn", `The answer "${quoted(text)}" has the weight "${quoted(weight)}", which is not the whole of the points. It was not read as an accepted answer, and nothing was guessed about it.`);
+          continue;
+        }
+      }
       if (how === "regexp") {
         r.note(FindingCode.UnreadContent, "warn", `The answer "${quoted(text)}" is a regular expression, which a short answer here cannot hold. It was not read as an accepted answer.`);
         continue;
@@ -324,8 +347,17 @@ function build(block: TableRow[], first: number, last: number, ctx: Ctx, file: s
     if (new Set(numbers).size !== numbers.length) return unsupported("Two choices have the same number, so the pairs cannot be joined.");
     if (choices.length < 2) return unsupported("A matching question needs at least two choices, each with a match.");
     const pairs: Array<{ left: RichText; right: string }> = [];
+    // The matches by their number, made once: a long matching question would otherwise search every match for every choice.
+    const matchesByNumber = new Map<number, TableRow[]>();
+    for (const m of matches) {
+      const key = numberOf(m) as number;
+      const list = matchesByNumber.get(key);
+      if (list) list.push(m);
+      else matchesByNumber.set(key, [m]);
+    }
+    const choiceNumbers = new Set(numbers);
     for (const choice of choices) {
-      const mine = matches.filter((m) => numberOf(m) === numberOf(choice));
+      const mine = matchesByNumber.get(numberOf(choice) as number) ?? [];
       if (mine.length !== 1) {
         return unsupported(
           mine.length === 0
@@ -339,7 +371,7 @@ function build(block: TableRow[], first: number, last: number, ctx: Ctx, file: s
       pairs.push({ left, right });
     }
     // A match that belongs to no choice is a spare answer, which a question here can hold, and it is said.
-    const spare = matches.filter((m) => !numbers.includes(numberOf(m) as number)).map((m) => r.plain(cell(m, 2), cell(m, 3))).filter((t) => t !== "");
+    const spare = matches.filter((m) => !choiceNumbers.has(numberOf(m) as number)).map((m) => r.plain(cell(m, 2), cell(m, 3))).filter((t) => t !== "");
     if (spare.length > 0) r.note(FindingCode.UnreadContent, "warn", `${plural(spare.length, "match has", "matches have")} a number that no choice has, so ${spare.length === 1 ? "it was" : "they were"} read as spare ${spare.length === 1 ? "answer" : "answers"}: ${spare.map(quoted).join("; ")}.`);
     return make("matching", { shuffle: true, distractors: spare, pairs: pairs.map((p, i) => ({ id: localId("p", i), left: p.left, right: p.right })) });
   }

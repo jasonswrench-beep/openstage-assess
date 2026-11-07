@@ -29,7 +29,7 @@ import { shuffledFor } from "../model/random.ts";
 import { dependsOnPlace } from "../model/test.ts";
 import type { Feedback, Metadata, Question, QuestionBody } from "../model/question.ts";
 import type { TableFile, TableRow, TableSheet } from "./table.ts";
-import { BLOOM_WORDS, DIFFICULTY_WORDS } from "./metadata-words.ts";
+import { bloomOf, difficultyOf } from "./metadata-words.ts";
 import { decodeTableText, parseDelimited, readCsv } from "./table-csv.ts";
 import { readXlsx } from "./table-xlsx.ts";
 import { countVerdicts, type Importer, type ImportOptions, type ImportResult, type Orphan, type SourceBlock } from "./types.ts";
@@ -48,6 +48,9 @@ const HEADER_SEARCH = 10;
 type Column = "type" | "question" | "id" | "chapter" | "section" | "objective" | "page" | "bloom" | "difficulty" | "tags" | "correct" | "rightText" | "points" | "attempts" | "right" | "wrong" | "general" | "category" | `a${number}` | `w${number}`;
 
 const squash = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** A table looked up by a word from the file: only its own entries, so a word that is the name of a property every object has ("constructor") is not found. */
+const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined);
 
 /**
  * A table made for two languages names a column for each ("question_english", "question_french"). The language is not part of
@@ -124,7 +127,7 @@ function columnOf(cell: string): Column | null {
     const n = Number(wrong[1]);
     return n >= 1 && n < MAX_ANSWERS ? (`w${n - 1}` as Column) : null;
   }
-  return NAMES[name] ?? null;
+  return own(NAMES, name) ?? null;
 }
 
 /**
@@ -240,7 +243,13 @@ const plural = (n: number, one: string, many: string): string => `${n} ${n === 1
  * "A, C", "A and C", "A/C") or the text of an answer. A letter that names an empty answer is a mistake, and so is anything
  * else: nothing is guessed at.
  */
-function positionsNamed(cell: string, letterOf: readonly number[], answers: readonly string[], numbered = false): { positions: number[] } | { bad: string; ambiguous?: true } {
+function positionsNamed(
+  cell: string,
+  letterOf: readonly number[],
+  answers: readonly string[],
+  numbered = false,
+  emptyColumns: ReadonlySet<number> = new Set(),
+): { positions: number[] } | { bad: string; ambiguous?: true; empty?: true } {
   const whole = cell.trim();
   // In a table whose answer columns are numbered ("Option 1" to "Option 4") a number names the column with that number, and a
   // letter names nothing, because no column is called by one. In a table with lettered columns it is the other way about, and a
@@ -256,6 +265,9 @@ function positionsNamed(cell: string, letterOf: readonly number[], answers: read
     const byText = /^[A-Ha-h]$/.test(token) && !numbered ? -1 : answers.findIndex((a) => a.toLowerCase() === token.toLowerCase());
     let at = byText;
     if (numbered && /^\d{1,2}$/.test(token)) {
+      // A number that names a column of the sheet which has no answer in this row says an answer that is not there. It is the same
+      // mistake as a letter that names an empty answer, and it is not read as the words of another answer.
+      if (emptyColumns.has(Number(token) - 1)) return { bad: token, empty: true };
       const byNumber = letterOf.indexOf(Number(token) - 1);
       // A number that is both the column's number and the words of another answer ("2" in a table of sums) could be either, and
       // nothing in the file says which: it is not guessed.
@@ -329,7 +341,7 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
         }`,
       );
     }
-  } else if (TYPE_CODES[code]) kind = TYPE_CODES[code] as Kind;
+  } else if (own(TYPE_CODES, code)) kind = own(TYPE_CODES, code) as Kind;
   else {
     kind = "essay";
     note(
@@ -353,8 +365,13 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
         note(FindingCode.UnreadContent, "warn", "This table has one column for the right answer, so only that answer is marked. If another is also right, mark it in the editor.");
       }
     } else if (correctCell !== "") {
-      const named = positionsNamed(correctCell, letterOf, answers, numbered);
-      if ("bad" in named && named.ambiguous) {
+      // The answer columns that the sheet has and this row leaves empty, by their place.
+      const emptyColumns = new Set<number>();
+      for (let i = 0; i < MAX_ANSWERS; i++) if (order.includes(`a${i}` as Column) && answerCells[i] === "") emptyColumns.add(i);
+      const named = positionsNamed(correctCell, letterOf, answers, numbered, emptyColumns);
+      if ("bad" in named && named.empty) {
+        note(FindingCode.KeyLetterMissing, "error", `"${named.bad}" in the Correct cell names answer ${named.bad}, which is empty in this row. No answer is marked.`);
+      } else if ("bad" in named && named.ambiguous) {
         note(FindingCode.KeyLetterMissing, "error", `"${named.bad}" in the Correct cell could be the answer in column ${named.bad} or the answer whose words are "${named.bad}", and the file does not say which. No answer is marked.`);
       } else if ("bad" in named) {
         const filled = letterOf.map((i) => nameOf(i)).join(", ");
@@ -412,7 +429,17 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
       const at = letterOf.indexOf(correctCell.toUpperCase().charCodeAt(0) - 65);
       if (at !== -1 && (isTrue(answers[at] as string) || isFalse(answers[at] as string))) said = answers[at] as string;
     }
-    if (isTrue(said)) value = true;
+    // In a table with numbered answer columns a number in the Correct cell names a column, and it is also what 1 and 0 mean as yes and
+    // no, so it is read as the column when that column holds True or False, and is otherwise not read: nothing says which was meant.
+    let numberedAmbiguous = false;
+    if (numbered && /^\d{1,2}$/.test(correctCell)) {
+      const at = letterOf.indexOf(Number(correctCell) - 1);
+      if (at !== -1 && (isTrue(answers[at] as string) || isFalse(answers[at] as string))) said = answers[at] as string;
+      else numberedAmbiguous = true;
+    }
+    if (numberedAmbiguous) {
+      note(FindingCode.KeyLetterMissing, "error", `The Correct cell says "${correctCell}", which in a table with numbered answer columns names a column, and that column does not hold True or False. It is not read as yes or no. No answer is marked.`);
+    } else if (isTrue(said)) value = true;
     else if (isFalse(said)) value = false;
     else if (said !== "") note(FindingCode.KeyLetterMissing, "error", `The ${rightFirst ? "right answer" : "Correct"} cell says "${said}", which is not True or False. No answer is marked.`);
     else note(FindingCode.KeyLetterMissing, "info", `The ${rightFirst ? "cell for the right answer" : "Correct cell"} is empty, so neither True nor False is marked.`);
@@ -435,7 +462,7 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   } else {
     type = "essay";
     body = {};
-    if (code !== "" && TYPE_CODES[code] === "essay" && (answers.length > 0 || correctCell !== "")) {
+    if (code !== "" && own(TYPE_CODES, code) === "essay" && (answers.length > 0 || correctCell !== "")) {
       note(FindingCode.UnreadContent, "warn", `An essay has no key, so the answer and Correct cells were not used (${[quotedAnswers(), correctCell !== "" ? `Correct: ${correctCell}` : ""].filter((s) => s !== "").join("; ")}).`);
     }
   }
@@ -473,16 +500,24 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   }
   const difficulty = tidy("difficulty");
   if (difficulty !== "") {
-    const level = Object.hasOwn(DIFFICULTY_WORDS, difficulty.toLowerCase()) ? DIFFICULTY_WORDS[difficulty.toLowerCase()] : undefined;
+    // A number could be a place on any scale (1 to 3, or Brightspace's 1 to 5), so it is not turned into easy, medium or hard here, even
+    // though the text reader reads 1, 2 and 3 that way for a line that says "Difficulty: 2". Only the words are read.
+    const level = /^\d+$/.test(difficulty) ? undefined : difficultyOf(difficulty.toLowerCase());
     if (level) metadata.difficulty = level;
     else {
       custom["Difficulty"] = difficulty;
-      note(FindingCode.UnknownMetadataLabel, "warn", `Difficulty "${difficulty}" was not recognised (easy, medium or hard), so it was kept as written under Difficulty in the question's notes.`);
+      note(
+        FindingCode.UnknownMetadataLabel,
+        "warn",
+        /^\d+$/.test(difficulty)
+          ? `Difficulty "${difficulty}" is a number, and a number could be a place on any scale (1 to 3, 1 to 5), so it was kept as written under Difficulty in the question's notes and not turned into easy, medium or hard.`
+          : `Difficulty "${difficulty}" was not recognised (easy, medium or hard), so it was kept as written under Difficulty in the question's notes.`,
+      );
     }
   }
   const bloom = tidy("bloom");
   if (bloom !== "") {
-    const level = Object.hasOwn(BLOOM_WORDS, bloom.toLowerCase()) ? BLOOM_WORDS[bloom.toLowerCase()] : undefined;
+    const level = bloomOf(bloom.toLowerCase());
     if (level) metadata.bloom = level;
     else {
       custom["Bloom level"] = bloom;
@@ -538,7 +573,12 @@ function plan(file: TableFile): { read: SheetPlan[]; skipped: TableSheet[]; head
   const withRows = file.sheets.filter((s) => s.rows.length > 0);
   const named: SheetPlan[] = [];
   for (const sheet of withRows) {
-    const at = sheet.rows.slice(0, HEADER_SEARCH).findIndex((r, i) => isHeader(r.cells, i === 0));
+    // The row that names the columns is the first that names two or more known ones. A first row that names only the question
+    // column is the row of names only when no row below it names more: a lone "Questions" in A1 is a title above the real names.
+    const rows = sheet.rows.slice(0, HEADER_SEARCH);
+    const known = (r: TableRow): number => r.cells.filter((c) => columnOf(c) !== null).length;
+    const strong = rows.findIndex((r, i) => isHeader(r.cells, i === 0) && known(r) >= 2);
+    const at = strong !== -1 ? strong : rows.findIndex((r, i) => isHeader(r.cells, i === 0));
     if (at !== -1) {
       const header = readHeader((sheet.rows[at] as TableRow).cells);
       named.push({ sheet, headerAt: at, order: header.order, names: (sheet.rows[at] as TableRow).cells, header });
@@ -550,7 +590,7 @@ function plan(file: TableFile): { read: SheetPlan[]; skipped: TableSheet[]; head
   // No row names the columns. The template's order is assumed only for a file that starts the way the template's rows do, with
   // a type in the first cell. Any other table is a layout nobody has told this, and reading it in the template's order would
   // put one column's words in another's place, and perhaps a key where there was none.
-  if (!first.rows.slice(0, 3).some((r) => TYPE_CODES[squash(r.cells[0] ?? "")] !== undefined)) {
+  if (!first.rows.slice(0, 3).some((r) => own(TYPE_CODES, squash(r.cells[0] ?? "")) !== undefined)) {
     return { read: [], skipped: withRows, headerless: true };
   }
   return {

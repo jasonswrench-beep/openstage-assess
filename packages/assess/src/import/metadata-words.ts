@@ -44,3 +44,7 @@ export const BLOOM_WORDS: Record<string, BloomLevel> = {
   create: "create",
   creating: "create",
 };
+
+/** The level a word means, or undefined. Only the table's own entries count, so a word such as "constructor" is not a level. */
+export const difficultyOf = (word: string): Difficulty | undefined => (Object.hasOwn(DIFFICULTY_WORDS, word) ? DIFFICULTY_WORDS[word] : undefined);
+export const bloomOf = (word: string): BloomLevel | undefined => (Object.hasOwn(BLOOM_WORDS, word) ? BLOOM_WORDS[word] : undefined);

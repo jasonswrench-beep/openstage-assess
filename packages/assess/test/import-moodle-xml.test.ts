@@ -219,7 +219,8 @@ describe("a key is read only where the file gives one", () => {
 
   test("a short answer with nothing worth the whole of the points has no accepted answer, and is flagged", () => {
     const q = one(quiz(question("shortanswer", `<usecase>0</usecase>${answer(50, "Paris")}`)));
-    assert.deepEqual((q.body as { accepted: string[] }).accepted, []);
+    // No accepted answer is one empty entry, which the model accepts (it wants at least one), so the question can be stored and repaired.
+    assert.deepEqual((q.body as { accepted: string[] }).accepted, [""]);
     assert.equal(hasUsableKey(q), false);
     assert.equal(verdictOf(q), "failed");
   });
