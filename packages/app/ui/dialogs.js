@@ -38,7 +38,7 @@ export function ask(options) {
     const form = h(
       "form",
       { class: "dialog-body", on: { submit: (/** @type {Event} */ e) => e.preventDefault() } },
-      h("h2", { text: options.title }),
+      h("h2", { text: options.title, id: "dialog-title" }),
       ...(options.body ?? []).map((part) => (typeof part === "string" ? h("p", { text: part }) : part)),
       h(
         "div",
@@ -54,6 +54,8 @@ export function ask(options) {
       ),
     );
     box.append(form);
+    // The heading is the dialog's name, so a screen reader says what is being asked when the dialog opens and not only "dialog".
+    box.setAttribute("aria-labelledby", "dialog-title");
     box.addEventListener("close", settle, { once: true });
     box.showModal();
     options.onOpen?.(form);

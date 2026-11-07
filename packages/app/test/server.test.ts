@@ -210,6 +210,18 @@ describe("the page", () => {
     });
   });
 
+  test("a dialog is named by its own heading, so a screen reader says what is being asked and not only 'dialog'", async () => {
+    await withApp(async (client) => {
+      const source = (await client.get("/dialogs.js")).text;
+      // The heading has an id, and the dialog is labelled by that id before it is shown. (Checked in a real browser on 7 November 2026: the
+      // name is "Rename this bank", Escape closes the dialog, and focus goes back to the button that opened it.)
+      const heading = /h\("h2",\s*\{[^}]*\bid:\s*"([^"]+)"/.exec(source);
+      assert.ok(heading, "the dialog's heading has an id");
+      assert.match(source, new RegExp(`setAttribute\\("aria-labelledby",\\s*"${heading?.[1]}"\\)`), "the dialog is labelled by the heading");
+      assert.ok(source.indexOf("aria-labelledby") < source.indexOf("showModal()"), "it is named before it is shown");
+    });
+  });
+
   test("serves the screens the router can open", async () => {
     await withApp(async (client) => {
       const router = (await import("node:fs")).readFileSync(join(UI, "app.js"), "utf8");
