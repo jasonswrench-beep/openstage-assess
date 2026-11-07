@@ -68,6 +68,20 @@ describe("the screens' scripts", () => {
     }
   });
 
+  // Found by an independent reader of these changes.
+  test("what the score review says is cancelled by the next thing it says, so an older confirmation is never written back", () => {
+    const say = /function say\(text\) \{[\s\S]*?\n  \}\n/.exec(source("scoring.js"))?.[0] ?? "";
+    assert.match(say, /clearTimeout\(sayTimer\)/, "the timer an earlier call left running is cleared");
+    assert.match(say, /sayTimer = window\.setTimeout/, "and the new one is kept so that the next call can clear it");
+    assert.ok(say.indexOf("clearTimeout") < say.indexOf("setTimeout"), "cleared before a new one is set");
+  });
+
+  test("in forced colours a row that is chosen and has focus keeps its focus ring", () => {
+    const css = readFileSync(join(UI, "style.css"), "utf8");
+    const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+    assert.match(forced, /\.qrow\[aria-current="true"\]:focus-visible \{[^}]*outline: 3px solid Highlight/);
+  });
+
   test("a link or button that repeats for each bank, sample or sheet says which one it is for", () => {
     const repeated: Array<[string, RegExp]> = [
       ["home.js", /text: "Open"/],

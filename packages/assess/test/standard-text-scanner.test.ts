@@ -280,6 +280,15 @@ describe("repeated question numbers do not share a key", () => {
     assert.equal(result.fileFindings.filter((f) => f.severity === "warn").length, 0);
   });
 
+  test("it is a warning when an Answers list placed before the questions is not applied to the repeated numbers", () => {
+    // Found by an independent reader: no question is marked ambiguous here, but the list's entries were held back all the same.
+    const result = parse(`Answers:\n1. A\n2. B\n\n1) First?\na. x\nb. y\n2) Second?\na. x\nb. y\n\n1) Third?\na. p\nb. q\n2) Fourth?\na. p\nb. q\n`);
+    assert.deepEqual(result.questions.map(verdictOf), ["failed", "failed", "failed", "failed"]);
+    const said = result.fileFindings.find((f) => f.code === FindingCode.DuplicateQuestionNumber);
+    assert.equal(said?.severity, "warn");
+    assert.doesNotMatch(said?.message ?? "", /No Answers entry was waiting/);
+  });
+
   test("it is a warning when only some of the repeated numbers had an Answers entry", () => {
     const result = parse(`3) A?\na. x\nb. y\n\n3) B?\na. x\nb. y\n\nAnswers:\n3. B\n\n4) C?\n*a. x\nb. y\n\n4) D?\na. x\n*b. y\n`);
     assert.equal(result.fileFindings.find((f) => f.code === FindingCode.DuplicateQuestionNumber)?.severity, "warn");

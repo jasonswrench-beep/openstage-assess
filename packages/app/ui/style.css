@@ -344,5 +344,8 @@ table.results tr.current { background: var(--note-bg); }
   .chip.on, button.bubble.on { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: HighlightText; }
   .chip.on span { color: HighlightText; }
   .qrow[aria-current="true"], table.results tr.current { outline: 3px solid Highlight; outline-offset: -3px; }
+  /* A row that is the chosen one and is also where focus is keeps its focus ring: both are outlines, and the one above is more specific
+     than the one that shows focus, so without this a focused chosen row looked no different from one focus had left. */
+  .qrow[aria-current="true"]:focus-visible { outline: 3px solid Highlight; outline-offset: 2px; }
   .dropzone.over, .export.wide .panel.over, section.panel.over { outline: 3px dashed Highlight; outline-offset: 2px; }
 }

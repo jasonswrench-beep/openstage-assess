@@ -2044,7 +2044,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
   }
 
   resolveKeys(questions, keyBlocks, file, fileFindings);
-  reportRepeatedNumbers(questions, fileFindings);
+  reportRepeatedNumbers(questions, keyBlocks, fileFindings);
 
   // The last line of defence for the rule that nothing is dropped silently.
   let unattributed = 0;
@@ -2334,7 +2334,7 @@ function readBoldBlanks(blocks: readonly SourceBlock[], questions: RawQuestion[]
  * only a repeat inside one stretch is reported. It matters most to the key, but
  * it is also the first sign that two chapters were pasted together.
  */
-function reportRepeatedNumbers(questions: RawQuestion[], fileFindings: Finding[]): void {
+function reportRepeatedNumbers(questions: RawQuestion[], keyBlocks: KeyBlock[], fileFindings: Finding[]): void {
   const repeated = new Set<number | string>();
   const seen = new Set<string>();
   for (const q of questions) {
@@ -2346,11 +2346,12 @@ function reportRepeatedNumbers(questions: RawQuestion[], fileFindings: Finding[]
   if (repeated.size === 0) return;
 
   const listed = `${[...repeated].slice(0, 10).join(", ")}${repeated.size > 10 ? ", and more" : ""}`;
-  // It is a warning only when it cost something: an Answers entry for one of the repeated numbers was held back (`resolveKeys` has
-  // already run). Four of twenty-one real files started their numbering again in each section (multiple choice 1 to 10, then true
-  // or false 1 to 10) and marked their answers another way, and were told that "an Answers entry is not applied" when there was no
-  // Answers list at all. Said as information, it is still said.
-  if (questions.some((q) => q.keyAmbiguous)) {
+  // It is information only when the file has no Answers list with entries in it, since then nothing could have been held back. Four
+  // of twenty-one real files started their numbering again in each section (multiple choice 1 to 10, then true or false 1 to 10) and
+  // marked their answers another way, and were told that "an Answers entry is not applied" when there was no Answers list at all.
+  // With a list, an entry for a repeated number may have been held back without any question being marked (a list placed before its
+  // questions is not applied to a number two questions share), so that stays a warning. Said as information, it is still said.
+  if (questions.some((q) => q.keyAmbiguous) || keyBlocks.some((b) => b.entries.size > 0)) {
     fileFindings.push(
       finding(
         FindingCode.DuplicateQuestionNumber,

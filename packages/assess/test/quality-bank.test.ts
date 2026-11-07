@@ -151,6 +151,20 @@ describe("questions that are alike", () => {
     assert.equal(findDuplicates([full, reworded])[0]?.kind, "alike");
   });
 
+  // Found by an independent reader: with only the stems compared exactly, a near-copy hid behind a small word.
+  test("stems that differ only in small words are one stem: a different right answer is then a conflict between copies, not a parallel", () => {
+    const gas = (stem: string, right: string) => mc(stem, [`${right}*`, "Oxygen", "Argon", "Carbon dioxide", "Neon"]);
+    const base = "Which one of the following gases makes up most of the Earth's atmosphere by volume at sea level under standard conditions of temperature and pressure?";
+    assert.equal(findDuplicates([gas(base, "Nitrogen"), gas(base.replace("one ", ""), "Nitrogen gas")])[0]?.kind, "alike", "a word dropped and the answer reworded");
+    const country = (prep: string, right: string) => mc(`What is the name of the capital city of the largest and most populous country ${prep} Oceania today?`, [`${right}*`, ...["Auckland", "Perth", "Wellington"].filter((x) => x !== right)]);
+    assert.equal(findDuplicates([country("in", "Canberra"), country("of", "Sydney")])[0]?.kind, "alike", "in against of, with a different capital marked");
+    // A word that matters is never small: half and full, before and after, and not are what make a parallel.
+    const ripple = (kind: string, right: string) => mc(`The ripple frequency produced by a ${kind} power supply connected to a normal household circuit is:`, ["120 Hz", "60 Hz", "90 Hz", "30 Hz"].map((o) => (o === right ? `${o}*` : o)));
+    assert.deepEqual(findDuplicates([ripple("full-wave", "120 Hz"), ripple("half-wave", "60 Hz")]), []);
+    const order = (word: string, right: string) => mc(`Which of the following events happened ${word} the signing of the treaty by the two delegations in that year?`, [`${right}*`, "The vote", "The fire", "The march"].filter((x, i, a) => a.indexOf(x) === i));
+    assert.deepEqual(findDuplicates([order("before", "The vote"), order("after", "The fire")]), []);
+  });
+
   test("the right answers of a multiple response question are compared as a set, and of the other types by their whole key", () => {
     const pick = (right: string[]) => mc("Which of these are the factors of twelve that are smaller than the number itself here:", ["1", "2", "3", "5"].map((o) => (right.includes(o) ? `${o}*` : o)));
     // Same stem, a different set right: a conflict, still said.
