@@ -297,7 +297,8 @@ What has been checked: the sample in `fixtures/moodle-xml` has the shape of a re
 category question, a picture) and was written from Moodle's documented format and memory of real files; no export from a real Moodle
 has been read. This program's own exporter is read back: every question of every fixture bank that Moodle XML can hold comes back with
 the same type, title, points, text, answers, key, pairs, accepted answers and feedback, and exporting that again gives the same file,
-byte for byte. A file cut at every length and one with characters changed is read or refused in a sentence and never throws. Six faults
+byte for byte. So do the real banks in `fixtures/publisher` (1,216 questions of the kinds it holds, which have pictures, accented
+letters, quotation marks and tables of their own): none differed in type, points, text, answers, key or pairs, and none gained an error. A file cut at every length and one with characters changed is read or refused in a sentence and never throws. Six faults
 planted one at a time (a guessed key, true and false swapped, the standard feedback kept, part credit read as an accepted answer, a
 picture kept without looking at its bytes, the case rule inverted) were each caught.
 
@@ -331,7 +332,8 @@ essays with their words and fail.
 
 What has been checked: this program's QTI 1.2 and 2.1 exports of every fixture bank are read back as what they were (type, title, points,
 text, answers, key, pairs, accepted answers; a 1.2 package does not carry credit for part of a multiple answer, so that is left out of
-the comparison), and the 2.1 package is read and exported again to the same files, byte for byte. Files in the shape Canvas writes and in
+the comparison), and the 2.1 package is read and exported again to the same files, byte for byte. The real banks in `fixtures/publisher` come back
+the same way from both (1,216 questions each, none different in type, points, text, answers, key or pairs, none with a new error). Files in the shape Canvas writes and in
 the shape of the standard's templates, written by hand from memory of those shapes, are read as expected; no real export from Canvas or
 Brightspace has been read, and `TESTING-TODO.md` asks for one. A package cut at many lengths and one with bytes changed are read or refused
 in a sentence and never throw. Seven faults planted one at a time (part credit counted as the key, the first answer guessed when none is

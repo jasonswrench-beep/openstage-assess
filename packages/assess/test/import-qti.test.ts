@@ -13,7 +13,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -401,6 +401,16 @@ describe("a package", () => {
     assert.doesNotMatch(shown, /Alpha/);
   });
 
+  test("a package of more than five thousand items is read, which a publisher's bank can be, in a reasonable time", () => {
+    const files: Record<string, string> = {};
+    for (let i = 1; i <= 5001; i++) files[`i${i}.xml`] = choiceItem(`i${i}`, `Question ${i}`);
+    const started = Date.now();
+    const result = read(zipOf(files));
+    assert.equal(result.questions.length, 5001);
+    assert.equal(result.counts.parsed, 5001);
+    assert.ok(Date.now() - started < 20000, "it takes seconds, not minutes");
+  });
+
   test("a zip that holds no QTI says that no question was found", () => {
     const result = read(zipOf({ "readme.txt": "hello", "data.xml": "<root/>" }));
     assert.deepEqual(result.questions, []);
@@ -533,6 +543,35 @@ describe("what this program exports, read back", () => {
       }
       assert.ok(checked >= 15, `only ${checked} fixtures were exported`);
       assert.ok(questions >= 40, `only ${questions} questions were compared`);
+    });
+  }
+
+  const real = join(fileURLToPath(new URL("../../../fixtures/publisher/", import.meta.url)));
+  const hasReal = existsSync(real) && readdirSync(real).some((n) => n.endsWith(".expected.json"));
+  for (const [label, run, partial] of [
+    ["QTI 1.2", exportQti12, false],
+    ["QTI 2.1", exportQti21, true],
+  ] as const) {
+    test(`every real bank in fixtures/publisher, when there are some, comes back from ${label} as what it was`, { skip: hasReal ? false : "none there; the folder is git-ignored and local" }, () => {
+      let questions = 0;
+      for (const name of readdirSync(real).filter((n) => /\.(txt|docx|xlsx|csv)$/.test(n))) {
+        const bytes = new Uint8Array(readFileSync(join(real, name)));
+        const source = runImporter(importerForContent(name, bytes), bytes, { file: name, at: AT, author: "test" });
+        const out = run(source.questions, { name: "Bank", ...(source.media ? { media: source.media } : {}) });
+        if (out.files.length === 0) continue;
+        const zip = out.files[0]?.bytes as Uint8Array;
+        const back = runImporter(importerForContent(out.files[0]?.name ?? "", zip), zip, { file: "Bank.zip", at: AT, author: "test" });
+        const written = source.questions.filter((_q, i) => out.report.items[i]?.outcome !== "leftOut");
+        assert.equal(back.questions.length, written.length, name);
+        written.forEach((q, i) => {
+          if (q.type === "fillInBlank") return;
+          assert.deepEqual(facts(back.questions[i] as Question, partial), facts(q, partial), `${name}: ${q.title}`);
+          const errors = (back.questions[i] as Question).findings.filter((f) => f.severity === "error" && !q.findings.some((x) => x.code === f.code));
+          assert.deepEqual(errors, [], `${name}: ${q.title}`);
+          questions++;
+        });
+      }
+      assert.ok(questions > 0);
     });
   }
 
