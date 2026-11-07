@@ -312,7 +312,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2478 engine tests and 296 app tests, Node's own runner
+npm test                       # 2533 engine tests and 297 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -324,7 +324,7 @@ npm run assess -- sheets rescore <bank> <file.openassess-scores>   # score again
 npm run assess -- sheets check <bank> <picture.png>   # Check my printing: a scan of a blank printed copy
 npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine
 npm run assess -- perf         # the speed budget on a 500-question bank
-npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|common-cartridge|blackboard-upload   # the destination check; the Author/Scroll CSV is the default; --out writes it
+npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|qti-2.1|common-cartridge|blackboard-upload   # the destination check; the Author/Scroll CSV is the default; --out writes it
 npm run assess -- print <bank> --out <folder>   # a student copy and an answer key, as Word or PDF
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
 npm run assess -- check <bank> [--save]   # notes on the writing of each question, copies, and where the right answers sit

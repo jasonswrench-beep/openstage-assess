@@ -93,7 +93,7 @@ function isCodePoint(code: number): boolean {
   return Number.isInteger(code) && code >= 0 && code <= 0x10ffff;
 }
 
-function decodeEntities(text: string): string {
+export function decodeEntities(text: string): string {
   return text.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (whole, body: string) => {
     // Number.isFinite alone only rejects NaN, so an out-of-range reference such
     // as &#x110000; threw a RangeError out of here. That was enough to make a
@@ -162,14 +162,14 @@ export interface SanitizeResult {
   removedAttributes: string[];
 }
 
-interface Token {
+export interface Token {
   kind: "text" | "open" | "close" | "selfclose" | "comment";
   name?: string;
   attrs?: Record<string, string>;
   text?: string;
 }
 
-function tokenize(input: string): Token[] {
+export function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
   while (i < input.length) {
