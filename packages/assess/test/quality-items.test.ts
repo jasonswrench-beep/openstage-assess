@@ -180,6 +180,42 @@ describe("a negative stem that is not set apart", () => {
     }
   });
 
+  // What real banks showed (1421 questions of real Word banks, 79 notes, a third of them wrong): the question is positive and the word
+  // is in the story before it, in an example it quotes, in a why question about a negative fact, or in a condition.
+  test("is not noted when the story before the question says not and the question itself does not", () => {
+    assert.equal(stemNoted("Darlene is concerned that she will not appear honest because her speech is about a product her company sells.  What aspect of credibility is Darlene concerned about?"), false);
+    assert.equal(stemNoted("Jim notices that the speaker may not be accurate. Gerald does not agree. What is this called?"), false);
+    // The question can be the first sentence, with the story after it, or the story can lead to a question that does say it.
+    assert.ok(stemNoted("Which description is not correct? You are planning to build a speech processor. Compared to AF clipping, RF clipping:"));
+    assert.ok(stemNoted("Sara is concerned about the artistic standard.  Which of the following speech components would Sara not be concerned about?"));
+    // The last sentence is the question even when it has no question mark.
+    assert.ok(stemNoted("Read the passage above carefully.  All of the following are true except"));
+    // A stem of one sentence is looked at whole, and an abbreviation does not cut it in two.
+    assert.ok(stemNoted("Which of these is not a method, e.g. a technique for sorting?"));
+  });
+
+  test("is not noted for a word inside quotation marks", () => {
+    assert.equal(stemNoted("“If you do not use suntan lotion, you will get skin cancer and die!” is an example of which aspect of style?"), false);
+    assert.equal(stemNoted('"It does not seem to flow right" is an example of which kind of criticism?'), false);
+    assert.ok(stemNoted("In “Hamlet”, which of these characters does not die?"), "the word is outside the quotation");
+  });
+
+  test("is not noted for a why question, and is for a which question that has the same words", () => {
+    assert.equal(stemNoted("Why can't sound waves propagate through a vacuum?"), false);
+    assert.equal(stemNoted("Why is carbon-14 dating not suitable for dating rocks?"), false);
+    assert.ok(stemNoted("Which reason is not suitable for dating rocks?"));
+  });
+
+  test("is not noted for a word in a condition, and is for one in the question after it", () => {
+    assert.equal(stemNoted("If you do not understand what a critic is saying, you should"), false);
+    assert.equal(stemNoted("What type of image is formed by a converging lens when the object is not near the focal point?"), false);
+    assert.equal(stemNoted("What should you do if a balanced equation is not in its simplest form?"), false);
+    assert.equal(stemNoted("When the transmitter is not modulated, or the signal is zero, the frequency is called its:"), false);
+    assert.ok(stemNoted("When receiving criticism, which of the following is something you should not do?"), "the condition ends at the comma");
+    assert.ok(stemNoted("Which of the following is not true when the temperature does not change?"), "the first word is in the question");
+    assert.equal(stemNoted("What do people who may or may not be interested in a topic want to hear?"), false);
+  });
+
   test("is only for questions with options to choose from", () => {
     const essay = createQuestion({ type: "essay", stem: plainToRich("Why is it not a fruit?"), body: {} });
     assert.equal(codes(essay).includes(FindingCode.NegativeStemNotEmphasised), false);
