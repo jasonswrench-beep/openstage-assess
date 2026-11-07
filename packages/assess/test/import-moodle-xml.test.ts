@@ -11,7 +11,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -541,6 +541,31 @@ describe("what this program exports, read back", () => {
     }
     assert.ok(checked >= 15, `only ${checked} fixtures were exported`);
     assert.ok(questions >= 40, `only ${questions} questions were compared`);
+  });
+
+  const real = join(fileURLToPath(new URL("../../../fixtures/publisher/", import.meta.url)));
+  const hasReal = existsSync(real) && readdirSync(real).some((n) => n.endsWith(".expected.json"));
+  test("every real bank in fixtures/publisher, when there are some, comes back from Moodle XML as what it was", { skip: hasReal ? false : "none there; the folder is git-ignored and local" }, () => {
+    let questions = 0;
+    for (const name of readdirSync(real).filter((n) => /\.(txt|docx|xlsx|csv)$/.test(n))) {
+      const bytes = new Uint8Array(readFileSync(join(real, name)));
+      const source = runImporter(importerForContent(name, bytes), bytes, { file: name, at: AT, author: "test" });
+      const out = exportMoodleXml(source.questions, { name: "Bank", ...(source.media ? { media: source.media } : {}) });
+      if (out.files.length === 0) continue;
+      const data = new TextEncoder().encode(out.files[0]?.content ?? "");
+      const back = runImporter(importerForContent("Bank.xml", data), data, { file: "Bank.xml", at: AT, author: "test" });
+      const written = source.questions.filter((_q, i) => out.report.items[i]?.outcome !== "leftOut");
+      assert.equal(back.questions.length, written.length, name);
+      written.forEach((q, i) => {
+        if (q.type === "fillInBlank") return;
+        assert.deepEqual(facts(back.questions[i] as Question), facts(q), `${name}: ${q.title}`);
+        // What a real file holds does not make the key worse: no error that the source did not have.
+        const errors = (back.questions[i] as Question).findings.filter((f) => f.severity === "error" && !q.findings.some((x) => x.code === f.code));
+        assert.deepEqual(errors, [], `${name}: ${q.title}`);
+        questions++;
+      });
+    }
+    assert.ok(questions > 0);
   });
 
   test("a picture in the text goes out in the file and comes back as the same picture with the same description", () => {

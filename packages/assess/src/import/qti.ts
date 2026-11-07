@@ -30,9 +30,9 @@ import { countVerdicts, type Importer, type ImportOptions, type ImportResult, ty
 
 export const QTI_PROFILE_ID = "qti";
 
-/** The most XML files of a package that are read, and the most items; a package built to be followed forever is refused. */
-const MOST_FILES = 5000;
-const MOST_ITEMS = 20000;
+/** The most XML files of a package that are read, and the most items. A zip holds at most 65535 entries, so the first is no limit in practice; both are a guard against a file built to be followed forever. */
+const MOST_FILES = 70000;
+const MOST_ITEMS = 100000;
 
 const BLANK = "_____";
 const SHORT = 120;
