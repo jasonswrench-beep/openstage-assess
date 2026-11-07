@@ -8,13 +8,14 @@
 
 import { aikenImporter, looksLikeAiken } from "./aiken.ts";
 import { giftImporter, looksLikeGift } from "./gift.ts";
+import { looksLikeMoodleXml, moodleXmlImporter } from "./moodle-xml.ts";
 import { looksLikePdf, pdfImporter } from "./pdf.ts";
 import { looksLikeQuestionTable, spreadsheetImporter } from "./spreadsheet.ts";
 import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult } from "./types.ts";
 import { wordImporter } from "./word.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, spreadsheetImporter, pdfImporter];
+export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, moodleXmlImporter, spreadsheetImporter, pdfImporter];
 
 /** The importer that reads files with this name's extension, if there is one. */
 export function importerFor(file: string): Importer | undefined {
@@ -50,6 +51,7 @@ export function importerForContent(file: string, bytes: Uint8Array): Importer {
   if (looksLikePdf(bytes)) return pdfImporter;
   if (looksLikeQuestionTable(bytes)) return spreadsheetImporter;
   const text = Buffer.from(bytes.subarray(0, SNIFF_BYTES)).toString("utf8");
+  if (looksLikeMoodleXml(text)) return moodleXmlImporter;
   if (looksLikeGift(text)) return giftImporter;
   if (looksLikeAiken(text)) return aikenImporter;
   return standardTextImporter;

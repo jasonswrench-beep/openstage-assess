@@ -95,6 +95,7 @@ export { DocxError, openDocx } from "./import/docx/package.ts";
 export { IMPORTERS, importerFor, importerForContent, runImporter } from "./import/registry.ts";
 export { aikenImporter, AIKEN_PROFILE_ID, looksLikeAiken } from "./import/aiken.ts";
 export { giftImporter, GIFT_PROFILE_ID, looksLikeGift, giftUnescape } from "./import/gift.ts";
+export { moodleXmlImporter, MOODLE_XML_PROFILE_ID, looksLikeMoodleXml } from "./import/moodle-xml.ts";
 export { spreadsheetImporter, SPREADSHEET_PROFILE_ID, looksLikeQuestionTable } from "./import/spreadsheet.ts";
 export { pdfImporter, PDF_PROFILE_ID, looksLikePdf, pdfToBlocks } from "./import/pdf.ts";
 export { PdfError } from "./import/pdf/objects.ts";

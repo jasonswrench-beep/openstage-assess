@@ -10,7 +10,7 @@ One of the OpenStage suite of tools; it stands on its own. Apache 2.0.
 
 The engine came first, on purpose: the parse-accuracy target is the whole product, and it
 cannot be iterated on through a user interface. It is built and measured, and **there is
-now an app on top of it**: open a Word, Excel, CSV, PDF, text, Aiken or GIFT file, see what was found beside
+now an app on top of it**: open a Word, Excel, CSV, PDF, text, Aiken, GIFT or Moodle XML file, see what was found beside
 the lines it came from, repair what needs it, save it into a bank, write and edit questions,
 and export or print them. The Word importer's acceptance target (95 percent on three real
 chapters it was not fitted to) is not yet met, because no such chapters exist yet; see
@@ -77,6 +77,13 @@ only and answers only to the window it opened.
   step, runs on 127.0.0.1 only, and is built to be safe from other pages in the same
   browser: a key handed to the window once, a Host check, a header every change must
   carry, and a policy that allows only its own scripts. See `docs/design-plan.md`.
+- Moodle XML in (`import-moodle-xml`): the file Moodle writes when a question bank is exported, read
+  with the key the file gives and none it does not (an answer is right when it is worth the whole of
+  the points; a question where none is has no key and says so). Multiple choice, multiple answer,
+  true or false, short answer, matching, essay and numerical questions are read, with their points,
+  feedback, tags, category and pictures. A cloze, a drag and drop and the rest are kept as text and
+  marked failed; a description is an orphan. Moodle's standard feedback sentences are not kept as
+  feedback. Read back, what this program exports is what was exported.
 - Aiken and GIFT in; GIFT and Moodle XML out, each with the destination check that says
   what will arrive, what will be lost and what cannot go. A `.txt` file is told apart
   by what is in it.
@@ -284,7 +291,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/bank/             opening, saving, changing and searching a bank
   src/quality/          item quality checks
   src/import/           importers: the Standard Format, Word (docx/ is its XML and package reader), PDF (pdf/ is its
-                        reader, from the file's objects to lines and paragraphs), Aiken, GIFT and
+                        reader, from the file's objects to lines and paragraphs), Aiken, GIFT, Moodle XML and
                         the question table (spreadsheet.ts, with table-csv.ts and table-xlsx.ts to read the file)
   src/export/           exporters and the destination check: the spreadsheet, GIFT, Moodle XML, Brightspace CSV, QTI 1.2, QTI 2.1, Common Cartridge and Blackboard upload
   src/print/            a printed test: the layout, and the Word and PDF writers
@@ -292,7 +299,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 2533 tests, run by Node's own test runner
+  test/                 2580 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

@@ -135,6 +135,18 @@ item says what has been run and what has not. Items are removed when done, with 
   engine would have. Refusing a scan with the way round (an original document, or text recognition done in a PDF program) is what
   it does now.
 
+## Moodle XML in
+
+Built on 6 November 2026. The sample in `fixtures/moodle-xml` was written from Moodle's documented format, not exported from a Moodle.
+
+- [ ] **Export a question bank from a real Moodle (Question bank, Export, Moodle XML) and import it here.** Check each question's
+  right answer against Moodle's, the points, a picture, and a question with feedback. Say what came in wrongly or flagged for no
+  reason; a cloze, a drag and drop and a calculated question are expected to come in as text that fails.
+- [ ] **A multiple answer question with partial credit in Moodle.** It is read as right answers earning a share each, with a wrong
+  answer taking one away. If the weights in your Moodle are not equal shares, the import says they were not kept; look at what it did.
+- [ ] **Moodle in a language other than English.** The standard feedback sentences are recognised in English only, so another
+  language's sentences come in as feedback on every question. Say which language, and send what the sentences are.
+
 ## Brightspace
 
 - [ ] **Import a file with every type into a Brightspace course.** Quizzes, Question Library, Import, Upload a File. One file

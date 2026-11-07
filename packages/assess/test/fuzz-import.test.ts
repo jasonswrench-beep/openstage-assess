@@ -43,9 +43,9 @@ interface Seed {
 
 function seeds(): Seed[] {
   const out: Seed[] = [];
-  for (const dir of ["fixtures/word-authored", "packages/app/samples", "fixtures/standard-format"]) {
+  for (const dir of ["fixtures/word-authored", "packages/app/samples", "fixtures/standard-format", "fixtures/moodle-xml"]) {
     for (const file of readdirSync(join(root, dir)).sort()) {
-      if (![".docx", ".xlsx", ".txt", ".csv"].includes(extname(file))) continue;
+      if (![".docx", ".xlsx", ".txt", ".csv", ".xml"].includes(extname(file))) continue;
       out.push({ name: file, bytes: new Uint8Array(readFileSync(join(root, dir, file))) });
     }
   }
