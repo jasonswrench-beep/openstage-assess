@@ -19,6 +19,9 @@ import { fileURLToPath } from "node:url";
 
 import { Bank } from "../src/bank/store.ts";
 import { unzipSync, zipSync } from "../src/container/zip.ts";
+import { exportCommonCartridge } from "../src/export/common-cartridge.ts";
+import { exportQti12 } from "../src/export/qti12.ts";
+import { exportQti21 } from "../src/export/qti21.ts";
 import { importerForContent, runImporter } from "../src/import/registry.ts";
 import { createQuestion } from "../src/model/create.ts";
 import { plainToRich } from "../src/model/richtext.ts";
@@ -33,7 +36,8 @@ import { docx, paragraph, run } from "./support/docx-writer.ts";
 import { drawing, emf, gif, jpeg, pictureParts, png } from "./support/images.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const ROUNDS = 40;
+// OPENASSESS_FUZZ_ROUNDS asks for a longer run by hand (a few hundred rounds a file); the same seeds give the same files, so a failure can be run again.
+const ROUNDS = Number(process.env["OPENASSESS_FUZZ_ROUNDS"] ?? 40);
 const SLOW_MS = 3000;
 
 interface Seed {
@@ -70,6 +74,45 @@ function seeds(): Seed[] {
     }),
   });
   out.push({ name: "table.csv", bytes: new Uint8Array(Buffer.from("Type,Question,A,B,Correct\nMC,What is 2 + 2?,3,4,B\nMC,What is the capital of Spain?,Madrid,Rome,A\n")) });
+  // A table with the right answer in a column of its own and a second language beside it, as a text file the way a spreadsheet saves it.
+  out.push({
+    name: "right-first.txt",
+    bytes: new Uint8Array(
+      Buffer.from(
+        "question_id;question_english;correct_answer_english;incorrect_answer_1_english;incorrect_answer_2_english;question_french;correct_answer_french;incorrect_answer_1_french;incorrect_answer_2_french\n" +
+          "A-001;Which is cold?;Ice;Fire;Lava;Lequel est froid?;La glace;Le feu;La lave\nA-002;Which is true?;Both;Neither;None of the above;Lequel est vrai?;Les deux;Aucun;Aucune de ces réponses\n",
+      ),
+    ),
+  });
+  // What the LMS exporters write, which the QTI reader reads back (a package, and one of its XML files on its own), and a question
+  // library in the shape a real Brightspace file had.
+  const mixed = new Uint8Array(readFileSync(join(root, "fixtures/standard-format/03-mixed-types.txt")));
+  const made = runImporter(importerForContent("mixed.txt", mixed), mixed, { file: "mixed.txt" });
+  const packages: Array<[string, Uint8Array]> = [
+    ["qti12.zip", exportQti12(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
+    ["qti21.zip", exportQti21(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
+    ["cartridge.imscc", exportCommonCartridge(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
+  ];
+  for (const [name, bytes] of packages) {
+    out.push({ name, bytes });
+    for (const [inside, data] of unzipSync(bytes)) {
+      if (/\.xml$/i.test(inside) && !/manifest/i.test(inside)) {
+        out.push({ name: `${name.replace(/\W/g, "-")}-${inside.replace(/\W/g, "-")}`.slice(0, 60) + ".xml", bytes: data });
+        break;
+      }
+    }
+  }
+  const libraryItem = (n: number): string =>
+    `<item d2l_2p0:id="${n}" ident="OBJ_${n}" label="QUES_${n}" title="Which planet is closest to the Su"><itemmetadata><qtimetadata><qti_metadatafield><fieldlabel>qmd_questiontype</fieldlabel><fieldentry>Multiple Choice</fieldentry></qti_metadatafield><qti_metadatafield><fieldlabel>qmd_weighting</fieldlabel><fieldentry>2.0000</fieldentry></qti_metadatafield></qtimetadata></itemmetadata><presentation><flow><material><mattext texttype="text/html"><![CDATA[Which planet is closest to the Sun?]]></mattext></material><response_lid ident="QUES_${n}_LID" rcardinality="Multiple"><render_choice shuffle="no"><flow_label class="Block"><response_label ident="QUES_${n}_A1"><flow_mat><material><mattext texttype="text/html"><![CDATA[Venus]]></mattext></material></flow_mat></response_label></flow_label><flow_label class="Block"><response_label ident="QUES_${n}_A2"><flow_mat><material><mattext texttype="text/html"><![CDATA[Mercury]]></mattext></material></flow_mat></response_label></flow_label></render_choice></response_lid></flow></presentation><resprocessing><respcondition title="C1"><conditionvar><varequal respident="QUES_${n}_LID">QUES_${n}_A1</varequal></conditionvar><setvar action="Set">0.0000</setvar></respcondition><respcondition title="C2"><conditionvar><varequal respident="QUES_${n}_LID">QUES_${n}_A2</varequal></conditionvar><setvar action="Set">100.0000</setvar></respcondition></resprocessing></item>`;
+  out.push({
+    name: "library.zip",
+    bytes: zipSync([
+      { name: "imsmanifest.xml", data: new Uint8Array(Buffer.from('<manifest xmlns:d2l_2p0="http://desire2learn.com/xsd/d2lcp_v2p0" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"><resources><resource identifier="res_question_library" type="webcontent" d2l_2p0:material_type="d2lquestionlibrary" href="questiondb.xml" /></resources></manifest>')) },
+      { name: "questiondb.xml", data: new Uint8Array(Buffer.from(`<?xml version="1.0" encoding="UTF-8"?><questestinterop><objectbank ident="QLIB_1" xmlns:d2l_2p0="http://desire2learn.com/xsd/d2lcp_v2p0"><section ident="SECT_1" title="Section-Test">${libraryItem(1)}${libraryItem(2)}</section></objectbank></questestinterop>`)) },
+    ]),
+  });
+  // A zip that only wraps a text file, which is what a downloaded bank often is.
+  out.push({ name: "wrapped.zip", bytes: zipSync([{ name: "bank/questions.txt", data: new Uint8Array(Buffer.from("Question;Correct;Wrong\nWhich?;A;B\n")) }]) });
   return out;
 }
 
