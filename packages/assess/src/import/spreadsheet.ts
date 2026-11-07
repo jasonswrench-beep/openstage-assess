@@ -27,8 +27,9 @@ import { localId } from "../model/ids.ts";
 import { plainToRich } from "../model/richtext.ts";
 import { shuffledFor } from "../model/random.ts";
 import { dependsOnPlace } from "../model/test.ts";
-import type { Feedback, Question, QuestionBody } from "../model/question.ts";
+import type { Feedback, Metadata, Question, QuestionBody } from "../model/question.ts";
 import type { TableFile, TableRow, TableSheet } from "./table.ts";
+import { BLOOM_WORDS, DIFFICULTY_WORDS } from "./metadata-words.ts";
 import { decodeTableText, parseDelimited, readCsv } from "./table-csv.ts";
 import { readXlsx } from "./table-xlsx.ts";
 import { countVerdicts, type Importer, type ImportOptions, type ImportResult, type Orphan, type SourceBlock } from "./types.ts";
@@ -44,7 +45,7 @@ const HEADER_SEARCH = 10;
 // The columns
 // ---------------------------------------------------------------------------
 
-type Column = "type" | "question" | "id" | "correct" | "rightText" | "points" | "attempts" | "right" | "wrong" | "general" | "category" | `a${number}` | `w${number}`;
+type Column = "type" | "question" | "id" | "chapter" | "section" | "objective" | "page" | "bloom" | "difficulty" | "tags" | "correct" | "rightText" | "points" | "attempts" | "right" | "wrong" | "general" | "category" | `a${number}` | `w${number}`;
 
 const squash = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -68,6 +69,19 @@ const NAMES: Record<string, Column> = {
   feedbackifwrong: "wrong", wrongfeedback: "wrong", incorrectfeedback: "wrong", feedbackincorrect: "wrong", feedbackwrong: "wrong", ifwrong: "wrong", ifincorrect: "wrong", feedbackifincorrect: "wrong",
   explanation: "general", rationale: "general", generalfeedback: "general", feedback: "general",
   category: "category", categoryname: "category", topic: "category",
+  // What a bank is organised by. A column of these is the question's own field, so Coverage and a blueprint can use it.
+  chapter: "chapter", chap: "chapter",
+  section: "section", sec: "section",
+  objective: "objective", objectives: "objective", learningobjective: "objective", learningobjectives: "objective", lo: "objective", obj: "objective",
+  page: "page", pages: "page", pagereference: "page",
+  bloom: "bloom", blooms: "bloom", bloomlevel: "bloom", bloomslevel: "bloom", bloomstaxonomy: "bloom", cognitivelevel: "bloom",
+  difficulty: "difficulty", difficultylevel: "difficulty", diff: "difficulty",
+  tags: "tags", tag: "tags", keywords: "tags",
+  // Names a table is often given that mean a column already known.
+  questions: "question", questionstem: "question", item: "question", itemtext: "question",
+  qtype: "type",
+  marks: "points", mark: "points", point: "points",
+  ans: "correct", correctoption: "correct", correctchoice: "correct", rightoption: "correct", rightchoice: "correct", correctresponse: "correct",
 };
 for (let i = 0; i < MAX_ANSWERS; i++) {
   const l = (LETTERS[i] as string).toLowerCase();
@@ -444,13 +458,45 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   // A question's number in the list it came from (an official bank's "A-001-001-001") is the thing a person looks a question
   // up by, so it is kept where the bank can search it, and not dropped as an unknown column.
   const sourceId = words(get("id")).replace(/\s+/g, " ");
+  const tidy = (column: Column): string => words(get(column)).replace(/\s+/g, " ");
+  const metadata: Metadata = { status: "draft", tags: category !== "" ? [category] : [] };
+  const custom: Record<string, string> = {};
+  if (sourceId !== "") custom["Question ID"] = sourceId;
+  // The columns a bank is organised by. A value that is a word this knows (the same words the text reader knows) is the field; a
+  // difficulty or a Bloom level that is not one is kept as written, under its own name, and said, and never turned into a guess.
+  for (const column of ["chapter", "section", "objective", "page"] as const) {
+    const value = tidy(column);
+    if (value !== "") metadata[column] = value;
+  }
+  for (const tag of tidy("tags").split(/[;,]/).map((t) => t.trim()).filter((t) => t !== "")) {
+    if (!metadata.tags.includes(tag)) metadata.tags.push(tag);
+  }
+  const difficulty = tidy("difficulty");
+  if (difficulty !== "") {
+    const level = Object.hasOwn(DIFFICULTY_WORDS, difficulty.toLowerCase()) ? DIFFICULTY_WORDS[difficulty.toLowerCase()] : undefined;
+    if (level) metadata.difficulty = level;
+    else {
+      custom["Difficulty"] = difficulty;
+      note(FindingCode.UnknownMetadataLabel, "warn", `Difficulty "${difficulty}" was not recognised (easy, medium or hard), so it was kept as written under Difficulty in the question's notes.`);
+    }
+  }
+  const bloom = tidy("bloom");
+  if (bloom !== "") {
+    const level = Object.hasOwn(BLOOM_WORDS, bloom.toLowerCase()) ? BLOOM_WORDS[bloom.toLowerCase()] : undefined;
+    if (level) metadata.bloom = level;
+    else {
+      custom["Bloom level"] = bloom;
+      note(FindingCode.UnknownMetadataLabel, "warn", `Bloom level "${bloom}" was not recognised (remember, understand, apply, analyze, evaluate or create), so it was kept as written under Bloom level in the question's notes.`);
+    }
+  }
+  if (Object.keys(custom).length > 0) metadata.custom = custom;
   const made = createQuestion({
     type,
     stem: plainToRich(stem),
     body,
     feedback,
     points,
-    metadata: { status: "draft", tags: category !== "" ? [category] : [], ...(sourceId !== "" ? { custom: { "Question ID": sourceId } } : {}) },
+    metadata,
     by: ctx.author,
     at: ctx.at,
     origin: { kind: "import", source, profile: ctx.profile, at: ctx.at },

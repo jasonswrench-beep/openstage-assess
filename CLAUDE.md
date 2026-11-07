@@ -123,6 +123,11 @@ column with that number, and a letter names none, while in a table with lettered
 the other way about, and a table that mixes the two reads no number as a place (`numbered` in
 `readHeader`). A number that is both a column's number and the words of another answer ("2" in a
 table of sums) is an error that says so, never a guess (`spreadsheet-numbered-answers.test.ts`).
+Columns for chapter, section, objective, page, Bloom level, difficulty and tags are the question's
+own fields (`spreadsheet-metadata-columns.test.ts`), so Coverage and a blueprint can use a table
+already organised that way; the words for a difficulty or a Bloom level are the text reader's own
+(`import/metadata-words.ts`, one table for both), and a word that is not in it is kept as written
+under its own name and said, never turned into a level.
 
 **A table can name the right answer by the column it stands in, and then the order of its answers is not the author's.** A column
 called Correct or Correct answer beside columns called Incorrect answer 1, 2, 3 (or Wrong, Distractor) holds the words of the right
@@ -367,7 +372,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2717 engine tests and 309 app tests, Node's own runner
+npm test                       # 2727 engine tests and 309 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

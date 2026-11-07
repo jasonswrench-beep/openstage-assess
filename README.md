@@ -229,7 +229,9 @@ only and answers only to the window it opened.
   stand in, the answers are mixed so the key is not A throughout (and the file says how many), the columns
   of a second language are reported as not read, and a question's own number is kept. Answer
   columns may be numbered (Option 1 to Option 4) with a number in the Correct column; a number
-  that is also the words of another answer is reported and not guessed at.
+  that is also the words of another answer is reported and not guessed at. Columns for chapter,
+  section, objective, page, Bloom level, difficulty and tags become the question's own fields,
+  so the coverage grid and a blueprint can use them.
 - A PDF in, from its text alone (`src/import/pdf/`, no library): the pages' words are put back into lines
   and paragraphs, the page numbers and running titles are left out and counted, and the result goes through the
   same scanner as a Word file. A PDF has no list numbering and no styles, so nothing is read from formatting, and an
@@ -314,7 +316,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 2717 tests, run by Node's own test runner
+  test/                 2727 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question
