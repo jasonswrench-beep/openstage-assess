@@ -78,9 +78,29 @@ describe("answer columns named by number", () => {
     assert.deepEqual(right(q), ["2"]);
   });
 
-  test("a number that names an empty column can only be the words of an answer, and is read as that", () => {
-    const q = first(csv("Question,Option 1,Option 2,Option 3,Correct\nWhat is 1 + 1?,2,,5,2"));
-    assert.deepEqual(right(q), ["2"]);
+  test("a number that names a column which has no answer in this row is an error, and is not read as the words of another answer", () => {
+    // Option 2 is a column of the sheet and is empty here, and "2" is also the words of Option 3. Nothing says which was meant.
+    const q = first(csv("Question,Option 1,Option 2,Option 3,Correct\nPick,x,,2,2"));
+    assert.deepEqual(right(q), []);
+    assert.match(said(q), /"2" in the Correct cell names answer 2, which is empty in this row\. No answer is marked\./);
+    assert.notEqual(verdictFrom(q.findings), "parsed");
+  });
+
+  test("a number that names no column of the sheet at all can only be the words of an answer", () => {
+    // Three answer columns, and a Correct cell that says 4, which is the words of the second answer.
+    const q = first(csv("Question,Option 1,Option 2,Option 3,Correct\nHow many sides has a square?,3,4,5,4"));
+    assert.deepEqual(right(q), ["4"]);
+  });
+
+  test("a true or false row of a numbered table is not read as yes or no from a number that names a column", () => {
+    const ambiguous = first(csv("Type,Question,Option 1,Option 2,Correct\nTF,The sky is green,False,True,1"));
+    assert.equal((ambiguous.body as unknown as { correct?: boolean }).correct, false, "column 1 holds False");
+    const none = first(csv("Type,Question,Option 1,Option 2,Correct\nTF,The sky is green,,,1"));
+    assert.equal((none.body as unknown as { correct?: boolean }).correct, undefined);
+    assert.match(said(none), /The Correct cell says "1", which in a table with numbered answer columns names a column, and that column does not hold True or False/);
+    assert.notEqual(verdictFrom(none.findings), "parsed");
+    const words = first(csv("Type,Question,Option 1,Option 2,Correct\nTF,The sky is green,,,False"));
+    assert.equal((words.body as unknown as { correct?: boolean }).correct, false, "the word is still read");
   });
 
   test("a letter that is the words of an answer is that answer, even in a numbered table", () => {

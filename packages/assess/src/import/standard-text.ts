@@ -72,7 +72,7 @@ import {
   type RawOption,
   type RawQuestion,
 } from "./standard-text-scan.ts";
-import { BLOOM_WORDS, DIFFICULTY_WORDS } from "./metadata-words.ts";
+import { bloomOf, difficultyOf } from "./metadata-words.ts";
 import {
   countVerdicts,
   linesToBlocks,
@@ -300,7 +300,7 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
     if (value.trim().length === 0) continue;
 
     if (key === "difficulty") {
-      const parsed = DIFFICULTY_WORDS[value.trim().toLowerCase()];
+      const parsed = difficultyOf(value.trim().toLowerCase());
       if (!parsed) {
         if (addCustom(entry.label, value, source) === "new") {
           findings.push(
@@ -320,7 +320,7 @@ function applyMetadata(raw: RawQuestion, file: string): { metadata: Metadata; fi
         );
       }
     } else if (key === "bloom") {
-      const parsed = BLOOM_WORDS[value.trim().toLowerCase()];
+      const parsed = bloomOf(value.trim().toLowerCase());
       if (!parsed) {
         if (addCustom(entry.label, value, source) === "new") {
           findings.push(

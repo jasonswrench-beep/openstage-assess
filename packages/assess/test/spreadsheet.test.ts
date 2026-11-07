@@ -78,7 +78,8 @@ describe("a table of questions", () => {
     }
     assert.deepEqual(options(r.questions[0] as Question).map((o) => o[1]), [false, false, false]);
     assert.equal(body(r.questions[2] as Question)["correct"], undefined);
-    assert.deepEqual(body(r.questions[3] as Question)["accepted"], []);
+    // No accepted answer is one empty entry, which is what the model asks for (it wants at least one), and the missing key is flagged above.
+    assert.deepEqual(body(r.questions[3] as Question)["accepted"], [""]);
     // The check says what is wrong in general, and the importer says where: which cell was empty.
     for (const q of r.questions) assert.ok(liveFindings(q.findings).some((f) => f.code === FindingCode.KeyLetterMissing && /empty/.test(f.message)), plain(q));
   });

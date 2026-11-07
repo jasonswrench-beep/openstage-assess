@@ -1183,6 +1183,34 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by a reader who had not seen the code (7 November 2026, after the table layouts and the Brightspace CSV reader)
+
+A separate reader was asked to find real faults in the changes since the last release and to prove each with an input that
+misbehaves. It proved eight, all fixed, each with a test and a planted-fault run (15 of 15 caught):
+
+- **A question could not be stored** (three ways, two of them older than the new code). A short answer with no accepted answer
+  (a table's, Moodle's, Brightspace's) had an empty list, which the model refuses; points above 1000 were refused too; and an unknown
+  Brightspace kind with nothing written in it had an empty stem. The bank refused each, so `import --out` stopped for the whole file
+  and the app listed the question as not saved, against the rule that an imported question with no key has to be storable.
+  `createQuestion` now keeps a short answer with no accepted answer as one empty entry (the missing key is still flagged), and cuts
+  points to the most a question can hold and says so.
+- **A word from a file was taken for a property every object has.** The text reader stored a function as the difficulty for
+  "Difficulty: constructor" (no finding, and the bank refused the question); a table header or Type cell of "constructor" was
+  looked up in the prototype. Lookups of a word from a file go through the table's own entries.
+- **A title above the names of the columns was taken for the names** once "Questions" became a name: a sheet with that word in A1 and
+  the real names below read as three essays. The names are now the first row with two or more known columns.
+- **A number was taken for a place when it should not be**: in a table with numbered answer columns, a number that named an empty
+  column fell back to the words of another answer, and a 1 in a true or false row was read as yes where it named a column. Both are
+  errors now. A difficulty of 3 on a 1 to 5 scale was turned into "hard"; a number is kept as written and said, since it could be a
+  place on any scale.
+- **The Brightspace reader dropped words without a word**: a row with no keyword, text where HTML goes, a second QuestionText, Title
+  or Points row, and a short answer worth nothing or part of the points (which it accepted as a full answer). Each is said now; a
+  short answer worth less than the whole is not accepted. A matching question of thousands of pairs took seconds (a search for
+  every choice) and is a map now.
+
+What it checked and found sound: the right-answer-first layout (four runs of 2000 questions, no wrong key, the key follows its
+words), the registry, the list of files that are refused, the zip message, and typography through every path.
+
 ### Found by reading the first real learning-system file (7 November 2026)
 
 Three test banks had been in `Downloads/testbanks` since 30 October and had not been tried against the importers: a Moodle GIFT export,

@@ -12,6 +12,7 @@ import { checkAnswerKey, replaceFileKeyProblems } from "../quality/answer-key.ts
 import { replacePlaceholderProblems } from "../quality/placeholders.ts";
 import { collectRefs, plainToRich, richTextFields, sanitizeDeep, type RichText } from "./richtext.ts";
 import {
+  MAX_POINTS,
   MAX_TITLE_LENGTH,
   titleFromStem,
   type Feedback,
@@ -43,6 +44,18 @@ export interface CreateQuestionInput {
 
 export const DEFAULT_POINTS = 1;
 
+/** The body with an empty list of accepted answers (of a short answer, or of one blank) made into a list of one empty entry. */
+function withStorableAnswers(body: QuestionBody): QuestionBody {
+  const raw = body as unknown as { accepted?: unknown; blanks?: unknown };
+  let out = body;
+  if (Array.isArray(raw.accepted) && raw.accepted.length === 0) out = { ...(out as object), accepted: [""] } as QuestionBody;
+  if (Array.isArray(raw.blanks)) {
+    const blanks = (raw.blanks as Array<{ accepted?: unknown }>).map((b) => (b && Array.isArray(b.accepted) && b.accepted.length === 0 ? { ...b, accepted: [""] } : b));
+    if (blanks.some((b, i) => b !== (raw.blanks as unknown[])[i])) out = { ...(out as object), blanks } as QuestionBody;
+  }
+  return out;
+}
+
 export function emptyMetadata(): Metadata {
   return { tags: [], status: "draft" };
 }
@@ -63,19 +76,32 @@ export function createQuestion(input: CreateQuestionInput): Question {
   const by = input.by ?? "unknown";
   const title = (input.title ?? titleFromStem(titleText(clean.value.stem))).slice(0, MAX_TITLE_LENGTH);
 
+  // Two things a file can hold that a question cannot, whichever importer found them. A question has to be storable, because an
+  // imported question with no key or an odd value must be kept and shown beside its source to be repaired, and a bank refuses what the
+  // model does not accept.
+  const findings = [...(input.findings ?? [])];
+  let points = input.points ?? DEFAULT_POINTS;
+  if (points > MAX_POINTS) {
+    findings.push(finding(FindingCode.PointsAssumed, "warn", `The question was worth ${points} points, which is more than a question can be worth (${MAX_POINTS}), so it was set to ${MAX_POINTS}.`));
+    points = MAX_POINTS;
+  }
+  // A short answer or a blank with no accepted answer is kept with one empty entry, which is what "no answer is accepted" looks like to the
+  // model (it asks for at least one entry), and the missing key is flagged by the check of the key, as for any question without one.
+  const body = withStorableAnswers(clean.value.body);
+
   return {
     id: input.id ?? newQuestionId(),
     version: 1,
     type: input.type,
     title: title.length > 0 ? title : "Untitled question",
     stem: clean.value.stem,
-    points: input.points ?? DEFAULT_POINTS,
-    body: clean.value.body,
+    points,
+    body,
     feedback: clean.value.feedback,
     metadata: { ...emptyMetadata(), ...input.metadata },
     media: input.media ?? [],
     math: input.math ?? [],
-    findings: input.findings ?? [],
+    findings,
     history: [{ at, by, change: "created", toVersion: 1 }],
     ...(input.origin ? { origin: input.origin } : {}),
   };
