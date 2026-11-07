@@ -59,16 +59,34 @@ const COLOURS = ["red", "orange", "yellow", "green", "blue", "purple", "violet",
  * to disappear unless it is only spacing, case, or the stop at the end.
  */
 export function normalForm(text: string): string {
+  return tidy(text, true);
+}
+
+/** `normalForm` with or without the lower case. A function of one parameter apart from this, because callers hand `normalForm` to `map`. */
+function tidy(text: string, lower: boolean): string {
   // Typography is folded because the text is no longer flattened on the way in (see `normalizeCharacters`): the same question
   // typed with straight quotes and with curly ones is still the same question.
-  return foldTypography(text)
-    .normalize("NFC")
-    .toLowerCase()
+  const folded = foldTypography(text).normalize("NFC");
+  return (lower ? folded.toLowerCase() : folded)
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^["'“”‘’(\[]+/u, "")
     .replace(/["'“”‘’)\].!?;:,]+$/u, "")
     .trim();
+}
+
+/**
+ * A text as it is compared with another option for being a copy of it: `normalForm`, but with the case kept, except for the first letter
+ * of an option of four letters or more, which is a capital because it starts the option and means nothing ("Paris" and "paris" are one
+ * answer). A capital inside an option can be the whole of the difference: PV = nRT and PV = NRt (n moles and N molecules), a calorie and
+ * a Calorie, Mb and MB. Real questions had the first two and they were called copies, with the advice to change one or take it out, which
+ * would have spoilt each question. A short option (Mb, pH, kHz) keeps its first letter too, since there the capital is part of the symbol.
+ */
+function copyForm(text: string): string {
+  const kept = tidy(text, false);
+  if ((kept.match(/\p{L}/gu) ?? []).length < 4) return kept;
+  const first = [...kept][0] ?? "";
+  return first.toLowerCase() + kept.slice(first.length);
 }
 
 /**
@@ -240,7 +258,7 @@ function duplicateOptions(question: Question): Finding | undefined {
     options.forEach((o, i) => {
       if (isPlaceholderOption(o)) return;
       const refs = collectRefs(o.content);
-      add(`${normalForm(plain(o.content))}|${refs.media.join(",")}|${refs.math.join(",")}`, i);
+      add(`${copyForm(plain(o.content))}|${refs.media.join(",")}|${refs.math.join(",")}`, i);
     });
   } else if (isMatching(question)) {
     // Two pairs may share a right-hand entry on purpose (a category that two things belong to). An extra entry that repeats
@@ -249,13 +267,13 @@ function duplicateOptions(question: Question): Finding | undefined {
     field = "body.pairs";
     const pairs = question.body.pairs.length;
     name = (at) => (at < pairs ? `right-hand entry ${at + 1}` : `extra entry ${at - pairs + 1}`);
-    [...question.body.pairs.map((p) => p.right), ...question.body.distractors].forEach((r, i) => add(normalForm(r), i));
+    [...question.body.pairs.map((p) => p.right), ...question.body.distractors].forEach((r, i) => add(copyForm(r), i));
     for (const [signature, at] of seen) if (!at.some((i) => i >= pairs)) seen.delete(signature);
   } else if (isOrdering(question)) {
     what = "items";
     field = "body.items";
     name = (at) => `item ${at + 1}`;
-    question.body.items.forEach((item, i) => add(`${normalForm(plain(item.content))}|${collectRefs(item.content).media.join(",")}`, i));
+    question.body.items.forEach((item, i) => add(`${copyForm(plain(item.content))}|${collectRefs(item.content).media.join(",")}`, i));
   } else {
     return undefined;
   }

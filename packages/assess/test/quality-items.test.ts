@@ -276,11 +276,29 @@ describe("a stem that ends in a or an", () => {
 });
 
 describe("options that read the same", () => {
-  test("are noted, whatever the case, spacing or punctuation", () => {
-    const found = checkItemQuality(mc("Pick.", ["Paris*", "Rome", "paris.", "  PARIS "])).find((f) => f.code === FindingCode.DuplicateOption);
+  test("are noted, whatever the spacing, the punctuation or the capital that starts them", () => {
+    const found = checkItemQuality(mc("Pick.", ["Paris*", "Rome", "paris.", "  Paris "])).find((f) => f.code === FindingCode.DuplicateOption);
     assert.ok(found);
     assert.match(found.message, /option A and option C and option D/);
     assert.equal(found.field, "body.options");
+  });
+
+  // Real questions had these, and they were called copies with the advice to change one or take one out: the capital is the answer.
+  test("options that differ in a capital inside them are not copies: n and N, a calorie and a Calorie, Mb and MB", () => {
+    const sets = [
+      ["PV = nRT*", "PV = NkT", "PV = nKT", "PV = NRt"],
+      ["They are the same", "A Calorie is 1/1000 of a calorie", "A calorie is 1/1000 of a Calorie*", "A calorie is used in nutrition"],
+      ["Mb*", "MB", "mB", "mb"],
+      ["PARIS*", "Paris", "paris-ish"],
+    ];
+    for (const options of sets) assert.equal(flagged(mc("Pick.", options), FindingCode.DuplicateOption), false, options.join(" | "));
+    // Only the first letter is let go: the same option, written twice with a different first capital, is still a copy.
+    assert.ok(flagged(mc("Pick.", ["A calorie is 1/1000 of a Calorie*", "a calorie is 1/1000 of a Calorie"]), FindingCode.DuplicateOption));
+    // And the other kinds of option: a right-hand entry and an item.
+    const pair = createQuestion({ type: "matching", stem: plainToRich("Match."), body: { shuffle: true, distractors: ["mB"], pairs: [{ id: "p0", left: plainToRich("Megabit"), right: "Mb" }] } as never });
+    assert.equal(flagged(pair, FindingCode.DuplicateOption), false, "a megabit is not an extra megabyte");
+    const order = createQuestion({ type: "ordering", stem: plainToRich("Order."), body: { items: ["Mb", "MB"].map((w, i) => ({ id: `i${i}`, content: plainToRich(w), position: i + 1 })) } as never });
+    assert.equal(flagged(order, FindingCode.DuplicateOption), false);
   });
 
   test("two groups are both named", () => {
@@ -297,7 +315,8 @@ describe("options that read the same", () => {
     assert.ok(flagged(mc("Pick.", ["café*", "café"]), FindingCode.DuplicateOption), "composed and decomposed");
     assert.ok(flagged(mc("Pick.", ["Paris*", "Paris."]), FindingCode.DuplicateOption));
     assert.ok(flagged(mc("Pick.", ["\"Paris\"*", "Paris"]), FindingCode.DuplicateOption), "with quotes");
-    assert.ok(flagged(mc("Pick.", ["x > 3*", "X  >  3"]), FindingCode.DuplicateOption), "with spacing and case");
+    assert.ok(flagged(mc("Pick.", ["x > 3*", "x  >  3"]), FindingCode.DuplicateOption), "with spacing");
+    assert.equal(flagged(mc("Pick.", ["x > 3*", "X > 3"]), FindingCode.DuplicateOption), false, "a short option keeps its capital: a variable and a value are not one thing");
   });
 
   test("two placeholders are not a pair of copies", () => {
