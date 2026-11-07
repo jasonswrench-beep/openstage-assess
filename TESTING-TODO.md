@@ -103,8 +103,12 @@ item says what has been run and what has not. Items are removed when done, with 
   heading; and the message line was hidden until it had a message, so it is kept in the page and drawn only when it has words. All of
   it was read from the browser's accessibility tree and not heard. Listen for: the confirmation and the message line (are they read,
   once, and not twice?), whether the question editor, which sits inside a polite live region on the bank and import screens, is read
-  out whole each time another question is chosen (it may be too much), and the order of reading in the editor. Not checked: Windows
-  high-contrast mode.
+  out whole each time another question is chosen (it may be too much), and the order of reading in the editor. Windows high-contrast
+  mode: the stylesheet had nothing for it, so the chosen filter, the question or sheet being looked at, a ticked bubble and the place a
+  file is dragged to, each shown by a background colour alone, would have looked like everything else. A `forced-colors` block gives
+  each the system's highlight colours or an outline. It was written from the specification and checked only to parse and to change
+  nothing outside the mode (the built-in browser cannot switch the mode on): turn on a contrast theme (Settings, Accessibility,
+  Contrast themes) and look at the import review, the bank list, the Review of a scored class and the home screen's drop area.
 - [ ] **Look at the review page.** `npm run assess -- review <a .docx or .txt file> --out review.html`, then open the page. It is
   the first thing you can see, so it is the first thing to judge: is it the right information in the right order, and what would
   you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank
