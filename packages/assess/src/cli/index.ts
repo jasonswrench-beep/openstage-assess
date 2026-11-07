@@ -296,7 +296,7 @@ async function cmdImport(args: string[]): Promise<number> {
   if (cannot) return fail(cannot);
   // A .txt file may be the Standard Format, Aiken or GIFT, and is told by what is in it. A file with an extension no importer
   // claims is read as the plain-text format, as it always was.
-  const bytes = await readFile(full);
+  const bytes = await readInput(full);
   const importer = importerForContent(full, bytes);
   const keyMark = arg(args, "key-mark");
   const result = runImporter(importer, bytes, { file: basename(full), ...(keyMark ? { keyMark } : {}) });
@@ -379,7 +379,7 @@ async function cmdReview(args: string[]): Promise<number> {
   const extension = extname(full).toLowerCase();
   const cannot = cannotRead(full);
   if (cannot) return fail(cannot);
-  const bytes = await readFile(full);
+  const bytes = await readInput(full);
   const importer = importerForContent(full, bytes);
   const keyMark = arg(args, "key-mark");
   const result = runImporter(importer, bytes, { file: basename(full), ...(keyMark ? { keyMark } : {}) });
@@ -1047,6 +1047,20 @@ function cmdContract(): number {
   }
   console.log(`Question types in the model: ${QUESTION_TYPES.length}`);
   return 0;
+}
+
+/**
+ * A file read whole, with Node's own refusal of one over 2 GiB said in words ("File size (6651950811) is greater than 2 GiB" was all a
+ * person saw when a 6 GB zip was named by mistake; 7 of 407 zips in one real downloads folder were over that).
+ */
+async function readInput(path: string): Promise<Buffer> {
+  try {
+    return await readFile(path);
+  } catch (error) {
+    if ((error as { code?: string }).code !== "ERR_FS_FILE_TOO_LARGE") throw error;
+    const size = (await stat(path)).size;
+    throw new Error(`That file is ${(size / 1073741824).toFixed(1)} GB, more than this can read at once (2 GB). A file of questions is far smaller than that, so check it is the one you meant.`);
+  }
 }
 
 function fail(message: string): number {

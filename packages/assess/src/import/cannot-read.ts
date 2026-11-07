@@ -27,8 +27,17 @@ const CANNOT_READ: Record<string, string> = {
   ".pptx": "This is a PowerPoint file. It holds slides, not a list of questions. Copy the questions into a Word document and import that.",
 };
 
+/**
+ * Word and Excel keep a file of 162 bytes beside a document that is open, whose name begins with "~$", to remember who has it open.
+ * It looks like the document in a folder (it ends in .docx or .xlsx) and holds nothing. 31 of the 341 Word files in one real
+ * downloads folder were these, and each was refused with "not a zip: no end-of-central-directory record", which says nothing to a person.
+ */
+const LOCK_FILE = 'This is not a document. Word and Excel keep a small file whose name starts with "~$" beside a document while it is open, to remember who has it open, and it holds nothing to read. Close the document and import the document itself, which is in the same folder with a name like this one without the "~$" at the start.';
+
 /** What to tell a person about a file this cannot read, from its name, or undefined when the name is not one of those. */
-export function cannotRead(file: string): string | undefined {
+export function cannotRead(path: string): string | undefined {
+  const file = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+  if (file.startsWith("~$")) return LOCK_FILE;
   const dot = file.lastIndexOf(".");
   if (dot === -1) return undefined;
   const extension = file.slice(dot).toLowerCase();

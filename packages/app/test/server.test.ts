@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
 import { Bank, unzipSync } from "../src/engine.ts";
 import { revealCommand } from "../src/server.ts";
-import { chunkedPost, liarPost, rawRequest, withApp, type Client } from "./support/app.ts";
+import { chunkedPost, liarPost, liarPostReply, rawRequest, withApp, type Client } from "./support/app.ts";
 
 const FIXTURES = fileURLToPath(new URL("../../../fixtures/standard-format/", import.meta.url));
 
@@ -140,6 +140,19 @@ describe("who is let in", () => {
     await withApp(async (client) => {
       const reply = await client.send("POST", "/api/banks", Buffer.alloc(5 * 1024 * 1024, 120), { "content-type": "application/json" });
       assert.equal(reply.status, 413);
+    });
+  });
+
+  // It used to say "That file is too large.", which says neither how large nor what to do.
+  test("a request that is too large says how large it is, what the most is, and what to do about a file", async () => {
+    await withApp(async (client) => {
+      const small = await client.send("POST", "/api/banks", Buffer.alloc(5 * 1024 * 1024, 120), { "content-type": "application/json" });
+      assert.equal((small.json as { error: string }).error, "That is 5.0 MB, and the most this takes at once is 4.0 MB.");
+      const headers = { host: `127.0.0.1:${client.server.port}`, cookie: client.cookie, "x-openassess": "1", "content-type": "application/octet-stream" };
+      const file = await liarPostReply(client.server.port, "/api/import?name=bank.docx", headers);
+      assert.equal(file.status, 413);
+      const said = (JSON.parse(file.text) as { error: string }).error;
+      assert.match(said, /^That is 954 MB, and the most this takes at once is 80 MB\. A file of questions is far smaller than that, so check it is the one you meant; if it holds large pictures, save a copy with smaller ones\.$/);
     });
   });
 
