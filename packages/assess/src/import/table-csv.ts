@@ -52,9 +52,9 @@ export function delimiterOf(text: string): "," | ";" | "\t" {
  * records keep their number, and an empty record is left out of the result but still counted, so a row is where the
  * spreadsheet program shows it.
  */
-export function parseDelimited(raw: string, limit: number = MAX_ROWS): { rows: TableRow[]; truncated: boolean } {
+export function parseDelimited(raw: string, limit: number = MAX_ROWS, separator?: "," | ";" | "\t"): { rows: TableRow[]; truncated: boolean } {
   const text = raw.replace(/^﻿/, "");
-  const sep = delimiterOf(text);
+  const sep = separator ?? delimiterOf(text);
   const rows: TableRow[] = [];
   let row: string[] = [];
   let cell = "";

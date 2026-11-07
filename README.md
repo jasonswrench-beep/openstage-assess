@@ -97,7 +97,10 @@ only and answers only to the window it opened.
   arrived as written. A second file with all seven types (a twelve question test bank) was
   imported later and the person who did it said it worked fine; no record was kept of each
   question, so the right answer on each, a multiselect's scoring and the formatting have
-  not been looked at one by one.
+  not been looked at one by one. A file in this shape comes in as well (a .csv whose first row
+  that is not a comment is a NewQuestion row): each question is read by the keyword in its rows,
+  and what this program exports is what comes back. A weight that is part of the points is never
+  a key, and a kind it does not read is kept as an essay with its words and fails.
 - A QTI 1.2 package out, for Brightspace's Import/Export/Copy Components (quizzes) and for
   Canvas's Import Course Content (QTI .zip file): multiple choice, multiple answer, true or
   false, short answer, matching and essay, each with its points. Ordering, numeric, hotspot
@@ -310,13 +313,14 @@ packages/assess/        the engine, published as @openstage/assess
   src/import/           importers: the Standard Format, Word (docx/ is its XML and package reader), PDF (pdf/ is its
                         reader, from the file's objects to lines and paragraphs), Aiken, GIFT, Moodle XML, QTI and
                         the question table (spreadsheet.ts, with table-csv.ts and table-xlsx.ts to read the file)
+                        and the Brightspace question library CSV (d2l-csv.ts)
   src/export/           exporters and the destination check: the spreadsheet, GIFT, Moodle XML, Brightspace CSV, QTI 1.2, QTI 2.1, Common Cartridge and Blackboard upload
   src/print/            a printed test: the layout, and the Word and PDF writers
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 2727 tests, run by Node's own test runner
+  test/                 2773 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

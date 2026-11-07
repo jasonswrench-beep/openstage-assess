@@ -99,6 +99,7 @@ export { giftImporter, GIFT_PROFILE_ID, looksLikeGift, giftUnescape } from "./im
 export { moodleXmlImporter, MOODLE_XML_PROFILE_ID, looksLikeMoodleXml } from "./import/moodle-xml.ts";
 export { qtiImporter, QTI_PROFILE_ID, looksLikeQtiXml } from "./import/qti.ts";
 export { spreadsheetImporter, SPREADSHEET_PROFILE_ID, looksLikeQuestionTable } from "./import/spreadsheet.ts";
+export { d2lCsvImporter, D2L_CSV_PROFILE_ID, looksLikeD2lCsv } from "./import/d2l-csv.ts";
 export { pdfImporter, PDF_PROFILE_ID, looksLikePdf, pdfToBlocks } from "./import/pdf.ts";
 export { PdfError } from "./import/pdf/objects.ts";
 export { readXlsx } from "./import/table-xlsx.ts";
