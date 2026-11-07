@@ -117,7 +117,12 @@ question types; any other layout is refused with a message, because reading one 
 words as another's is how a key lands where there was none. A row below the first counts
 as the names only if it names two known columns, so a note with the word Question in it
 is not mistaken for them. A cell that holds an error, or a formula with no stored result,
-is read as empty and named, never as text that could be taken for a letter.
+is read as empty and named, never as text that could be taken for a letter. Answer columns
+may be named by number ("Option 1" to "Option 4"); a number in the Correct cell then names the
+column with that number, and a letter names none, while in a table with lettered columns it is
+the other way about, and a table that mixes the two reads no number as a place (`numbered` in
+`readHeader`). A number that is both a column's number and the words of another answer ("2" in a
+table of sums) is an error that says so, never a guess (`spreadsheet-numbered-answers.test.ts`).
 
 **A table can name the right answer by the column it stands in, and then the order of its answers is not the author's.** A column
 called Correct or Correct answer beside columns called Incorrect answer 1, 2, 3 (or Wrong, Distractor) holds the words of the right
@@ -362,7 +367,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2702 engine tests and 308 app tests, Node's own runner
+npm test                       # 2717 engine tests and 309 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

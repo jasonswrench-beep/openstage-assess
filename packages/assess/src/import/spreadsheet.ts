@@ -72,6 +72,8 @@ const NAMES: Record<string, Column> = {
 for (let i = 0; i < MAX_ANSWERS; i++) {
   const l = (LETTERS[i] as string).toLowerCase();
   for (const name of [l, `answer${l}`, `choice${l}`, `answerchoice${l}`, `option${l}`, `response${l}`]) NAMES[name] = `a${i}` as Column;
+  // The same columns numbered from 1 ("Option 1", "Answer 3"), which is how many tables name them. A bare number is not a name.
+  for (const name of [`answer${i + 1}`, `choice${i + 1}`, `answerchoice${i + 1}`, `option${i + 1}`, `answeroption${i + 1}`, `response${i + 1}`]) NAMES[name] = `a${i}` as Column;
 }
 
 /** The order of the columns when the first row is not a row of names: the template's, with room for five answers. */
@@ -128,6 +130,8 @@ interface Header {
   repeated: string[];
   /** Columns that were understood but cannot be used with the others (see below). */
   conflicting: string[];
+  /** Every answer column is named by a number ("Option 1"), so a number in the Correct cell names one, and a letter names none. */
+  numbered: boolean;
 }
 
 function readHeader(cells: readonly string[]): Header {
@@ -164,7 +168,11 @@ function readHeader(cells: readonly string[]): Header {
       }
     } else order[correctAt] = "rightText";
   }
-  return { order, unused, repeated, conflicting };
+  // Numbered only when every answer column is. A table that mixes the two ("A" and "Option 2") has no one way to say which column
+  // a cell means, so its numbers are not read as places.
+  const answerAt = order.map((c, i) => (c !== null && /^a\d$/.test(c) ? i : -1)).filter((i) => i !== -1);
+  const numbered = answerAt.length > 0 && answerAt.every((i) => /\d$/.test(squash((cells[i] as string).replace(LANGUAGE_SUFFIX, ""))));
+  return { order, unused, repeated, conflicting, numbered };
 }
 
 /**
@@ -218,9 +226,12 @@ const plural = (n: number, one: string, many: string): string => `${n} ${n === 1
  * "A, C", "A and C", "A/C") or the text of an answer. A letter that names an empty answer is a mistake, and so is anything
  * else: nothing is guessed at.
  */
-function positionsNamed(cell: string, letterOf: readonly number[], answers: readonly string[]): { positions: number[] } | { bad: string } {
+function positionsNamed(cell: string, letterOf: readonly number[], answers: readonly string[], numbered = false): { positions: number[] } | { bad: string; ambiguous?: true } {
   const whole = cell.trim();
-  const single = /^[A-Ha-h]$/.test(whole);
+  // In a table whose answer columns are numbered ("Option 1" to "Option 4") a number names the column with that number, and a
+  // letter names nothing, because no column is called by one. In a table with lettered columns it is the other way about, and a
+  // number is only ever the words of an answer.
+  const single = numbered ? /^\d{1,2}$/.test(whole) : /^[A-Ha-h]$/.test(whole);
   if (!single) {
     // The whole cell may be the words of one answer, which may have spaces and commas in it.
     const exact = answers.findIndex((a) => a.toLowerCase() === whole.toLowerCase());
@@ -228,16 +239,22 @@ function positionsNamed(cell: string, letterOf: readonly number[], answers: read
   }
   const positions: number[] = [];
   for (const token of whole.split(/[,;|/]|\s+and\s+|\s+/i).map((t) => t.trim()).filter((t) => t !== "")) {
-    let at = -1;
-    if (/^[A-Ha-h]$/.test(token)) at = letterOf.indexOf(token.toUpperCase().charCodeAt(0) - 65);
-    if (at === -1 && !/^[A-Ha-h]$/.test(token)) at = answers.findIndex((a) => a.toLowerCase() === token.toLowerCase());
+    const byText = /^[A-Ha-h]$/.test(token) && !numbered ? -1 : answers.findIndex((a) => a.toLowerCase() === token.toLowerCase());
+    let at = byText;
+    if (numbered && /^\d{1,2}$/.test(token)) {
+      const byNumber = letterOf.indexOf(Number(token) - 1);
+      // A number that is both the column's number and the words of another answer ("2" in a table of sums) could be either, and
+      // nothing in the file says which: it is not guessed.
+      if (byNumber !== -1 && byText !== -1 && byNumber !== byText) return { bad: token, ambiguous: true };
+      at = byNumber !== -1 ? byNumber : byText;
+    } else if (!numbered && /^[A-Ha-h]$/.test(token)) at = letterOf.indexOf(token.toUpperCase().charCodeAt(0) - 65);
     if (at === -1) return { bad: token };
     if (!positions.includes(at)) positions.push(at);
   }
   return { positions: positions.sort((x, y) => x - y) };
 }
 
-function build(row: TableRow, order: readonly (Column | null)[], line: number, ctx: Ctx): { question?: Question; orphan?: Orphan } {
+function build(row: TableRow, order: readonly (Column | null)[], line: number, ctx: Ctx, numbered = false): { question?: Question; orphan?: Orphan } {
   const source = { file: ctx.file, firstBlock: line, lastBlock: line };
   const get = (column: Column): string => {
     const at = order.indexOf(column);
@@ -275,7 +292,9 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
     letterOf.push(rightFirst ? answers.length : i);
     answers.push(a);
   });
-  const quotedAnswers = (): string => answers.map((a, i) => `${LETTERS[letterOf[i] as number]}: ${a}`).join("; ");
+  // What a message calls an answer's column: its letter, or its number when the columns are numbered.
+  const nameOf = (slot: number): string => (numbered ? String(slot + 1) : (LETTERS[slot] as string));
+  const quotedAnswers = (): string => answers.map((a, i) => `${nameOf(letterOf[i] as number)}: ${a}`).join("; ");
   const rightIsFirst = rightFirst && rightWords !== "";
 
   // The type: as the cell says, or from what the row holds when it says nothing. A type that is stated is believed.
@@ -320,22 +339,26 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
         note(FindingCode.UnreadContent, "warn", "This table has one column for the right answer, so only that answer is marked. If another is also right, mark it in the editor.");
       }
     } else if (correctCell !== "") {
-      const named = positionsNamed(correctCell, letterOf, answers);
-      if ("bad" in named) {
-        const filled = letterOf.map((i) => LETTERS[i]).join(", ");
+      const named = positionsNamed(correctCell, letterOf, answers, numbered);
+      if ("bad" in named && named.ambiguous) {
+        note(FindingCode.KeyLetterMissing, "error", `"${named.bad}" in the Correct cell could be the answer in column ${named.bad} or the answer whose words are "${named.bad}", and the file does not say which. No answer is marked.`);
+      } else if ("bad" in named) {
+        const filled = letterOf.map((i) => nameOf(i)).join(", ");
         note(FindingCode.KeyLetterMissing, "error", `"${named.bad}" in the Correct cell is not one of the answers${filled ? ` (the answers filled in are ${filled})` : ""}. No answer is marked.`);
       } else marked = named.positions;
     } else note(FindingCode.KeyLetterMissing, "info", "The Correct cell is empty, so no answer is marked.");
     if (kind === "mc" && code === "" && marked.length > 1) {
       kind = "mr";
-      note(FindingCode.MoreThanOneRight, "warn", `The Correct cell names ${marked.map((p) => LETTERS[letterOf[p] as number]).join(", ")}, and the Type cell is empty, so this is read as a multiple response. Check that it is.`);
+      note(FindingCode.MoreThanOneRight, "warn", `The Correct cell names ${marked.map((p) => nameOf(letterOf[p] as number)).join(", ")}, and the Type cell is empty, so this is read as a multiple response. Check that it is.`);
     }
     // A gap between filled answers: the Correct letters still mean the columns, and the gap is said.
     const gaps = LETTERS.slice(0, letterOf.length === 0 ? 0 : (letterOf[letterOf.length - 1] as number) + 1)
       .split("")
-      .filter((_, i) => !letterOf.includes(i));
+      .map((_, i) => i)
+      .filter((i) => !letterOf.includes(i))
+      .map((i) => nameOf(i));
     if (gaps.length > 0) {
-      note(FindingCode.OptionLetterGap, "warn", `${gaps.length === 1 ? `Answer ${gaps[0]} is` : `Answers ${gaps.join(", ")} are`} empty, so ${gaps.length === 1 ? "it was" : "they were"} left out. The letters in the Correct cell still mean the columns.`);
+      note(FindingCode.OptionLetterGap, "warn", `${gaps.length === 1 ? `Answer ${gaps[0]} is` : `Answers ${gaps.join(", ")} are`} empty, so ${gaps.length === 1 ? "it was" : "they were"} left out. The ${numbered ? "numbers" : "letters"} in the Correct cell still mean the columns.`);
     }
     let texts = [...answers];
     if (texts.length < 2) {
@@ -541,7 +564,7 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
         orphans.push({ source: { file: ctx.file, firstBlock: lineIndex, lastBlock: lineIndex }, text: row.cells.filter((c) => c !== "").join(" | "), reason: "This row is above the row that names the columns, so it was not read as a question." });
         return;
       }
-      const built = build(row, p.order, lineIndex, ctx);
+      const built = build(row, p.order, lineIndex, ctx, p.header?.numbered ?? false);
       if (built.question) questions.push(built.question);
       if (built.orphan) orphans.push(built.orphan);
     });
