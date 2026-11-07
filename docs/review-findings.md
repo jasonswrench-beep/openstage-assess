@@ -1183,6 +1183,50 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by reading the first real learning-system file (7 November 2026)
+
+Three test banks had been in `Downloads/testbanks` since 30 October and had not been tried against the importers: a Moodle GIFT export,
+a question library in Brightspace's own export format (a zip of `imsmanifest.xml` and `questiondb.xml`, 80 multiple choice
+questions), and a semicolon-delimited bank. The Brightspace one was the first file from a real learning system the QTI reader had
+met, and the reader, written from memory of Canvas and of the standard, **read none of its 80 questions**. It failed all of them
+and guessed no key (the rule worked: every question was kept with its words and flagged), which is the right way to fail and
+is still no use to anyone. The faults, each seen only because the file was real:
+
+- The words of an answer sat inside a `flow_mat` in the `response_label`, and the reader looked only at a `material` directly
+  under it, so every answer was `(missing)`.
+- The metadata field is `qti_metadatafield` in this file, not `qtimetadatafield`, so no metadata was read: not the type, not the
+  points (`qmd_weighting`, "1.0000").
+- A multiple choice question is written with `rcardinality="Multiple"` and says what it is in `qmd_questiontype`, so it was read as
+  a multiple response whose scoring (one condition for each answer, setting 0 or 100) matched no shape, and no answer was marked.
+- No `decvar` is declared, and the reader had taken the biggest score as the whole. That worked here (100) and would have called an
+  answer worth 50 the key when nothing is worth more; with no scale declared it now takes 100, or 1 when 1 is the biggest, as
+  the whole, and anything smaller is said and not read as the key.
+- `shuffle="no"` was compared with `"No"`, so every question in the file would have been shuffled when read back.
+- The title was cut at about twenty characters mid-word ("Which of the followi"), which is the stem's own start; it is left out
+  and the question is titled from its words. A hint and the settings Brightspace keeps for each question (difficulty, bonus,
+  mandatory) are said, the hint for the question and the settings once for the file.
+
+After the fixes all 80 are read, and each agrees with a second reading of the raw XML that shares no code with the reader (stem,
+the answers in their order, which one is scored as the whole, and the points: `import-brightspace-library.test.ts`, which runs it
+when the file is on the machine, in `fixtures/publisher/lms`, git-ignored because its licence is not known). Five questions read by
+eye against what the subject says were right. Thirteen faults planted one at a time in the new code were each caught.
+
+What this does not show. It is one file, and every question in it is multiple choice, so the shapes Brightspace writes for true or
+false, multi-select, matching, ordering, short answer, long answer, fill in the blanks and arithmetic have not been seen: `True/False`
+and `Multiple Choice` are read as single answer from their type, and anything else with several answers is read by the older rules
+and, if its scoring is not one of those, fails for lack of a key. The text inside an answer's feedback is read from the shape of
+the empty entries that are in the file and has not been seen with words in it. The file was written for Brightspace by a tool that
+authors quizzes, so it shows what Brightspace takes in and not necessarily what Brightspace itself writes. The Canvas shapes in
+`import/qti.ts` remain from memory.
+
+The other two files. The GIFT export (Moodle's, 139 questions in nine categories) reads 139 parsed with two orphan blocks, which are
+two items written as text with no braces, which GIFT means as a description and not a question ("Give an example of a disaccharide."),
+so they are kept as text no question used, with the reason. The third is an amateur radio question bank (549 rows, eleven `;`-separated columns: an id, a question, **the
+right answer, then three wrong ones**, in English and again in French, with names such as `correct_answer_english`) and it is not
+read at all: it is taken as text, 550 orphan blocks, nothing dropped, nothing guessed. A column that holds the text of the right
+answer, with the wrong answers in the columns that follow, is a layout a table reader could take from its names, and it is not one
+the table reader knows; it knows a Correct column that names a letter. Not started.
+
 ### Found by a blind test on thirteen openly licensed files (stage 4f), not yet fixed
 
 Thirteen files from one instructor's physical science course, shared under a CC BY 4.0 licence, were

@@ -105,8 +105,8 @@ only and answers only to the window it opened.
   not carried. It is held to the structure of QTI 1.2 and to a response processor that scores
   every possible answer, so the key is shown to travel. It has not been seen to import
   anywhere: in Brightspace it was tried twice and not accepted (see `TESTING-TODO.md`).
-- QTI in, versions 1.2 and 2.1, as a package (a `.zip`, the way a learning system exports a quiz) or a
-  bare `.xml` file. The key is read only from a scoring shape the reader knows: in 1.2 the label whose
+- QTI in, versions 1.2 and 2.1, as a package (a `.zip` or a Common Cartridge `.imscc`, the way a learning
+  system exports a quiz) or a bare `.xml` file. The key is read only from a scoring shape the reader knows: in 1.2 the label whose
   condition sets the whole of the points, in 2.1 the declared correct response (with a response map
   for shared credit). A question whose scoring it cannot read is kept with its words as an essay that
   fails, never given a guessed key. Choice, true or false, multiple answer, short answer, a text box in
@@ -197,7 +197,7 @@ only and answers only to the window it opened.
   already chosen, one with no usable answer key, or a copy of (or one very much alike to) a question already in the test, and it
   says how many of each it left out, so a short answer is never a mystery.
 - Blueprints, above Make a test (or `assess blueprint <bank> list|add|draw|remove`): a recipe for a test that the bank keeps, such
-  as five questions from chapter 1 and two at the apply level. A rule is a value on one axis and how many to take; using a blueprint
+  as five questions from chapter 1 and two at the apply level. A rule is a value on one axis, if you like more values on other axes that a question must have as well ("chapter 2 and the apply level", one cell of the grid that Coverage shows), and how many to take; using a blueprint
   adds what it takes to the questions already chosen, with another draw each time, and every question stays visible and can be
   taken out. It takes a question that fits two rules once, never fills a rule up from another value when the bank has too few (it
   says how many it came out short and why), and leaves out what Pick for me does. A blueprint holds no question, so changing or
@@ -308,7 +308,7 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 2626 tests, run by Node's own test runner
+  test/                 2663 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

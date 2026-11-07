@@ -75,7 +75,8 @@ the bank could not read is said in the history. The folder rules are held by `fo
 changes that checks them after every step, and the app's) and `mutate`-style runs; do not add a path that deletes a question with
 its folder.
 
-**A blueprint is a recipe and never a list of questions.** `bank/blueprint.ts` keeps rules (a value on one axis, and how many) in
+**A blueprint is a recipe and never a list of questions.** `bank/blueprint.ts` keeps rules (a value on one axis, up to four more values on
+other axes that a question must have as well, such as "chapter 2 and the Apply level", and how many) in
 `blueprints/<id>.json`, and drawing one is `pickQuestions` for each rule in turn with what the earlier rules took counted as chosen,
 so a question that fits two rules is taken once and the second rule says it found it taken. It holds no question id, so nothing it
 holds goes stale when a question changes or goes, and changing or removing one touches no question and no test (a test holds its own
@@ -85,6 +86,10 @@ would take from the whole bank and read as though it had asked for something), i
 blueprint file the bank cannot read, or that holds a field it does not know, is kept byte for byte, reported and not used, like a
 test. Names are told apart without regard to case when one is added or renamed, and are not refused when a merge left two. The seed
 is not kept (the test record keeps the one it used). Do not add a field that holds a question id, a seed or a way to fill a rule up.
+The other values of a rule are the `and` list, written only when it has something in it, so a recipe that never used it is the file it
+always was; a set no question could meet (two chapters, a tag and no tag, the same value twice) is refused with the reason, because a
+rule that can take nothing would read as a short bank, a blank one is refused for the reason above (`pickQuestions` refuses it too), and
+two rules with the same values in another order are one rule. A rule of one value has the seed and the draw it always had.
 
 **Delivery settings are not part of a question.** Attempts, feedback timing,
 time limits and scoring weight belong to the course that uses the question, not
@@ -127,7 +132,10 @@ understand is never passed as read; an answer worth part of the points is never 
 none or for more than one right side makes the whole question text, because the pair would be a guess. A kind it does not know is
 kept as an essay with its words and fails. A picture is looked for only inside the package (a path that climbs out of it, a link, an
 inline `data:` address are not followed), and MathML stays as `[equation]` with the question flagged. Its two sister exporters are
-read back through it (`import-qti.test.ts`); the Canvas shapes are written from memory, not from a real export.
+read back through it (`import-qti.test.ts`); the Canvas shapes are written from memory, not from a real export. The Brightspace shape
+was read from one real question library, which read none of its 80 questions until the reader was corrected on what the file showed and
+is now held to an independent reading of its own XML (`import-brightspace-library.test.ts`, when the file is in `fixtures/publisher/lms`).
+With no `decvar` the whole is 100 (or 1 where that is the biggest score), never merely the biggest, so an answer worth part is not a key.
 
 **A PDF is read from its words and where they stand, and never from a font.** It has no list numbers and no styles, so
 the whole of what is known of a question is its text, and an answer is read only where it is written down (an asterisk, an
@@ -333,7 +341,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2626 engine tests and 304 app tests, Node's own runner
+npm test                       # 2663 engine tests and 308 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

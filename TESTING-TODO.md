@@ -137,12 +137,20 @@ item says what has been run and what has not. Items are removed when done, with 
 
 ## QTI in (a package or a file from another learning system)
 
-Built on 7 November 2026. The Canvas and standard shapes were written from memory of them, not read from a real export.
+Built on 7 November 2026. The Canvas and standard shapes were written from memory of them, not read from a real export. The
+Brightspace shape was read from one real question library (80 multiple choice questions, found on this machine the same day; it read none
+until the reader was fixed, then all, held to a second reading of its XML), so a Brightspace question library should come in; its true or
+false, multi-select, matching and other types have not been seen.
 
 - [ ] **Export a quiz from Canvas (Quizzes, Export Course Content, Quiz as QTI) and import the zip here.** Check each question's right
   answer against Canvas's, the points, the feedback, and a picture. Say what came in wrongly, flagged for no reason, or read as text.
-- [ ] **Export a quiz or the question library from Brightspace as QTI and import it.** Say whether it was 1.2 or 2.x, and which kinds
-  arrived as text. Send the zip if anything is wrong, as the shapes are the point.
+- [ ] **Export the question library from Brightspace (Question Library, Export) and import the zip.** A library of multiple choice
+  questions is the shape that has been read from a real file; try one with true or false, multi-select, matching, ordering and
+  short answer questions, which have not been seen. Say which kinds arrived as text or without a key, and send the zip if anything is
+  wrong, as the shapes are the point. Then a quiz exported the other way (Import/Export/Copy Components), and say whether it was 1.2 or 2.x.
+- [ ] **Export a whole Canvas course (Settings, Export Course Content) and import the `.imscc` here.** It is read as a package. Say
+  whether the quizzes came in once each, with the right answers, and what the file says about files that end in `.qti` (Canvas is said
+  to keep its question banks in them; they are counted and not read, so a bank that only lives there comes in empty and says so).
 - [ ] **A test bank from a publisher as a QTI package.** The same checks. A key that is missing or wrong is the one failure that matters.
 - [ ] **A multiple answer question with partial credit.** In 1.2 the shares that are added are read as credit for part; in 2.1 a response
   map is. Check that the weights you set in the other system are what come in as right answers.
@@ -379,9 +387,10 @@ Everything a program can check is in `coverage.test.ts` (engine and app). What i
   "5 from chapter 1, 3 from chapter 2" with the chapters of a bank of your own, save it, and press Use. Look at what it chose and at
   what it says when a chapter has fewer than you asked for. Press Use again for another draw, take a question out and put another in
   by hand, and make the test. Then change a question in the bank, or retire it, and use the blueprint again to see that nothing in
-  it went stale. A rule is one value on one axis, so a recipe that wants two things together ("chapter 2 and hard") cannot be
-  written yet; whether it should be, and whether you would rather it kept a seed so that a draw can be repeated, are yours to
-  decide. Looked at in the built-in browser at desktop and phone width and driven by script (create, use, change, delete, a name
+  it went stale. A rule can ask for two or more things together ("chapter 2 and the apply level": press "Also ask for another value"
+  in the rule), so write one with the chapters and levels of a real test plan, one rule to a cell of the grid, and see what it says
+  when a cell has fewer than you asked for. A limit ("at most 2 hard") is not built, and whether you would rather the blueprint kept
+  a seed so that a draw can be repeated is yours to decide. Looked at in the built-in browser at desktop and phone width and driven by script (create, use, change, delete, a name
   made of markup shown as text), not with a screen reader and not with a bank of real questions.
 - [ ] **Try the three states the window can be left in.** Open a cell of the grid on a bank with a retired question and see that
   the list has the number the cell showed (the retired are left out), and that Clear filters brings them back. Start changing a
