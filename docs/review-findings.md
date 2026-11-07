@@ -1243,8 +1243,14 @@ server took 0.8 seconds to read it and send 3.8 MB; the review drew its 5000 row
 saved bank took 0.8 seconds and a search 0.4 seconds. What was slow was choosing a question: every choice drew the whole list again,
 0.5 to 0.9 seconds each, and threw away the row a keyboard user was on. A choice now changes the two rows that differ (`markSelected` in
 `ui/list.js`): 84 to 140 milliseconds with the question's own load, one row marked, focus kept. 5000 is a size a publisher's bank can
-reach; nothing has been tried above it, and the list still holds every row at once (no windowing), so a bank of 20,000 would take
-several seconds to open and is untried. The engine at 5000 questions: a Word file read in 0.36 seconds (500 took 0.06, 2000 took 0.16,
+reach. 20,000 was tried next (a 6 MB table; the server read it in 2 seconds and sent 15 MB): the list drew its 20,000 rows (160,000
+elements) at once and the bank took 8.6 seconds to open, with the window unresponsive. Building the rows is not the cost (0.9
+seconds); laying them out is (7 to 8 seconds, about 0.35 milliseconds a row, and `content-visibility: auto` did not help). So a list
+draws its first 1000 rows and a line that says how many are not drawn, with Show 1000 more and Show all (`fillRows` in `ui/list.js`),
+always as far as the chosen row, starting again from the first thousand for another search or filter: the same 20,000-question bank
+opens in 0.8 seconds, a search is 0.3, choosing a question 44 milliseconds, and Show 1000 more 0.5 seconds with focus on the first new
+row. "File these N in..." still means every question the search or filter found, which the line states. A bank over 20,000 and the
+Show all button on a bank that size (it draws every row, which is the slow case) are untried. The engine at 5000 questions: a Word file read in 0.36 seconds (500 took 0.06, 2000 took 0.16,
 so it is linear), Check quality in 3.5 seconds, each of the seven exports in about 2 seconds, and a student copy and key printed as PDF
 in 2.5 seconds.
 

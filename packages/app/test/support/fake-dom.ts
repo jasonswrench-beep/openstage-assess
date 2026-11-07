@@ -28,7 +28,14 @@ export class FakeNode {
   get dataset(): Record<string, string | undefined> {
     return { key: this.attrs["data-key"] };
   }
-  addEventListener(): void {}
+  listeners: Record<string, Array<(event: unknown) => void>> = {};
+  addEventListener(type: string, handler: (event: unknown) => void): void {
+    (this.listeners[type] ??= []).push(handler);
+  }
+  /** Runs what was listening for a click, as a person clicking would. */
+  click(): void {
+    for (const handler of this.listeners["click"] ?? []) handler({});
+  }
   append(...kids: FakeNode[]): void {
     this.children.push(...kids);
   }

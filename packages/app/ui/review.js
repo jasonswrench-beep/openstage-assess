@@ -8,7 +8,7 @@ import { get, post, put } from "./api.js";
 import { ask } from "./dialogs.js";
 import { clear, h, plural, SEVERITY_NAMES } from "./dom.js";
 import { createEditor } from "./editor.js";
-import { arrowKeys, markSelected, questionRow } from "./list.js";
+import { arrowKeys, fillRows, markSelected, questionRow, ROWS_AT_FIRST } from "./list.js";
 
 /**
  * @param {HTMLElement} host
@@ -25,6 +25,7 @@ export async function renderReview(host, params, shell) {
   let tab = "questions";
   /** @type {number | null} */
   let selected = null;
+  let rowLimit = ROWS_AT_FIRST;
   /** @type {ReturnType<typeof createEditor> | null} */
   let editor = null;
   let saved = Boolean(session.savedTo);
@@ -74,7 +75,7 @@ export async function renderReview(host, params, shell) {
     const c = session.counts;
     /** @param {typeof filter} key @param {string} label @param {number} n */
     const chip = (key, label, n) =>
-      h("button", { type: "button", class: filter === key && tab === "questions" ? "chip on" : "chip", attrs: { "aria-pressed": String(filter === key && tab === "questions") }, on: { click: async () => { if (await canLeave()) { tab = "questions"; filter = key; renderAll(); } } } }, h("b", { text: String(n) }), h("span", { text: label }));
+      h("button", { type: "button", class: filter === key && tab === "questions" ? "chip on" : "chip", attrs: { "aria-pressed": String(filter === key && tab === "questions") }, on: { click: async () => { if (await canLeave()) { tab = "questions"; filter = key; rowLimit = ROWS_AT_FIRST; renderAll(); } } } }, h("b", { text: String(n) }), h("span", { text: label }));
     chips.append(
       chip("all", "All", c.total),
       chip("failed", "Failed", c.failed),
@@ -111,7 +112,15 @@ export async function renderReview(host, params, shell) {
     clear(list);
     const items = shown();
     if (items.length === 0) list.append(h("li", { class: "empty", text: session.questions.length === 0 ? "No question was found in this file. Look at the text no question used." : "Nothing here." }));
-    for (const summary of items) list.append(questionRow({ number: summary.index + 1, key: summary.index, summary, selected: selected === summary.index, onSelect: () => void select(summary.index) }));
+    fillRows(list, items, (/** @type {any} */ summary) => questionRow({ number: summary.index + 1, key: summary.index, summary, selected: selected === summary.index, onSelect: () => void select(summary.index) }), {
+      limit: rowLimit,
+      chosenAt: items.findIndex((/** @type {any} */ s) => s.index === selected),
+      more: (limit, firstNew) => {
+        rowLimit = limit;
+        renderList();
+        /** @type {HTMLElement | undefined} */ (list.querySelectorAll("button.qrow")[firstNew])?.focus();
+      },
+    });
   }
 
   /** @param {number} index */

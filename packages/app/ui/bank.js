@@ -10,7 +10,7 @@ import { del, get, post, put } from "./api.js";
 import { ask, askText, confirmAction } from "./dialogs.js";
 import { clear, EDITABLE_TYPES, h, plural, TYPE_NAMES, when } from "./dom.js";
 import { createEditor } from "./editor.js";
-import { arrowKeys, markSelected, questionRow } from "./list.js";
+import { arrowKeys, fillRows, markSelected, questionRow, ROWS_AT_FIRST } from "./list.js";
 
 /** What each kind of note is about, in the words the screen uses. */
 const NOTE_NAMES = {
@@ -63,6 +63,9 @@ export async function renderBank(host, params, shell) {
   let coverageCols = "bloom";
   /** @type {string | null} */
   let selected = null;
+  let rowLimit = ROWS_AT_FIRST;
+  /** The search and filters the list was last asked for, so that the same ones drawn again keep how many rows were shown. */
+  let listedFor = "";
   /** @type {ReturnType<typeof createEditor> | null} */
   let editor = null;
   let searchTimer = 0;
@@ -273,8 +276,14 @@ export async function renderBank(host, params, shell) {
     if (bank.questions.length === 0) {
       list.append(h("li", { class: "empty", text: bank.total === 0 ? "This bank has no questions yet. Write one, or import a file." : "No question matches." }));
     }
-    bank.questions.forEach(/** @param {any} summary @param {number} i */ (summary, i) => {
-      list.append(questionRow({ number: i + 1, key: summary.id, summary, selected: selected === summary.id, onSelect: () => void select(summary.id) }));
+    fillRows(list, bank.questions, (/** @type {any} */ summary, /** @type {number} */ i) => questionRow({ number: i + 1, key: summary.id, summary, selected: selected === summary.id, onSelect: () => void select(summary.id) }), {
+      limit: rowLimit,
+      chosenAt: bank.questions.findIndex(/** @param {any} q */ (q) => q.id === selected),
+      more: (limit, firstNew) => {
+        rowLimit = limit;
+        renderList();
+        /** @type {HTMLElement | undefined} */ (list.querySelectorAll("button.qrow")[firstNew])?.focus();
+      },
     });
   }
 
@@ -287,6 +296,12 @@ export async function renderBank(host, params, shell) {
     for (const [axis, value] of Object.entries(filters)) params2.set(axis, value);
     if (hideRetired) params2.set("hideRetired", "1");
     const suffix = params2.toString();
+    // A different search or filter is a different list, which starts from its first thousand again; the same list drawn again (after
+    // an edit) keeps how far it was shown.
+    if (suffix !== listedFor) {
+      listedFor = suffix;
+      rowLimit = ROWS_AT_FIRST;
+    }
     bank = await get(suffix ? `${base}?${suffix}` : base);
     // A folder taken away in another window is not one to stay narrowed to: the list would be empty and the choice would say nothing.
     if (folder && folder !== NONE && !(bank.folders ?? []).some(/** @param {any} f */ (f) => f.id === folder)) {

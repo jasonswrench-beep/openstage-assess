@@ -35,6 +35,43 @@ export function questionRow(options) {
   return h("li", null, button);
 }
 
+/** How many rows a list draws before it asks for more. */
+export const ROWS_AT_FIRST = 1000;
+
+/**
+ * Draws the rows of a list, the first `limit` of them and always as far as the chosen one, and then a line that says how many are not
+ * drawn and offers the next thousand or all of them. Drawing is not what is slow: laying out the rows is. Measured in the built-in
+ * browser, 5000 rows took about a second to appear and 20,000 took 8.6 seconds, every time the list was drawn again (a search, a filter),
+ * with the window unresponsive. A person with that many questions narrows the list by what they search for, so the first thousand are
+ * enough to start from, and nothing is hidden without saying so.
+ * @template T
+ * @param {HTMLElement} list
+ * @param {T[]} items
+ * @param {(item: T, at: number) => HTMLElement} row  makes the row of an item
+ * @param {{ limit: number, chosenAt?: number, more: (limit: number, firstNew: number) => void }} options
+ * @returns {number} how many rows were drawn
+ */
+export function fillRows(list, items, row, options) {
+  const drawn = Math.min(items.length, Math.max(options.limit, (options.chosenAt ?? -1) + 1));
+  for (let i = 0; i < drawn; i++) list.append(row(/** @type {T} */ (items[i]), i));
+  if (drawn < items.length) {
+    const left = items.length - drawn;
+    const next = Math.min(items.length, drawn + ROWS_AT_FIRST);
+    list.append(
+      h(
+        "li",
+        { class: "more-rows" },
+        h("p", { class: "hint", text: `Showing the first ${drawn.toLocaleString("en-US")} of ${items.length.toLocaleString("en-US")} questions. Search or narrow the list to find the others, or show more.` }),
+        h("div", { class: "card-actions" },
+          h("button", { type: "button", text: `Show ${Math.min(ROWS_AT_FIRST, left).toLocaleString("en-US")} more`, on: { click: () => options.more(next, drawn) } }),
+          left > ROWS_AT_FIRST ? h("button", { type: "button", text: `Show all ${items.length.toLocaleString("en-US")} (slow)`, on: { click: () => options.more(items.length, drawn) } }) : null,
+        ),
+      ),
+    );
+  }
+  return drawn;
+}
+
 /**
  * Shows which row is chosen, by changing the rows that are there. Choosing a question used to draw the whole list again, which for
  * 5000 questions (40,000 elements) took half a second to nearly a second, once for each question looked at, and left a keyboard user's

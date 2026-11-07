@@ -489,6 +489,12 @@ run on a machine other than the one it was built on.
   1 November 2026, seen in recordings: it opens the Exports folder with the file selected.
 - [ ] **Double-click `Open OpenAssess.cmd`, make a bank, import a real Word bank, repair a question, export, print.** The
   whole loop as a person would walk it. Write down the first place you hesitate; that is where the screen is wrong.
+- [ ] **Open a bank or an import of more than 1000 questions and use the end of the list.** The list draws its first 1000 rows, then a
+  line that says how many are not drawn, with Show 1000 more and Show all. Looked at in the built-in browser on 7 November 2026 with
+  5000 and 20,000 questions (timings are in `docs/review-findings.md`), not with a keyboard alone or a screen reader. Try: Tab to the
+  buttons after the last row, press one, and check that focus lands on the first new row; that the line is read as part of the list;
+  that searching or choosing a filter starts again from the first thousand; that a question you chose stays drawn when you show
+  fewer. Is "Show all 20,000 (slow)" a button you would ever press, or would you rather not have it?
 - [ ] **Run the window** (`packages/app/shell/src-tauri/target/release/openassess-shell.exe` after `npm run build:exe` in
   `packages/app/shell`) and close it. Check Task Manager afterwards: there should be no `node.exe` left. It was checked
   here by closing the window and listing processes; the force-quit case (End task on the window) was checked by killing it.

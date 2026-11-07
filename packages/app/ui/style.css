@@ -130,6 +130,9 @@ h2.card-title, h2.checks-title { font-size: 1rem; margin: 0 0 6px; }
 .detail { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-height: 200px; min-width: 0; }
 .qlist { list-style: none; margin: 0; padding: 0; }
 .qlist .empty { padding: 16px; color: var(--muted); }
+/* The line that ends a long list: how many rows are not drawn, and the buttons that draw more. */
+.qlist .more-rows { padding: 12px; border-top: 1px solid var(--line); }
+.qlist .more-rows p { margin: 0 0 8px; }
 .qrow { display: flex; gap: 10px; width: 100%; text-align: left; border: none; border-bottom: 1px solid var(--line); border-left: 5px solid transparent; border-radius: 0; padding: 9px 12px; background: transparent; align-items: flex-start; }
 .qrow.v-parsed { border-left-color: var(--ok); }
 .qrow.v-needsReview { border-left-color: var(--warn); }
