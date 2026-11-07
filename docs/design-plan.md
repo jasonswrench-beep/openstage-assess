@@ -664,7 +664,10 @@ button on a bank). Every result is a note (severity `info`) and never a warning 
 the import gate counts and what an export holds back, and advice about writing must not move either. The checks speak
 only when sure: a rule that depends on which option is right is skipped for a question with no usable key; the a/an rule is
 silent when any option starts with a letter that does not settle the sound (an hour, a university, a one); the negative
-stem rule leaves "at least", "whether or not", "not only" and "least common multiple" alone. They run when a question is
+stem rule leaves "at least", "whether or not", "not only" and "least common multiple" alone, and (after 1421 real questions gave 79
+notes, a third of them wrong) a word in the story before the question, in a quotation, in a why question and in a condition ("if you
+do not understand, you should"; "when the object is not near the focus"), where the question itself is positive: 79 became 49, and
+what is left is mostly "which of the following is not". They run when a question is
 saved into a bank and when the whole bank is checked, and not at import. The notes are written to the questions without
 changing a version, a history or a status (looking is not editing), and a dismissal survives. What looks across questions
 is worked out each time and not stored: the same question twice or nearly (0.85 of the words, with the same numbers, and not when

@@ -10,7 +10,8 @@
  * Each rule is meant to be right when it speaks and silent when unsure. The false positives that would teach an author to ignore
  * the notes cost more than the misses: the longest-answer rule needs the right answer to be well clear of the others, the
  * a/an rule leaves a question alone when any option starts with a letter whose sound is not settled by the letter (an hour, a
- * university), and the negative-stem rule ignores "at least" and "not only". Nothing here reads a key that is not there: a rule
+ * university), and the negative-stem rule ignores "at least" and "not only", and a "not" that is in a story, a quotation, a why
+ * question or a condition and not in the question itself. Nothing here reads a key that is not there: a rule
  * that depends on which option is right is skipped for a question with no usable key (`hasUsableKey`), so none of these can
  * make a guess about the answer.
  *
@@ -150,18 +151,35 @@ function negativeStem(question: Question): Finding | undefined {
   // "least common multiple".
   const text = richTextToPlain(unemphasised)
     .replace(/\bat least\b/gi, " ")
-    .replace(/\b(?:or|if) not\b/gi, " ")
+    .replace(/\bor (?:\w+ )?not\b|\bif not\b/gi, " ")
     .replace(/\bnot (?:only|just)\b/gi, " ")
-    .replace(/\bleast (?:common|squares?)\b/gi, " ");
-  for (const match of text.matchAll(/\b(?:not|cannot|except|least|incorrect(?:ly)?)\b|\b\w+n['’]t\b/gi)) {
-    const word = match[0];
-    // A word already written in capitals is set apart.
-    if (word === word.toUpperCase()) continue;
-    return note(
-      FindingCode.NegativeStemNotEmphasised,
-      `The stem asks for the opposite of what is usual ("${word}") and the word is not set apart. A student who reads past it answers the other question. Write it in capitals or bold: NOT, EXCEPT, LEAST.`,
-      "stem",
-    );
+    .replace(/\bleast (?:common|squares?)\b/gi, " ")
+    // Words in quotation marks are an example the question is about, not the question: “If you do not use lotion, you will burn!” is
+    // an example of which aspect of style?
+    .replace(/“[^”]*”|"[^"]*"/g, " ");
+  // A story before the question can say not as much as it likes ("Darlene is concerned that she will not appear honest. What aspect of
+  // credibility ..."), so with more than one sentence only the ones that ask (end in a question mark) and the last are looked at.
+  // A sentence ends at a stop and a capital, so that "e.g. a method" is not cut in two.
+  const sentences = text.split(/(?<=[.!?])\s+(?=[\p{Lu}(])/u);
+  const asked = sentences.length > 1 ? sentences.filter((s, i) => i === sentences.length - 1 || /\?\s*$/.test(s)) : sentences;
+  for (const sentence of asked) {
+    // "Why can't sound waves travel through a vacuum?" explains a negative fact and does not pick the one that is not true.
+    if (/^\s*why\b/i.test(sentence)) continue;
+    for (const match of sentence.matchAll(/\b(?:not|cannot|except|least|incorrect(?:ly)?)\b|\b\w+n['’]t\b/gi)) {
+      const word = match[0];
+      // A word already written in capitals is set apart.
+      if (word === word.toUpperCase()) continue;
+      // Not inside a condition: "If you do not understand, you should", "when the object is not near the focus". The condition is the
+      // words since the last comma, colon or bracket, so "When receiving criticism, which of these should you not do?" is still noted.
+      const before = sentence.slice(0, match.index);
+      const clause = before.slice(Math.max(before.lastIndexOf(","), before.lastIndexOf(";"), before.lastIndexOf(":"), before.lastIndexOf("(")) + 1);
+      if (/\b(?:if|when|whenever|where|while|unless|because|although|though)\b/i.test(clause)) continue;
+      return note(
+        FindingCode.NegativeStemNotEmphasised,
+        `The stem asks for the opposite of what is usual ("${word}") and the word is not set apart. A student who reads past it answers the other question. Write it in capitals or bold: NOT, EXCEPT, LEAST.`,
+        "stem",
+      );
+    }
   }
   return undefined;
 }
