@@ -68,8 +68,8 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess new <bank${BANK_EXTENSION}> --title "Course bank"
       Create an empty bank.
 
-  openassess import <file.txt|file.docx|file.gift|file.aiken> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
-      Read a file (the standard test-bank format, Aiken or GIFT as text, or a
+  openassess import <file.txt|file.docx|file.gift|file.aiken|file.xml> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
+      Read a file (the standard test-bank format, Aiken or GIFT as text, Moodle XML, or a
       Word .docx) and report the verdicts. A .txt file is told apart by what is
       in it. With --out, write the questions into a new bank.
       A Word file may mark the correct option by formatting it. The file is
@@ -83,7 +83,7 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       --out, write it as a Word file or a PDF. The student copy shows no answer.
       The key marks only what the bank records, and says when it records none.
 
-  openassess review <file> [--out <review.html>] [--key-mark <mark>]   (a .docx, .xlsx, .csv, .pdf, .txt, .aiken or .gift file)
+  openassess review <file> [--out <review.html>] [--key-mark <mark>]   (a .docx, .xlsx, .csv, .pdf, .txt, .aiken, .gift or Moodle .xml file)
       Read a file as import does and write one web page that shows each question
       with its answer, its checks and the lines of the file it came from, then
       the text no question used. Open the page in any browser. Nothing is

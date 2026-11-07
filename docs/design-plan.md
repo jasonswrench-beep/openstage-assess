@@ -264,6 +264,43 @@ Brightspace's own blank template file was not available to compare with.
 takes a subset of QTI 2.x and 3.x, according to a D2L staff reply in April 2026. The QTI 1.2 package below is for the first of
 the two. The second is not built, and the matrix of what each accepts is built from sandbox imports, as M2 says.
 
+### Moodle XML in
+
+`src/import/moodle-xml.ts`, profile `moodle-xml`, for a `.xml` file whose first element is `quiz` (told by what it holds, so a quiz saved
+under another name is still found). It exists because an instructor whose questions are in Moodle, or whose publisher hands over Moodle
+XML, should not have to retype them, and because reading the exporter's output back is the only way to hold the exporter to what it
+writes. The file states its key, so the rule of the project is easy to keep: an answer is the right one only where its `fraction` is the
+whole of the points (99.99 or more, since Moodle writes 33.33333 for a third). A single answer question where none is has no key and
+says so; one where two are leaves both marked, as the file has them, and the question fails the key check; part credit on a single
+answer and credit for a wrong answer in a short answer are said and never turned into a key. A multiple answer question is read as
+partial credit unless every wrong answer takes everything away, in which case it is all or nothing, and weights that are not equal
+shares are said not to be kept.
+
+Read: multiple choice, multiple answer, true or false, short answer (with the case rule), matching (with spare answers), essay (the
+information for graders is the model answer, which is where this program's own export writes it), and numerical (one number worth the
+whole of the points, its tolerance as the most it may differ, one unit with the multiplier 1). Each keeps its points, its title, its
+tags and category (the category line, without its context, is a tag, as GIFT does), the general feedback, the combined feedback for right
+and wrong, the feedback on a single answer, and its pictures. A picture is a base64 file beside the text; it is kept when it is a PNG,
+JPEG or GIF by its bytes (named for them, with the description the tag gave and a note on the question when there is none), and is
+`[picture]` in the text, with the question flagged and the reason said, when it is linked from another site, is not in the file, or is
+another format. LaTeX between `\(` and `\)` is left in the text as typed. Not read, and kept as text so that nothing is lost: a cloze,
+the drag and drop kinds, select missing words, the calculated kinds, a plugin's ordering question, and anything else, each as an
+essay that fails, with the reason. A description is an orphan. A numerical question with several right numbers or a right answer that
+is not a number is kept as text too. Not kept, and said: partial credit feedback, the template of an essay, the other units, an
+asterisk's meaning in a short answer.
+
+Moodle puts its own sentences ("Your answer is correct." and two others) in the combined feedback of nearly every question when
+nothing is typed. They are not authored feedback, and flagging a question for each would make a real export read as all needing a
+look, so they are not kept and the file says how many there were. This is the one place English is assumed.
+
+What has been checked: the sample in `fixtures/moodle-xml` has the shape of a real export (the comments, the boilerplate, the
+category question, a picture) and was written from Moodle's documented format and memory of real files; no export from a real Moodle
+has been read. This program's own exporter is read back: every question of every fixture bank that Moodle XML can hold comes back with
+the same type, title, points, text, answers, key, pairs, accepted answers and feedback, and exporting that again gives the same file,
+byte for byte. A file cut at every length and one with characters changed is read or refused in a sentence and never throws. Six faults
+planted one at a time (a guessed key, true and false swapped, the standard feedback kept, part credit read as an accepted answer, a
+picture kept without looking at its bytes, the case rule inverted) were each caught.
+
 ### QTI 1.2 package (Brightspace and Canvas)
 
 One package serves both (`src/export/qti12.ts`, destination `qti-1.2`). It is a zip of `imsmanifest.xml` (IMS content packaging
@@ -519,7 +556,7 @@ home screen and stops its server when it is closed; the installer is unsigned.
    definitions, and keep the formatting. Exit: a real publisher chapter imports
    at 95 percent or better, with every other question listed and linked to its
    source text.
-3. **Cheap formats:** Aiken and GIFT in, Moodle XML and GIFT out. Done.
+3. **Cheap formats:** Aiken and GIFT in, Moodle XML and GIFT out. Done. Moodle XML in was added on 6 November 2026 (below).
 4. **Printing:** Word and PDF with a student copy and a key. Done.
 5. **The desktop app** (phase 3): bank browser, editor, import preview and repair,
    export wizard. Done as described above, except that the 95 percent exit on three real

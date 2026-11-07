@@ -108,6 +108,16 @@ as the names only if it names two known columns, so a note with the word Questio
 is not mistaken for them. A cell that holds an error, or a formula with no stored result,
 is read as empty and named, never as text that could be taken for a letter.
 
+**A Moodle XML file's key is the weights it gives, and nothing else.** `import/moodle-xml.ts` reads an answer as right only where its
+`fraction` is the whole of the points (99.99 or more). A single answer question where none is has no key and says so; two leaves both
+marked as the file has them and fails the key check; part credit on a single answer, credit for a wrong answer in a short answer, and
+a multiple answer's weights that are not equal shares are said and never turned into a key. A kind it does not read (a cloze, a drag
+and drop, a calculated question, a plugin's) is kept as an essay with all its words and marked failed, a description is an orphan, and
+a picture it cannot keep (linked from another site, missing from the file, not a PNG, JPEG or GIF by its bytes) stays as `[picture]`
+with the question flagged. Moodle's three standard combined-feedback sentences are not authored feedback and are not kept; the file
+says how many. Its exporter is read back through it (`import-moodle-xml.test.ts`): what is exported and imported again is what was
+exported, byte for byte. The sample in `fixtures/moodle-xml` is written from the documented format, not from a real Moodle.
+
 **A PDF is read from its words and where they stand, and never from a font.** It has no list numbers and no styles, so
 the whole of what is known of a question is its text, and an answer is read only where it is written down (an asterisk, an
 `Answer:` line, an Answers list). A bold or italic option is never taken for a key, because it can be bold for another
@@ -312,7 +322,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2533 engine tests and 297 app tests, Node's own runner
+npm test                       # 2580 engine tests and 297 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
