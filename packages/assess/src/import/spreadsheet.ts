@@ -78,7 +78,7 @@ const NAMES: Record<string, Column> = {
   difficulty: "difficulty", difficultylevel: "difficulty", diff: "difficulty",
   tags: "tags", tag: "tags", keywords: "tags",
   // Names a table is often given that mean a column already known.
-  questions: "question", questionstem: "question", item: "question", itemtext: "question",
+  questions: "question", questionstem: "question",
   qtype: "type",
   marks: "points", mark: "points", point: "points",
   ans: "correct", correctoption: "correct", correctchoice: "correct", rightoption: "correct", rightchoice: "correct", correctresponse: "correct",
