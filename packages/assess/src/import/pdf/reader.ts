@@ -40,6 +40,15 @@ const quote = (text: string): string => `"${text.length > 60 ? `${text.slice(0, 
 /** What a line says with its numbers taken out, so that "479 Instructor's Manual" and "481 Instructor's Manual" are the same line. */
 const shape = (text: string): string => text.replace(/\d+/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
 
+/** A line that starts with a number and a stop and has another number somewhere after it: the shape of "8. AI IN EVERYDAY LIFE | 531". */
+const NUMBERED_EDGE = /^\s*(\d{1,3}[.)])\s+(.*\d.*)$/;
+
+/** What makes two such lines the same running title: the number it begins with and its words with their numbers taken out. */
+function numberedEdgeKey(text: string): string | undefined {
+  const m = NUMBERED_EDGE.exec(text);
+  return m ? `${m[1]}\u0001${shape(m[2] as string)}` : undefined;
+}
+
 /** A page number on its own: digits, or a Roman numeral, with nothing else but punctuation round it. */
 const PAGE_NUMBER = /^\W*(?:\d{1,4}|[ivxlc]{1,6})\W*$/i;
 
@@ -51,6 +60,7 @@ const PAGE_NUMBER = /^\W*(?:\d{1,4}|[ivxlc]{1,6})\W*$/i;
  */
 function removeFurniture(pages: PdfPageText[]): PdfNote[] {
   const edgeCount = new Map<string, number>();
+  const numberedEdges = new Map<string, Set<string>>();
   const edges = (page: PdfPageText): { top: PdfLine[]; bottom: PdfLine[] } => {
     const h = page.height;
     return {
@@ -62,9 +72,29 @@ function removeFurniture(pages: PdfPageText[]): PdfNote[] {
     const { top, bottom } = edges(page);
     const keys = new Set([...top, ...bottom].filter((l) => !LABEL_START.test(l.text)).map((l) => shape(l.text)));
     for (const k of keys) edgeCount.set(k, (edgeCount.get(k) ?? 0) + 1);
+    const seen = new Set<string>();
+    for (const l of [...top, ...bottom]) {
+      const key = numberedEdgeKey(l.text);
+      if (key === undefined || seen.has(key)) continue;
+      seen.add(key);
+      const rests = numberedEdges.get(key) ?? new Set<string>();
+      rests.add(NUMBERED_EDGE.exec(l.text)?.[2] ?? "");
+      numberedEdges.set(key, rests);
+    }
   }
   const removed: string[] = [];
-  const isFurniture = (l: PdfLine): boolean => !LABEL_START.test(l.text) && (PAGE_NUMBER.test(l.text) || (edgeCount.get(shape(l.text)) ?? 0) >= 2);
+  /**
+   * A running title that begins with a number ("8. AI IN EVERYDAY LIFE | 531"): the same number and the same words at the edge of at
+   * least three pages (a line is counted once for a page, and three different ones are three pages), with another number in the line that is different on each (the page's). It begins like a question, so the rule
+   * below would never take it off, and it was read as question 8 and took the answer of the question before it (a real book, whose
+   * true or false quiz went across a page). Three different pages with the same question number and the same words is not a question.
+   */
+  const isNumberedTitle = (l: PdfLine): boolean => {
+    const key = numberedEdgeKey(l.text);
+    const rests = key === undefined ? undefined : numberedEdges.get(key);
+    return rests !== undefined && rests.size >= 3;
+  };
+  const isFurniture = (l: PdfLine): boolean => isNumberedTitle(l) || (!LABEL_START.test(l.text) && (PAGE_NUMBER.test(l.text) || (edgeCount.get(shape(l.text)) ?? 0) >= 2));
   for (const page of pages) {
     // Peel from each edge while the line there is furniture, up to three lines deep.
     for (let k = 0; k < 3; k++) {

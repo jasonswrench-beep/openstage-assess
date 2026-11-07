@@ -1238,6 +1238,17 @@ chosen row lost its focus ring. One point was kept as a trade-off and not change
 are not called copies ("Sodium Chloride" and "Sodium chloride" are not reported), because a calorie and a Calorie cannot be told from
 that by a program, and the rule is silent when it is unsure.
 
+**The PDF reader was run over 300 real PDFs of every kind** from a downloads folder (books, manuals, forms, scans; names that looked
+personal or financial were skipped, and only outcomes and times were printed): none crashed or hung, none took 15 seconds, and a 97 MB
+file was answered in 2. Most produced "questions" that no one would take for a bank (a book is full of numbered lists), and every one
+of those was flagged failed or needing review, not parsed. The few files that had parsed questions were a real test bank (right),
+instructor manuals and a textbook with end-of-chapter quizzes (their own items, right), the guides to a format, with their examples, and
+one fault: a true or false quiz that went across a page in a book whose running title was "8. AI IN EVERYDAY LIFE | 531". It begins like
+a question, and the reader never takes a line that begins like a question for a running title, so it was read as question 8 with
+"Answer: True." and the question before it lost its answer. A numbered line at the edge of a page is a running title now when the same
+number and the same words, with a different number inside (the page's), are at the edge of three pages; three different question
+numbers or the same text each time are still questions. The five real PDF banks read the same (129 of 157).
+
 A table of 5000 questions was also pushed through the app to see where size hurts (7 November 2026, in the built-in browser). The
 server took 0.8 seconds to read it and send 3.8 MB; the review drew its 5000 rows (40,000 elements) in about 1.5 seconds; opening the
 saved bank took 0.8 seconds and a search 0.4 seconds. What was slow was choosing a question: every choice drew the whole list again,

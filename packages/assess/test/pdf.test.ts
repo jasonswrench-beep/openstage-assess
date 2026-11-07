@@ -213,6 +213,26 @@ describe("the furniture of a page", () => {
     assert.deepEqual(linesOf(pdf({ pages })).map((l) => l[l.length - 1]), ["d. none of the above", "d. none of the above"]);
   });
 
+  // A real book (a true or false quiz that went across a page): "8. AI IN EVERYDAY LIFE | 531" at the top of the odd pages began like a
+  // question, was never taken for a running title, was read as question 8, and took the answer of the question before it.
+  test("a running title that begins with a number, the same on every page but for the page number, is left out", () => {
+    const pages = [1, 2, 3, 4].map((n) => body(n) + at(36, 770, 12, `8. AI IN EVERYDAY LIFE  |  ${530 + n}`));
+    const result = readPdfText(pdf({ pages }));
+    assert.deepEqual(result.pages.map((p) => p.lines.length), [3, 3, 3, 3]);
+    assert.deepEqual(result.pages.map((p) => p.lines[0]?.text), ["1. A question that has an answer?", "2. A question that has an answer?", "3. A question that has an answer?", "4. A question that has an answer?"]);
+    const note = result.notes.map((n) => n.message).join("\n");
+    assert.match(note, /4 lines at the top or bottom of the pages/);
+    assert.match(note, /AI IN EVERYDAY LIFE/);
+  });
+
+  test("a numbered line is not a running title when it is on fewer than three pages, is the same words with the same page, or has another question's number", () => {
+    const top = (n: number, text: string) => body(n) + at(36, 770, 12, text);
+    const kept = (pages: string[]) => linesOf(pdf({ pages })).map((l) => l[0]);
+    assert.deepEqual(kept([top(1, "8. AI IN EVERYDAY LIFE  |  531"), top(2, "8. AI IN EVERYDAY LIFE  |  533")]), ["8. AI IN EVERYDAY LIFE  |  531", "8. AI IN EVERYDAY LIFE  |  533"], "two pages are not enough");
+    assert.deepEqual(kept([1, 2, 3].map((n) => top(n, "8. Which of these is 5?"))), ["8. Which of these is 5?", "8. Which of these is 5?", "8. Which of these is 5?"], "the same text each time has no page number in it");
+    assert.deepEqual(kept([top(1, "12. Simplify 3 + 4"), top(2, "13. Simplify 5 + 6"), top(3, "14. Simplify 7 + 8")]), ["12. Simplify 3 + 4", "13. Simplify 5 + 6", "14. Simplify 7 + 8"], "different question numbers are different questions");
+  });
+
   test("a page number is left out even on a PDF of one page", () => {
     const bytes = pdf({ pages: [body(1) + at(297, 27, 12, "42")] });
     assert.deepEqual(linesOf(bytes)[0]?.length, 3);
