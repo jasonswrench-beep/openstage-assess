@@ -7,6 +7,7 @@
  */
 
 import { aikenImporter, looksLikeAiken } from "./aiken.ts";
+import { d2lCsvImporter, looksLikeD2lCsv } from "./d2l-csv.ts";
 import { giftImporter, looksLikeGift } from "./gift.ts";
 import { looksLikeMoodleXml, moodleXmlImporter } from "./moodle-xml.ts";
 import { looksLikeQtiXml, qtiImporter } from "./qti.ts";
@@ -16,7 +17,7 @@ import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult } from "./types.ts";
 import { wordImporter } from "./word.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, moodleXmlImporter, qtiImporter, spreadsheetImporter, pdfImporter];
+export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, moodleXmlImporter, qtiImporter, spreadsheetImporter, d2lCsvImporter, pdfImporter];
 
 /** The importer that reads files with this name's extension, if there is one. */
 export function importerFor(file: string): Importer | undefined {
@@ -49,6 +50,10 @@ export function importerForContent(file: string, bytes: Uint8Array): Importer {
   const named = importerFor(file);
   // An .xml file is Moodle XML or QTI, told by its first element; a .zip is read as a QTI package and says so if it holds none.
   if (named === moodleXmlImporter && looksLikeQtiXml(Buffer.from(bytes.subarray(0, 4000)).toString("utf8"))) return qtiImporter;
+  // A .csv whose first row is a NewQuestion row is a Brightspace question library, and not a table, whatever it was named.
+  if ((named === spreadsheetImporter && /.csv$/i.test(file)) || !named || named === standardTextImporter) {
+    if (looksLikeD2lCsv(bytes)) return d2lCsvImporter;
+  }
   if (named && named !== standardTextImporter) return named;
   // A PDF is told by what it begins with, whatever it was named.
   if (looksLikePdf(bytes)) return pdfImporter;

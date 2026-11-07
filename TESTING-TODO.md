@@ -183,6 +183,14 @@ Built on 6 November 2026. The sample in `fixtures/moodle-xml` was written from M
 
 ## Brightspace
 
+- [ ] **Bring in a Brightspace question library CSV that you did not get from this program** (one you wrote from Brightspace's own
+  template, or one a publisher supplies). It is read by the keyword in each row, and what this program exports comes back as it was
+  written (every fixture, and the 21 real Word banks, tested on 7 November 2026), but no file Brightspace itself wrote has been read, so
+  how it reads one is unknown. Look at the file's notes first (a hint, an image, an answer box's size and a 1 to 5 difficulty are said and
+  not kept), then at a multiselect (is its scoring right?) and a matching question. A question it cannot read is kept as an essay with
+  its words and marked failed.
+- [ ] **A multiselect's scoring in Brightspace.** On 7 November 2026 the file began to write `AllOrNothing` where it wrote `All or nothing`,
+  and `RightMinusWrong` is unchanged. Import a multiselect each way and open it: is the scoring Brightspace shows the one the bank says?
 - [ ] **Import a file with every type into a Brightspace course.** Quizzes, Question Library, Import, Upload a File. One file
   has been (1 November 2026, seen in a recording): 13 multiple choice, 10 true or false and 5 written response questions arrived
   as 28 questions of those types, 1 point each, and the one true or false opened showed the right answer. Still to look at:

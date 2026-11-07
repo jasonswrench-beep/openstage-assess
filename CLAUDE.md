@@ -144,6 +144,19 @@ anything. The real bank behind this (550 questions, one right answer first, two 
 in `spreadsheet-right-first.test.ts` when it is in `fixtures/publisher/tables`. A zip that holds no questions but holds a text file,
 spreadsheet or Word file names those files and says to unzip and import them on their own.
 
+**A Brightspace question library CSV's key is its weights, in the shapes its documentation gives, and nothing else.** `import/d2l-csv.ts`
+reads a `.csv` or `.txt` whose first row that is not a `//` comment is a `NewQuestion` row with a type (the registry looks, before it
+takes a `.csv` for a table). A multiple choice option is right where its weight is the whole of the points (99.99 or more), a multiselect
+option where it says 1 (any other number is not a shape it knows, and the question is kept as an essay that fails), a true or false
+where one of the two rows is worth the whole. Part credit is never a key. A short answer's `regexp` row is not an accepted answer, and the
+last row's way of matching decides case. A matching choice with no match or two is not guessed at; a match that no choice has is a spare
+answer, said. A kind it does not read (FIB, MSA, arithmetic) and an unknown type are kept as an essay with every word and fail; a hint,
+an image, the starting text of an answer box and a row it does not know are said and not kept; Brightspace's 1 to 5 difficulty is kept as
+written under `custom`, never turned into easy, medium or hard. Its exporter is read back through it (`import-d2l-csv.test.ts`: every
+question of every fixture, and of the real Word banks when they are here, comes back as it was written). The exporter writes the scoring
+word of a multiselect as `AllOrNothing` or `RightMinusWrong`, the tokens a guide to the template lists; Brightspace's own article gives
+display names ("All or nothing", "Correct Selections") that people report are not accepted. No file written by Brightspace itself has been read.
+
 **A Moodle XML file's key is the weights it gives, and nothing else.** `import/moodle-xml.ts` reads an answer as right only where its
 `fraction` is the whole of the points (99.99 or more). A single answer question where none is has no key and says so; two leaves both
 marked as the file has them and fails the key check; part credit on a single answer, credit for a wrong answer in a short answer, and
@@ -372,7 +385,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2727 engine tests and 309 app tests, Node's own runner
+npm test                       # 2773 engine tests and 309 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

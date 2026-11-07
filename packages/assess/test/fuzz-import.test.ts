@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { Bank } from "../src/bank/store.ts";
 import { unzipSync, zipSync } from "../src/container/zip.ts";
 import { exportCommonCartridge } from "../src/export/common-cartridge.ts";
+import { exportD2lCsv } from "../src/export/d2l-csv.ts";
 import { exportQti12 } from "../src/export/qti12.ts";
 import { exportQti21 } from "../src/export/qti21.ts";
 import { importerForContent, runImporter } from "../src/import/registry.ts";
@@ -93,6 +94,9 @@ function seeds(): Seed[] {
     ["qti21.zip", exportQti21(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
     ["cartridge.imscc", exportCommonCartridge(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
   ];
+  // The Brightspace question library as a CSV, which is read by the keyword in each row's first cell.
+  const library = exportD2lCsv(made.questions, { name: "Fuzz" }).files[0];
+  if (library) out.push({ name: "library.csv", bytes: new Uint8Array(Buffer.from(library.content, "utf8")) });
   for (const [name, bytes] of packages) {
     out.push({ name, bytes });
     for (const [inside, data] of unzipSync(bytes)) {
