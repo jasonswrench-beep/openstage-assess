@@ -1250,7 +1250,15 @@ draws its first 1000 rows and a line that says how many are not drawn, with Show
 always as far as the chosen row, starting again from the first thousand for another search or filter: the same 20,000-question bank
 opens in 0.8 seconds, a search is 0.3, choosing a question 44 milliseconds, and Show 1000 more 0.5 seconds with focus on the first new
 row. "File these N in..." still means every question the search or filter found, which the line states. A bank over 20,000 and the
-Show all button on a bank that size (it draws every row, which is the slow case) are untried. The engine at 5000 questions: a Word file read in 0.36 seconds (500 took 0.06, 2000 took 0.16,
+Show all button on a bank that size (it draws every row, which is the slow case) are untried. On the same bank the export and print
+screens opened in 0.5 to 0.8 seconds, and the Make a test screen, which lists every question with a box, took 2.7 seconds to open and
+3 seconds for Choose all shown (ticking one box took 67 milliseconds); that list was not changed, since a test is not built from
+20,000 questions at once. Check quality at 20,000 questions took 23.5 seconds, against 3.5 at 5000, so it was worse than linear: the
+search for questions that are alike looked for each question among all the others and copied the list of those for every question
+(0.7, 4.6 and 23 seconds at 5000, 10,000 and 20,000). Pairs with different numbers or signs are never alike, so each question is now
+looked for only among those with the same ones, and the list is added to in place: 0.2, 0.3 and 0.9 seconds (the whole check on 20,000
+questions is 4.1 seconds, opening the bank included), and the same groups on the real banks. The case this does not shorten is 20,000 questions that use a few hundred words between them and no numbers (7 seconds;
+with a vocabulary of 3000 words, 1 second). The engine at 5000 questions: a Word file read in 0.36 seconds (500 took 0.06, 2000 took 0.16,
 so it is linear), Check quality in 3.5 seconds, each of the seven exports in about 2 seconds, and a student copy and key printed as PDF
 in 2.5 seconds.
 

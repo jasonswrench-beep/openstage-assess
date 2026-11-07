@@ -188,6 +188,9 @@ function alikePairs(items: Compared[]): Array<[number, number]> {
   // reads the same with another answer marked is still said (a conflict between two copies), and so is a pair that agrees on the answer.
   const stems = items.map((item) => item.stemKey);
   const answers = items.map((item) => item.answer);
+  // Questions are looked up by a word of their prefix AND by their numbers and signs, since a pair with different ones is never alike
+  // (the check below): looking only among questions with the same ones gives the same pairs and none of the work for the rest. A bank of
+  // 20,000 questions whose wording is the same but for a number took 23 seconds to look through, and 1 second after this.
   const index = new Map<string, number[]>();
   const found: Array<[number, number]> = [];
 
@@ -196,7 +199,7 @@ function alikePairs(items: Compared[]): Array<[number, number]> {
     if (words.length < ALIKE_MIN_WORDS) return;
     const prefix = words.slice(0, words.length - Math.ceil(ALIKE_AT * words.length) + 1);
     const candidates = new Set<number>();
-    for (const w of prefix) for (const other of index.get(w) ?? []) candidates.add(other);
+    for (const w of prefix) for (const other of index.get(`${numbers[at]}\u0002${w}`) ?? []) candidates.add(other);
     for (const other of candidates) {
       const a = sets[at] as Set<string>;
       const b = sets[other] as Set<string>;
@@ -207,7 +210,13 @@ function alikePairs(items: Compared[]): Array<[number, number]> {
       for (const w of a) if (b.has(w)) shared++;
       if (shared / (a.size + b.size - shared) >= ALIKE_AT) found.push([other, at]);
     }
-    for (const w of prefix) index.set(w, [...(index.get(w) ?? []), at]);
+    // Added to the list in place: a list rebuilt for each question (a copy of everything before it) made this quadratic by itself.
+    for (const w of prefix) {
+      const key = `${numbers[at]}\u0002${w}`;
+      const list = index.get(key);
+      if (list) list.push(at);
+      else index.set(key, [at]);
+    }
   });
   return found;
 }

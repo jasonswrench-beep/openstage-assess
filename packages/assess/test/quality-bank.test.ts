@@ -249,6 +249,22 @@ describe("questions that are alike", () => {
     assert.ok(took < 1500, `took ${took.toFixed(0)} ms`);
     assert.ok(groups.some((g) => g.titles.includes("planted") && g.titles.includes("Q10")), "the planted pair is found");
   });
+
+  // A bank of 20,000 questions written from one template (the same words, a different number in each) took 23 seconds to look through,
+  // because questions were looked for among all the others and the list of those was copied for every question; it is a second now.
+  test("a bank of thousands of questions that differ only in a number is searched in linear time, and a planted pair is still the only group", () => {
+    const stem = (n: number) => `Question number ${n} about the topic of the unit: which of the following statements is most accurate when considering the case above?`;
+    const make = (n: number, title: string) => mc(stem(n), [`The first possible statement for ${n}*`, `The second possible statement for ${n}`, `The third possible statement for ${n}`], { title });
+    const questions = Array.from({ length: 12000 }, (_, i) => make(i + 1, `Q${i + 1}`));
+    // The same numbers and one more word: a pair, however many questions have other numbers.
+    const planted = mc(`${stem(777)} Explain.`, ["The first possible statement for 777*", "The second possible statement for 777", "The third possible statement for 777"], { title: "planted" });
+    const start = performance.now();
+    const groups = findDuplicates([...questions, planted]);
+    const took = performance.now() - start;
+    assert.ok(took < 3000, `took ${took.toFixed(0)} ms`);
+    assert.equal(groups.length, 1, JSON.stringify(groups.map((g) => g.titles)));
+    assert.deepEqual([...(groups[0]?.titles ?? [])].sort(), ["Q777", "planted"]);
+  });
 });
 
 describe("how likely a spread is by chance", () => {
