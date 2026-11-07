@@ -626,6 +626,7 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
   const repeated: string[] = [];
   const conflicting: string[] = [];
   const rightColumns: string[] = [];
+  const boardValues = new Set<string>();
   let attemptsColumn = false;
   let hiddenRows = 0;
   let hiddenSheets = 0;
@@ -633,7 +634,13 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
   for (const p of read) {
     const label = file.kind === "xlsx" && p.sheet.name !== "" ? p.sheet.name : "";
     if (label !== "" && read.length > 1) lines.push(`Sheet: ${label}`);
-    for (const u of p.header?.unused ?? []) unused.add(u);
+    for (const u of p.header?.unused ?? []) {
+      // The games' own file has a Category beside a Value, which is what a question is worth on the board (100, 200, 300): a setting
+      // of the game and not of the question, said as such. A column called Value in any other table might mean anything, so it stays
+      // an unused column with the warning.
+      if (p.order.includes("category") && u.trim().toLowerCase() === "value") boardValues.add(u);
+      else unused.add(u);
+    }
     for (const r of p.header?.repeated ?? []) repeated.push(r);
     for (const c of p.header?.conflicting ?? []) conflicting.push(c);
     if (p.order.includes("rightText")) rightColumns.push(p.names[p.order.indexOf("rightText")] as string);
@@ -671,6 +678,7 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
     );
   }
   if (attemptsColumn) say("info", "The Attempts column was not used. Attempts are set by the course that uses a question, not stored in the question.");
+  if (boardValues.size > 0) say("info", `The ${[...boardValues].map((v) => `"${v}"`).join(" and ")} column was not used. Beside a Category column it is what a question is worth on a game board (100, 200, 300), which belongs to the game that uses the question and not to the question. The Category was read as a tag.`);
   if (hiddenRows > 0) say("info", `${plural(hiddenRows, "row is", "rows are")} hidden in the workbook (by a filter or by hand). ${hiddenRows === 1 ? "It was" : "They were"} read all the same.`);
   if (hiddenSheets > 0) say("info", `${plural(hiddenSheets, "sheet is", "sheets are")} hidden in the workbook. ${hiddenSheets === 1 ? "It was" : "They were"} read all the same.`);
   if (questions.length === 0 && orphans.length === 0) {

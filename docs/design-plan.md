@@ -154,7 +154,10 @@ second copy first, and a CSV written for Author still works here. Differences fr
   names the cell. Author's dialog says "row 9 was left out", and the question is not seen again; here it is on the repair
   screen with its row beside it.
 - A line break inside a cell is kept. A `Category` or `Topic` column becomes a tag, and an `Explanation` column general
-  feedback. `Attempts` is a setting of the course, so it is not stored, and the file says it was not used.
+  feedback. `Attempts` is a setting of the course, so it is not stored, and the file says it was not used. A `Value` column beside a
+  `Category` column is the games' board value (100, 200, 300), also a setting of the game, and is said the same way as information;
+  a Value column in any other table might mean anything, so it stays an unused column with the warning (the real OpenStage quiz
+  board file, 9 questions, read this way on 7 November 2026).
 - An essay (`ES`) can be listed. Matching, ordering and the rest still cannot be written in a table.
 - Every sheet with a Question column is read, not only the first, hidden rows and sheets are read and counted, and a sheet
   that was not read is named. A cell that holds an error, or a formula that was never calculated, is read as empty and

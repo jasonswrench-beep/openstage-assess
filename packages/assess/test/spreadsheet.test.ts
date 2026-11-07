@@ -209,6 +209,30 @@ describe("a table of questions", () => {
     assert.equal(richTextToPlain(q.feedback.general as never), "Because.");
   });
 
+  // The OpenStage quiz board file (Category, Value, Type, Question, A to E, Correct, feedback) is a real file in use. Its Value is what a
+  // question is worth on the board, a setting of the game, and was said with the same warning as any column that was not understood.
+  test("a Value column beside a Category column is the game board's, and is said as information that it was not used", () => {
+    const r = csv(["Category,Value,Type,Question,A,B,Correct", "Colour,100,MC,Which is warm?,Red,Blue,A"].join("\n"));
+    assert.deepEqual(only(r).metadata.tags, ["Colour"]);
+    assert.equal(only(r).points, 1, "the board value is not the points");
+    const notes = r.fileFindings.filter((f) => /Value/.test(f.message));
+    assert.equal(notes.length, 1);
+    assert.equal(notes[0]?.severity, "info");
+    assert.match(notes[0]?.message ?? "", /game board/);
+    assert.equal(r.fileFindings.some((f) => f.severity === "warn"), false);
+  });
+
+  test("a Value column in any other table is an unused column with the warning, since it may mean anything", () => {
+    const alone = csv("Question,A,B,Correct,Value\nWhich is warm?,Red,Blue,A,100");
+    const note = alone.fileFindings.find((f) => /Value/.test(f.message));
+    assert.equal(note?.severity, "warn");
+    assert.match(note?.message ?? "", /These columns were not used: Value/);
+    // Next to a column that is not Category it is the same, and next to Category another unused column is still warned about.
+    const other = csv("Category,Value,Colour,Question,A,B,Correct\nColour,100,Red,Which is warm?,Red,Blue,A");
+    assert.equal(other.fileFindings.find((f) => /Colour/.test(f.message) && /not used/.test(f.message))?.severity, "warn");
+    assert.equal(other.fileFindings.find((f) => /game board/.test(f.message))?.severity, "info");
+  });
+
   test("a line break inside a cell is kept in the question", () => {
     const q = only(csv([HEAD, 'MC,"First line.\nSecond line.",a,b,,,A,,,'].join("\n")));
     assert.equal(plain(q).includes("First line."), true);
