@@ -42,6 +42,28 @@ export function h(tag, props, ...children) {
 }
 
 /**
+ * A tick box with its words and, when there is one, a line of explanation under them. The words name the box and the explanation
+ * describes it. A label that held both made the box's name a whole paragraph, which a screen reader reads out in full each time
+ * the box takes focus, before it says what the box is for.
+ * It does the same for a round button of a group, which is laid out as a "choice" and not a "check", and may have its words in bold.
+ * @param {HTMLInputElement} box  with an id, which the label and the two parts are named from
+ * @param {string} label
+ * @param {string} [hint]
+ * @param {{ wrapper?: "check" | "choice", bold?: boolean }} [look]
+ */
+export function checkRow(box, label, hint, look = {}) {
+  const words = h(look.bold ? "b" : "span", { id: `${box.id}-words`, text: label });
+  box.setAttribute("aria-labelledby", words.id);
+  /** @type {any} */
+  let note = null;
+  if (hint) {
+    note = h("span", { class: "hint", id: `${box.id}-hint`, text: hint });
+    box.setAttribute("aria-describedby", note.id);
+  }
+  return h("div", { class: look.wrapper ?? "check" }, box, h("label", { for: box.id }, words, note));
+}
+
+/**
  * Adds children to a node, leaving out the ones that are not there. The browser's own `append` would turn a missing child
  * into the word "null".
  * @param {Node} parent

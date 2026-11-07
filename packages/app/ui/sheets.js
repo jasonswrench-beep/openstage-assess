@@ -9,7 +9,7 @@
 import { get, post, del } from "./api.js";
 import { blueprintsPanel } from "./blueprints.js";
 import { confirmAction } from "./dialogs.js";
-import { clear, h, plural, put, TYPE_NAMES, when } from "./dom.js";
+import { checkRow, clear, h, plural, put, TYPE_NAMES, when } from "./dom.js";
 import { fileButtons } from "./files.js";
 import { sendForCheck } from "./scan.js";
 
@@ -152,7 +152,7 @@ export async function renderSheets(host, params, shell) {
       const id = `sheet-${value}`;
       const input = h("input", { type: "radio", name, id, value, checked: s.sheet === value });
       input.addEventListener("change", () => (s.sheet = value));
-      return h("div", { class: "choice" }, input, h("label", { for: id }, h("span", { text: label }), h("span", { class: "hint", text: hint })));
+      return checkRow(input, label, hint, { wrapper: "choice" });
     };
     /**
      * @param {string} id
@@ -164,7 +164,7 @@ export async function renderSheets(host, params, shell) {
     const tick = (id, label, on, set, hint) => {
       const box = h("input", { type: "checkbox", id, checked: on });
       box.addEventListener("change", () => set(box.checked));
-      return h("div", { class: "check" }, box, h("label", { for: id }, h("span", { text: label }), hint ? h("span", { class: "hint", text: hint }) : null));
+      return checkRow(box, label, hint);
     };
     const paper = h("select", { id: "sheet-paper" }, h("option", { value: "letter", text: "Letter (US)", selected: true }), h("option", { value: "a4", text: "A4" }));
     paper.addEventListener("change", () => (s.paper = paper.value));

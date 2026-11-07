@@ -11,7 +11,7 @@
 
 import { del, get, post, put as putJson } from "./api.js";
 import { ask } from "./dialogs.js";
-import { clear, h, plural, put } from "./dom.js";
+import { checkRow, clear, h, plural, put } from "./dom.js";
 import { fileButtons } from "./files.js";
 import { sendScans } from "./scan.js";
 
@@ -85,7 +85,8 @@ export async function renderScoring(host, params, shell) {
   const adjustHost = h("section", { class: "panel" });
   const statsHost = h("section", { class: "panel" });
   const saveHost = h("section", { class: "panel" });
-  host.append(h("div", { class: "export wide" }, headHost, scanHost, reviewHost, resultsHost, adjustHost, statsHost, saveHost));
+  const announcer = h("div", { class: "visually-hidden", attrs: { role: "status", "aria-live": "polite", "aria-atomic": "true" } });
+  host.append(h("div", { class: "export wide" }, headHost, scanHost, reviewHost, resultsHost, adjustHost, statsHost, saveHost), announcer);
 
   function renderAll() {
     renderHead();
@@ -227,9 +228,16 @@ export async function renderScoring(host, params, shell) {
   // -------------------------------------------------------------------------------------------------------------------------
   // Review
 
-  /** @param {string} text */
+  /**
+   * What was just done, in words, shown under the card and spoken. It is spoken from one region that stays in the page and is
+   * written to after the screen has been redrawn: a live region that is built with its words already in it, as the one under each
+   * new card is, is often not read out at all, and this is the only confirmation that a keystroke did what it was meant to.
+   * @param {string} text
+   */
   function say(text) {
     said = text;
+    announcer.textContent = "";
+    if (text) window.setTimeout(() => (announcer.textContent = text), 50);
   }
 
   function renderReview() {
@@ -245,11 +253,12 @@ export async function renderScoring(host, params, shell) {
     });
     put(
       reviewHost,
-      h("h2", { id: "review-heading", text: view.queue.total === 0 ? "Review" : `Review: ${view.queue.total} to settle` }),
-      h("div", { class: "check" }, blanks, h("label", { for: "accept-blanks" }, h("span", { text: "Take a row the reader found blank as blank, without asking" }), h("span", { class: "hint", text: "For when students leave questions unanswered. A faint or doubled mark is still asked about. Every blank is counted, and none is turned into an answer." }))),
+      // Not a stop for the Tab key, but a place focus can be put when the last card has gone (see focusCard).
+      h("h2", { id: "review-heading", tabIndex: -1, text: view.queue.total === 0 ? "Review" : `Review: ${view.queue.total} to settle` }),
+      checkRow(blanks, "Take a row the reader found blank as blank, without asking", "For when students leave questions unanswered. A faint or doubled mark is still asked about. Every blank is counted, and none is turned into an answer."),
     );
     if (items.length === 0) {
-      put(reviewHost, h("p", { class: "sub", text: view.sheets.length === 0 ? "Add scans to begin." : "Nothing is waiting for you: every question is settled." }), said ? h("p", { class: "hint", attrs: { "aria-live": "polite" }, text: said }) : null);
+      put(reviewHost, h("p", { class: "sub", text: view.sheets.length === 0 ? "Add scans to begin." : "Nothing is waiting for you: every question is settled." }), said ? h("p", { class: "hint", text: said }) : null);
       return;
     }
     if (cursor >= items.length || cursor < 0) cursor = 0;
@@ -257,7 +266,7 @@ export async function renderScoring(host, params, shell) {
     const isVersion = item.kind === "version";
     const picked = new Set();
     const card = h("div", { class: "review-card", tabIndex: 0, attrs: { role: "group", "aria-label": isVersion ? `Sheet ${item.sheet}: which version` : `Sheet ${item.sheet}, question ${item.question}` } });
-    const live = h("p", { class: "hint", attrs: { "aria-live": "polite" }, text: said });
+    const live = h("p", { class: "hint", text: said });
     const fills = item.fills.map(/** @param {number} f @param {number} i */ (f, i) => `${item.labels[i] ?? String.fromCharCode(65 + i)} ${Math.round(f * 100)}%`).join(", ");
 
     /** @param {number[] | "blank" | number} choice */
@@ -393,7 +402,9 @@ export async function renderScoring(host, params, shell) {
   }
 
   function focusCard() {
-    /** @type {HTMLElement | null} */ (reviewHost.querySelector(".review-card"))?.focus({ preventScroll: true });
+    // With the last question settled there is no card, and focus would be left on one that is gone, which puts a keyboard user back
+    // at the top of the page: it goes to the heading, which says what is left.
+    /** @type {HTMLElement | null} */ (reviewHost.querySelector(".review-card") ?? reviewHost.querySelector("#review-heading"))?.focus({ preventScroll: true });
   }
 
   // -------------------------------------------------------------------------------------------------------------------------
@@ -432,7 +443,7 @@ export async function renderScoring(host, params, shell) {
               h("td", { text: `${s.earned} of ${s.possible}` }),
               h("td", { text: s.percent === null ? "" : `${s.percent.toFixed(1)}%` }),
               h("td", { text: s.complete ? "Complete" : `${s.unsettled === 0 ? "" : `${plural(s.unsettled, "question", "questions")} to settle. `}${s.problems.join(" ")}`.trim() }),
-              h("td", null, h("button", { type: "button", class: "small-button", text: openSheet === s.number ? "Hide" : "Look", attrs: { "aria-expanded": String(openSheet === s.number) }, on: { click: () => void look(s.number) } })),
+              h("td", null, h("button", { type: "button", class: "small-button", text: openSheet === s.number ? "Hide" : "Look", attrs: { "aria-expanded": String(openSheet === s.number), "aria-label": `${openSheet === s.number ? "Hide" : "Look at"} sheet ${s.number}` }, on: { click: () => void look(s.number) } })),
             ),
           ),
         ),
@@ -716,7 +727,7 @@ export async function renderScoring(host, params, shell) {
     const tick = (key, label, hint) => {
       const box = h("input", { type: "checkbox", id: `out-${key}`, checked: true });
       box.addEventListener("change", () => (choices[key] = box.checked));
-      return h("div", { class: "check" }, box, h("label", { for: `out-${key}` }, h("span", { text: label }), h("span", { class: "hint", text: hint })));
+      return checkRow(box, label, hint);
     };
     const write = h("button", { type: "button", class: "primary", text: "Write the results", disabled: view.sheets.length === 0 });
     write.addEventListener("click", async () => {

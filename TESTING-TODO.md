@@ -92,8 +92,19 @@ item says what has been run and what has not. Items are removed when done, with 
   screens, every button, link, field and select has a name, no image lacks a description, each screen has one main heading and one main
   area, no id is used twice, the language is set, a focus ring shows, and the dark and reduced-motion settings are honoured. The one
   fault found was that the question dialog had no name (a screen reader said only "dialog"); it is named by its heading now, and
-  Escape closes it and puts focus back on the button that opened it. Not checked: the score review screen, how a screen reader
-  reads any of it, the order of reading in the editor, and Windows high-contrast mode.
+  Escape closes it and puts focus back on the button that opened it. A second pass the same day looked at the score review screen
+  too (a sitting of three drawn sheets, with a faint mark, a blank row and a doubled mark) and at names that repeat. It found: a tick
+  box or round button whose label held a paragraph of explanation, so its name was the paragraph (seven of them; the words name it now
+  and the explanation describes it); the Open, Export and Print links of every bank, the Try it and Save a copy buttons of every
+  sample and the Look button of every sheet, each the same words with nothing to say which one (each names its bank, sample or
+  sheet now); the confirmation after a keystroke in the score review ("Recorded A for sheet 2, question 2. 1 to go") was in a live
+  region built with its words already in it, which a screen reader often does not read, and is now said from one that stays in the
+  page; after the last question of the review was settled, focus was left on a card that had gone, and now moves to the review's
+  heading; and the message line was hidden until it had a message, so it is kept in the page and drawn only when it has words. All of
+  it was read from the browser's accessibility tree and not heard. Listen for: the confirmation and the message line (are they read,
+  once, and not twice?), whether the question editor, which sits inside a polite live region on the bank and import screens, is read
+  out whole each time another question is chosen (it may be too much), and the order of reading in the editor. Not checked: Windows
+  high-contrast mode.
 - [ ] **Look at the review page.** `npm run assess -- review <a .docx or .txt file> --out review.html`, then open the page. It is
   the first thing you can see, so it is the first thing to judge: is it the right information in the right order, and what would
   you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank

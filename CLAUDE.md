@@ -97,6 +97,16 @@ always was; a set no question could meet (two chapters, a tag and no tag, the sa
 rule that can take nothing would read as a short bank, a blank one is refused for the reason above (`pickQuestions` refuses it too), and
 two rules with the same values in another order are one rule. A rule of one value has the seed and the draw it always had.
 
+**A control's name says what it is for, and a spoken message is made in a place that was already there.** Having a name is not enough:
+a tick box whose label held a paragraph was named by the paragraph, and the Open, Export and Print link of every bank, the Try it
+of every sample and the Look of every sheet were the same words each time. A tick box or round button with an explanation is built
+with `checkRow` in `ui/dom.js` (the words name it, the explanation describes it), and a link or button that repeats down a list names
+what it acts on in an `aria-label` that still begins with its visible words (`accessible-names.test.ts` holds both). What is said
+aloud after an action goes to a region that stays in the page and is written to afterwards (the message line at the bottom,
+`.toast:empty`, and the score review's `announcer`): a region built with its words already in it, or hidden until it has some, is often
+not read, and `display: none` takes a region out of what a screen reader sees. When the last card of a list is settled, focus moves
+to something that is still there. All of this was read from the browser's accessibility tree and not heard (`TESTING-TODO.md`).
+
 **Delivery settings are not part of a question.** Attempts, feedback timing,
 time limits and scoring weight belong to the course that uses the question, not
 to the item. `schema.ts` rejects them by name with an explanation.
@@ -391,7 +401,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2796 engine tests and 309 app tests, Node's own runner
+npm test                       # 2796 engine tests and 314 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

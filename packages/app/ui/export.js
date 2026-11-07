@@ -7,7 +7,7 @@
  */
 
 import { get, post } from "./api.js";
-import { clear, h, plural, put } from "./dom.js";
+import { checkRow, clear, h, plural, put } from "./dom.js";
 import { fileButtons } from "./files.js";
 import { EXPORT_WORDS, reportNodes } from "./reportview.js";
 
@@ -45,7 +45,7 @@ export async function renderExport(host, params, shell) {
         writtenHost && clear(writtenHost);
         void check();
       });
-      return h("div", { class: "choice" }, radio, h("label", { for: id }, h("b", { text: d.label }), h("span", { class: "hint", text: d.blurb })));
+      return checkRow(radio, d.label, d.blurb, { wrapper: "choice", bold: true });
     }),
   );
 

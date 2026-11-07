@@ -7,7 +7,7 @@
  */
 
 import { get, post } from "./api.js";
-import { clear, h, plural, put } from "./dom.js";
+import { checkRow, clear, h, plural, put } from "./dom.js";
 import { fileButtons } from "./files.js";
 import { PRINT_WORDS, reportNodes } from "./reportview.js";
 
@@ -59,7 +59,7 @@ export async function renderPrint(host, params, shell) {
       set(box.checked);
       changed();
     });
-    return h("div", { class: "check" }, box, h("label", { for: id }, h("span", { text: label }), hint ? h("span", { class: "hint", text: hint }) : null));
+    return checkRow(box, label, hint);
   };
   /**
    * @param {string} label
