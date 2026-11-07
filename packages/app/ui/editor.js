@@ -780,7 +780,10 @@ export function createEditor(options) {
     saveButton = h("button", { type: "button", class: "primary", text: options.saveLabel ?? "Save", disabled: true, on: { click: () => void doSave() } });
     dirtyNote = h("span", { class: "dirty", role: "status" });
 
-    element.append(
+    // put, not append: a panel that is not there (no equation, no table in the question) is null, and the browser's own append would
+    // write the word "null" into the page for it.
+    put(
+      element,
       headerHost,
       top,
       stem,
