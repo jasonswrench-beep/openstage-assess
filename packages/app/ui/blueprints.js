@@ -31,9 +31,33 @@ function valueName(/** @type {string} */ axis, /** @type {string} */ value) {
   return axis === "type" ? /** @type {any} */ (TYPE_NAMES)[value] ?? value : value;
 }
 
-/** One rule in a line: "5 where chapter is Chapter 1". */
-export function ruleText(/** @type {{ axis: string, value: string, count: number }} */ rule) {
-  return `${rule.count} where ${axisName(rule.axis)} is ${valueName(rule.axis, rule.value)}`;
+/** @typedef {{ axis: string, value: string, count: number, and?: Array<{ axis: string, value: string }> }} Rule */
+
+/** The most values one rule asks for in all, the first included. The same as the engine's. */
+const MOST_VALUES = 5;
+
+/** One rule in a line: "5 where chapter is Chapter 1", or "3 where chapter is Chapter 2 and Bloom level is apply". */
+export function ruleText(/** @type {Rule} */ rule) {
+  const all = [{ axis: rule.axis, value: rule.value }, ...(rule.and ?? [])];
+  return `${rule.count} where ${all.map((c) => `${axisName(c.axis)} is ${valueName(c.axis, c.value)}`).join(" and ")}`;
+}
+
+/**
+ * Why a set of values could never all be had by one question, in words, or an empty string. The engine refuses the same sets; saying
+ * it here means the person is told before the request goes, in the rule's own words.
+ * @param {Array<{ axis: string, value: string }>} conditions
+ */
+export function impossibleText(conditions) {
+  /** @type {Map<string, string[]>} */
+  const byAxis = new Map();
+  for (const c of conditions) byAxis.set(c.axis, [...(byAxis.get(c.axis) ?? []), c.value]);
+  for (const [axis, values] of byAxis) {
+    if (values.length < 2) continue;
+    if (new Set(values).size !== values.length) return `A rule asks for the same ${axisName(axis)} twice.`;
+    if (axis !== "tag") return `A question has one ${axisName(axis)}, so a rule that asks for ${values.length} of them could never take a question.`;
+    if (values.includes("(none)")) return "A rule cannot ask for a question with no tag and for a tag as well.";
+  }
+  return "";
 }
 
 /**
@@ -49,7 +73,7 @@ export function ruleText(/** @type {{ axis: string, value: string, count: number
  */
 export function blueprintsPanel(options) {
   const base = `${options.base}/blueprints`;
-  /** @type {Array<{ id: string, name: string, rules: Array<{ axis: string, value: string, count: number }> }>} */
+  /** @type {Array<{ id: string, name: string, rules: Rule[] }>} */
   let blueprints = [];
   /** The id of the blueprint being changed, or null when a new one is being written. */
   let editing = /** @type {string | null} */ (null);
@@ -80,22 +104,79 @@ export function blueprintsPanel(options) {
     return choices;
   }
 
-  /** @param {{ axis: string, value: string, count: number }} [rule] */
-  function ruleRow(rule) {
-    const axis = h("select", { attrs: { "aria-label": "Rule is by" } }, ...RULE_AXES.map(([a, label]) => h("option", { value: a, text: label, selected: (rule?.axis ?? "chapter") === a })));
+  /**
+   * The two choices that make one value a rule asks for: what it is by, and which value. The list of values is what the bank has on
+   * that axis, so a person picks and never types one that matches nothing.
+   * @param {{ axis: string, value: string }} [start]
+   */
+  function pairControls(start) {
+    const axis = h("select", { attrs: { "aria-label": "Rule is by" } }, ...RULE_AXES.map(([a, label]) => h("option", { value: a, text: label, selected: (start?.axis ?? "chapter") === a })));
     const value = h("select", { attrs: { "aria-label": "Rule is for the value" } });
-    const count = h("input", { type: "number", value: String(rule?.count ?? 5), attrs: { min: "1", max: "1000", inputmode: "numeric", "aria-label": "How many questions" } });
-    const remove = h("button", { type: "button", class: "small-button", text: "Remove" });
-    const row = h("div", { class: "rule-row" }, h("span", { text: "Take" }), count, h("span", { text: "questions by" }), axis, h("span", { text: "being" }), value, remove);
     function fillValue(/** @type {string} */ keep) {
       clear(value);
       const choices = valueChoices(axis.value, keep);
       if (choices.length === 0) put(value, h("option", { value: "", text: "No values" }));
       for (const c of choices) put(value, h("option", { value: c.value, text: c.text, selected: c.value === keep }));
     }
-    fillValue(rule?.value ?? "");
+    fillValue(start?.value ?? "");
     axis.addEventListener("change", () => fillValue(""));
-    return { el: row, read: () => ({ axis: axis.value, value: value.value, count: Number(count.value) }), remove };
+    return { axis, value, read: () => ({ axis: axis.value, value: value.value }) };
+  }
+
+  /** @param {Rule} [rule] */
+  function ruleRow(rule) {
+    const count = h("input", { type: "number", value: String(rule?.count ?? 5), attrs: { min: "1", max: "1000", inputmode: "numeric", "aria-label": "How many questions" } });
+    const remove = h("button", { type: "button", class: "small-button", text: "Remove" });
+    const first = pairControls(rule);
+    const head = h("div", { class: "rule-line" }, h("span", { text: "Take" }), count, h("span", { text: "questions where" }), first.axis, h("span", { text: "is" }), first.value, remove);
+    const othersHost = h("div", { class: "rule-others" });
+    const addValue = h("button", { type: "button", class: "small-button", text: "Also ask for another value" });
+    const row = h("div", { class: "rule-row" }, head, othersHost, addValue);
+    /** The other values this rule asks for, as well as the first. */
+    let others = /** @type {Array<{ el: HTMLElement, controls: ReturnType<typeof pairControls>, drop: HTMLButtonElement }>} */ ([]);
+
+    /** Each extra value says which rule and which value it is to a screen reader, and the button hides when there is no room for another. */
+    function label() {
+      others.forEach((o, j) => {
+        o.el.setAttribute("role", "group");
+        o.el.setAttribute("aria-label", `Value ${j + 2} of this rule`);
+        o.drop.setAttribute("aria-label", `Remove value ${j + 2} of this rule`);
+      });
+      addValue.hidden = others.length + 1 >= MOST_VALUES;
+    }
+    /** @param {{ axis: string, value: string }} [start] */
+    function addOther(start) {
+      const controls = pairControls(start);
+      const drop = h("button", { type: "button", class: "small-button", text: "Remove this value" });
+      const el = h("div", { class: "rule-line rule-and" }, h("span", { text: "and" }), controls.axis, h("span", { text: "is" }), controls.value, drop);
+      const entry = { el, controls, drop };
+      drop.addEventListener("click", () => {
+        others = others.filter((o) => o !== entry);
+        el.remove();
+        label();
+        // Focus stays in the rule: on the button that adds a value, which is there again if it was hidden.
+        addValue.focus();
+      });
+      others.push(entry);
+      put(othersHost, el);
+      label();
+    }
+    for (const c of rule?.and ?? []) addOther(c);
+    addValue.addEventListener("click", () => {
+      addOther({ axis: "bloom", value: "" });
+      others[others.length - 1]?.controls.axis.focus();
+    });
+    label();
+    return {
+      el: row,
+      read: () => {
+        /** @type {Rule} */
+        const out = { ...first.read(), count: Number(count.value) };
+        if (others.length > 0) out.and = others.map((o) => o.controls.read());
+        return out;
+      },
+      remove,
+    };
   }
 
   /** The rules being written, in order. */
@@ -111,7 +192,7 @@ export function blueprintsPanel(options) {
     });
   }
 
-  /** @param {{ axis: string, value: string, count: number }} [rule] */
+  /** @param {Rule} [rule] */
   function addRow(rule) {
     const row = ruleRow(rule);
     row.remove.addEventListener("click", () => {
@@ -126,7 +207,7 @@ export function blueprintsPanel(options) {
     numberRows();
   }
 
-  /** @param {{ id: string, name: string, rules: Array<{ axis: string, value: string, count: number }> } | null} existing */
+  /** @param {{ id: string, name: string, rules: Rule[] } | null} existing */
   function startForm(existing) {
     editing = existing?.id ?? null;
     name.value = existing?.name ?? "";
@@ -164,9 +245,16 @@ export function blueprintsPanel(options) {
       name.focus();
       return;
     }
-    if (rules.some((r) => r.value === "")) {
-      options.notify("A rule needs a value. If no question has one for that, there is nothing to take.", "error");
+    if (rules.some((r) => r.value === "" || (r.and ?? []).some((c) => c.value === ""))) {
+      options.notify("A rule needs a value for each thing it asks for. If no question has one for that, there is nothing to take.", "error");
       return;
+    }
+    for (const [i, r] of rules.entries()) {
+      const why = impossibleText([{ axis: r.axis, value: r.value }, ...(r.and ?? [])]);
+      if (why !== "") {
+        options.notify(`Rule ${i + 1}: ${why}`, "error");
+        return;
+      }
     }
     if (rules.some((r) => !Number.isInteger(r.count) || r.count < 1 || r.count > 1000)) {
       options.notify("How many to take is a whole number from 1 to 1000.", "error");

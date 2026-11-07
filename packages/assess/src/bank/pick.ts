@@ -27,6 +27,13 @@ export interface PickOptions {
   axis: CoverageAxis;
   /** The value the questions must have on the axis. `(none)` asks for those that have none. */
   value: string;
+  /**
+   * Further values the questions must have as well, each on an axis (the first is `axis` and `value`): "chapter 2 and Apply" is
+   * `axis` chapter, `value` 2 and `also` one condition for the Bloom level. A question has to match every one. A blank value is
+   * refused, because the question filter reads a blank as no filter, and a condition that took from the whole bank would read as
+   * though it had asked for something.
+   */
+  also?: ReadonlyArray<{ axis: CoverageAxis; value: string }>;
   /** How many to pick, from 1 to `MOST_PICKED`. */
   count: number;
   /** Questions already in the test: not picked again, and nothing alike to them is picked. */
@@ -49,6 +56,10 @@ export function pickQuestions(questions: readonly Question[], options: PickOptio
   if (!Number.isInteger(options.count) || options.count < 1 || options.count > MOST_PICKED) {
     throw new RangeError(`The number of questions to pick is a whole number from 1 to ${MOST_PICKED}.`);
   }
+  const also = options.also ?? [];
+  for (const c of also) {
+    if (c.value.trim() === "") throw new RangeError(`A condition on ${c.axis} needs a value. A blank one would match every question.`);
+  }
   const taken = new Set(options.chosen ?? []);
   const left = { retired: 0, chosen: 0, noKey: 0, alike: 0 };
 
@@ -64,6 +75,8 @@ export function pickQuestions(questions: readonly Question[], options: PickOptio
   const eligible: Question[] = [];
   for (const q of [...questions].sort((a, b) => a.id.localeCompare(b.id))) {
     if (!matchesFacets(q, { [options.axis]: options.value })) continue;
+    // Each further condition is tried on its own, so two on one axis (two tags) both have to hold; one record keyed by axis would keep only the last.
+    if (!also.every((c) => matchesFacets(q, { [c.axis]: c.value }))) continue;
     if (q.metadata.status === "retired") left.retired++;
     else if (taken.has(q.id)) left.chosen++;
     else if (!hasUsableKey(q)) left.noKey++;
@@ -73,7 +86,8 @@ export function pickQuestions(questions: readonly Question[], options: PickOptio
   const ids: string[] = [];
   const shuffled = shuffledFor(
     eligible.map((q) => q.id),
-    `${options.seed ?? ""}:pick:${options.axis}:${options.value}`,
+    // A pick with no further condition has the seed it always had, so what a seed took before it takes now.
+    `${options.seed ?? ""}:pick:${options.axis}:${options.value}${also.map((c) => `:and:${c.axis}:${c.value}`).join("")}`,
   );
   for (const id of shuffled) {
     const g = groupOf.get(id);

@@ -236,3 +236,75 @@ describe("what a request may say", () => {
     });
   });
 });
+
+describe("a rule for several values together", () => {
+  /** Chapter one's eight essays: the first three at the apply level and the rest at remember; chapter two's four have none. */
+  const cell = (chapter: string, bloom: string, count: number) => ({ axis: "chapter", value: chapter, count, and: [{ axis: "bloom", value: bloom }] });
+
+  test("is made, read, changed, drawn and kept on disk, with its other values", async () => {
+    await withApp(async (client) => {
+      const { bp, ids } = await seeded(client, "Cells");
+      const made = await client.post<Json>(bp, { name: "Grid", rules: [cell("1", "apply", 5), { axis: "chapter", value: "2", count: 2 }] });
+      assert.equal(made.status, 200, made.text);
+      const one = made.json["blueprint"];
+      assert.deepEqual(one.rules, [cell("1", "apply", 5), { axis: "chapter", value: "2", count: 2 }], "a rule of one value carries no list of others");
+      assert.equal("and" in one.rules[1], false);
+
+      // The draw takes only the cell, says which cell came out short, and names the other value in what it answers.
+      const reply = await client.post<Json>(`${bp}/${one.id}/draw`, {});
+      assert.equal(reply.status, 200, reply.text);
+      const got: string[] = reply.json["ids"];
+      const apply = (ids["1"] as string[]).slice(0, 3);
+      assert.deepEqual(got.filter((id) => (ids["1"] as string[]).includes(id)).sort(), [...apply].sort(), "the three at the apply level, and none at remember");
+      assert.equal(got.filter((id) => (ids["2"] as string[]).includes(id)).length, 2);
+      assert.equal(reply.json["short"], 2);
+      assert.deepEqual(reply.json["rules"].map((r: Json) => [r.axis, r.value, r.and ?? null, r.count, r.taken, r.short]), [["chapter", "1", [{ axis: "bloom", value: "apply" }], 5, 3, 2], ["chapter", "2", null, 2, 2, 0]]);
+      assert.match(reply.json["notes"].join("\n"), /chapter 1 and bloom apply: wanted 5, took 3; the bank has no more/);
+
+      // A change to the name leaves the rules, other values included; a change to the rules replaces them.
+      const renamed = await client.put<Json>(`${bp}/${one.id}`, { name: "Grid 1" });
+      assert.deepEqual(renamed.json["blueprint"].rules, one.rules);
+      const changed = await client.put<Json>(`${bp}/${one.id}`, { rules: [{ axis: " chapter ".trim(), value: " 1 ", count: 2, and: [{ axis: "bloom", value: " remember " }] }] });
+      assert.equal(changed.status, 200, changed.text);
+      assert.deepEqual(changed.json["blueprint"].rules, [cell("1", "remember", 2)], "its values are tidied");
+
+      // Read from the file afresh, not through the server.
+      const folder = client.server.context.library.banks;
+      const file = readdirSync(folder).find((name) => name.endsWith(".openassess")) as string;
+      const { bank, report } = await Bank.open(join(folder, file));
+      assert.deepEqual(report.invalid, []);
+      assert.deepEqual(bank.listBlueprints()[0]?.rules, [cell("1", "remember", 2)]);
+    });
+  });
+
+  test("a set that could never be met, a blank, a field it does not know and a list that is not one are refused, and nothing is kept", async () => {
+    await withApp(async (client) => {
+      const { bp } = await seeded(client, "Refused");
+      const refused: Array<[string, unknown, RegExp]> = [
+        ["two chapters", [{ axis: "chapter", value: "1", count: 1, and: [{ axis: "chapter", value: "2" }] }], /one chapter.*could never take a question/],
+        ["a blank", [{ axis: "chapter", value: "1", count: 1, and: [{ axis: "bloom", value: "   " }] }], /Value 2 of rule 1 needs a value/],
+        ["an axis it does not know", [{ axis: "chapter", value: "1", count: 1, and: [{ axis: "colour", value: "red" }] }], /colour|what value 2 of rule 1 is by/i],
+        ["a field of a value it does not know", [{ axis: "chapter", value: "1", count: 1, and: [{ axis: "bloom", value: "apply", weight: 2 }] }], /weight/],
+        ["a list that is not one", [{ axis: "chapter", value: "1", count: 1, and: "bloom" }], /other values of rule 1/],
+        ["too many", [{ axis: "tag", value: "a", count: 1, and: ["b", "c", "d", "e", "f"].map((value) => ({ axis: "tag", value })) }], /other values of rule 1/],
+        ["a value that is not an object", [{ axis: "chapter", value: "1", count: 1, and: ["apply"] }], /Value 2 of rule 1 must be an object/],
+        ["the same cell twice, the other way round", [cell("1", "apply", 1), { axis: "bloom", value: "apply", count: 1, and: [{ axis: "chapter", value: "1" }] }], /same thing/],
+      ];
+      for (const [what, rules, message] of refused) {
+        const reply = await client.post<Json>(bp, { name: `Refused ${what}`, rules });
+        assert.equal(reply.status, 400, `${what}: ${reply.text}`);
+        assert.match(reply.json["error"], message, what);
+      }
+      assert.deepEqual((await client.get<Json>(bp)).json["blueprints"], [], "none of them was kept");
+    });
+  });
+
+  test("a rule of another axis and the same value is another rule, and a rule can be a tag and another tag", async () => {
+    await withApp(async (client) => {
+      const { bp } = await seeded(client, "Others");
+      const made = await client.post<Json>(bp, { name: "Several", rules: [{ axis: "tag", value: "lab", count: 1, and: [{ axis: "tag", value: "exam" }] }, cell("1", "apply", 1), { axis: "chapter", value: "1", count: 1 }] });
+      assert.equal(made.status, 200, made.text);
+      assert.equal(made.json["blueprint"].rules.length, 3);
+    });
+  });
+});
