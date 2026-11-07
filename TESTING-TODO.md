@@ -29,8 +29,9 @@ item says what has been run and what has not. Items are removed when done, with 
   clicked in the built-in browser with a picture standing in for the computer's file chooser, which was not opened. Try the real
   chooser, a large photograph, and a picture that is not a PNG, JPEG or GIF.
 - [ ] **Print a test with figures, as Word and as PDF, and look.** Word opened the printed test without repair and reported each
-  picture's size and description (`check:word-print`); the PDF was taken apart (`print-pictures.test.ts`) and not looked at
-  in a viewer. Are the figures the right size, under the right words, not split from their question across a page? A GIF, a CMYK
+  picture's size and description (`check:word-print`); the PDF was taken apart (`print-pictures.test.ts`) and, on 7 November 2026,
+  drawn by Windows' own PDF renderer for the "placed" sample (a small picture in each of three questions: under the words of its
+  question, in its place, not cut), and not looked at in a desktop PDF program. Are the figures the right size, under the right words, not split from their question across a page? A GIF, a CMYK
   JPEG and an interlaced PNG cannot be drawn in the PDF here and are printed as words, with the reason against the question.
 - [ ] **Import the Moodle XML of a bank with figures into a Moodle course.** A picture in the text of a question is written as
   Moodle documents it (an image tag and the file in base64). Not tried in a Moodle. A picture in an answer, in feedback or in a
@@ -112,7 +113,8 @@ item says what has been run and what has not. Items are removed when done, with 
 - [ ] **Look at the review page.** `npm run assess -- review <a .docx or .txt file> --out review.html`, then open the page. It is
   the first thing you can see, so it is the first thing to judge: is it the right information in the right order, and what would
   you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank
-  if you have one. It was looked at in the browser pane at desktop width and at phone width; the dark colours were not looked at.
+  if you have one. It was looked at in the browser pane at desktop width and at phone width, and in its dark colours on 7 November 2026
+(the status chips, the marked answer, the check box and the source line all read clearly).
 
 - [ ] **Print a test from a real bank with curly quotes and dashes in it, as Word and as PDF, and look.** Since 6 November 2026
   the quotes, the en and em dashes and the ellipses you typed are kept (they used to come out as straight quotes and `--`). The
