@@ -121,6 +121,8 @@ export { exportBlackboardUpload, checkBlackboardUpload, BLACKBOARD_UPLOAD_ID, BL
 export type { BlackboardUploadOptions } from "./export/blackboard-upload.ts";
 export { exportQti12, checkQti12, QTI12_ID, QTI12_LABEL, QTI12_RESOURCE_TYPE } from "./export/qti12.ts";
 export type { Qti12Options } from "./export/qti12.ts";
+export { exportQti21, checkQti21, QTI21_ID, QTI21_LABEL, QTI21_TEST_TYPE, QTI21_ITEM_TYPE } from "./export/qti21.ts";
+export type { Qti21Options } from "./export/qti21.ts";
 export { exportCommonCartridge, checkCommonCartridge, COMMON_CARTRIDGE_ID, COMMON_CARTRIDGE_LABEL, CC_ASSESSMENT_TYPE } from "./export/common-cartridge.ts";
 export type { CommonCartridgeOptions } from "./export/common-cartridge.ts";
 export type { MoodleXmlOptions } from "./export/moodle-xml.ts";

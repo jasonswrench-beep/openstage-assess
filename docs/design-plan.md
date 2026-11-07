@@ -94,8 +94,8 @@ part of a question. `CLAUDE.md` explains each of these and the bugs behind them.
 | Destination | Format | Notes |
 | --- | --- | --- |
 | Moodle | Moodle XML, GIFT as an option | Moodle's own formats keep more than QTI does |
-| Brightspace | Question Library CSV (done, imported twice); Common Cartridge 1.3 package (built, in the form a Brightspace quiz tool writes, never imported); QTI 1.2 zip (built, tried twice, not accepted); 2.x or 3.x subset for Course Import (to do) | See below |
-| Canvas | QTI 1.2 package (built, never imported) | The same file as Brightspace's. Classic and New Quizzes behave differently, and only Classic is described by the guide that was read |
+| Brightspace | Question Library CSV (done, imported twice); Common Cartridge 1.3 package (built, in the form a Brightspace quiz tool writes, never imported); QTI 1.2 zip (built, tried twice, not accepted); QTI 2.1 zip (built, never imported); 3.x for Course Import (to do) | See below |
+| Canvas | QTI 1.2 and QTI 2.1 packages (built, never imported) | The same file as Brightspace's. Classic and New Quizzes behave differently, and only Classic is described by the guide that was read |
 | Blackboard | The Upload questions text file (built, never tried) | Works in Ultra and Original. Blackboard's pool package and its QTI import are not written |
 | Any other LMS | QTI 1.2, 2.1 or 3.0 | The user picks the version |
 | OpenStage Author and Scroll | The question spreadsheet (CSV) | See below |
@@ -301,6 +301,52 @@ time it "just uploaded as a zip" (the screen was not said, and the note then poi
 does not give for QTI), and the second time, by the Course Admin route that guide documents, it "still does not like the format"
 (no message was recorded). Canvas has not been tried (`TESTING-TODO.md`).
 
+### QTI 2.1 package (Canvas, and Brightspace's Course Import)
+
+`src/export/qti21.ts`, destination `qti-2.1`, written as `<name> - QTI 2.1.zip`. QTI 2.1 is a different file from 1.2 and not a newer
+spelling of it: the package is an `imsmanifest.xml`, an `assessmentTest.xml` that lists the questions and adds their scores up, and
+a file of its own for each question (`q1.xml`, keeping the question's place in the bank, so a question left out leaves a gap). The
+resource types are `imsqti_test_xmlv2p1` and `imsqti_item_xmlv2p1`, the test depends on every item, and the manifest's schema line
+is `QTIv2.1 Package` 1.0.0, written from memory of IMS's own examples and not compared with a package an LMS wrote.
+
+What a question is: the text is XHTML written into the file as markup (the 1.2 package holds it as escaped text), an answer is
+declared once and scored by response processing in the standard's own operators, and the points are the number the processing
+sets (and the top of `SCORE`). A multiple choice or true or false question is a `choiceInteraction` with one choice allowed, scored
+by `match` of the response against the correct response. A multiple answer question is the same with any number of choices (QTI
+compares a multiple response without regard to order); one with partial credit is a mapping instead, each right answer an equal share
+of the points and each wrong one taking the same share away, never below nothing, which is how the bank itself scores it
+(`sheets/score.ts`). A short answer or a fill in the blank with one blank is a `textEntryInteraction` scored by a mapping with an
+entry for each accepted answer and the case rule on each entry. Matching is a `matchInteraction` scored by a mapping of an equal share
+to each right pair (the last share is what is left, so every pair right is exactly the points), a left side takes one answer, and a
+right side may take as many left sides as there are, so the shape of the question does not show. An essay is an
+`extendedTextInteraction` with no processing, so it is marked by hand.
+
+What it carries that the 1.2 package cannot: an answer that stays in place when the others are mixed (`fixed`, exactly, answer by
+answer), a picture (a file in `images/`, named for what its bytes are, listed against the questions that use it, with its
+description as `alt` and an empty one when the picture is decoration), an equation (the MathML the bank holds, when it is well
+formed and is MathML; otherwise `[Equation: LaTeX]` as words, counted), and partial credit. What it cannot hold, and says: feedback,
+a model answer, a rubric, the expected length of an essay, ordering, numeric, hotspot and calculated questions (left out with the
+reason, as in the 1.2 package: neither tool documents them in a QTI file), and a fill in the blank with several blanks. Underline,
+strike-through and a list's starting number are not in the markup QTI 2.1 allows in a question, so they are taken out, the words stay,
+and the question says so. A question with no usable answer key is never written.
+
+What the vendors say, from a search on 6 November 2026 (the Canvas guide and the campus pages, not a test): Canvas's guide says New
+Quizzes imports QTI 1.2 and 2.x, and Classic Quizzes 1.2 and 2.1; no per-type list for 2.1 was found. Campus guides list QTI 2.1 as
+"partial" for Brightspace's Import/Export/Copy Components, and a D2L community reply says Course Import reads a subset of 2.x and 3.x.
+One vendor's page says the Quizzes tool's own import reads 1.2 only. None of this says which question types arrive.
+
+What has been checked: every package is held to a second reading of the structure, written apart from the exporter
+(`test/support/qti21-reader.ts`: the manifest and its dependencies, every file accounted for, the nesting and order of the parts of
+an item, an interaction that agrees with its declaration, choices and pairs that exist, markup limited to XHTML the standard allows,
+pictures that are in the zip and described), and to a small QTI 2.1 response processor that runs the item's own processing for every
+answer a student could give (every subset of a multiple answer question, every way of matching three to five). The right answer must
+score the points and nothing else may, for every question of every fixture bank. Six faults planted in the exporter one at a time
+(a wrong answer adding where it should take away, the case rule ignored, a pair pointing at the wrong side, underline kept, `fixed`
+dropped, the last share not the remainder) were each caught. That shows the package follows the standard and carries the key. It
+shows nothing about whether Canvas or Brightspace accepts it, which only an import can (`TESTING-TODO.md`). The shares of the points
+are written to five decimals, so two ways of getting the same part of a matching or partial-credit question right can differ by a
+hundred-thousandth of a point.
+
 ### Common Cartridge 1.3 package (Brightspace)
 
 `src/export/common-cartridge.ts`, destination `common-cartridge`, written as `<name> - Common Cartridge.imscc`. It exists because
@@ -488,7 +534,7 @@ home screen and stops its server when it is closed; the installer is unsigned.
   and imported twice into a real course: once seen for three of its seven types, and once with all seven, reported to have
   worked fine without a record of each question. A QTI 1.2 package (Brightspace and Canvas) and a
   Blackboard upload file are built and tested against the standard and the help pages, and have not been imported anywhere;
-  QTI 2.1 and 3.0, and the 2.x or 3.x subset of Brightspace's Course Import, are not started.
+  a QTI 2.1 package is built the same way and has not been imported anywhere (below); QTI 3.0, and the 3.x subset of Brightspace's Course Import, are not started.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
   pools, blueprints, versions, the item quality and accessibility checks (phase
   7), and the web quiz. Done so far: versions (the test record), copies, and a first set of

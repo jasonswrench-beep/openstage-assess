@@ -158,7 +158,7 @@ item says what has been run and what has not. Items are removed when done, with 
   (it is one line in `d2l-csv.ts`).
 - [ ] **A question with bold in its wording.** It is written as HTML with `HTML` in the third cell, which the article shows for
   the question text only. Check that it arrives bold and not as visible tags.
-- [ ] **Course Import's QTI 2.x and 3.x subset is not built.** Brightspace's Quizzes tool takes QTI up to 1.2 (built, below) and
+- [ ] **Course Import's QTI 3.x subset is not built (QTI 2.1 is: its own section below).** Brightspace's Quizzes tool takes QTI up to 1.2 (built, below) and
   Course Import takes a subset of 2.x and 3.x. Which one matters depends on how you move content.
 
 ## QTI 1.2 package (Brightspace and Canvas)
@@ -195,6 +195,25 @@ work, and the Common Cartridge package (next section) was built for that reason.
 - [ ] **Import it into Canvas** (Settings, Import Course Content, content type QTI .zip file, and try Create new question bank).
   The guide that was read is for Classic Quizzes. Say which types arrive and which do not, and whether New Quizzes took it.
   If you have no Canvas course, say so and this stays open.
+
+## QTI 2.1 package (Canvas, and Brightspace's Course Import)
+
+Built on 6 November 2026 from the standard and the vendors' help pages. It is held to a second reading of QTI 2.1 and to a response
+processor that scores every possible answer (see `docs/design-plan.md`), which shows it follows the standard and carries the key,
+and nothing about what either tool accepts. Nobody has imported it anywhere. Use `QTI 2.1 package (Canvas and Brightspace Course
+Import)` on the export screen, on a bank with one question of each type, one with a picture and one with an equation.
+
+- [ ] **Canvas: Settings, Import Course Content, QTI .zip file.** Canvas's guides say Classic Quizzes reads QTI 1.2 and 2.1 and New
+  Quizzes 1.2 and 2.x. Say which quiz engine you used, copy any message word for word, and look at every question after.
+- [ ] **Brightspace: Import/Export/Copy Components.** Campus guides list QTI 2.1 there as partly read. Say which question types
+  arrived and which did not.
+- [ ] **The score of each question.** Answer each one right and wrong and see the points. A multiple answer question with partial
+  credit is scored by a mapping (each right answer a share, each wrong one a share taken away), and a tool may use only the correct
+  answer and score it all or nothing. If so, say.
+- [ ] **A picture and an equation.** The picture is a file in the zip that the question points at, with its description; the
+  equation is MathML. See whether each arrives, and whether the description is read.
+- [ ] **The manifest's schema line.** It says `QTIv2.1 Package` 1.0.0, written from memory of IMS's examples. If a tool refuses the
+  package at once, compare with a QTI 2.1 package that tool wrote itself, and send that file.
 
 ## Common Cartridge package (Brightspace)
 
