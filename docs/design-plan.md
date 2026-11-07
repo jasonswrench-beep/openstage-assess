@@ -301,6 +301,43 @@ byte for byte. A file cut at every length and one with characters changed is rea
 planted one at a time (a guessed key, true and false swapped, the standard feedback kept, part credit read as an accepted answer, a
 picture kept without looking at its bytes, the case rule inverted) were each caught.
 
+### QTI in
+
+`src/import/qti.ts`, profile `qti`, for a `.zip` package or an `.xml` file whose first element is `questestinterop` (1.2), `assessmentItem`
+or `assessmentTest` (2.1). It is the way to bring in a quiz that was exported from Canvas or Brightspace, or a test bank a publisher
+hands over as a QTI package, and it lets this program's own two QTI exports be read back. A package's XML files are read apart from
+the manifest; those that are items or a test are questions, the others (settings, course data) are counted and said, and one that is
+not well formed is said with its name. A 2.1 test gives the order of its items and its title becomes a tag; items no test lists
+follow, and a reference to an item that is not there is said. A 1.2 file is read item by item, with the assessment's title as a tag.
+
+The key. In 1.2 the question's scoring states it: a choice is right where a condition that asks for that label alone sets SCORE to the
+whole of the points (the decvar's maximum, 100 in Canvas's files and the points in this program's); a multiple answer's right labels are
+those of a condition that asks for every right one and none of the wrong (`and` with `not`), or labels that each add a share (partial
+credit); a short answer is the conditions that set the whole of the points, with their case rule; a matching question is a response for
+each left side with the right side that scores. In 2.1 it is the declared correct response, or when there is only a mapping the entries
+worth the most, and the response processing says only whether credit is shared (a `mapResponse` or the `map_response` template, with a
+mapping, is partial credit; `match_correct` is all or nothing). What cannot be read stays unread and said: an answer worth part of the
+points is not the key; a rule that sets points and that no shape reads is reported as not read; a left side scored for none or more than one
+right side makes the question text, because the pair would be a guess; the correct order of an ordering question must be declared for
+every item. Feedback in Canvas's identifiers (`general_fb`, `correct_fb`, `general_incorrect_fb`, `<answer>_fb`) is kept; feedback on a
+condition in 2.1 (`modalFeedback`) is said and not placed.
+
+Pictures are kept only from inside the package: an `img` is looked for beside the file, then in `web_resources` for the cartridge's file
+base (`$IMS-CC-FILEBASE$/...`), and a path that climbs out of the package, a link and an inline `data:` address are not followed; the
+rest is as for Moodle XML (`import/html-pictures.ts`, shared). MathML is not turned into LaTeX, so an equation stays as `[equation]` and
+the question is flagged. A text box in the middle of a sentence is a fill in the blank with the blank where it stood; a text box alone is
+a short answer. Kinds not read (a hotspot, a drag and drop, a calculated question, several drop downs, a numerical question) are kept as
+essays with their words and fail.
+
+What has been checked: this program's QTI 1.2 and 2.1 exports of every fixture bank are read back as what they were (type, title, points,
+text, answers, key, pairs, accepted answers; a 1.2 package does not carry credit for part of a multiple answer, so that is left out of
+the comparison), and the 2.1 package is read and exported again to the same files, byte for byte. Files in the shape Canvas writes and in
+the shape of the standard's templates, written by hand from memory of those shapes, are read as expected; no real export from Canvas or
+Brightspace has been read, and `TESTING-TODO.md` asks for one. A package cut at many lengths and one with bytes changed are read or refused
+in a sentence and never throw. Seven faults planted one at a time (part credit counted as the key, the first answer guessed when none is
+scored, the same in 2.1, partial credit always on, a path allowed to climb out of the package, a matching pair taken from the first of
+several hits) were each caught.
+
 ### QTI 1.2 package (Brightspace and Canvas)
 
 One package serves both (`src/export/qti12.ts`, destination `qti-1.2`). It is a zip of `imsmanifest.xml` (IMS content packaging
@@ -619,8 +656,8 @@ ellipsis in it is noted, with the plain form to add, since a keyboard makes the 
 it is silent when the plain form is accepted too, and the author's answer is never rewritten. What is not covered: a question with a picture is not
 compared for copies (the pictures are not read here), and `MissingAltText` stays an import warning, since the app cannot
 edit a description yet.
-- **M4, assistance.** AI drafting and import rescue, the MCP server, QTI import
-  from LMS exports, and publisher Word templates.
+- **M4, assistance.** AI drafting and import rescue, the MCP server, and publisher Word templates. QTI import from
+  LMS exports (1.2 and 2.1, and Moodle XML) was built on 7 November 2026 (above) and has not read a real export.
 - **M5, answer sheets.** Stages 1 to 3 above, and item statistics from scans.
 
 No dates are set.

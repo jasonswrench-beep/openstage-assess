@@ -9,13 +9,14 @@
 import { aikenImporter, looksLikeAiken } from "./aiken.ts";
 import { giftImporter, looksLikeGift } from "./gift.ts";
 import { looksLikeMoodleXml, moodleXmlImporter } from "./moodle-xml.ts";
+import { looksLikeQtiXml, qtiImporter } from "./qti.ts";
 import { looksLikePdf, pdfImporter } from "./pdf.ts";
 import { looksLikeQuestionTable, spreadsheetImporter } from "./spreadsheet.ts";
 import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult } from "./types.ts";
 import { wordImporter } from "./word.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, moodleXmlImporter, spreadsheetImporter, pdfImporter];
+export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, moodleXmlImporter, qtiImporter, spreadsheetImporter, pdfImporter];
 
 /** The importer that reads files with this name's extension, if there is one. */
 export function importerFor(file: string): Importer | undefined {
@@ -46,12 +47,15 @@ export function importerForContent(file: string, bytes: Uint8Array): Importer {
   // importer, which does not read it and says what to do instead (save it from Word as a .docx), by name or by what it begins with.
   if (file.toLowerCase().endsWith(".rtf") || startsWithRtf(bytes)) return wordImporter;
   const named = importerFor(file);
+  // An .xml file is Moodle XML or QTI, told by its first element; a .zip is read as a QTI package and says so if it holds none.
+  if (named === moodleXmlImporter && looksLikeQtiXml(Buffer.from(bytes.subarray(0, 4000)).toString("utf8"))) return qtiImporter;
   if (named && named !== standardTextImporter) return named;
   // A PDF is told by what it begins with, whatever it was named.
   if (looksLikePdf(bytes)) return pdfImporter;
   if (looksLikeQuestionTable(bytes)) return spreadsheetImporter;
   const text = Buffer.from(bytes.subarray(0, SNIFF_BYTES)).toString("utf8");
   if (looksLikeMoodleXml(text)) return moodleXmlImporter;
+  if (looksLikeQtiXml(text)) return qtiImporter;
   if (looksLikeGift(text)) return giftImporter;
   if (looksLikeAiken(text)) return aikenImporter;
   return standardTextImporter;

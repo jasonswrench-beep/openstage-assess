@@ -118,6 +118,17 @@ with the question flagged. Moodle's three standard combined-feedback sentences a
 says how many. Its exporter is read back through it (`import-moodle-xml.test.ts`): what is exported and imported again is what was
 exported, byte for byte. The sample in `fixtures/moodle-xml` is written from the documented format, not from a real Moodle.
 
+**A QTI file's key is what its scoring states, in a shape the reader knows, and nothing else.** `import/qti.ts` reads 1.2 and 2.1, as a
+package or a bare file. In 1.2 a label is right where a condition that asks for it alone sets the whole of the points; a multiple answer
+is the labels of a condition that asks for all the right ones and none of the wrong, or labels that add shares; a short answer is the
+conditions that set the whole of the points. In 2.1 it is the declared correct response (or the entries of a response map worth the
+most). A rule that sets some points and that no shape above reads is said, so a question scored in a way the reader does not
+understand is never passed as read; an answer worth part of the points is never the key; a matching left side that is scored for
+none or for more than one right side makes the whole question text, because the pair would be a guess. A kind it does not know is
+kept as an essay with its words and fails. A picture is looked for only inside the package (a path that climbs out of it, a link, an
+inline `data:` address are not followed), and MathML stays as `[equation]` with the question flagged. Its two sister exporters are
+read back through it (`import-qti.test.ts`); the Canvas shapes are written from memory, not from a real export.
+
 **A PDF is read from its words and where they stand, and never from a font.** It has no list numbers and no styles, so
 the whole of what is known of a question is its text, and an answer is read only where it is written down (an asterisk, an
 `Answer:` line, an Answers list). A bold or italic option is never taken for a key, because it can be bold for another
@@ -322,7 +333,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2580 engine tests and 297 app tests, Node's own runner
+npm test                       # 2622 engine tests and 297 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

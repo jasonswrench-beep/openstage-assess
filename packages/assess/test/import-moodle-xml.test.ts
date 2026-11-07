@@ -260,9 +260,11 @@ describe("a key is read only where the file gives one", () => {
 
 describe("what is read of the text", () => {
   test("html keeps its paragraphs, lists and emphasis, and says what it took out", () => {
-    const q = one(quiz(choice(true, [answer(100, "A"), answer(0, "B")], '<div class="x"><p style="color:red">One <i>two</i> <span lang="en">three</span></p><ul><li>a</li></ul></div>')));
-    assert.match(q.stem.content, /<p>One <em>two<\/em> three<\/p><ul><li>a<\/li><\/ul>/);
-    assert.match(q.findings.find((f) => f.code === "import.markup-removed")?.message ?? "", /<div> <span>/);
+    const q = one(quiz(choice(true, [answer(100, "A"), answer(0, "B")], '<div class="x"><p style="color:red">One <i>two</i> <font color="red">three</font> <span lang="en">four</span></p><ul><li>a</li></ul></div>')));
+    assert.match(q.stem.content, /<p>One <em>two<\/em> three four<\/p><ul><li>a<\/li><\/ul>/);
+    const said = q.findings.find((f) => f.code === "import.markup-removed")?.message ?? "";
+    assert.match(said, /<font>/);
+    assert.doesNotMatch(said, /<div>|<span>/, "a div or a span only wraps words, so it is not worth a note");
   });
 
   test("plain text and the default format are text, not markup, and keep their line breaks", () => {
