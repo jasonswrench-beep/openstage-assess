@@ -116,6 +116,13 @@ item says what has been run and what has not. Items are removed when done, with 
   top of the review: which columns were not used, which sheets were not read, how many rows were hidden. It reads a workbook
   that Excel wrote correctly (`check:excel-authored`, run on 1 November 2026: 246 comparisons with what Excel says, none
   differing) and has not read one of yours.
+- [ ] **Bring in a table that puts the right answer first** (columns such as Question, Correct answer, Incorrect answer 1, 2, 3, in
+  Excel or as CSV or text, `;` or `,` between the cells). The file's notes say the answers were mixed and how many; open a few
+  questions and check that the one marked right is the one the file gave as right, and that a table of yours with two languages
+  was read in the language that comes first. It was written from one real file (an amateur radio bank, 549 questions, held to a plain
+  split of its own lines when it is in `fixtures/publisher/tables`), and has not been tried on a table from a spreadsheet you made.
+  Decide too whether you want the answers mixed at import (they are, because version A of a printed test keeps the bank's order and
+  the key would have been A throughout) or left in the file's order with a switch.
 - [ ] **Open the blank table and the Excel sample in Excel** (use Save a copy… on the first screen) and look at them: the bold first row, the
   drop-down on Type, the "How to fill it in" sheet. Excel opened them without repair when asked by the check, and nothing
   can say how they look.

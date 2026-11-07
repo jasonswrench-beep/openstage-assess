@@ -1224,8 +1224,16 @@ two items written as text with no braces, which GIFT means as a description and 
 so they are kept as text no question used, with the reason. The third is an amateur radio question bank (549 rows, eleven `;`-separated columns: an id, a question, **the
 right answer, then three wrong ones**, in English and again in French, with names such as `correct_answer_english`) and it is not
 read at all: it is taken as text, 550 orphan blocks, nothing dropped, nothing guessed. A column that holds the text of the right
-answer, with the wrong answers in the columns that follow, is a layout a table reader could take from its names, and it is not one
-the table reader knows; it knows a Correct column that names a letter. Not started.
+answer, with the wrong answers in the columns that follow, is a layout a table reader could take from its names, and it was not one
+the table reader knew; it knew a Correct column that names a letter. **Read since** (7 November 2026): the table reader takes a
+Correct (or Correct answer) column as the right answer's words when columns named Incorrect answer 1, 2, 3 (or Wrong, Distractor)
+are there and answer columns A, B, C are not, and the key is the column the words stand in. The same file reads 549 of 549, each
+equal to a plain split of its own lines (the question, its number kept as `Question ID`, the right answer, the set of answers); the
+French columns repeat the English ones and are reported as not read. Two things the layout forced. The right answer is first in every
+row, so left as it came the key of the bank would be A throughout and so would version A of a printed test (it keeps the bank's order);
+the answers are mixed at import, deterministically, with the right answer kept with its words (113, 153, 142, 141 for A to D on this
+bank), and the file says how many. And a zip that wraps a text file is read as a QTI package and used to say only that no question was
+found; it now names the files it holds and says to unzip them.
 
 ### Found by a blind test on thirteen openly licensed files (stage 4f), not yet fixed
 

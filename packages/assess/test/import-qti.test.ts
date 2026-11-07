@@ -652,6 +652,22 @@ describe("a Common Cartridge package", () => {
     assert.match(warned?.message ?? "", /One file of the package ends in \.qti and was not read/);
     assert.ok(only.fileFindings.some((f) => /No question was found/.test(f.message)));
   });
+
+  test("a zip that only wraps a question table or a text file says which files to unzip and import, and reads none of them", () => {
+    const one = read(zipOf({ "bank/questions.txt": "Question;Correct;Wrong\nWhich?;A;B", "__MACOSX/bank/._questions.txt": "x" }), "download.zip");
+    assert.equal(one.questions.length, 0);
+    const said = one.fileFindings.map((f) => f.message).join(" | ");
+    assert.match(said, /No question was found/);
+    assert.match(said, /This zip holds bank\/questions\.txt, which is a file of another kind\. Unzip it and import that file on its own\./);
+    assert.ok(!/MACOSX/.test(said), "the Mac's own litter is not offered as a file to import");
+
+    const many = read(zipOf({ "a.csv": "x", "b.xlsx": "x", "c.docx": "x", "d.pdf": "x", "e.txt": "x", "f.gift": "x", "g/readme.html": "x" }), "download.zip");
+    const list = many.fileFindings.map((f) => f.message).join(" | ");
+    assert.match(list, /This zip holds a\.csv, b\.xlsx, c\.docx, d\.pdf, e\.txt and 1 more, which are files of another kind\. Unzip it and import those files on their own\./);
+
+    const none = read(zipOf({ "notes.html": "x" }), "download.zip");
+    assert.ok(!/another kind/.test(none.fileFindings.map((f) => f.message).join(" | ")), "nothing is offered when the zip holds nothing this program reads");
+  });
 });
 
 /** Every file of a zip as text, by name, for comparing two packages. */
