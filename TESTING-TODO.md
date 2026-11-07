@@ -377,7 +377,11 @@ Planned in `docs/design-plan.md` (phase 7, first set). Everything a program can 
   and NOT or EXCEPT in a stem that is already clear.
 - [ ] **Look at the copies on a bank that has some.** The same question twice, and a few words changed. Is "very much alike" the
   right line (0.85 of the words, the same numbers), and is a question with the same wording and a different answer marked worth
-  being called alike? Questions with pictures are not compared at all.
+  being called alike? Questions with pictures are not compared at all. Measured on 7 November 2026 on real questions: a bank of 549
+  (one exam's) and the 1421 of the real Word banks had 26 alike groups between them and every one was a deliberate parallel (a
+  full-wave and a half-wave supply, series and parallel circuits), none a copy, so a pair whose stems differ and whose right answers
+  differ is no longer called alike (2 groups remain, which agree on the answer). Neither source had a real copy, so what a bank with
+  copies looks like is still unseen: copy some questions of your own and look.
 - [ ] **Look at where the right answers sit on a real test.** Assemble a test and check the bank. A version whose key is mostly one
   letter should be said; one that is not should not. The test is a binomial test at 20 answers or more, divided by the letters tried.
 - [ ] **Use the Check quality panel and the notes in the editor with a screen reader and with the keyboard alone.** The panel opens

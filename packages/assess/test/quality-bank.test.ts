@@ -134,6 +134,34 @@ describe("questions that are alike", () => {
     assert.deepEqual(findDuplicates([essay(short.join(" ")), essay([...short.slice(0, 10), "different"].join(" "))]), []);
   });
 
+  test("two questions that share their options and nearly all their stem, and have a different right answer, are parallel questions and not copies", () => {
+    // A real bank (an exam's 549 multiple choice questions) had 22 groups of this kind and no copy among them: the same four options, one
+    // word of the stem changed, and a different one of the options right.
+    const ripple = (kind: string, right: string) => mc(`The ripple frequency produced by a ${kind} power supply connected to a normal household circuit is:`, ["120 Hz", "60 Hz", "90 Hz", "30 Hz"].map((o) => (o === right ? `${o}*` : o)));
+    const full = ripple("full-wave", "120 Hz");
+    const half = ripple("half-wave", "60 Hz");
+    assert.deepEqual(findDuplicates([full, half]), [], "different stems, different right answers");
+    // The same two with the same right answer are alike: the words say they are one question, and the key does not say otherwise.
+    assert.equal(findDuplicates([full, ripple("half-wave", "120 Hz")])[0]?.kind, "alike");
+    // And a stem that reads the same with another answer marked is still a conflict worth saying (the test above this group holds that).
+    assert.equal(findDuplicates([full, ripple("full-wave", "60 Hz")])[0]?.kind, "alike");
+    // What is compared is the right answer, not the whole set of options: the same right answer with one wrong option reworded is still
+    // an agreement.
+    const reworded = mc("The ripple frequency produced by a half-wave power supply connected to a normal household circuit is:", ["120 Hz*", "60 Hz", "90 Hz", "30 Hz approximately"]);
+    assert.equal(findDuplicates([full, reworded])[0]?.kind, "alike");
+  });
+
+  test("the right answers of a multiple response question are compared as a set, and of the other types by their whole key", () => {
+    const pick = (right: string[]) => mc("Which of these are the factors of twelve that are smaller than the number itself here:", ["1", "2", "3", "5"].map((o) => (right.includes(o) ? `${o}*` : o)));
+    // Same stem, a different set right: a conflict, still said.
+    assert.equal(findDuplicates([pick(["1", "2"]), pick(["1", "3"])])[0]?.kind, "alike");
+    const blank = (stem: string, accepted: string[]) => createQuestion({ type: "fillInBlank", stem: plainToRich(stem), body: { caseSensitive: false, blanks: [{ id: "b1", accepted }] } as never });
+    const long = "The capital of the country that lies directly to the south of Canada and is a federation of states is ____ at present";
+    // Different stems and different accepted answers: parallel. The same accepted answer under another stem: alike.
+    assert.deepEqual(findDuplicates([blank(long, ["Washington"]), blank(long.replace("south", "north"), ["Ottawa"])]), []);
+    assert.equal(findDuplicates([blank(long, ["Washington"]), blank(long.replace("south", "north"), ["Washington"])])[0]?.kind, "alike");
+  });
+
   test("a different sign makes two questions different, as a different number does", () => {
     const question = (sign: string, right: string, wrong: string) => mc(`Which value of x satisfies the inequality 2x + 1 ${sign} 7 for every real number in the set?`, [`${right}*`, wrong, "x = 3"], {});
     const greater = question(">", "x > 3", "x < 3");

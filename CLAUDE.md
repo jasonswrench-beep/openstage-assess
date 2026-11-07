@@ -54,7 +54,10 @@ to guess. A rule that depends on which option is right is skipped for a question
 Looking is not editing: a check writes the notes and leaves the version, history and status alone. What looks across questions is
 worked out each time and never stored, because a note about two questions goes stale when either changes (the same fault that
 once left findings unrefreshed). A dismissal survives the next check. The lines (1.5 times and 20 characters, 8 pairs, 0.85 alike,
-20 answers) are judgements in named constants; change them on a bank of real questions, never to make a test pass.
+20 answers) are judgements in named constants; change them on a bank of real questions, never to make a test pass. The "very much alike"
+rule leaves a pair alone when both the stem and the right answer differ (a real bank of 549 multiple choice questions had 22 groups
+that were deliberate parallels, such as the ripple frequency of a full-wave and of a half-wave supply, and none that were copies; the
+1421 questions of the real Word banks had 4, series and parallel circuits among them, also all parallels), and still says a pair whose stems read the same with another answer marked, or whose right answers agree.
 
 **A damaged file is read or refused in words, and what is damaged inside a bank is kept, reported and shown.** A file that cannot be
 read is refused with a message a person can act on, never a TypeError or "Cannot read properties of undefined"; `fuzz-import.test.ts`
@@ -401,7 +404,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2796 engine tests and 314 app tests, Node's own runner
+npm test                       # 2798 engine tests and 314 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
