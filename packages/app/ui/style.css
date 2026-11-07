@@ -336,3 +336,13 @@ table.results tr.current { background: var(--note-bg); }
 .rule-others { display: flex; flex-direction: column; gap: 6px; padding-left: 1.5em; }
 .rule-row input[type="number"] { width: 5.5em; }
 .rule-row select { width: auto; min-width: 9em; max-width: 100%; }
+
+/* Windows high contrast (and any forced colours): the browser replaces every background and border colour with the system's, so a
+   state that was shown by a background alone is gone. The chosen filter, the question or sheet being looked at, a bubble that is ticked
+   and the place a file is being dragged to each get the system's highlight colours or an outline, which are kept. */
+@media (forced-colors: active) {
+  .chip.on, button.bubble.on { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: HighlightText; }
+  .chip.on span { color: HighlightText; }
+  .qrow[aria-current="true"], table.results tr.current { outline: 3px solid Highlight; outline-offset: -3px; }
+  .dropzone.over, .export.wide .panel.over, section.panel.over { outline: 3px dashed Highlight; outline-offset: 2px; }
+}
