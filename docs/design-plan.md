@@ -667,7 +667,9 @@ silent when any option starts with a letter that does not settle the sound (an h
 stem rule leaves "at least", "whether or not", "not only" and "least common multiple" alone. They run when a question is
 saved into a bank and when the whole bank is checked, and not at import. The notes are written to the questions without
 changing a version, a history or a status (looking is not editing), and a dismissal survives. What looks across questions
-is worked out each time and not stored: the same question twice or nearly (0.85 of the words, with the same numbers), and
+is worked out each time and not stored: the same question twice or nearly (0.85 of the words, with the same numbers, and not when
+both the stem and the right answer differ, which is how a bank of parallel questions reads: measured on 549 real multiple choice
+questions, 22 groups became 2; all 22 were parallel questions, and the 2 left agree on their right answer), and
 a letter that holds more of the right answers than chance would (a binomial test, divided by the number of letters tried,
 at 20 answers or more), for the questions that keep their option order and for each version of an assembled test. The
 lines are judgements, kept in named constants: the right answer is noted when it is 1.5 times as long as the longest wrong

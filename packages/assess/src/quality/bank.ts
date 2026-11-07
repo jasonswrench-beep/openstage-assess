@@ -71,6 +71,10 @@ interface Compared {
   question: Question;
   /** The same for two questions that are the same question. */
   same: string;
+  /** The stem alone, in its comparison form: two questions that are alike and whose stems read the same are one question asked twice. */
+  stem: string;
+  /** What makes an answer right: the right options of a choice question, and for the other types the whole of the key. Empty for an essay. */
+  answer: string;
   words: string[];
   /** Every number and sign in what a student reads, in order of the sort, with repeats. Two questions that differ in it are different. */
   signs: string;
@@ -136,7 +140,8 @@ function compared(question: Question): Compared | undefined {
   // The numbers and signs, counted and not only listed: "x > 3" against "x < 3" has the same two signs among its options either way
   // round, and what tells the questions apart is how many times each sign is used.
   const signs = tokens.filter((w) => /\d/.test(w) || /^\p{S}+$/u.test(w)).sort().join(" ");
-  return { question, same: [question.type, stem, ...parts].join("\u0001"), words, signs };
+  const answer = (question.type === "multipleChoice" || question.type === "multipleResponse" ? parts.filter((p) => p.startsWith("+")) : parts).join("\u0001");
+  return { question, same: [question.type, stem, ...parts].join("\u0001"), stem, answer, words, signs };
 }
 
 /** Disjoint sets, for putting questions that are alike in pairs into groups of any size. */
@@ -166,6 +171,12 @@ function alikePairs(items: Compared[]): Array<[number, number]> {
   const sets = items.map((item) => new Set(item.words));
   // A number is a difference that makes two questions different, and so is a sign: "x > 3" and "x < 3" are not one question.
   const numbers = items.map((item) => item.signs);
+  // Two questions whose stems differ AND whose right answers differ are not a question asked twice: "the ripple frequency of a full-wave
+  // supply" (120 Hz) and "of a half-wave supply" (60 Hz) share every option and all but one word of the stem. A bank of real questions
+  // (549 multiple choice, one exam's) had 23 groups of that kind and almost none that were copies, so they are left alone. A stem that
+  // reads the same with another answer marked is still said (a conflict between two copies), and so is a pair that agrees on the answer.
+  const stems = items.map((item) => item.stem);
+  const answers = items.map((item) => item.answer);
   const index = new Map<string, number[]>();
   const found: Array<[number, number]> = [];
 
@@ -180,6 +191,7 @@ function alikePairs(items: Compared[]): Array<[number, number]> {
       const b = sets[other] as Set<string>;
       if (Math.min(a.size, b.size) < ALIKE_AT * Math.max(a.size, b.size)) continue;
       if (numbers[at] !== numbers[other]) continue;
+      if (stems[at] !== stems[other] && answers[at] !== answers[other]) continue;
       let shared = 0;
       for (const w of a) if (b.has(w)) shared++;
       if (shared / (a.size + b.size - shared) >= ALIKE_AT) found.push([other, at]);
