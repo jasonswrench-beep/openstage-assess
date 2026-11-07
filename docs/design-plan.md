@@ -304,7 +304,9 @@ picture kept without looking at its bytes, the case rule inverted) were each cau
 
 ### QTI in
 
-`src/import/qti.ts`, profile `qti`, for a `.zip` package or an `.xml` file whose first element is `questestinterop` (1.2), `assessmentItem`
+`src/import/qti.ts`, profile `qti`, for a `.zip` or `.imscc` package (a Common Cartridge, which is a zip of the same kind and is what this
+program's own Common Cartridge export and a Canvas course export are called; added 7 November 2026, with the fix that a cartridge's
+`cc_weighting` is read as the points, since it fixes the score of a right answer at 100) or an `.xml` file whose first element is `questestinterop` (1.2), `assessmentItem`
 or `assessmentTest` (2.1). It is the way to bring in a quiz that was exported from Canvas or Brightspace, or a test bank a publisher
 hands over as a QTI package, and it lets this program's own two QTI exports be read back. A package's XML files are read apart from
 the manifest; those that are items or a test are questions, the others (settings, course data) are counted and said, and one that is
@@ -330,12 +332,23 @@ the question is flagged. A text box in the middle of a sentence is a fill in the
 a short answer. Kinds not read (a hotspot, a drag and drop, a calculated question, several drop downs, a numerical question) are kept as
 essays with their words and fail.
 
-What has been checked: this program's QTI 1.2 and 2.1 exports of every fixture bank are read back as what they were (type, title, points,
+A file in a package that ends in `.qti` is not read and is counted and said (a warning when nothing else was found, so a package that
+holds only such files does not come in empty without a word). Canvas is said to name some of a course export's files this way, among
+them its question banks and a second copy of each quiz; reading them could double the questions, and no real Canvas export has been
+seen to say what they hold, so they wait for one.
+
+What has been checked: this program's QTI 1.2, QTI 2.1 and Common Cartridge exports of every fixture bank are read back as what they were (type, title, points,
 text, answers, key, pairs, accepted answers; a 1.2 package does not carry credit for part of a multiple answer, so that is left out of
 the comparison), and the 2.1 package is read and exported again to the same files, byte for byte. The real banks in `fixtures/publisher` come back
 the same way from both (1,196 questions each, none different in type, points, text, answers, key or pairs, none with a new error; the 20 fill in the blanks arrive as short answers and are not compared). Files in the shape Canvas writes and in
-the shape of the standard's templates, written by hand from memory of those shapes, are read as expected; no real export from Canvas or
-Brightspace has been read, and `TESTING-TODO.md` asks for one. A package cut at many lengths and one with bytes changed are read or refused
+the shape of the standard's templates, written by hand from memory of those shapes, are read as expected; no real export from Canvas
+has been read, and `TESTING-TODO.md` asks for one. One real Brightspace question library has (80 multiple choice questions, found on 7
+November 2026): it read none until the reader was corrected on what it showed (`qti_metadatafield`, an answer's words inside a
+`flow_mat`, a multiple choice question written with `rcardinality="Multiple"`, the points in `qmd_weighting`, no declared score scale,
+`shuffle="no"` in lower case), and then reads 80 of 80 and agrees with a second, independent reading of its XML on every stem, answer, key
+and point; the shapes it does not show (its true or false, multi-select, matching, ordering, short and long answer) are not read from memory
+beyond the type names `Multiple Choice` and `True/False`, which are single answer. With no `decvar` the whole is 100, or 1 where 1 is the
+biggest, and no smaller biggest is called the whole. A package cut at many lengths and one with bytes changed are read or refused
 in a sentence and never throw. Seven faults planted one at a time (part credit counted as the key, the first answer guessed when none is
 scored, the same in 2.1, partial credit always on, a path allowed to climb out of the package, a matching pair taken from the first of
 several hits) were each caught.
@@ -620,11 +633,13 @@ home screen and stops its server when it is closed; the installer is unsigned.
   test screen (`bank/pick.ts`: some questions with a value, at random, never a retired one, one already chosen, one with no usable
   key or a copy of one in the test, and it says what it left out and why; it is a helper for building a test chapter by chapter;
   a stored recipe is a blueprint, below), and folders in the app (`bank/store.ts`: make, rename, move and take away a folder, file a question in one, narrow the list to one; a folder never holds a question, so taking one away leaves its questions in the bank in no folder, and the folders inside it move up). an import can be saved into a folder by name. Several questions are filed at once (`Bank.moveManyToFolder`, the control beside the list: the questions shown, all or nothing). Blueprints are done in their first form (`bank/blueprint.ts`, the Blueprints panel above Make a test, `assess blueprint`): a stored recipe
-  in `blueprints/`, each rule a value on one axis and how many to take, drawn rule by rule through the same pick, so it takes a
+  in `blueprints/`, each rule a value on one axis, up to four more on other axes that a question must have as well (added 7 November
+  2026: "chapter 2 and the Apply level" is one cell of the grid a test is planned on, and is the common case of a test plan), and
+  how many to take, drawn rule by rule through the same pick, so it takes a
   question that fits two rules once, never fills a rule up from another value when the bank is short (it says how many short and why),
-  holds no question id and no seed, and is kept byte for byte when its file cannot be read. A rule is one value on one axis; a rule for
-  two things together ("chapter 2 and hard"), a limit ("at most 2 hard") and a blueprint that draws when a student takes the test
-  are not built. Not done: pools in that sense, the web quiz, and from the original list of checks
+  holds no question id and no seed, and is kept byte for byte when its file cannot be read. A set of values no question could meet (two
+  chapters, a tag and no tag) is refused with the reason, since a rule that can take nothing would read as a short bank. A limit
+  ("at most 2 hard") and a blueprint that draws when a student takes the test are not built. Not done: pools in that sense, the web quiz, and from the original list of checks
   the reading level, which would need a reading-level formula that is not misleading on technical
   words, and an equation that is a picture, which the import already reports.
 
