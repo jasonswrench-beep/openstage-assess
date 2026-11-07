@@ -135,6 +135,18 @@ item says what has been run and what has not. Items are removed when done, with 
   engine would have. Refusing a scan with the way round (an original document, or text recognition done in a PDF program) is what
   it does now.
 
+## QTI in (a package or a file from another learning system)
+
+Built on 7 November 2026. The Canvas and standard shapes were written from memory of them, not read from a real export.
+
+- [ ] **Export a quiz from Canvas (Quizzes, Export Course Content, Quiz as QTI) and import the zip here.** Check each question's right
+  answer against Canvas's, the points, the feedback, and a picture. Say what came in wrongly, flagged for no reason, or read as text.
+- [ ] **Export a quiz or the question library from Brightspace as QTI and import it.** Say whether it was 1.2 or 2.x, and which kinds
+  arrived as text. Send the zip if anything is wrong, as the shapes are the point.
+- [ ] **A test bank from a publisher as a QTI package.** The same checks. A key that is missing or wrong is the one failure that matters.
+- [ ] **A multiple answer question with partial credit.** In 1.2 the shares that are added are read as credit for part; in 2.1 a response
+  map is. Check that the weights you set in the other system are what come in as right answers.
+
 ## Moodle XML in
 
 Built on 6 November 2026. The sample in `fixtures/moodle-xml` was written from Moodle's documented format, not exported from a Moodle.

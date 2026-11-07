@@ -16,16 +16,14 @@
  * text as the author typed it.
  */
 
-import { createHash } from "node:crypto";
-
 import { addFindings, createQuestion, DEFAULT_POINTS, withRecomputedFindings } from "../model/create.ts";
 import { finding, FindingCode, type Finding, type Severity } from "../model/findings.ts";
 import { localId } from "../model/ids.ts";
-import { MAX_PICTURE_BYTES, sniffImage } from "../model/image.ts";
 import type { MediaRef, Question, QuestionBody } from "../model/question.ts";
-import { decodeEntities, isEmptyRichText, plainToRich, rich, richTextToPlain, sanitizeRichText, type RichText } from "../model/richtext.ts";
+import { isEmptyRichText, plainToRich, rich, richTextToPlain, sanitizeRichText, type RichText } from "../model/richtext.ts";
 import { unreadObjectFindings } from "../model/unread-objects.ts";
 import { allText, elements, first, parseXml, XmlError, type XmlElement } from "./docx/xml.ts";
+import { PictureKeeper, type FoundPicture } from "./html-pictures.ts";
 import { countVerdicts, type Importer, type ImportOptions, type ImportResult, type Orphan, type SourceBlock } from "./types.ts";
 
 export const MOODLE_XML_PROFILE_ID = "moodle-xml";
@@ -107,15 +105,17 @@ interface Context {
 
 /** The state of one question while it is read: its pictures, what it says about itself, the markup taken out. */
 class Reader {
-  readonly media: MediaRef[] = [];
+  private readonly pictures: PictureKeeper;
   readonly findings: Finding[] = [];
   readonly removed = new Set<string>();
-  private readonly lost: string[] = [];
 
-  private readonly ctx: Context;
 
   constructor(ctx: Context) {
-    this.ctx = ctx;
+    this.pictures = new PictureKeeper(ctx.media);
+  }
+
+  get media(): MediaRef[] {
+    return this.pictures.media;
   }
 
   note(code: string, severity: Severity, message: string): void {
@@ -126,41 +126,23 @@ class Reader {
     this.note(FindingCode.UnreadContent, "warn", `${what} was not read: "${quoted(value)}".`);
   }
 
-  /** A picture the text points at: kept when its bytes are there and it is a PNG, JPEG or GIF, otherwise `[picture]`, with the reason. */
-  private picture(tag: string, files: ReadonlyMap<string, Uint8Array>): string {
-    const attrs = new Map<string, string>();
-    for (const m of tag.matchAll(/([a-zA-Z][-a-zA-Z0-9:]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs.set((m[1] as string).toLowerCase(), decodeEntities(m[2] ?? m[3] ?? ""));
-    const src = attrs.get("src") ?? "";
-    const named = /^@@PLUGINFILE@@\/(.+)$/.exec(src);
-    let name: string | undefined;
-    if (named) {
+  /** Where a Moodle picture is: the file of the same name, beside the text, in the files of the element that holds the text. */
+  private finder(files: ReadonlyMap<string, Uint8Array>): (src: string) => FoundPicture {
+    return (src) => {
+      const named = /^@@PLUGINFILE@@\/(.+)$/.exec(src);
+      if (!named) {
+        return { label: src, why: /^(https?:)?\/\//i.test(src) ? "it is linked from another site, and a bank holds only pictures that are in the file" : "it does not point at a picture in the file" };
+      }
       const bare = (named[1] as string).split(/[?#]/)[0] as string;
+      let name = bare;
       try {
         name = decodeURIComponent(bare);
       } catch {
-        name = bare;
+        // a name with a stray percent sign is looked for as it is written
       }
-    }
-    const bytes = name !== undefined ? files.get(name) : undefined;
-    const info = bytes ? sniffImage(bytes) : undefined;
-    if (bytes && info && bytes.length <= MAX_PICTURE_BYTES) {
-      const file = `media/p-${createHash("sha256").update(bytes).digest("hex").slice(0, 16)}.${info.ext}`;
-      this.ctx.media.set(file, bytes);
-      const id = `m${this.media.length + 1}`;
-      const alt = (attrs.get("alt") ?? "").trim();
-      const decorative = alt === "" && /^(presentation|none)$/i.test(attrs.get("role") ?? "");
-      this.media.push({ id, file, mime: info.mime, alt, ...(decorative ? { decorative: true } : {}), width: info.width, height: info.height });
-      return `<oa-media ref="${id}"></oa-media>`;
-    }
-    const why = !named
-      ? /^(https?:)?\/\//i.test(src) ? "it is linked from another site, and a bank holds only pictures that are in the file" : "it does not point at a picture in the file"
-      : bytes === undefined
-        ? `the file does not hold a picture named ${quoted(name ?? "")}`
-        : info === undefined
-          ? "it is not a PNG, JPEG or GIF"
-          : "it is larger than a question can hold";
-    this.lost.push(`${attrs.get("alt")?.trim() || quoted(name ?? src) || "a picture"} (${why})`);
-    return " [picture] ";
+      const bytes = files.get(name);
+      return bytes ? { bytes, label: name } : { label: name, why: `the file does not hold a picture named ${quoted(name)}` };
+    };
   }
 
   /** The files an element holds beside its text. */
@@ -183,8 +165,9 @@ class Reader {
     const markup = format === "html" || (format === "moodle_auto_format" && /<[a-z][^>]*>/i.test(raw));
     if (format === "markdown") this.note(FindingCode.MarkupRemoved, "warn", "A text is marked as Markdown, which was not converted. It is kept as it was written.");
     if (!markup) return raw === "" ? undefined : plainToRich(raw);
-    const html = modelTags(raw.replace(/<img\b[^>]*>/gi, (tag) => this.picture(tag, this.filesOf(container))));
-    for (const tag of sanitizeRichText(html).removedTags) this.removed.add(tag);
+    const html = modelTags(this.pictures.replaceImages(raw, this.finder(this.filesOf(container))));
+    // A div or a span only wraps words, so taking it out loses nothing worth a note.
+    for (const tag of sanitizeRichText(html).removedTags) if (tag !== "div" && tag !== "span") this.removed.add(tag);
     const text = rich(BLOCK.test(html) ? html : `<p>${html}</p>`);
     return isEmptyRichText(text) ? undefined : text;
   }
@@ -198,9 +181,8 @@ class Reader {
   /** What the reading of the question's text and answers has to say, once, at the end. */
   finish(): Finding[] {
     const out = [...this.findings];
-    if (this.lost.length > 0) {
-      out.push(finding(FindingCode.UnreadContent, "warn", `${this.lost.length === 1 ? "A picture" : `${this.lost.length} pictures`} could not be kept, and stands as [picture] in the text: ${this.lost.map(quoted).join("; ")}.`));
-    }
+    const lost = this.pictures.lostMessage();
+    if (lost) out.push(finding(FindingCode.UnreadContent, "warn", lost));
     if (this.removed.size > 0) {
       out.push(finding(FindingCode.MarkupRemoved, "info", `Some markup in the text is not one OpenAssess keeps, and was taken out, leaving its words: ${[...this.removed].sort().map((t) => `<${t}>`).join(" ")}.`));
     }
