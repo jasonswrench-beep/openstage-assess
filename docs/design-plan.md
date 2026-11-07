@@ -667,7 +667,10 @@ silent when any option starts with a letter that does not settle the sound (an h
 stem rule leaves "at least", "whether or not", "not only" and "least common multiple" alone, and (after 1421 real questions gave 79
 notes, a third of them wrong) a word in the story before the question, in a quotation, in a why question and in a condition ("if you
 do not understand, you should"; "when the object is not near the focus"), where the question itself is positive: 79 became 49, and
-what is left is mostly "which of the following is not". They run when a question is
+what is left is mostly "which of the following is not". Two options are copies when they differ only in spacing, the stop at the end,
+or the capital that starts an option of four letters or more; a capital inside is left alone (PV = nRT against PV = NRt, a calorie
+and a Calorie, Mb and MB), because real questions had those and the rule called them copies and advised changing one. On the same
+1421 questions 3 notes became 1, which is a real repeated option. They run when a question is
 saved into a bank and when the whole bank is checked, and not at import. The notes are written to the questions without
 changing a version, a history or a status (looking is not editing), and a dismissal survives. What looks across questions
 is worked out each time and not stored: the same question twice or nearly (0.85 of the words, with the same numbers, and not when
