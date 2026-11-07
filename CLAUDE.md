@@ -58,8 +58,11 @@ once left findings unrefreshed). A dismissal survives the next check. The lines 
 
 **A damaged file is read or refused in words, and what is damaged inside a bank is kept, reported and shown.** A file that cannot be
 read is refused with a message a person can act on, never a TypeError or "Cannot read properties of undefined"; `fuzz-import.test.ts`
-damages the repository's own files (Word, Excel, PDF, text, banks, scans of sheets) from a fixed seed and holds every one to that, and
-a run of about 60,000 more found two crashes in the bank reader (a folder tree damaged inside) that are fixed. A bank that opens with
+damages the repository's own files (Word, Excel, PDF, text, banks, scans of sheets, and since 7 November 2026 the QTI 1.2, QTI 2.1 and
+Common Cartridge packages this program writes, a Brightspace-shaped question library, a table with the right answer first, and a zip
+that wraps a text file) from a fixed seed and holds every one to that, and a run of about 60,000 more found two crashes in the bank
+reader (a folder tree damaged inside) that are fixed; `OPENASSESS_FUZZ_ROUNDS=6000` runs the same seeds far longer by hand (about
+360,000 damaged files, a minute, no crash on 7 November 2026). A bank that opens with
 a part it cannot read (a question file that is not JSON, a folder file of the wrong shape, a lost file) opens with the rest, keeps the
 damaged file byte for byte through every save (`passthrough`; a damaged folder file is kept as `folders.damaged.json`), and says so:
 the engine in `OpenReport`, the app in the amber box on the bank screen. A branch of the bank reader that reports a file and does not
