@@ -1,6 +1,8 @@
 /**
  * The QTI importer: the question and test format that learning systems write when a quiz is exported, in the two versions this program
- * also writes, 1.2 and 2.1, as a package (a zip with an `imsmanifest.xml`) or as a bare file.
+ * also writes, 1.2 and 2.1, as a package (a zip with an `imsmanifest.xml`) or as a bare file. A Common Cartridge package (`.imscc`, which
+ * is a zip of the same kind, and is what this program's own Common Cartridge export is and what Canvas names a course export) is read
+ * the same way: every XML file in it is looked at, and the files that are not questions are counted.
  *
  * A QTI file states its key, in the scoring and not in the question: in 1.2 a condition says that choosing this label sets SCORE to
  * the whole of the points; in 2.1 a response declaration says what the correct response is, and may carry a mapping of what each
@@ -272,7 +274,11 @@ function conditions12(item: XmlElement): { list: Condition12[]; max: number; unr
   const decvar = all(processing ?? NONE, "decvar")[0];
   const declared = Number(attr(decvar, "maxvalue"));
   const biggest = Math.max(0, ...list.map((c) => c.amount));
-  return { list, max: Number.isFinite(declared) && declared > 0 ? declared : biggest, unreadable };
+  // A file that declares no scale (Brightspace's does not): scores of 100 or more are on the usual 0 to 100 scale, and a biggest of
+  // exactly 1 is on a 0 to 1 scale. Any other biggest (50, 5) might be part of a whole that is not written down, so the whole is
+  // taken to be 100 and nothing smaller reads as the key, rather than the biggest being called whole because it is the biggest.
+  const assumed = biggest >= 100 || biggest === 1 ? biggest : 100;
+  return { list, max: Number.isFinite(declared) && declared > 0 ? declared : assumed, unreadable };
 }
 
 const isWhole = (amount: number, max: number): boolean => max > 0 && amount >= max * 0.9999;
@@ -321,9 +327,13 @@ const CANVAS_UNSUPPORTED: Record<string, string> = {
 
 function item12(item: XmlElement, tag: string | undefined, source: { file: string; firstBlock: number; lastBlock: number }, ctx: Context, docPath: string): Built {
   const r = new ItemReader(ctx, docPath);
-  const meta = new Map(all(item, "qtimetadatafield").map((f) => [allText(first(f, "fieldlabel") ?? NONE).trim(), allText(first(f, "fieldentry") ?? NONE).trim()] as const));
+  // The field is `qtimetadatafield` in QTI 1.2 and Canvas's files, and `qti_metadatafield` in Brightspace's.
+  const meta = new Map([...all(item, "qtimetadatafield"), ...all(item, "qti_metadatafield")].map((f) => [allText(first(f, "fieldlabel") ?? NONE).trim(), allText(first(f, "fieldentry") ?? NONE).trim()] as const));
   const presentation = first(item, "presentation") ?? NONE;
-  const pointsRaw = Number(meta.get("points_possible"));
+  // Canvas writes an item's points as `points_possible`; Common Cartridge fixes the score of a right answer at 100 and says what the
+  // item is worth in `cc_weighting`, so reading the score would call every question 100 points.
+  // Brightspace writes it as `qmd_weighting` ("1.0000"), in a file that is its own question library export.
+  const pointsRaw = Number(meta.get("points_possible") ?? meta.get("cc_weighting") ?? meta.get("qmd_weighting"));
   const pieces: Pieces = {
     title: attr(item, "title").replace(/\s+/g, " ").trim(),
     stem: material12(r, first(presentation, "material") ?? all(presentation, "material")[0]),
@@ -332,6 +342,14 @@ function item12(item: XmlElement, tag: string | undefined, source: { file: strin
     feedback: {},
   };
   if (pieces.title === "" || /^question$/i.test(pieces.title)) pieces.title = "";
+  // A title that is only the first words of the question, cut where a field ran out (Brightspace's library does it at about twenty
+  // characters), is left out, and the question is titled from its own words as any other is.
+  const stemWords = r.words(pieces.stem);
+  if (pieces.title !== "" && pieces.title.length < stemWords.length && stemWords.toLowerCase().startsWith(pieces.title.toLowerCase())) pieces.title = "";
+  // A hint has nowhere to go, so its words are said.
+  const hint = first(item, "hint");
+  const hintWords = hint ? allText(hint).replace(/\s+/g, " ").trim() : "";
+  if (hintWords !== "") r.dropped("A hint", hintWords);
 
   // Feedback: the entries Canvas names, by identifier. One for a single answer is kept with the answer.
   const fb = new Map<string, RichText>();
@@ -350,7 +368,7 @@ function item12(item: XmlElement, tag: string | undefined, source: { file: strin
   };
   const unsupported = (why: string): Built => {
     // The words of the answers are kept with the stem, so that nothing the question said is lost.
-    const labels = all(presentation, "response_label").map((l) => r.words(material12(r, first(l, "material") ?? NONE))).filter((t) => t !== "");
+    const labels = all(presentation, "response_label").map((l) => r.words(material12(r, first(l, "material") ?? all(l, "material")[0]))).filter((t) => t !== "");
     if (labels.length > 0 && pieces.stem) pieces.stem = rich(`${pieces.stem.content}<ul>${labels.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>`);
     return done({ unsupported: why });
   };
@@ -364,8 +382,9 @@ function item12(item: XmlElement, tag: string | undefined, source: { file: strin
   const { list, max } = scoring;
   if (lids.length + strs.length === 0) return unsupported("It has no response to read an answer from.");
 
-  const labelsOf = (lid: XmlElement): Array<{ id: string; text: RichText | undefined }> =>
-    all(lid, "response_label").map((l) => ({ id: attr(l, "ident"), text: material12(r, first(l, "material") ?? NONE) }));
+  // An answer's words are in its `material`, which Brightspace nests inside a `flow_mat`.
+  const materialOf = (e: XmlElement): XmlElement | undefined => first(e, "material") ?? all(e, "material")[0];
+  const labelsOf = (lid: XmlElement): Array<{ id: string; text: RichText | undefined }> => all(lid, "response_label").map((l) => ({ id: attr(l, "ident"), text: material12(r, materialOf(l)) }));
 
   // Conditions that set a score above nothing and that no rule below reads are said, so that a question scored in a way this
   // does not understand is never passed as read.
@@ -381,7 +400,10 @@ function item12(item: XmlElement, tag: string | undefined, source: { file: strin
   if (lids.length === 1 && strs.length === 0) {
     const lid = lids[0] as XmlElement;
     const resp = attr(lid, "ident");
-    const multiple = attr(lid, "rcardinality") === "Multiple";
+    // Brightspace writes a multiple choice question, and a true or false one, with `rcardinality="Multiple"` and says what it is in
+    // `qmd_questiontype`; the type is what it says, and one answer is the answer, scored on its own.
+    const single = ["multiple choice", "true/false"].includes((meta.get("qmd_questiontype") ?? "").toLowerCase());
+    const multiple = attr(lid, "rcardinality") === "Multiple" && !single;
     const labels = labelsOf(lid);
     if (labels.length < 2) return unsupported("A choice question needs at least two answers.");
     const right = new Set<string>();
@@ -411,10 +433,26 @@ function item12(item: XmlElement, tag: string | undefined, source: { file: strin
         allOrNothing = true;
       }
     }
+    // Feedback on an answer: Canvas names it `<answer>_fb`; Brightspace names it in the condition that scores the answer
+    // (`displayfeedback linkrefid`), and the entry is found by that name. The three Canvas general entries are not an answer's.
+    const feedbackOf = (id: string): { name: string; text: RichText } | undefined => {
+      const own = fb.get(`${id}_fb`);
+      if (own) return { name: `${id}_fb`, text: own };
+      for (const c of list) {
+        const f = flat(c.expr);
+        if (!f.plain || f.yes.length !== 1 || f.no.length !== 0 || (f.yes[0] as { value: string }).value !== id) continue;
+        for (const ref of c.feedback) {
+          const text = fb.get(ref);
+          if (text && !usedFeedback.has(ref)) return { name: ref, text };
+        }
+      }
+      return undefined;
+    };
     const options = labels.map((l, i) => {
       const text = l.text ?? plainToRich("(missing)");
-      const f = fb.get(`${l.id}_fb`);
-      if (f) usedFeedback.add(`${l.id}_fb`);
+      const found = feedbackOf(l.id);
+      const f = found?.text;
+      if (found) usedFeedback.add(found.name);
       return { id: localId("o", i), content: text, correct: right.has(l.id), ...(f ? { feedback: f } : {}), empty: l.text === undefined };
     });
     if (options.some((o) => o.empty)) r.note(FindingCode.EmptyOption, "error", "An answer has no text. It is kept as (missing), and the question needs fixing.");
@@ -422,7 +460,8 @@ function item12(item: XmlElement, tag: string | undefined, source: { file: strin
     if (unknown.length > 0) r.note(FindingCode.UnreadContent, "warn", `The scoring names an answer the question does not offer (${unknown.map(quoted).join(", ")}). It is not read as a key.`);
     const clean = options.map(({ empty: _empty, ...o }) => o);
     rest();
-    const shuffle = attr(first(lid, "render_choice"), "shuffle") !== "No";
+    // "No" in Canvas's files, "no" in Brightspace's; the standard's own values are Yes and No.
+    const shuffle = attr(first(lid, "render_choice"), "shuffle").toLowerCase() !== "no";
     if (!multiple) {
       const names = labels.map((l) => r.words(l.text).toLowerCase());
       if (labels.length === 2 && names.includes("true") && names.includes("false")) {
@@ -744,6 +783,8 @@ interface Found {
   docs: Doc[];
   files: Map<string, Uint8Array>;
   problems: string[];
+  /** Files of the package that end in `.qti`. They are not XML by name and are not read, so they are counted and said. */
+  unreadQti: number;
 }
 
 function gather(bytes: Uint8Array, name: string): Found | { refusal: string } {
@@ -757,7 +798,7 @@ function gather(bytes: Uint8Array, name: string): Found | { refusal: string } {
       if (error instanceof XmlError) return { refusal: `This file is not well formed XML, so it could not be read as QTI: ${error.message}` };
       throw error;
     }
-    return { docs, files: new Map(), problems };
+    return { docs, files: new Map(), problems, unreadQti: 0 };
   }
   let files: Map<string, Uint8Array>;
   try {
@@ -775,7 +816,7 @@ function gather(bytes: Uint8Array, name: string): Found | { refusal: string } {
       else throw error;
     }
   }
-  return { docs, files, problems };
+  return { docs, files, problems, unreadQti: [...files.keys()].filter((n) => n.toLowerCase().endsWith(".qti")).length };
 }
 
 function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
@@ -868,7 +909,18 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
     if (built.orphan) orphans.push(built.orphan);
   });
 
+  // Brightspace keeps a difficulty, a bonus mark and a mandatory mark for each question in `itemproc_extension`. The model has no place
+  // for them (a difficulty is a different scale), so they are counted and said once for the file and not for every question.
+  const withSettings = entries.filter((e) => e.version === "1.2" && first(e.el, "itemproc_extension") !== undefined).length;
+  if (withSettings > 0) fileFindings.push(finding(FindingCode.UnreadContent, "info", `${withSettings === 1 ? "One question carries" : `${withSettings} questions carry`} Brightspace's own settings (difficulty, bonus, mandatory), which are not read.`));
   if (ignored > 0) fileFindings.push(finding(FindingCode.UnreadContent, "info", `${ignored === 1 ? "One XML file" : `${ignored} XML files`} of the package ${ignored === 1 ? "is" : "are"} not questions or a test (settings, course data) and ${ignored === 1 ? "was" : "were"} not read.`));
+  // A file that ends in .qti is not looked at, because it is not named as XML and a second copy of a quiz read from it could double the
+  // questions. Canvas names some of the files of a course export this way (its question banks are said to be among them), so a bank
+  // that lives only there would come in empty; the count is said, and is a warning when nothing else was found.
+  if (found.unreadQti > 0) {
+    const n = found.unreadQti;
+    fileFindings.push(finding(FindingCode.UnreadContent, questions.length === 0 ? "warn" : "info", `${n === 1 ? "One file" : `${n} files`} of the package end${n === 1 ? "s" : ""} in .qti and ${n === 1 ? "was" : "were"} not read, so a question that is only in ${n === 1 ? "it" : "them"} is not here.`));
+  }
   if (questions.length === 0) fileFindings.push(finding(FindingCode.UnreadContent, "warn", "No question was found in this file. A QTI file holds item elements (1.2) or assessmentItem files (2.1)."));
   return {
     profile: options.profile ?? QTI_PROFILE_ID,
@@ -885,7 +937,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
 export const qtiImporter: Importer = {
   id: QTI_PROFILE_ID,
   label: "QTI (1.2 and 2.1)",
-  extensions: [".zip"],
+  extensions: [".zip", ".imscc"],
 
   parse(input: string | SourceBlock[], options: ImportOptions = {}): ImportResult {
     const text = typeof input === "string" ? input : input.map((b) => b.text).join("\n");
