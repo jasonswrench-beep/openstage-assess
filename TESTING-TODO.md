@@ -87,6 +87,13 @@ item says what has been run and what has not. Items are removed when done, with 
 
 ## Needs a person's eye
 
+- [ ] **Go through the whole app with a screen reader and with the keyboard alone.** What a program could check was checked in the
+  built-in browser on 7 November 2026: on the home, import review, bank (with the editor open), export, print and answer sheets
+  screens, every button, link, field and select has a name, no image lacks a description, each screen has one main heading and one main
+  area, no id is used twice, the language is set, a focus ring shows, and the dark and reduced-motion settings are honoured. The one
+  fault found was that the question dialog had no name (a screen reader said only "dialog"); it is named by its heading now, and
+  Escape closes it and puts focus back on the button that opened it. Not checked: the score review screen, how a screen reader
+  reads any of it, the order of reading in the editor, and Windows high-contrast mode.
 - [ ] **Look at the review page.** `npm run assess -- review <a .docx or .txt file> --out review.html`, then open the page. It is
   the first thing you can see, so it is the first thing to judge: is it the right information in the right order, and what would
   you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank
