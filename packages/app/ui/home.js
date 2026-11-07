@@ -74,9 +74,9 @@ export async function renderHome(host, _params, shell) {
       h(
         "div",
         { class: "card-actions" },
-        s.template ? null : h("button", { type: "button", class: "primary", text: "Try it", on: { click: () => void trySample(s.id) } }),
+        s.template ? null : h("button", { type: "button", class: "primary", text: "Try it", attrs: { "aria-label": `Try it: ${s.title}` }, on: { click: () => void trySample(s.id) } }),
         // A link to the sample's own file, so that the window asks where to put the copy like it does for an export.
-        h("a", { class: "button", href: `/files/samples/${encodeURIComponent(s.id)}`, text: s.template ? "Save a copy to fill in…" : "Save a copy…", attrs: { download: "" } }),
+        h("a", { class: "button", href: `/files/samples/${encodeURIComponent(s.id)}`, text: s.template ? "Save a copy to fill in…" : "Save a copy…", attrs: { download: "", "aria-label": `${s.template ? "Save a copy to fill in" : "Save a copy"} of ${s.title}` } }),
       ),
     ),
   );
@@ -106,9 +106,10 @@ export async function renderHome(host, _params, shell) {
         : h(
             "div",
             { class: "card-actions" },
-            h("a", { class: "button", href: `#/bank/${encodeURIComponent(b.name)}`, text: "Open" }),
-            h("a", { class: "button", href: `#/export/${encodeURIComponent(b.name)}`, text: "Export" }),
-            h("a", { class: "button", href: `#/print/${encodeURIComponent(b.name)}`, text: "Print" }),
+            // Each says which bank it is for: a list of the page's links read out "Open, Export, Print" once for every bank.
+            h("a", { class: "button", href: `#/bank/${encodeURIComponent(b.name)}`, text: "Open", attrs: { "aria-label": `Open ${b.title}` } }),
+            h("a", { class: "button", href: `#/export/${encodeURIComponent(b.name)}`, text: "Export", attrs: { "aria-label": `Export ${b.title}` } }),
+            h("a", { class: "button", href: `#/print/${encodeURIComponent(b.name)}`, text: "Print", attrs: { "aria-label": `Print ${b.title}` } }),
           ),
     ),
   );

@@ -14,20 +14,22 @@ let current = null;
 let lastHash = location.hash || "#/";
 let asking = false;
 let toastTimer = 0;
+let speakTimer = 0;
 
 /**
+ * The message line stays in the page all the time and is empty when there is nothing to say (an empty one is not drawn: `.toast:empty`).
+ * It used to be hidden until a message arrived, and a region that appears at the same moment as its words is often not read out; it
+ * was also cleared and set in one go, so the same message twice in a row, such as two saves, was not read the second time.
  * @param {string} message
  * @param {"ok" | "error"} [kind]
  */
 export function notify(message, kind = "ok") {
-  status.textContent = message;
+  status.textContent = "";
   status.className = kind === "error" ? "toast error" : "toast";
-  status.hidden = false;
+  clearTimeout(speakTimer);
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => {
-    status.hidden = true;
-    status.textContent = "";
-  }, kind === "error" ? 15000 : 6000);
+  speakTimer = window.setTimeout(() => (status.textContent = message), 50);
+  toastTimer = window.setTimeout(() => (status.textContent = ""), kind === "error" ? 15000 : 6000);
 }
 
 /** @param {string} hash */

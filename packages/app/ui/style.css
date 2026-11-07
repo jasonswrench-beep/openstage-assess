@@ -185,6 +185,9 @@ h2.card-title, h2.checks-title { font-size: 1rem; margin: 0 0 6px; }
 .toast { position: fixed; right: 16px; bottom: 16px; max-width: min(520px, calc(100vw - 32px)); background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--ok); border-radius: 8px; padding: 10px 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); z-index: 40; overflow-wrap: anywhere; }
 .toast.error { border-left-color: var(--bad); }
 .toast[hidden] { display: none; }
+/* With nothing to say it is not drawn, but it stays in the page for a screen reader: a region that is hidden until its words arrive is
+   often not read out. (display: none or visibility: hidden would take it out of what a screen reader sees.) */
+.toast:empty { position: absolute; right: auto; bottom: auto; width: 1px; height: 1px; padding: 0; border: 0; box-shadow: none; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); padding: 0; max-width: min(520px, calc(100vw - 24px)); width: 100%; }
 dialog::backdrop { background: rgba(10, 14, 20, 0.5); }
