@@ -11,6 +11,7 @@ import { extname } from "node:path";
 
 import {
   BANK_EXTENSION,
+  cannotRead,
   createQuestion,
   dismissFinding,
   docxToBlocks,
@@ -196,12 +197,6 @@ function readInput(raw: Record<string, unknown>): EditorInput {
 // Importing
 // ---------------------------------------------------------------------------
 
-/** Files that are known, by name, to be ones this cannot read, and what to do instead. A message beats reading them as text. */
-const CANNOT_READ: Record<string, string> = {
-  ".doc": "This is an older Word file (.doc). In Word, choose File, then Save As, and pick Word Document (*.docx).",
-  ".xls": "This is an older Excel file (.xls). In Excel, choose File, then Save As, and pick Excel Workbook (*.xlsx) or CSV UTF-8.",
-};
-
 async function importFile(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   return importBytes(ctx, req.query.get("name") ?? "import.txt", req.body, req.query.get("keyMark"));
 }
@@ -209,7 +204,9 @@ async function importFile(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
 /** Reads a file's bytes into an import to look at. The same for a file the person chose and for a sample. */
 function importBytes(ctx: Context, name: string, body: Buffer, keyMark: string | null): ApiResponse {
   const extension = extname(name).toLowerCase();
-  const cannot = CANNOT_READ[extension];
+  // A file of a kind this does not read (an older Word or Excel file, OpenDocument, a Google Drive shortcut, a web page) is said to be
+  // one and told what to do instead, and is not read as text.
+  const cannot = cannotRead(name);
   if (cannot) throw badRequest(cannot);
   if (extension === BANK_EXTENSION) throw badRequest("This is an OpenAssess bank, not a file to import. Use Open a bank.");
   if (body.length === 0) throw badRequest("That file is empty.");

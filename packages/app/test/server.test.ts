@@ -331,6 +331,12 @@ describe("importing and repairing", () => {
       const old = await client.send("POST", "/api/import?name=old.doc", text("x"));
       assert.equal(old.status, 400);
       assert.match(String(old.json["error"]), /Save As/);
+      // A file of another kind is said to be one, with what to do, and is not read as text (it used to come out as orphan blocks of junk).
+      for (const [name, words] of [["exam.odt", /OpenDocument text.*Save As/], ["exam.gdoc", /shortcut.*Download.*\.docx/], ["exam.html", /web page/], ["exam.pages", /Export To.*Word/]] as const) {
+        const other = await client.send("POST", `/api/import?name=${name}`, text("x"));
+        assert.equal(other.status, 400, name);
+        assert.match(String(other.json["error"]), words, name);
+      }
       const bank = await client.send("POST", "/api/import?name=thing.openassess", text("x"));
       assert.match(String(bank.json["error"]), /Use Open a bank/);
       const empty = await client.send("POST", "/api/import?name=a.txt", Buffer.alloc(0));
