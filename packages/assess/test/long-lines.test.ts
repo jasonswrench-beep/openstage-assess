@@ -82,6 +82,15 @@ describe("a long run of white space", () => {
     });
   }
 
+  // Found by a second reviewer: the check that a stem holds its own options had one lazy pattern across "a." and "b.", and a stem made of
+  // thousands of "a." with no "b." took N squared steps (five such stems took 20 seconds).
+  test("a stem made of thousands of option markers, in a file of five questions that were all guessed at", () => {
+    const stem = "a. ".repeat(64000);
+    const text = Array.from({ length: 5 }, (_, i) => `${i + 1}. ${stem}`).join("\n\n");
+    const ms = timeOf("bank.txt", text);
+    assert.ok(ms < LIMIT_MS, `${Math.round(ms)} ms`);
+  });
+
   test("in a table: a header cell, a cell of a headerless table, and a cell of an answer", () => {
     const long = " ".repeat(32767);
     const cases: Array<[string, string, string]> = [

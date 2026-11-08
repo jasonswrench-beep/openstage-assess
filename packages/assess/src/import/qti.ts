@@ -926,21 +926,25 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
     // package. Say which files it holds that this program does read on their own, so the next step is plain.
     const readable = [...found.files.keys()].filter((n) => /\.(txt|csv|tsv|xlsx|xlsm|docx|pdf|gift|aiken)$/i.test(n) && !n.split("/").some((part) => part.startsWith("__MACOSX") || part.startsWith("._")));
     const shown = readable.slice(0, 5).join(", ") + (readable.length > 5 ? ` and ${readable.length - 5} more` : "");
-    // Blackboard exports a pool or a test as a zip whose questions are in .dat files, named by the manifest as its own kinds of resource
-    // (`x-bb-...`). They are Blackboard's own form and are not read here, so a person who dropped one was told only what a QTI file
-    // holds, which did not say what they had. Say what it is and what this program does read from Blackboard.
+    // Blackboard exports a pool or a test as a zip whose questions are in .dat files, and its manifest names them as its own kinds of
+    // assessment resource (`type="assessment/x-bb-..."`). They are Blackboard's own form and are not read here, so a person who dropped
+    // one was told only what a QTI file holds, which did not say what they had. Say what it is and what this program does read from
+    // Blackboard. It takes a resource that is an assessment: a course export that holds only documents and announcements has .dat files
+    // too, and a manifest that merely mentions the company is nothing.
     const datFiles = [...found.files.keys()].filter((n) => /\.dat$/i.test(n) && !n.split("/").some((part) => part.startsWith("__MACOSX") || part.startsWith("._")));
     const manifest = [...found.files.entries()].find(([n]) => /(^|\/)imsmanifest\.xml$/i.test(n));
-    const blackboard = datFiles.length > 0 && manifest !== undefined && /x-bb-|blackboard\.com/i.test(Buffer.from(manifest[1]).toString("utf8").slice(0, 200000));
+    const blackboard = datFiles.length > 0 && manifest !== undefined && /\btype\s*=\s*["']assessment\/x-bb-[a-z0-9._-]*["']/i.test(Buffer.from(manifest[1]).toString("utf8").slice(0, 200000));
+    const another =
+      readable.length > 0
+        ? ` This zip holds ${shown}, which ${readable.length === 1 ? "is a file" : "are files"} of another kind. Unzip it and import ${readable.length === 1 ? "that file" : "those files"} on ${readable.length === 1 ? "its" : "their"} own.`
+        : "";
     fileFindings.push(
       finding(
         FindingCode.UnreadContent,
         "warn",
         blackboard
-          ? `No question was found in this file. It is a package that Blackboard exports for its own use, with its questions in ${datFiles.length === 1 ? "a .dat file" : `${datFiles.length} .dat files`}, and this program does not read that form. It does read the tab delimited file that Blackboard takes in (one question to a row, beginning with its type), and a Word, Excel or text file of the questions.`
-          : `No question was found in this file. A QTI file holds item elements (1.2) or assessmentItem files (2.1).${
-              readable.length > 0 ? ` This zip holds ${shown}, which ${readable.length === 1 ? "is a file" : "are files"} of another kind. Unzip it and import ${readable.length === 1 ? "that file" : "those files"} on ${readable.length === 1 ? "its" : "their"} own.` : ""
-            }`,
+          ? `No question was found in this file. It is a package that Blackboard exports for its own use, with its questions in .dat files (${datFiles.length === 1 ? "one .dat file" : `${datFiles.length} .dat files`} in all), and this program does not read that form. It does read the tab delimited file that Blackboard takes in (one question to a row, beginning with its type), and a Word, Excel or text file of the questions.${another}`
+          : `No question was found in this file. A QTI file holds item elements (1.2) or assessmentItem files (2.1).${another}`,
       ),
     );
   }

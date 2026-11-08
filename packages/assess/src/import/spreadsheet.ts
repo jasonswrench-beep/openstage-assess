@@ -139,11 +139,21 @@ function nameUsed(cell: string): string {
   if (columnNamed(cell) !== null) return cell;
   // Plain scans only, with no pattern that can backtrack: a cell may be 32,767 characters and a table's first rows are all tried.
   const one = cell.replace(/\s+/g, " ").trim();
-  for (const shorter of [beforeDash(one), beforeBracket(one)]) {
-    if (shorter !== null && shorter !== "" && columnNamed(shorter) !== null) return shorter;
+  // Every way of cutting a description off that leaves a name, and the longest of them, which keeps most of what the cell said:
+  // "Answer - 4 - max 60 characters" is "Answer - 4" (the fourth answer) and not "Answer" (the key), which the first dash alone would give.
+  let best: string | null = null;
+  for (const [shorter, description] of cuts(one)) {
+    const column = shorter === "" ? null : columnNamed(shorter);
+    if (column === null) continue;
+    // A bare "Answer" is the key, and also the words of an answer: "Answer - max 60 characters" limits a text, so it is not the key. A cut
+    // that lands on the key needs a description about choosing.
+    if (column === "correct" && !CHOOSES.test(description)) continue;
+    if (best === null || shorter.length > best.length) best = shorter;
   }
-  return cell;
+  return best ?? cell;
 }
+
+const CHOOSES = /\b(?:choose|select|pick)\b/i;
 
 /**
  * The only words a description may be made of: a limit or an instruction for filling a column in, and nothing about what the column holds
@@ -160,6 +170,9 @@ const INSTRUCTION_WORDS: ReadonlySet<string> = new Set([
 const INSTRUCTION_CUES: ReadonlySet<string> = new Set(["max", "maximum", "min", "minimum", "up", "most", "least", "between", "limit", "limited", "choose", "select", "pick", "enter", "required", "optional", "characters", "chars", "words", "letters", "digits"]);
 
 function isInstruction(description: string): boolean {
+  // A letter, a number or a symbol outside ASCII is a word the list does not hold, and splitting on what is not a letter would make it
+  // vanish ("Answer - max 60 ✗" and "Answer - 错误 max 60" were instructions).
+  if (/[\p{L}\p{N}\p{S}]/u.test(description.replace(/[ -~]/g, ""))) return false;
   const words = description.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w !== "");
   return words.length > 0 && words.every((w) => /^\d+$/.test(w) || INSTRUCTION_WORDS.has(w)) && words.some((w) => INSTRUCTION_CUES.has(w));
 }
@@ -168,17 +181,22 @@ function isInstruction(description: string): boolean {
 const MOST_DASHES = 8;
 
 /**
- * The name before the first dash, with a space each side, after which only an instruction follows. A dash that is part of the name
- * ("Feedback - if right - max 100 characters") is passed over, and the name that is left is looked up as it always is.
+ * Each way of cutting a description off a header cell: at a dash with a space each side after which only an instruction follows (a dash
+ * that is part of the name, "Feedback - if right - max 100 characters", is one more way, not the end of the search), or at the first
+ * bracket when what is inside it is an instruction. Each is the name that is left and the description that was cut.
  */
-function beforeDash(one: string): string | null {
+function cuts(one: string): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
   let tried = 0;
   for (let i = nextDash(one, 1); i !== -1 && i < one.length - 1 && tried < MOST_DASHES; i = nextDash(one, i + 1)) {
     if (one[i - 1] !== " " || one[i + 1] !== " ") continue;
     tried++;
-    if (isInstruction(one.slice(i + 2))) return one.slice(0, i - 1).trim();
+    const description = one.slice(i + 2);
+    if (isInstruction(description)) out.push([one.slice(0, i - 1).trim(), description]);
   }
-  return null;
+  const bracket = beforeBracket(one);
+  if (bracket !== null) out.push(bracket);
+  return out;
 }
 
 function nextDash(one: string, from: number): number {
@@ -186,8 +204,8 @@ function nextDash(one: string, from: number): number {
   return -1;
 }
 
-/** The name before the first bracket, when what is inside it is an instruction, and so is what follows it if anything does. */
-function beforeBracket(one: string): string | null {
+/** The name before the first bracket and what was cut, when what is inside it is an instruction, and so is what follows it if anything does. */
+function beforeBracket(one: string): [string, string] | null {
   const at = one.indexOf("(");
   if (at <= 0) return null;
   const close = one.indexOf(")", at);
@@ -195,7 +213,7 @@ function beforeBracket(one: string): string | null {
   const after = close === -1 ? "" : one.slice(close + 1).trim();
   // What follows the bracket may be a dash and a further instruction ("Question (required) - max 95 characters") and nothing else.
   const afterIsFine = after === "" || (nextDash(after, 0) === 0 && after[1] === " " && isInstruction(after.slice(2)));
-  return isInstruction(inside) && afterIsFine ? one.slice(0, at).trim() : null;
+  return isInstruction(inside) && afterIsFine ? [one.slice(0, at).trim(), one.slice(at + 1)] : null;
 }
 
 function columnNamed(cell: string): Column | null {
@@ -404,6 +422,12 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   const nameOf = (slot: number): string => (numbered ? String(slot + 1) : (LETTERS[slot] as string));
   const quotedAnswers = (): string => answers.map((a, i) => `${nameOf(letterOf[i] as number)}: ${a}`).join("; ");
   const rightIsFirst = rightFirst && rightWords !== "";
+  // A row of Blackboard's upload file read as a table: each answer is followed by the word correct or incorrect, and the words land in
+  // the answer cells while the key is taken from the wrong place. The check for that file is meant to catch it first; this says so when it
+  // did not, because the question would otherwise read as parsed with the word "incorrect" marked right.
+  if (answers.length >= 4 && answers.every((a, i) => (i % 2 === 1) === /^(?:in)?correct$/i.test(a))) {
+    note(FindingCode.UnreadContent, "warn", 'The answers of this row alternate with the word correct or incorrect, which is how Blackboard\'s upload file marks its key. If this is a row of that file read as a table, the key is not read from it: check it.');
+  }
 
   // The type: as the cell says, or from what the row holds when it says nothing. A type that is stated is believed.
   const code = squash(typeCell);

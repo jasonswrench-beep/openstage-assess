@@ -680,23 +680,23 @@ describe("a Common Cartridge package", () => {
     test("is called what it is, with what this program does read from Blackboard, and none of its files are read", () => {
       const one = said({ "imsmanifest.xml": manifest, "res00001.dat": dat });
       assert.equal(one.questions, 0);
-      assert.match(one.text, /\[warn\] No question was found in this file\. It is a package that Blackboard exports for its own use, with its questions in a \.dat file, and this program does not read that form\./);
+      assert.match(one.text, /\[warn\] No question was found in this file\. It is a package that Blackboard exports for its own use, with its questions in \.dat files \(one \.dat file in all\), and this program does not read that form\./);
       assert.match(one.text, /It does read the tab delimited file that Blackboard takes in \(one question to a row, beginning with its type\), and a Word, Excel or text file of the questions\./);
       assert.ok(!/A QTI file holds/.test(one.text), "the words about QTI do not say what the person has");
     });
 
-    test("is known by either of the two ways its manifest names Blackboard, and by a manifest inside a folder of the zip", () => {
-      const bySpace = `<manifest xmlns:bb="http://www.blackboard.com/content-packaging/"><resources><resource type="webcontent" href="res00001.dat"/></resources></manifest>`;
-      const byType = `<manifest><resources><resource type="assessment/x-bb-qti-pool" href="res00001.dat"/></resources></manifest>`;
-      const cases: Record<string, Record<string, string>> = { "the namespace alone": { "imsmanifest.xml": bySpace, "res00001.dat": dat }, "the resource type alone": { "imsmanifest.xml": byType, "res00001.dat": dat }, "a manifest in a folder": { "export/imsmanifest.xml": manifest, "export/res00001.dat": dat } };
+    test("is known by a resource that is an assessment of Blackboard's kinds, in a manifest anywhere in the zip", () => {
+      const pool = `<manifest><resources><resource type="assessment/x-bb-qti-pool" href="res00001.dat"/></resources></manifest>`;
+      const testType = `<manifest><resources><resource type='assessment/x-bb-qti-test' href="res00001.dat"/></resources></manifest>`;
+      const cases: Record<string, Record<string, string>> = { "a pool": { "imsmanifest.xml": pool, "res00001.dat": dat }, "a test": { "imsmanifest.xml": testType, "res00001.dat": dat }, "a manifest in a folder": { "export/imsmanifest.xml": manifest, "export/res00001.dat": dat } };
       for (const [name, files] of Object.entries(cases)) {
         assert.match(said(files).text, /package that Blackboard exports for its own use/, name);
       }
     });
 
     test("counts its .dat files, and counts none of the Mac's own litter", () => {
-      assert.match(said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "res00002.dat": dat, "__MACOSX/._res00001.dat": "x" }).text, /with its questions in 2 \.dat files,/);
-      assert.match(said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "sub/RES00002.DAT": dat }).text, /with its questions in 2 \.dat files,/, "by the end of the name, whatever its case or folder");
+      assert.match(said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "res00002.dat": dat, "__MACOSX/._res00001.dat": "x" }).text, /\(2 \.dat files in all\),/);
+      assert.match(said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "sub/RES00002.DAT": dat }).text, /\(2 \.dat files in all\),/,"by the end of the name, whatever its case or folder");
     });
 
     test("is not claimed for a zip whose manifest does not name Blackboard, or that has no .dat file, or no manifest", () => {
@@ -709,6 +709,28 @@ describe("a Common Cartridge package", () => {
         assert.ok(!/Blackboard/.test(got.text), `no claim for ${Object.keys(files).join(", ")}`);
         assert.match(got.text, /A QTI file holds item elements/);
       }
+    });
+
+    // Found by a second reviewer: a course export with only documents and announcements has .dat files too and names Blackboard, and was
+    // told it held questions; and a manifest that only mentions the company, with a file to import beside it, lost the advice to import it.
+    test("is not claimed for a course export that holds no assessment, or a manifest that only mentions the company", () => {
+      const course = `<manifest xmlns:bb="http://www.blackboard.com/content-packaging/"><resources><resource type="resource/x-bb-document" bb:file="res00001.dat"/><resource type="resource/x-bb-announcement" bb:file="res00002.dat"/></resources></manifest>`;
+      const got = said({ "imsmanifest.xml": course, "res00001.dat": dat, "res00002.dat": dat });
+      assert.ok(!/Blackboard exports/.test(got.text), got.text);
+      assert.match(got.text, /A QTI file holds item elements/);
+      const mention = `<!-- exported from www.blackboard.com --><manifest><resources/></manifest>`;
+      const beside = said({ "imsmanifest.xml": mention, "res00001.dat": dat, "bank.txt": "x" });
+      assert.ok(!/Blackboard exports/.test(beside.text));
+      assert.match(beside.text, /This zip holds bank\.txt, which is a file of another kind\. Unzip it and import that file on its own\./);
+      // A name in an attribute that is not the type does not count either.
+      const titled = `<manifest><resources><resource title="assessment/x-bb-pool" type="webcontent"/></resources></manifest>`;
+      assert.ok(!/Blackboard exports/.test(said({ "imsmanifest.xml": titled, "a.dat": dat }).text));
+    });
+
+    test("keeps the advice to import a file that is beside it, after what it says it is", () => {
+      const got = said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "bank.txt": "x" });
+      assert.match(got.text, /package that Blackboard exports for its own use/);
+      assert.match(got.text, /This zip holds bank\.txt, which is a file of another kind\. Unzip it and import that file on its own\./);
     });
 
     test("says nothing about Blackboard when questions were found, whatever else the package holds", () => {

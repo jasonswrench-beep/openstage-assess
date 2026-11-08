@@ -48,8 +48,15 @@ const ALL_TYPES = new Set([...READ_TYPES, ...Object.keys(KEPT_TYPES)]);
  * file must agree with it: it asked for a listed type on every row, so a file with one row of a type that is not listed was taken for a
  * table, and the table reader marked the word "incorrect" as a right answer.
  */
-const TYPE_WORD = /^[A-Z_]{2,12}$/;
+const TYPE_WORD = /^[A-Z][A-Z_]{1,39}$/;
+/** The reader keeps a row whose first word is made like a type, in any case, as a question of a type it does not know (a failed essay). */
 const isTypeWord = (field: string): boolean => ALL_TYPES.has(field.toUpperCase()) || TYPE_WORD.test(field.toUpperCase());
+/**
+ * The check for the kind of file is stricter about a word that is not on the list: it has to be written in capitals, as Blackboard writes
+ * them, so that the header of a table ("Type") is not one. Twelve characters was once the longest; JUMBLED_SENTENCE is 16 and
+ * CALCULATED_NUMERIC is 18, and a file with either sent to the table reader marked the word "incorrect" as a right answer.
+ */
+const looksTyped = (field: string): boolean => ALL_TYPES.has(field.toUpperCase()) || TYPE_WORD.test(field);
 
 const SHORT = 120;
 const quoted = (s: string): string => (s.length > SHORT ? `${s.slice(0, SHORT - 1)}...` : s).replace(/\s+/g, " ").trim();
@@ -95,10 +102,11 @@ function strictShape(fields: string[]): boolean {
 }
 
 /**
- * Whether the start of a file is a Blackboard upload file. Every row begins with a type (one of the file's, or any word that is made like
+ * Whether the start of a file is a Blackboard upload file. The rows begin with a type (one of the file's, or a word of capitals made like
  * one) and a tab, and at least one is a multiple choice, multiple answer or true or false row with the words correct, incorrect, true or
- * false where they belong, or there are several rows of the listed other types. A table with no header row whose first cells are types (the template's order) is not caught: its
- * answers come before a letter, not before the word correct.
+ * false where they belong (then a quarter of the rows may be anything else), or every row is typed and there are several of the listed
+ * other types. A table with no header row whose first cells are types (the template's order) is not caught: its answers come before a
+ * letter, not before the word correct.
  */
 export function looksLikeBlackboardUpload(bytes: Uint8Array): boolean {
   let text: string;
@@ -109,9 +117,14 @@ export function looksLikeBlackboardUpload(bytes: Uint8Array): boolean {
   }
   const rows = rowsOf(text).slice(0, 40);
   if (rows.length === 0) return false;
-  if (!rows.every((r) => r.fields.length >= 2 && isTypeWord(r.fields[0] as string))) return false;
-  if (rows.some((r) => strictShape(r.fields))) return true;
-  return rows.length >= 3 && rows.filter((r) => ["ESS", "FIB", "MAT", "ORD"].includes((r.fields[0] as string).toUpperCase())).length >= 3;
+  // A first row that names a Question column is the header of a table, whatever follows it.
+  if (rows[0]?.fields.some((f) => ["question", "questions", "question text", "stem"].includes(wordOf(f)))) return false;
+  const typed = rows.filter((r) => r.fields.length >= 2 && looksTyped(r.fields[0] as string));
+  // A row with a strict shape is firm evidence, so a few stray lines among the rows (a count at the end, a lone type) do not undo it: the
+  // reader keeps each as an orphan or a failed essay, which is said, and a file sent to the table reader instead marked "incorrect" as the
+  // key. Without one, every row has to be typed.
+  if (typed.some((r) => strictShape(r.fields))) return typed.length * 4 >= rows.length * 3;
+  return typed.length === rows.length && rows.length >= 3 && rows.filter((r) => ["ESS", "FIB", "MAT", "ORD"].includes((r.fields[0] as string).toUpperCase())).length >= 3;
 }
 
 interface Ctx {

@@ -114,6 +114,13 @@ describe("rich text", () => {
     assert.equal(isBlankText(""), true);
     assert.equal(isBlankText(" \t\n "), true);
     assert.equal(isBlankText(invisible.map(c).join("")), true, "all of them together");
+    // Found by a second reviewer: these draw nothing and were not blank, so a cell of only one of them was an option or a stem with no words.
+    const fillers = [0x3164, 0x2800, 0x115f, 0x1160, 0xffa0, 0x034f, 0xfe0f, 0xfe00, 0x180b, 0x180e, 0x061c, 0x17b4, 0x2062, 0x206f];
+    for (const code of fillers) assert.equal(isBlankText(c(code)), true, `U+${code.toString(16).padStart(4, "0")} alone`);
+    assert.equal(isBlankText(String.fromCodePoint(0xe0020)) && isBlankText(String.fromCodePoint(0xe0001)), true, "tag characters are never drawn");
+    // And these are drawn: the Arabic number signs, the end of ayah, the Syriac abbreviation mark, a Brahmi number joiner.
+    const signs = [0x0600, 0x0601, 0x0605, 0x06dd, 0x070f, 0x08e2, 0x110bd, 0x110cd];
+    for (const code of signs) assert.equal(isBlankText(String.fromCodePoint(code)), false, `U+${code.toString(16).padStart(4, "0")} is a sign that shows`);
     assert.equal(isBlankText(c(0xd800)), true, "a lone half of a surrogate pair is dropped by the cleaning, and so nothing is left");
     for (const text of ["a", "0", ".", "-", c(0x200b) + "x" + c(0x200b), "é", "é", "字", "😀", "–", "…", "°", c(0x2122)]) assert.equal(isBlankText(text), false, JSON.stringify(text));
   });

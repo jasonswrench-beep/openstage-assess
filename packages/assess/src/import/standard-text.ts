@@ -1495,7 +1495,13 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
   // no stem holds its own options ("a) Ice b) Fire"), which a bank written on one line looks like. Each of those was a real bank that
   // was told it might not be one.
   const hasModelAnswer = (q: Question): boolean => (q.body as { modelAnswer?: unknown }).modelAnswer !== undefined;
-  const optionsInStem = (q: Question): boolean => /(?:^|\s)\(?[aA][.)]\s+\S[\s\S]*?\s\(?[bB][.)]\s+\S/.test(richTextToPlain(q.stem));
+  // The first "a)" decides: a "b)" after a later one is after the first too. One lazy pattern across both took N squared steps on a stem
+  // made of thousands of "a." (five such stems took 20 seconds).
+  const optionsInStem = (q: Question): boolean => {
+    const stem = richTextToPlain(q.stem);
+    const first = /(?:^|\s)\(?[aA][.)]\s+\S/.exec(stem);
+    return first !== null && /\s\(?[bB][.)]\s+\S/.test(stem.slice(first.index + first[0].length));
+  };
   const allGuessedEssays =
     questions.length >= 5 &&
     questions.every(

@@ -220,6 +220,48 @@ describe("what a description may and may not cut", () => {
       }
     });
 
+    // Found by a second reviewer. A bare "Answer" is the key and is also the words of an answer, so a description that limits a text says it
+    // is the words, and a description in a language or a script the list does not hold is not read at all.
+    test("so a bare Answer that is limited like a text is not the key, nor is one with a description the list cannot read", () => {
+      for (const header of ["Answer - max 60 characters", "Answer (max 60 characters)", "Answer - enter the text", "Answer - up to 4 options", "Answer - enter all of the options", "Answer - max 60 ✗", "Answer - 错误 max 60", "Answer - max 60 é", "Answer – max 60", "Answer - min 2"]) {
+        const r = base(header);
+        assert.deepEqual(right(first(r)), ["Ice"], header);
+        assert.ok(!r.fileFindings.some((f) => /repeats one already read/.test(f.message)), header);
+      }
+      // The guard about choosing hides the checks for what is outside ASCII, so these are about choosing and are still not cut.
+      for (const header of ["Answer - choose 错误", "Answer - choose one ✗", "Answer - select all é", "Answer - pick one –– 一"]) {
+        const r = base(header);
+        assert.deepEqual(right(first(r)), ["Ice"], header);
+        assert.ok(!r.fileFindings.some((f) => /repeats one already read/.test(f.message)), header);
+      }
+      // The key is cut when the description is about choosing, as the quiz game template's is.
+      for (const header of ["Answer - choose one", "Answer (select one)", "Answer - pick at least one", "Key - choose one", "Correct answer(s) - choose at least one"]) {
+        const r = csv(`Question,A,B,${header}\nWhich?,x,y,B`);
+        assert.deepEqual(right(first(r)), ["y"], header);
+        assert.ok(!r.fileFindings.some((f) => /not used/.test(f.message)), header);
+      }
+    });
+
+    test("so the longest name that is left is the one used, and a dash that is part of the name is not taken for the start of the description", () => {
+      // "Answer - 4" is the fourth answer; the first dash alone would have cut it to "Answer", the key, and marked the wrong option right.
+      const headers = [1, 2, 3, 4].map((n) => `Answer - ${n} - max 60 characters`).join(",");
+      const r = csv(`Question,${headers},Correct answer(s) - choose at least one\nWhat is 1+1?,2,3,4,5,1`);
+      assert.deepEqual(options(first(r)).map(([t]) => t), ["2", "3", "4", "5"]);
+      assert.deepEqual(right(first(r)), ["2"]);
+      assert.equal(verdictFrom(first(r).findings), "parsed");
+      // Where the shorter cut is a name too, the longer one still wins: "Answer" would be the key here, with a description about choosing.
+      const chosen = csv("Question,Answer - 1 - choose one,Answer - 2 - choose one,Correct\nWhich?,x,y,2");
+      assert.deepEqual(options(first(chosen)).map(([t]) => t), ["x", "y"]);
+      assert.deepEqual(right(first(chosen)), ["y"]);
+      assert.equal(verdictFrom(first(chosen).findings), "parsed");
+      // The same with letters, and with the last answer's number the same as the words of another answer.
+      const lettered = csv("Question,Answer - A - max 60 characters,Answer - B - max 60 characters,Answer - C - max 60 characters,Answer - D - max 60 characters,Correct answer(s) - choose at least one\nWhich is a vowel?,b,c,a,d,C");
+      assert.deepEqual(right(first(lettered)), ["a"]);
+      const same = csv("Question,Answer - 1 - max 60 characters,Answer - 2 - max 60 characters,Answer - 3 - max 60 characters,Answer - 4 - max 60 characters,Correct answer(s) - choose at least one\nWhat is 1+1?,5,4,3,2,4");
+      assert.equal(verdictFrom(first(same).findings), "failed", "a 4 that is both a column's number and the words of another answer is not guessed at");
+      assert.deepEqual(right(first(same)), []);
+    });
+
     test("so feedback for one outcome is not the general feedback, which every answer is shown", () => {
       for (const header of ["Feedback - when right", "Feedback - when correct", "Feedback - for a right answer", "Feedback - for a wrong answer", "Feedback - hint"]) {
         const r = csv(`Question,A,B,Correct,${header}\nWhich?,x,y,A,Well done`);
@@ -339,5 +381,29 @@ describe("a cell that shows nothing is an empty cell", () => {
     assert.equal(plain(first(r).stem), "Which?");
     assert.deepEqual(right(first(r)), ["Ice"]);
     assert.equal(verdictFrom(first(r).findings), "parsed");
+  });
+});
+
+// Found by a second reviewer. A file of Blackboard's upload rows that reaches this reader instead of its own (the check for the kind of
+// file is meant to catch it first) read the word "incorrect" as the key of a question that came out as parsed.
+describe("a row that looks like one of Blackboard's upload rows, read as a table", () => {
+  test("is flagged for review, because the key is not read from it", () => {
+    const r = csv("MC,Which is cold?,Ice,correct,Fire,incorrect,Lava,incorrect\nMC,Which is hot?,Fire,correct,Snow,incorrect");
+    for (const q of r.questions) {
+      assert.ok(liveFindings(q.findings).some((f) => /alternate with the word correct or incorrect/.test(f.message) && f.severity === "warn"), said(q));
+      assert.notEqual(verdictFrom(q.findings), "parsed");
+    }
+  });
+
+  test("is not said of a question whose answers happen to be the words Correct and Incorrect", () => {
+    // Two answers are never enough, even when the second is the word: "Ice" and "Correct" are two answers.
+    const two = csv("Question,A,B,Correct\nWhich?,Ice,Correct,A");
+    assert.ok(!liveFindings(first(two).findings).some((f) => /alternate with the word/.test(f.message)));
+    for (const row of ["The claim is...,Correct,Incorrect,A", "The claim is...,Incorrect,Correct,B", "Pick,Correct,Incorrect,Both,Neither,C", "Pick,Yes,Correct,No,Incorrect,A"]) {
+      const r = csv(`Question,A,B,C,D,Correct\n${row}`);
+      const bad = r.questions.filter((q) => liveFindings(q.findings).some((f) => /alternate with the word/.test(f.message)));
+      // Only the last row alternates (answers at odd places are exactly the two words), and that shape is Blackboard's.
+      assert.equal(bad.length, row.startsWith("Pick,Yes") ? 1 : 0, row);
+    }
   });
 });
