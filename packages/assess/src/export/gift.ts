@@ -33,6 +33,32 @@ export function giftEscape(text: string): string {
 /** The weight of one right answer out of several, in the form Moodle reads. */
 const share = (n: number): string => String(Math.round((100 / n) * 100000) / 100000);
 
+/**
+ * What GIFT reads as its own marks inside an answer and gives no way to escape: "->" is the sign of a matching pair, and a percentage
+ * between percent signs at the start of an answer is its weight. A question with either in an answer is left out and said so. Written
+ * as it was, an answer that held an arrow made the whole question a failed essay on the way back, a matching pair "p -> q" with
+ * "Implication" came back as "p" with "q -> Implication", and an answer that began %50% was read as a weight and the wrong option
+ * came back right.
+ */
+const ARROW = "->";
+const WEIGHT_AT_START = /^\s*%-?\d+(?:\.\d+)?%/;
+const ARROW_REASON = `One of its answers contains "${ARROW}", which GIFT reads as the mark for a matching pair, and it cannot be written another way.`;
+const WEIGHT_REASON = "One of its answers begins with a percentage between percent signs (for example %50%), which GIFT reads as a weight, and it cannot be written another way.";
+
+/** A number as plain digits. An exponent ("6.67e-11", "1e+21") is not something the numeric answer of every tool reads, and this one did not. */
+export function plainNumber(n: number): string {
+  const text = String(n);
+  if (!/e/i.test(text)) return text;
+  const sign = n < 0 ? "-" : "";
+  const [mantissa = "", exponentText = "0"] = Math.abs(n).toExponential().toLowerCase().split("e");
+  const exponent = Number(exponentText);
+  const digits = mantissa.replace(".", "");
+  const point = (mantissa.indexOf(".") === -1 ? mantissa.length : mantissa.indexOf(".")) + exponent;
+  if (point <= 0) return `${sign}0.${"0".repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${"0".repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
+
 interface Planned {
   item: ReportItem;
   block?: string;
@@ -58,11 +84,24 @@ function plan(question: Question, position: number): Planned {
   if (stem === "") return leftOut("It has no question text once it is written as plain text.");
   // A stem with formatting keeps it, by being marked as HTML. The answers cannot be marked, so theirs becomes plain text.
   const formatted = question.stem.format === "rich" && FORMATTING.test(question.stem.content);
-  const stemText = formatted ? `[html]${giftEscape(htmlText(question.stem, question, newLosses()).replace(/\n/g, ""))}` : giftEscape(stem);
+  // A newline between two blocks is nothing, and a newline inside a block is a space (or a line of a code block): giftEscape writes it as \n,
+  // which Moodle reads back as a newline in HTML. It was deleted, so "following\nis" was written "followingis".
+  const stemText = formatted ? `[html]${giftEscape(htmlText(question.stem, question, newLosses()).replace(/>\s*\n\s*</g, "><"))}` : giftEscape(stem);
+  // Text that GIFT would read as something else at the start of a block: a line that begins // is a comment, so a question with that stem
+  // vanished from the file and its answers were left as a block with no question; and a text that begins [html], [plain], [moodle] or
+  // [markdown] has the tag taken for the format and lost. A [plain] tag in front is read as the format, and the text keeps what it had.
+  const needsFormatTag = !formatted && /^\s*(?:\/\/|\[(?:html|plain|markdown|moodle)\])/i.test(stemText);
+  const stemWritten = needsFormatTag ? `[plain]${stemText}` : stemText;
   // A title that is only the start of the question text, which is what an untitled question is given, says nothing the text
   // does not, and Moodle makes the same name from the text. Only a title someone wrote is written.
   const automatic = question.title === titleFromStem(titleText(question.stem));
-  const title = automatic ? "" : question.title.replace(/::/g, ":").replace(/\s+/g, " ").trim();
+  // The title sits between two pairs of colons, so it holds none: a run of them is one, and one at either end would run into the pair that
+  // closes or opens it (a title ending in a colon put ": " at the start of the stem and changed the title).
+  const wantedTitle = automatic ? "" : question.title.replace(/\s+/g, " ").trim();
+  const title = wantedTitle.replace(/:+/g, ":").replace(/^:+|:+$/g, "").trim();
+  if (title !== wantedTitle && wantedTitle !== "") {
+    notes.push(`The title had colons in it that GIFT cannot hold next to its own marks. ${title === "" ? "It is left out" : `It is written as "${title}"`}.`);
+  }
 
   const lines: string[] = [];
   const answer = (marker: "=" | "~", text: string, feedback?: string, weight?: string): string =>
@@ -72,6 +111,9 @@ function plan(question: Question, position: number): Planned {
     const options = question.body.options;
     const texts = options.map((o) => plainText(o.content, question, losses, false));
     if (texts.some((t) => t === "")) return leftOut("One of its answers has no text, and GIFT cannot hold an empty answer.");
+    if (texts.some((t) => t.includes(ARROW))) return leftOut(ARROW_REASON);
+    // A multiple response writes a weight in front of every answer, so a weight in the words that follow it is only words.
+    if (isChoice(question) && texts.some((t) => WEIGHT_AT_START.test(t))) return leftOut(WEIGHT_REASON);
     const feedbacks = options.map((o) => (o.feedback && hasText(o.feedback) ? plainText(o.feedback, question, losses, false) : ""));
     const right = options.filter((o) => o.correct).length;
     if (isMultipleResponse(question)) {
@@ -110,6 +152,8 @@ function plan(question: Question, position: number): Planned {
     }
     const cleaned = accepted.map((a) => a.replace(/\s+/g, " ").trim()).filter((a) => a !== "");
     if (cleaned.length === 0) return leftOut("It has no accepted answer, and nothing is guessed.");
+    if (cleaned.some((a) => a.includes(ARROW))) return leftOut(ARROW_REASON);
+    if (cleaned.some((a) => WEIGHT_AT_START.test(a))) return leftOut(WEIGHT_REASON);
     for (const a of cleaned) lines.push(answer("=", a));
     if (caseSensitive) notes.push("Upper and lower case count in this question, and GIFT cannot say so.");
   } else if (question.type === "matching") {
@@ -117,18 +161,23 @@ function plan(question: Question, position: number): Planned {
     if (body.pairs.length < MIN_PAIRS) return leftOut(`It has ${body.pairs.length} pairs and Moodle needs at least ${MIN_PAIRS} in a matching question.`);
     const pairs = body.pairs.map((p) => ({ left: plainText(p.left, question, losses, false), right: p.right.replace(/\s+/g, " ").trim() }));
     if (pairs.some((p) => p.left === "" || p.right === "")) return leftOut("One of its pairs has nothing on one side, and nothing is guessed to fill it.");
+    if (pairs.some((p) => p.left.includes(ARROW) || p.right.includes(ARROW))) return leftOut(ARROW_REASON);
+    if (pairs.some((p) => WEIGHT_AT_START.test(p.left))) return leftOut(WEIGHT_REASON);
     for (const p of pairs) lines.push(`=${giftEscape(p.left)} -> ${giftEscape(p.right)}`);
     if ((body.distractors ?? []).length > 0) notes.push(`${plural((body.distractors ?? []).length, "spare answer", "spare answers")} cannot be carried: GIFT matching has none.`);
   } else if (question.type === "numeric") {
     const body = question.body as { mode: string; value?: number; min?: number; max?: number; tolerance?: number; units?: string };
-    if (body.mode === "range" && typeof body.min === "number" && typeof body.max === "number") lines.push(`#${body.min}..${body.max}`);
-    else if (typeof body.value === "number") lines.push(`#${body.value}${body.mode === "tolerance" && typeof body.tolerance === "number" ? `:${body.tolerance}` : ""}`);
+    if (body.mode === "range" && typeof body.min === "number" && typeof body.max === "number") lines.push(`#${plainNumber(body.min)}..${plainNumber(body.max)}`);
+    else if (typeof body.value === "number") lines.push(`#${plainNumber(body.value)}${body.mode === "tolerance" && typeof body.tolerance === "number" ? `:${plainNumber(body.tolerance)}` : ""}`);
     else return leftOut("It has no value to score against, and nothing is guessed.");
     if (body.units && body.units.trim() !== "") notes.push(`The units (${body.units.trim()}) cannot be carried. Put them in the question text.`);
   } else {
     // An essay: GIFT writes it as empty braces.
     const model = (question.body as { modelAnswer?: Parameters<typeof plainText>[0] }).modelAnswer;
     if (model && hasText(model)) notes.push("The model answer cannot be carried: GIFT writes an essay as an empty answer.");
+    const essay = question.body as { rubric?: unknown[]; expectedWords?: number };
+    if ((essay.rubric ?? []).length > 0) notes.push("The rubric cannot be carried: GIFT has no place for one.");
+    if (typeof essay.expectedWords === "number") notes.push("The expected length cannot be carried.");
   }
 
   // Feedback for a right or a wrong answer has no place in the other types.
@@ -143,7 +192,7 @@ function plan(question: Question, position: number): Planned {
   if (losses.breaks) notes.push("Paragraph breaks in an answer became spaces.");
   notes.push(...lossNotes(losses, "Moodle"));
 
-  const head = `${title === "" ? "" : `::${giftEscape(title)}:: `}${stemText} `;
+  const head = `${title === "" ? "" : `::${giftEscape(title)}:: `}${stemWritten} `;
   const block = lines.length === 0 ? `${head}{}` : `${head}{\n${lines.join("\n")}\n}`;
   return { item: { ...base, outcome: notes.length > 0 ? "exportedWithLosses" : "exported", ...(asType ? { asType } : {}), notes }, block };
 }

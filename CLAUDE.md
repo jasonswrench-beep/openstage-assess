@@ -230,7 +230,21 @@ and drop, a calculated question, a plugin's) is kept as an essay with all its wo
 a picture it cannot keep (linked from another site, missing from the file, not a PNG, JPEG or GIF by its bytes) stays as `[picture]`
 with the question flagged. Moodle's three standard combined-feedback sentences are not authored feedback and are not kept; the file
 says how many. Its exporter is read back through it (`import-moodle-xml.test.ts`): what is exported and imported again is what was
-exported, byte for byte. The sample in `fixtures/moodle-xml` is written from the documented format, not from a real Moodle.
+exported, byte for byte. The sample in `fixtures/moodle-xml` is written from the documented format, not from a real Moodle. A Moodle
+answer that is plain text (the right side of a pair, an accepted answer, a name) is taken as written: text that looks like a tag is its
+words, and only an element marked `format="html"` is read as markup (three matching answers that began with a tag came back as the same
+words, and a bare `<br>` as "(missing)", in a question that read as parsed).
+
+**An exporter writes what its own reader gets back, or leaves the question out and says why.** A random round trip of twenty thousand
+questions with hostile text through every exporter found what the fixtures did not (`export-gift-round-trip.test.ts` holds each).
+GIFT has no escape for `->` (a matching pair) or for a percentage at the start of an answer (a weight), so a question with either in an
+answer is left out with the reason, and a multiple response, which writes a weight of its own, is not affected by a percentage in the
+words. A stem that begins `//` (a comment line, so the question vanished) or with `[html]`, `[plain]`, `[moodle]` or `[markdown]` (taken
+for the format and lost) is written after a `[plain]` tag. A title holds no run of colons and none at either end, and a changed one is
+said. A newline inside a formatted stem is written as `\n`, not deleted ("following\nis" was written "followingis"). A number is written
+in plain digits (`plainNumber`), and an exponent in a file is read. A Correct cell of a table that is the words of one answer and also a
+list of letters naming others ("A, B" for a question whose options are "A", "A, B" and "B") is not guessed: no answer is marked and it
+says so, as for a number that is a column and also the words of an answer.
 
 **A QTI file's key is what its scoring states, in a shape the reader knows, and nothing else.** `import/qti.ts` reads 1.2 and 2.1, as a
 package or a bare file. In 1.2 a label is right where a condition that asks for it alone sets the whole of the points; a multiple answer
@@ -450,7 +464,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2943 engine tests and 336 app tests, Node's own runner
+npm test                       # 2966 engine tests and 336 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

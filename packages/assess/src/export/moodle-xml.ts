@@ -200,6 +200,10 @@ function plan(question: Question, position: number, media?: ReadonlyMap<string, 
       `<responseformat>editor</responseformat><responserequired>1</responserequired><responsefieldlines>15</responsefieldlines><attachments>0</attachments>` +
       `<graderinfo format="html"><text>${model && hasText(model) ? cdata(html(model)) : ""}</text></graderinfo>`;
     if (model && hasText(model)) notes.push("The model answer is written as the note for the person who marks it.");
+    // What the other exporters say and this one did not: a rubric and an expected length have no place in a Moodle essay.
+    const essay = question.body as { rubric?: unknown[]; expectedWords?: number };
+    if ((essay.rubric ?? []).length > 0) notes.push("The rubric cannot be carried: a rubric is made in Moodle.");
+    if (typeof essay.expectedWords === "number") notes.push("The expected length cannot be carried.");
   }
 
   const hasOutcomeFeedback = (question.feedback.correct && hasText(question.feedback.correct)) || (question.feedback.incorrect && hasText(question.feedback.incorrect));

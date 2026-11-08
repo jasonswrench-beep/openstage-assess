@@ -352,17 +352,35 @@ function positionsNamed(
   answers: readonly string[],
   numbered = false,
   emptyColumns: ReadonlySet<number> = new Set(),
-): { positions: number[] } | { bad: string; ambiguous?: true; empty?: true } {
+): { positions: number[] } | { bad: string; ambiguous?: true; empty?: true; list?: true } {
   const whole = cell.trim();
   // In a table whose answer columns are numbered ("Option 1" to "Option 4") a number names the column with that number, and a
   // letter names nothing, because no column is called by one. In a table with lettered columns it is the other way about, and a
   // number is only ever the words of an answer.
   const single = numbered ? /^\d{1,2}$/.test(whole) : /^[A-Ha-h]$/.test(whole);
+  const listed = positionsListed(whole, letterOf, answers, numbered, emptyColumns);
   if (!single) {
     // The whole cell may be the words of one answer, which may have spaces and commas in it.
     const exact = answers.findIndex((a) => a.toLowerCase() === whole.toLowerCase());
-    if (exact !== -1) return { positions: [exact] };
+    if (exact !== -1) {
+      // And it may also read as a list of answers: "A, B" is the words of the second answer in a question whose options are "A", "A, B" and
+      // "B", and is also the first and the third. Either could be meant, and nothing in the file says which, so no answer is marked. It
+      // was read as the words, and the exporter wrote exactly this cell for a question with two right answers, so one of them was lost.
+      if ("positions" in listed && (listed.positions.length !== 1 || listed.positions[0] !== exact)) return { bad: whole, ambiguous: true, list: true };
+      return { positions: [exact] };
+    }
   }
+  return listed;
+}
+
+/** The answers a cell names when it is read as a list of letters or numbers, or of the words of answers. */
+function positionsListed(
+  whole: string,
+  letterOf: readonly number[],
+  answers: readonly string[],
+  numbered: boolean,
+  emptyColumns: ReadonlySet<number>,
+): { positions: number[] } | { bad: string; ambiguous?: true; empty?: true } {
   const positions: number[] = [];
   for (const token of whole.split(/[,;|/]|\s+and\s+|\s+/i).map((t) => t.trim()).filter((t) => t !== "")) {
     const byText = /^[A-Ha-h]$/.test(token) && !numbered ? -1 : answers.findIndex((a) => a.toLowerCase() === token.toLowerCase());
@@ -495,6 +513,8 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
       const named = positionsNamed(correctCell, letterOf, answers, numbered, emptyColumns);
       if ("bad" in named && named.empty) {
         note(FindingCode.KeyLetterMissing, "error", `"${named.bad}" in the Correct cell names answer ${named.bad}, which is empty in this row. No answer is marked.`);
+      } else if ("bad" in named && named.ambiguous && named.list) {
+        note(FindingCode.KeyLetterMissing, "error", `"${named.bad}" in the Correct cell is the words of one of the answers and is also a list of answers, and the file does not say which is meant. No answer is marked.`);
       } else if ("bad" in named && named.ambiguous) {
         note(FindingCode.KeyLetterMissing, "error", `"${named.bad}" in the Correct cell could be the answer in column ${named.bad} or the answer whose words are "${named.bad}", and the file does not say which. No answer is marked.`);
       } else if ("bad" in named) {

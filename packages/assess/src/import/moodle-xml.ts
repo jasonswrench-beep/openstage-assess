@@ -174,8 +174,18 @@ class Reader {
 
   /** An element's text as words, for the places that hold no markup (the right side of a pair, a unit). */
   plain(container: XmlElement | undefined): string {
-    const text = this.rich(container);
-    return text ? richTextToPlain(text).replace(/\s+/g, " ").trim() : "";
+    if (!container) return "";
+    // Moodle keeps these as plain text, and the exporter escapes what it writes, so text that looks like a tag ("<br> inserts a line break",
+    // "<p>") is the words of the answer. It was run through the HTML reader, which took the tag out: three answers that began with a tag
+    // came back as the same words, a bare "<br>" came back as "(missing)", and the question read as parsed. Only an element that says it is
+    // HTML is read as markup. A lone paragraph around the whole text is how some tools wrap a plain answer, and is taken off.
+    if (attr(container, "format") === "html") {
+      const text = this.rich(container);
+      return text ? richTextToPlain(text).replace(/\s+/g, " ").trim() : "";
+    }
+    const raw = allText(first(container, "text") ?? { name: "", attrs: {}, children: [] }).replace(/\s+/g, " ").trim();
+    const wrapped = /^<p>([\s\S]*)<\/p>$/i.exec(raw);
+    return wrapped && !/<p[\s>]/i.test(wrapped[1] as string) ? (wrapped[1] as string).trim() : raw;
   }
 
   /** What the reading of the question's text and answers has to say, once, at the end. */
