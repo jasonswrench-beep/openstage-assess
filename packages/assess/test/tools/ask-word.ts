@@ -44,7 +44,9 @@ ${readFileSync(join(here, "word-labels.ps1"), "utf8")}`;
     const said = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", wholeBlock], {
       input: script,
       encoding: "utf8",
-      timeout: 600_000,
+      // 155 documents for the formatting check took longer than the ten minutes this once allowed on a machine with other work going,
+      // and the timeout then looked like a permissions error (see the cleanup below).
+      timeout: 1_800_000,
     });
     console.log(said.trim());
 
@@ -53,6 +55,12 @@ ${readFileSync(join(here, "word-labels.ps1"), "utf8")}`;
     for (const [name, value] of Object.entries(raw)) answers[name] = Array.isArray(value) ? value : [value];
     return answers;
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // When Word is still running (the time ran out and PowerShell was stopped with it open) it holds the folder, and a failure to remove
+    // the folder must not replace the error that says why: it once did, and a timeout read as "Permission denied".
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (error) {
+      console.error(`The folder ${dir} could not be removed (${error instanceof Error ? error.message : String(error)}); Word may still be running.`);
+    }
   }
 }

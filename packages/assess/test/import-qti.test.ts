@@ -787,7 +787,9 @@ describe("a Common Cartridge package", () => {
       const hostile = "<manifest><bb:thing/>" + "<resource ".repeat(200000);
       const start = performance.now();
       const got = said({ "imsmanifest.xml": hostile, "a.dat": dat });
-      assert.ok(performance.now() - start < 1500, `${Math.round(performance.now() - start)} ms`);
+      // 1.4 seconds on a quiet machine, and the quadratic way of looking took minutes: the line is far from both, since the first line
+      // (1.5 seconds) failed on a machine that was doing other work.
+      assert.ok(performance.now() - start < 6000, `${Math.round(performance.now() - start)} ms`);
       assert.ok(!/Blackboard exports/.test(got.text));
     });
 

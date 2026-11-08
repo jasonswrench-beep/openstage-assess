@@ -135,7 +135,10 @@ export function openDocx(input: Uint8Array, limits: DocxLimits = {}): DocxPackag
       return parseXml(decodeXml(data, name), limits.xml);
     } catch (error) {
       if (error instanceof DocxError) throw error;
-      if (error instanceof XmlError) throw new DocxError(`The part "${name}" of this Word file is not valid XML. ${error.message}`);
+      if (error instanceof XmlError) {
+        if (error.tooLarge) throw new DocxError(`The part "${name}" of this Word file is more than this reader takes, though it may be nothing wrong with the file. ${error.message}. Split the test bank into two or more documents and import each.`);
+        throw new DocxError(`The part "${name}" of this Word file is not valid XML. ${error.message}`);
+      }
       throw error;
     }
   };

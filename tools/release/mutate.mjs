@@ -9,6 +9,7 @@
 //  - a killed run: the original of every file is kept outside the repository before it is changed, a signal puts it back, and the next
 //    run puts back anything a killed run left behind before it starts.
 // The exit code is 0 only when every planted fault was caught.
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -24,10 +25,27 @@ if (!specFile) {
 }
 
 // --- The originals are kept outside the repository, so that nothing a kill does can lose them. ---
-const keep = join(tmpdir(), "openassess-mutate-originals");
+// Each run keeps its own folder, named for this repository and for the run's process id. A single folder for the machine let a second
+// run, started while the first was alive, take the first's saved originals for the leavings of a killed run and write them into the
+// repository under it (a reader found this when two readers ran the tool in one afternoon). Now only a folder whose process is gone
+// is put back, and only if it belongs to this repository.
+const root = join(tmpdir(), "openassess-mutate-originals");
+mkdirSync(root, { recursive: true });
+const tag = createHash("sha1").update(repo.toLowerCase()).digest("hex").slice(0, 12);
+const keep = join(root, `${tag}-${process.pid}`);
 mkdirSync(keep, { recursive: true });
 const keepName = (file) => join(keep, `${Buffer.from(file).toString("hex")}.orig`);
 const recorded = new Map(); // repo-relative file -> original bytes, for the files changed in this run
+
+/** Whether a process with this id is running. A process that is not ours to signal is still running. */
+function running(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
 
 function putBack(file) {
   const saved = keepName(file);
@@ -36,12 +54,20 @@ function putBack(file) {
     rmSync(saved, { force: true });
   }
 }
-for (const name of readdirSync(keep)) {
+for (const folder of readdirSync(root)) {
+  const named = /^([0-9a-f]{12})-(\d+)$/.exec(folder);
+  if (!named || named[1] !== tag || Number(named[2]) === process.pid) continue;
+  if (running(Number(named[2]))) {
+    console.log(`LEFT ALONE    ${folder}: the run that made it is still going. Two runs that plant faults in one checkout at once can spoil each other's results.`);
+    continue;
+  }
   // A run that was killed left these: put them back before anything else.
-  const file = Buffer.from(name.replace(/\.orig$/, ""), "hex").toString("utf8");
-  console.log(`RESTORED      ${file} (left changed by a run that was killed)`);
-  writeFileSync(join(repo, file), readFileSync(join(keep, name)));
-  rmSync(join(keep, name), { force: true });
+  for (const name of readdirSync(join(root, folder))) {
+    const file = Buffer.from(name.replace(/\.orig$/, ""), "hex").toString("utf8");
+    console.log(`RESTORED      ${file} (left changed by a run that was killed)`);
+    writeFileSync(join(repo, file), readFileSync(join(root, folder, name)));
+  }
+  rmSync(join(root, folder), { recursive: true, force: true });
 }
 function restoreAll() {
   for (const file of recorded.keys()) putBack(file);
@@ -52,7 +78,10 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGBREAK"]) {
     process.exit(130);
   });
 }
-process.on("exit", restoreAll);
+process.on("exit", () => {
+  restoreAll();
+  rmSync(keep, { recursive: true, force: true });
+});
 
 const run = (tests) => {
   const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", "--test", ...tests.map((t) => join(repo, t))], { encoding: "utf8", timeout: 600_000, cwd: repo });

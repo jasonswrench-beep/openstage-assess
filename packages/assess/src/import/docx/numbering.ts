@@ -388,10 +388,14 @@ export function readNumbering(parts: NumberingParts): Numbering {
       // Counting from a number that Word's own list dialog would not take is a guess at what was meant, and in letters it is a label of
       // millions of them. The starts that can show in this label are those of this level (and its override) and of the levels above,
       // which are counted once if they have not been used. A bullet shows no number.
+      // The paragraph is still counted when its start is one of those, and is given back as unread after the counting: a paragraph
+      // that left the count out would make every number after it in the list one lower than the same file read before, and a number
+      // that moves is how a key lands on the wrong question.
+      let startUnread: string | undefined;
       if (level.format !== "bullet") {
         let biggest = Math.max(level.start, instance.overrides.get(ilvl)?.start ?? 0);
         for (let above = 0; above < ilvl; above++) biggest = Math.max(biggest, levelOf(above)?.start ?? 0);
-        if (biggest > MAX_START) return { unread: `its start (${biggest}) is more than the 32,767 that Word lets a list start at` };
+        if (biggest > MAX_START) startUnread = `its start (${biggest}) is more than the 32,767 that Word lets a list start at`;
       }
 
       // Count it. The first paragraph of an instance at a level starts that level
@@ -421,6 +425,7 @@ export function readNumbering(parts: NumberingParts): Numbering {
         if (limit !== 0 && ilvl < limit) count.delete(deeper);
       }
 
+      if (startUnread !== undefined) return { unread: startUnread };
       if (level.format === "bullet") return { bullet: true };
 
       // A text longer than a label may be is not read, before it is: a text that names the count a hundred thousand times was a
