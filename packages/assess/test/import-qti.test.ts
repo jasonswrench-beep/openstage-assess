@@ -752,6 +752,45 @@ describe("a Common Cartridge package", () => {
       assert.ok(!claimed({ "imsmanifest.xml": "", "a.dat": dat }));
     });
 
+    // Found by a fourth reviewer: a manifest with 125,000 children threw a RangeError out of the importer (children were spread into push()),
+    // and a manifest the strict reader refuses lost the message the old text match gave.
+    test("a manifest of a hundred and thirty thousand resources is read, and the import does not throw", () => {
+      const documents = Array.from({ length: 130000 }, (_, i) => `<resource type="resource/x-bb-document" identifier="r${i}"/>`).join("");
+      const big = `<manifest><resources>${documents}<resource type="assessment/x-bb-qti-pool" href="a.dat"/></resources></manifest>`;
+      const got = said({ "imsmanifest.xml": big, "a.dat": dat });
+      assert.match(got.text, /package that Blackboard exports for its own use/);
+    });
+
+    test("a manifest the strict reader refuses is looked at as text, for the start tag of a resource only", () => {
+      const refused: Record<string, string> = {
+        "an undeclared prefix": `<manifest><resources><bb:thing/><resource type="assessment/x-bb-pool" href="a.dat"/></resources></manifest>`,
+        "a document type": `<!DOCTYPE manifest><manifest><resources><resource type="assessment/x-bb-pool" href="a.dat"/></resources></manifest>`,
+        "an entity": `<manifest><title>caf&eacute;</title><resources><resource type='assessment/x-bb-qti-test' href="a.dat"/></resources></manifest>`,
+        "a prefix on the element": `<manifest><resources><imscp:resource type="assessment/x-bb-pool" href="a.dat"/></resources></manifest>`,
+        "a space before the value": `<manifest><resources><resource type=" assessment/x-bb-pool" href="a.dat"/></resources></manifest>`,
+      };
+      for (const [name, manifestText] of Object.entries(refused)) {
+        assert.match(said({ "imsmanifest.xml": manifestText, "a.dat": dat }).text, /package that Blackboard exports for its own use/, name);
+      }
+      // The same words in another attribute, or on another element, are still nothing when the manifest is one the strict reader refuses.
+      const nothing: Record<string, string> = {
+        "xsi:type": `<manifest><resources><bb:thing/><resource xsi:type="assessment/x-bb-pool" type="webcontent" href="a.dat"/></resources></manifest>`,
+        "data-type": `<manifest><resources><bb:thing/><resource data-type="assessment/x-bb-pool" type="webcontent" href="a.dat"/></resources></manifest>`,
+        "an item": `<manifest><resources><bb:thing/><item type="assessment/x-bb-pool"/></resources></manifest>`,
+      };
+      for (const [name, manifestText] of Object.entries(nothing)) {
+        assert.ok(!/Blackboard exports/.test(said({ "imsmanifest.xml": manifestText, "a.dat": dat }).text), name);
+      }
+    });
+
+    test("a manifest of thousands of start tags that are never closed is not slow", () => {
+      const hostile = "<manifest><bb:thing/>" + "<resource ".repeat(200000);
+      const start = performance.now();
+      const got = said({ "imsmanifest.xml": hostile, "a.dat": dat });
+      assert.ok(performance.now() - start < 1500, `${Math.round(performance.now() - start)} ms`);
+      assert.ok(!/Blackboard exports/.test(got.text));
+    });
+
     test("keeps the advice to import a file that is beside it, after what it says it is", () => {
       const got = said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "bank.txt": "x" });
       assert.match(got.text, /package that Blackboard exports for its own use/);

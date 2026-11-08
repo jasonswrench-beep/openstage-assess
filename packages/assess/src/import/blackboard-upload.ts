@@ -102,6 +102,23 @@ function strictShape(fields: string[]): boolean {
 }
 
 /**
+ * Words a person might write where the file puts correct or incorrect ("correct.", "wrong", "yes", "Correct (1)"). The reader takes none of
+ * them as a key: a row that has them is kept as a failed essay with its words. But a file made of such rows has Blackboard's layout, and
+ * has to be sent to this reader, which fails it where it can be seen. Sent to the table reader instead, the eighth cell was matched by its
+ * words to an answer and the option "incorrect." was marked right in a question that read as parsed.
+ */
+const MARKER_LIKE: ReadonlySet<string> = new Set(["correct", "incorrect", "right", "wrong", "true", "false", "yes", "no", "y", "n", "t", "f", "1", "0", "correctanswer", "incorrectanswer", "rightanswer", "wronganswer", "correct1", "incorrect0", "right1", "wrong0"]);
+const markerLike = (field: string | undefined): boolean => MARKER_LIKE.has((field ?? "").toLowerCase().replace(/[^a-z0-9]+/g, ""));
+
+/** A multiple choice or multiple answer row laid out as the file lays it out (an answer and then a marker, at least twice), whatever its markers say. */
+function markerLayout(fields: string[]): boolean {
+  const type = (fields[0] ?? "").toUpperCase();
+  if (type !== "MC" && type !== "MA") return false;
+  const rest = fields.length - 2;
+  return rest >= 4 && rest % 2 === 0 && fields.every((f, i) => i < 3 || i % 2 === 0 || markerLike(f));
+}
+
+/**
  * Whether the start of a file is a Blackboard upload file. The rows begin with a type (one of the file's, or a word of capitals made like
  * one) and a tab, and at least one is a multiple choice, multiple answer or true or false row with the words correct, incorrect, true or
  * false where they belong (then a quarter of the rows may be anything else), or every row is typed and there are several of the listed
@@ -125,7 +142,7 @@ export function looksLikeBlackboardUpload(bytes: Uint8Array): boolean {
   // A row with a strict shape is firm evidence, so a few stray lines among the rows (a count at the end, a lone type) do not undo it: the
   // reader keeps each as an orphan or a failed essay, which is said, and a file sent to the table reader instead marked "incorrect" as the
   // key. Without one, every row has to be typed.
-  if (typed.some((r) => strictShape(r.fields))) return typed.length * 4 >= rows.length * 3;
+  if (typed.some((r) => strictShape(r.fields) || markerLayout(r.fields))) return typed.length * 4 >= rows.length * 3;
   return typed.length === rows.length && rows.length >= 3 && rows.filter((r) => ["ESS", "FIB", "MAT", "ORD"].includes((r.fields[0] as string).toUpperCase())).length >= 3;
 }
 

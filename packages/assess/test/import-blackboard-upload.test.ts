@@ -121,6 +121,41 @@ describe("choosing the reader", () => {
       assert.ok(!looksLikeBlackboardUpload(bytes(rows(...three, row("A".repeat(41), "x", "y"), row("A".repeat(42), "x", "y")))), "past 40 it is not a type word, and two such rows are too many");
     });
 
+    // Found by a fourth reviewer: a row laid out as the file lays it out, with other words for correct and incorrect, did not look like the file,
+    // went to the table reader, and the eighth cell was matched by its words to an answer: "incorrect." was marked right in a parsed question.
+    test("rows laid out like the file with other marker words are sent to this reader, which keeps each as a failed essay and marks nothing", () => {
+      const pairs: Array<[string, string]> = [["correct.", "incorrect."], ["correct", "wrong"], ["right", "wrong"], ["yes", "no"], ["true", "false"], ["Y", "N"], ["1", "0"], ["Correct (1)", "Incorrect (0)"], ["correct answer", "wrong answer"], ["CORRECT!", "INCORRECT!"]];
+      for (const [yes, no] of pairs) {
+        for (const answers of [3, 2, 4, 5]) {
+          const cells = Array.from({ length: answers }, (_, i) => [`Answer ${i + 1}`, i === 0 ? yes : no]).flat();
+          const text = rows(row("MC", "Which is cold?", ...cells));
+          const name = `${yes}/${no} with ${answers} answers`;
+          assert.equal(importerForContent("bank.tsv", bytes(text)), blackboardUploadImporter, name);
+          for (const file of ["bank.tsv", "bank.txt", "bank.csv"]) {
+            const r = read(text, file);
+            assert.equal(r.questions.length, 1, name);
+            const q = r.questions[0] as Question;
+            assert.equal(q.type, "essay", name);
+            assert.equal(verdictFrom(q.findings), "failed", name);
+          }
+        }
+      }
+    });
+
+    test("and a table in the template's order, whose cells in those places are answers, is still a table", () => {
+      const table = rows(row("MC", "Which is cold?", "Ice", "Fire", "Lava", "Sun", "Snow", "A"), row("MC", "Which is hot?", "Fire", "Ice", "Snow", "Sun", "Lava", "A"));
+      assert.equal(importerForContent("bank.tsv", bytes(table)), spreadsheetImporter);
+      // Yes and no as the second and fourth of five answers is a layout that looks like it; it is sent here and fails in the open.
+      const odd = rows(row("MC", "Is it so?", "Maybe", "Yes", "Perhaps", "No"));
+      assert.equal(importerForContent("bank.tsv", bytes(odd)), blackboardUploadImporter);
+    });
+
+    test("one answer and one marker is not a layout: it takes at least two pairs, as the strict shape does", () => {
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(row("MC", "Is it so?", "Maybe", "yes")))));
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(row("MC", "Is it so?", "Maybe", "yes"), row("MC", "Is it hot?", "Maybe", "no")))));
+      assert.ok(looksLikeBlackboardUpload(bytes(rows(row("MC", "Is it so?", "Maybe", "yes", "Perhaps", "no")))));
+    });
+
     test("a few stray lines among the rows do not undo a file that has the words where the page puts them, and each is kept and said", () => {
       for (const stray of [row("Total questions: 3"), "ESS", row("ESS", "", ""), row("Q1", "something", "else"), row("", "something", "else"), row("1", "x")]) {
         const text = rows(...three, row("ESS", "Explain."), row("FIB", "Capital?", "Paris"), row("ORD", "Order.", "a", "b"), stray);

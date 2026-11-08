@@ -452,3 +452,46 @@ describe("a row that looks like one of Blackboard's upload rows, read as a table
   });
 });
 
+// Found by a fourth reviewer, outside the code it was asked about: text in cells past the last column that has a name was dropped without a
+// word, because the note about columns that were not used can only name a column that has a header.
+describe("text in cells past the last named column", () => {
+  const SAID = /after the last column that has a name hold/;
+  const warned = (q: Question): boolean => liveFindings(q.findings).some((f) => SAID.test(f.message) && f.severity === "warn");
+
+  test("is said against the question and the question needs a look, with the words shown", () => {
+    const r = csv("Type,Question,A,B,Correct\nMC,What is 2+2?,3,4,B,SECRET EXTRA,MORE");
+    const q = first(r);
+    assert.ok(warned(q), said(q));
+    assert.notEqual(verdictFrom(q.findings), "parsed");
+    assert.match(said(q), /2 cells after the last column that has a name hold text that was not read: "SECRET EXTRA", "MORE"/);
+    assert.deepEqual(right(q), ["4"], "the key is still the one the file gave");
+    assert.equal(first(csv("Type,Question,A,B,Correct\nMC,What is 2+2?,3,4,B,ONLY ONE")).findings.some((f) => /One cell after the last column that has a name holds text/.test(f.message)), true);
+  });
+
+  test("is said for a table in the template's order too, past its eleven columns", () => {
+    const q = first(csv("MC,Which?,a,b,c,d,e,A,2,good,bad,EXTRA TEXT"));
+    assert.ok(warned(q), said(q));
+    assert.match(said(q), /"EXTRA TEXT"/);
+  });
+
+  test("is said for a long text, shortened, and for many cells, counted", () => {
+    const long = "word ".repeat(40).trim();
+    const q = first(csv(`Type,Question,A,B,Correct\nMC,Q?,x,y,B,${long},c2,c3,c4,c5`));
+    assert.match(said(q), /5 cells after the last column that has a name hold text that was not read: "word word[^"]*\.\.\.", "c2", "c3" and 2 more/);
+  });
+
+  test("is not said of cells that are empty, blank or invisible, or of a row with fewer cells than the header", () => {
+    const c = (code: number): string => String.fromCharCode(code);
+    for (const row of ["MC,Q?,x,y,B", "MC,Q?,x,y,B,,,", `MC,Q?,x,y,B,  ,${c(0x200b)},${c(0x3164)}`, "MC,Q?,x,y"]) {
+      const r = csv(`Type,Question,A,B,Correct\n${row}`);
+      assert.ok(!warned(first(r)), `${JSON.stringify(row)}: ${said(first(r))}`);
+    }
+  });
+
+  test("makes a Blackboard row under a short header show that answers were lost, instead of the first two answers alone", () => {
+    const q = first(csv("Question,Answer\nMC,Which is cold?,Ice,correct,Fire,incorrect"));
+    assert.ok(warned(q), said(q));
+    assert.notEqual(verdictFrom(q.findings), "parsed");
+  });
+});
+

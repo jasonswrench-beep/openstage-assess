@@ -828,19 +828,26 @@ function gather(bytes: Uint8Array, name: string): Found | { refusal: string } {
 function namesBlackboardAssessment(files: Map<string, Uint8Array>): boolean {
   for (const [name, data] of files) {
     if (!/(^|\/)imsmanifest\.xml$/i.test(name)) continue;
+    const text = manifestText(data);
     try {
-      const text = manifestText(data);
       const stack: XmlElement[] = [parseXml(text)];
       for (let e = stack.pop(); e !== undefined; e = stack.pop()) {
-        if (e.name.split(":").pop() === "resource" && /^assessment\/x-bb-/i.test(e.attrs["type"] ?? "")) return true;
-        stack.push(...elements(e));
+        if (e.name.split(":").pop() === "resource" && /^assessment\/x-bb-/i.test((e.attrs["type"] ?? "").trim())) return true;
+        // One at a time: spreading the children into push() overflowed the stack on a manifest with 125,000 of them, and the import threw.
+        for (const child of elements(e)) stack.push(child);
       }
     } catch (error) {
-      if (!(error instanceof XmlError)) throw error;
+      // A message about what a package is must never fail an import, so nothing is rethrown. A manifest the strict reader refuses (an
+      // undeclared prefix, a DOCTYPE, an entity, a text over its size) is looked at as text, for the start tag of a resource only: the
+      // name has to be `type` with white space before it, so `xsi:type` and `data-type` are not it.
+      if (error instanceof XmlError && RESOURCE_OF_BLACKBOARD.test(text)) return true;
     }
   }
   return false;
 }
+
+// A start tag is not scanned past 2,000 characters, so a text of thousands of "<resource " with no ">" is not N squared.
+const RESOURCE_OF_BLACKBOARD = /<(?:[\w.-]+:)?resource\b[^>]{0,2000}?\stype\s*=\s*["']\s*assessment\/x-bb-/i;
 
 function manifestText(data: Uint8Array): string {
   if (data[0] === 0xff && data[1] === 0xfe) return new TextDecoder("utf-16le").decode(data.subarray(2));
