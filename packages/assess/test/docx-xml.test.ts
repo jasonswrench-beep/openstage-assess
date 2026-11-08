@@ -198,3 +198,47 @@ describe("limits", () => {
     assert.ok(took < 1500, `took ${took.toFixed(0)} ms for ${(xml.length / 1e6).toFixed(1)} MB`);
   });
 });
+
+// Found by a fourth reviewer: every element that declared a namespace copied the whole map of the ones in force, so a root that declared N
+// prefixes with N children that each declared one was N squared (a manifest of 1.2 MB took 23 seconds). A scope is a chain now.
+describe("namespace scopes", () => {
+  const WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+  test("a root that declares thousands of prefixes, over thousands of children that each declare one, is not slow", () => {
+    const n = 20000;
+    const root = Array.from({ length: n }, (_, i) => `xmlns:r${i}="urn:r${i}"`).join(" ");
+    const kids = Array.from({ length: n }, (_, i) => `<k xmlns:c${i}="urn:c${i}"/>`).join("");
+    const started = performance.now();
+    const parsed = parseXml(`<root ${root}>${kids}</root>`);
+    const took = performance.now() - started;
+    assert.equal(elements(parsed).length, n);
+    assert.ok(took < 1500, `took ${took.toFixed(0)} ms`);
+  });
+
+  test("an inner declaration hides an outer one for its own element and below, and then the outer one is back", () => {
+    const root = parseXml(`<r xmlns:p="${WNS}"><p:a><b xmlns:p="urn:other"><p:c/></b><p:d/></p:a></r>`);
+    const a = first(root, "w:a");
+    assert.ok(a, "the outer declaration reaches the first child");
+    assert.deepEqual(elements(a).map((e) => e.name), ["b", "w:d"]);
+    assert.deepEqual(elements(elements(a)[0] as XmlElement).map((e) => e.name), ["p:c"], "inside the inner declaration the prefix is the other address");
+  });
+
+  test("a prefix declared several levels up still resolves, and the default namespace is redeclared and restored the same way", () => {
+    const root = parseXml(`<r xmlns:w="${WNS}" xmlns="${WNS}"><a><b><w:c/><d xmlns="urn:other"><e/></d><f/></b></a></r>`);
+    const b = first(first(root, "w:a") as XmlElement, "w:b") as XmlElement;
+    assert.deepEqual(elements(b).map((e) => e.name), ["w:c", "d", "w:f"]);
+    assert.deepEqual(elements(elements(b)[1] as XmlElement).map((e) => e.name), ["e"]);
+  });
+
+  test("an element that declares a prefix of its own still sees the ones declared above it, for its children and its attributes", () => {
+    // The scope of the middle element holds only x, and w has to be found two scopes up.
+    const root = parseXml(`<r xmlns:w="${WNS}"><a xmlns:x="urn:x"><b xmlns:y="urn:y"><w:c x:id="1" w:val="2"/></b></a></r>`);
+    const c = first(first(first(root, "a") as XmlElement, "b") as XmlElement, "w:c") as XmlElement;
+    assert.ok(c, "w:c is found three scopes down");
+    assert.deepEqual(Object.keys(c.attrs).sort(), ["w:val", "x:id"]);
+  });
+
+  test("a prefix that is declared nowhere above is still refused", () => {
+    assert.throws(() => parseXml(`<r><a xmlns:q="urn:q"/><q:b/></r>`), XmlError);
+  });
+});

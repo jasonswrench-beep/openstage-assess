@@ -84,7 +84,23 @@ const CANONICAL: Record<string, string> = {
   [XML_NAMESPACE]: "xml",
 };
 
-type Scope = ReadonlyMap<string, string>;
+/**
+ * The namespace prefixes in force: what an element declares itself, and the scope of the element it is inside. An element that declares
+ * nothing shares its parent's scope. It was once a copy of the whole map for every element that declared anything, which was N squared for
+ * a root that declares N prefixes and N children that each declare one (a manifest of 1.2 MB took 23 seconds).
+ */
+interface Scope {
+  declared: ReadonlyMap<string, string>;
+  parent: Scope | undefined;
+}
+
+function lookupPrefix(scope: Scope, prefix: string): string | undefined {
+  for (let s: Scope | undefined = scope; s !== undefined; s = s.parent) {
+    const found = s.declared.get(prefix);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
 
 const NAMED_REFERENCES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
@@ -151,7 +167,7 @@ export function parseXml(source: string, limits: XmlLimits = {}): XmlElement {
     const local = colon === -1 ? raw : raw.slice(colon + 1);
     if (local.length === 0) return fail(`"${raw}" is not a valid name`, at);
 
-    const uri = prefix === "xml" ? XML_NAMESPACE : scope.get(prefix);
+    const uri = prefix === "xml" ? XML_NAMESPACE : lookupPrefix(scope, prefix);
     if (uri === undefined && colon !== -1) return fail(`The prefix "${prefix}" in "${raw}" is not declared`, at);
     if (uri !== undefined && Object.hasOwn(CANONICAL, uri)) {
       const canonical = CANONICAL[uri] as string;
@@ -162,7 +178,7 @@ export function parseXml(source: string, limits: XmlLimits = {}): XmlElement {
 
   let root: XmlElement | undefined;
   const stack: Open[] = [];
-  const base: Scope = new Map<string, string>();
+  const base: Scope = { declared: new Map<string, string>(), parent: undefined };
   let nodes = 0;
   let i = source.charCodeAt(0) === 0xfeff ? 1 : 0;
   let pending = "";
@@ -255,9 +271,9 @@ export function parseXml(source: string, limits: XmlLimits = {}): XmlElement {
       let scope: Scope = stack.length > 0 ? (stack[stack.length - 1] as Open).scope : base;
       const declared = raw.filter((a) => a.name === "xmlns" || a.name.startsWith("xmlns:"));
       if (declared.length > 0) {
-        const next = new Map(scope);
-        for (const a of declared) next.set(a.name === "xmlns" ? "" : a.name.slice(6), a.value);
-        scope = next;
+        const own = new Map<string, string>();
+        for (const a of declared) own.set(a.name === "xmlns" ? "" : a.name.slice(6), a.value);
+        scope = { declared: own, parent: scope };
       }
 
       const attrs: Record<string, string> = {};

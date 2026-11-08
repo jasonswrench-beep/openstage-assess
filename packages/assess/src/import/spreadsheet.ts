@@ -404,6 +404,16 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   const findings: Finding[] = [];
   const note = (code: string, severity: Severity, message: string): void => void findings.push(finding(code, severity, message));
 
+  // Text in cells past the last column that has a name (or past the last column of the template's order) belongs to no column, and the
+  // file-level note about columns that were not used cannot name it, because it has no header. It was dropped without a word: a data row
+  // of `MC,What is 2+2?,3,4,B,SECRET EXTRA,MORE` under a header of five columns read as parsed, and a Blackboard row under a short header
+  // lost every answer after the first.
+  const beyond = row.cells.slice(order.length).map((c) => c.replace(/\s+/g, " ").trim()).filter((c) => !isBlankText(c));
+  if (beyond.length > 0) {
+    const shown = beyond.slice(0, 3).map((c) => `"${c.length > 60 ? `${c.slice(0, 59)}...` : c}"`).join(", ") + (beyond.length > 3 ? ` and ${beyond.length - 3} more` : "");
+    note(FindingCode.UnreadContent, "warn", `${beyond.length === 1 ? "One cell" : `${beyond.length} cells`} after the last column that has a name hold${beyond.length === 1 ? "s" : ""} text that was not read: ${shown}. Name the column, or move the text, if it belongs in the question.`);
+  }
+
   const typeCell = get("type").trim();
   // In a table with columns for the wrong answers, the right answer's words are in one column of its own and the key is that
   // column. It is put first among the answers, and the other columns follow in their order; there is no letter to read.

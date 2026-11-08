@@ -1183,6 +1183,36 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by a fourth reader, of the third round of fixes (7 November 2026, after alpha 17)
+
+A fourth independent reader ran the previous reader's random generators again against the new code (about 100,000 rounds of valid
+Blackboard rows, 222,188 random headers, 30,000 random Blackboard files and 30,000 random headed tables: no wrong key from a valid row)
+and then looked for what the generators did not cover. It proved five faults, three of them in or beside the code under review and
+one of them outside it. Fixed, each with a test and planted faults:
+
+- **Wrong key: the table reader read a Blackboard-shaped row with other marker words.** A row laid out as the file lays it out (an
+  answer and then a word, at least twice) with "correct." and "incorrect.", or "correct" and "wrong", or yes and no, did not look like
+  the file to the check, went to the table reader, and the eighth cell was matched by its words to an answer: "incorrect." was marked
+  right in a question that read as parsed (3,054 of 4,809 random three-answer rows). The guard of the last round only knew the exact
+  words. A row with the file's layout is now sent to the Blackboard reader whatever its marker words are, and that reader keeps it as a
+  failed essay with every word, which is seen.
+- **Text past the last named column was dropped without a word** (outside the diff). `Type,Question,A,B,Correct` over
+  `MC,What is 2+2?,3,4,B,SECRET EXTRA,MORE` read as parsed with nothing said, and a Blackboard file whose first line was
+  `Question<TAB>Answer` read as essays whose stems were "MC" and "TF", with the rest of each row gone. The cells are now said against the
+  question as a warning, with their words, in a table with names and in one read in the template's order.
+- **A manifest with 125,000 or more children threw a RangeError out of the importer** (the children were spread into `push`). They are
+  pushed one at a time, and nothing is rethrown from a check that only decides which message to give.
+- **A manifest the strict reader refuses lost the pool message** (an undeclared prefix, a DOCTYPE, an entity, a value with a space). It
+  is looked at as text then, for the start tag of a `resource` only, scanned no further than 2,000 characters into each tag.
+- **The XML reader copied the whole namespace map for every element that declared a namespace**, so a root that declares N prefixes and
+  N children that each declare one took N squared: a manifest of 1.2 MB took 23 seconds, and a document from a hostile source would too.
+  A scope is a chain of what each element declares now (20,000 and 20,000 take 43 milliseconds).
+
+What it found sound: the header differential and the 222,188-header brute force (every changed landing was from nothing to the key and
+on a name that is not bare), the Blackboard files (no valid file missed, every strict row taken, keys equal), the sniff against 30,000
+random headed tables, eight manifests of 60 MB in 6 seconds, a UTF-8 BOM, UTF-16 and a manifest in a subfolder. Not run by it: real
+Blackboard, Excel or Word files, and the full suite.
+
 ### Found by a third reader, of the second round of fixes (7 November 2026, after alpha 16)
 
 The code of the second round was given to a third independent reader. It proved four faults, one of them a wrong key, and found the other

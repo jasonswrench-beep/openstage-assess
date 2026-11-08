@@ -138,7 +138,9 @@ question types; any other layout is refused with a message, because reading one 
 words as another's is how a key lands where there was none. A row below the first counts
 as the names only if it names two known columns, so a note with the word Question in it
 is not mistaken for them. A cell that holds an error, or a formula with no stored result,
-is read as empty and named, never as text that could be taken for a letter. A name with a
+is read as empty and named, never as text that could be taken for a letter. Text in a cell past the last column that has a name (or past
+the template's eleven) belongs to no column and is said against its question as a warning, with its words: it was dropped without a word,
+and a row of `MC,What is 2+2?,3,4,B,SECRET EXTRA` under five column names read as parsed. A name with a
 description after a dash that has a space each side ("Question - max 95 characters", "Answer 1 - max
 60 characters") or in a bracket is read as the name without it, tried only when the whole cell is not a name, and
 only when every word of the description is one of a short list of instruction words (`INSTRUCTION_WORDS` in `isInstruction`: max,
@@ -202,7 +204,9 @@ writes and the page documents (the registry looks at a `.txt` or `.tsv` before t
 word, one of the listed ones or a word of capitals up to 40 long made like one (`TYPE_WORD`; one row of an unlisted type, or of one past
 12 characters such as JUMBLED_SENTENCE, sent a file to the table reader, which marked the word "incorrect" as a right answer), and a
 tab, and a multiple choice, multiple answer or true or false row has the word correct, incorrect, true or false where the format puts
-it; then a quarter of the rows may be strays, which the reader keeps as orphans or failed essays, and a first row that names a Question
+it, or a multiple choice row is laid out as the file lays it out with other marker words ("correct.", "wrong", "yes": `markerLayout`;
+the reader fails such a row in the open, where the table reader matched the eighth cell to an answer by its words and marked
+"incorrect." right); then a quarter of the rows may be strays, which the reader keeps as orphans or failed essays, and a first row that names a Question
 column is a table's header unless it begins with one of the file's own types, since an answer may be the word "Stem"). The table reader
 flags a row that has the words correct or incorrect in the cells where Blackboard puts them (the second and fourth answer cell, however
 the answers read: an answer may itself be "Correct"), or a Correct cell that is only the word, so that one that still reaches it is
@@ -446,7 +450,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2927 engine tests and 336 app tests, Node's own runner
+npm test                       # 2943 engine tests and 336 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
