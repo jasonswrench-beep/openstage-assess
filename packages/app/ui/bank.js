@@ -501,6 +501,10 @@ export async function renderBank(host, params, shell) {
       panel.append(h("h3", { text: "Where the right answers sit" }), h("ul", { class: "quality-kinds" }, ...result.keyBalance.map(/** @param {any} note */ (note) => h("li", { text: note.message }))));
     }
 
+    if (result.limits && result.limits.length > 0) {
+      panel.append(h("h3", { text: "What this check could not do in full" }), h("ul", { class: "quality-kinds" }, ...result.limits.map(/** @param {any} note */ (note) => h("li", { text: note.message }))));
+    }
+
     panel.append(h("p", { class: "hint", text: "These are notes, not faults. Open a question to see its notes and dismiss any you meant. Checking changed nothing else about the questions." }));
     detail.append(panel);
     heading.focus();

@@ -149,7 +149,7 @@ describe("Check quality", () => {
     await withApp(async (client) => {
       await client.post("/api/banks", { title: "Empty" });
       const run = await client.post<Json>("/api/banks/Empty/quality");
-      assert.deepEqual([run.json["checked"], run.json["changed"], run.json["notes"], run.json["questions"], run.json["duplicates"], run.json["keyBalance"]], [0, 0, {}, [], [], []]);
+      assert.deepEqual([run.json["checked"], run.json["changed"], run.json["notes"], run.json["questions"], run.json["duplicates"], run.json["keyBalance"], run.json["limits"]], [0, 0, {}, [], [], [], []]);
       assert.equal((await client.post("/api/banks/Nothing/quality")).status, 404);
     });
   });
@@ -182,5 +182,20 @@ describe("a bank whose title is a word the server uses", () => {
       const brought = await client.send<Json>("POST", "/api/banks/open?name=Brought.openassess", new Uint8Array(bytes));
       assert.equal(brought.status, 200, brought.text);
     });
+  });
+});
+
+// Found by the implementer who limited the search for questions that are very much alike: the note that says so was in the report and
+// on the command line, and not in the app, where the person reads the result.
+describe("what a check could not do in full", () => {
+  test("is in the reply, with its severity and its words, and the panel shows it under a heading of its own", async () => {
+    const { qualityView } = await import("../src/api.ts");
+    const bank = Bank.createEmpty("Limits");
+    const note = { severity: "info" as const, check: "alike" as const, message: "The search was cut short for 3 questions." };
+    const view = qualityView(bank, { checked: 0, changed: 0, notes: {}, questions: [], report: { duplicates: [], keyBalance: [], limits: [note] } } as never);
+    assert.deepEqual(view.limits, [note]);
+    const panel = (await import("node:fs")).readFileSync(join(import.meta.dirname, "..", "ui", "bank.js"), "utf8");
+    assert.match(panel, /result\.limits && result\.limits\.length > 0/);
+    assert.match(panel, /What this check could not do in full/);
   });
 });

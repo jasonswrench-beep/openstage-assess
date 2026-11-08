@@ -401,7 +401,7 @@ function liveNotes(q: Question) {
  * What checking a bank for quality found, as the screen shows it. The notes were written to the questions by the check itself; what
  * looks across questions (copies, where the right answers sit) was worked out just now and is not kept anywhere.
  */
-function qualityView(bank: Bank, run: QualityRun) {
+export function qualityView(bank: Bank, run: QualityRun) {
   return {
     checked: run.checked,
     changed: run.changed,
@@ -409,6 +409,9 @@ function qualityView(bank: Bank, run: QualityRun) {
     questions: run.questions.map(({ id, title }) => ({ id, title, notes: liveNotes(bank.get(id) as Question).map((f) => ({ code: f.code, message: f.message })) })),
     duplicates: run.report.duplicates.map(({ kind, questionIds, titles, message }) => ({ kind, questionIds, titles, message })),
     keyBalance: run.report.keyBalance.map(({ scope, label, message }) => ({ scope, label, message })),
+    // What the check could not do in full (the search for questions that are very much alike is limited for a bank of thousands that
+    // share their words), said where the person reads the result and not only on the command line.
+    limits: run.report.limits.map(({ severity, check, message }) => ({ severity, check, message })),
   };
 }
 
