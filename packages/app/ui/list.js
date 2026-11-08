@@ -37,6 +37,11 @@ export function questionRow(options) {
 
 /** How many rows a list draws before it asks for more. */
 export const ROWS_AT_FIRST = 1000;
+/**
+ * The longest list that offers to draw every row at once. 5000 rows took about a second and 20,000 took 8.6 seconds with the window
+ * unresponsive, so past this a person asks for a thousand more at a time, and a search or a filter is the way to a particular question.
+ */
+export const SHOW_ALL_UP_TO = 5000;
 
 /**
  * Draws the rows of a list, the first `limit` of them and always as far as the chosen one, and then a line that says how many are not
@@ -64,7 +69,7 @@ export function fillRows(list, items, row, options) {
         h("p", { class: "hint", text: `Showing the first ${drawn.toLocaleString("en-US")} of ${items.length.toLocaleString("en-US")} questions. Search or narrow the list to find the others, or show more.` }),
         h("div", { class: "card-actions" },
           h("button", { type: "button", text: `Show ${Math.min(ROWS_AT_FIRST, left).toLocaleString("en-US")} more`, on: { click: () => options.more(next, drawn) } }),
-          left > ROWS_AT_FIRST ? h("button", { type: "button", text: `Show all ${items.length.toLocaleString("en-US")} (slow)`, on: { click: () => options.more(items.length, drawn) } }) : null,
+          left > ROWS_AT_FIRST && items.length <= SHOW_ALL_UP_TO ? h("button", { type: "button", text: `Show all ${items.length.toLocaleString("en-US")} (slow)`, on: { click: () => options.more(items.length, drawn) } }) : null,
         ),
       ),
     );

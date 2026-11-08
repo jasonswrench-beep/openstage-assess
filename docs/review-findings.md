@@ -1269,8 +1269,9 @@ seconds); laying them out is (7 to 8 seconds, about 0.35 milliseconds a row, and
 draws its first 1000 rows and a line that says how many are not drawn, with Show 1000 more and Show all (`fillRows` in `ui/list.js`),
 always as far as the chosen row, starting again from the first thousand for another search or filter: the same 20,000-question bank
 opens in 0.8 seconds, a search is 0.3, choosing a question 44 milliseconds, and Show 1000 more 0.5 seconds with focus on the first new
-row. "File these N in..." still means every question the search or filter found, which the line states. A bank over 20,000 and the
-Show all button on a bank that size (it draws every row, which is the slow case) are untried. On the same bank the export and print
+row. "File these N in..." still means every question the search or filter found, which the line states. Show all draws every row, which
+is the slow case (about a second at 5000, 8.6 seconds at 20,000), so it is offered only up to 5000 questions and past that a person
+asks for a thousand more at a time. A bank over 20,000 is untried. On the same bank the export and print
 screens opened in 0.5 to 0.8 seconds, and the Make a test screen, which lists every question with a box, took 2.7 seconds to open and
 3 seconds for Choose all shown (ticking one box took 67 milliseconds); that list was not changed, since a test is not built from
 20,000 questions at once. Check quality at 20,000 questions took 23.5 seconds, against 3.5 at 5000, so it was worse than linear: the
