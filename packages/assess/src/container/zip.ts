@@ -251,6 +251,8 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
   let total = 0;
   /** What the entries read so far really came to, as against `total`, which is only what the file says they come to. */
   let made = 0;
+  /** What the compressed sizes of the entries read so far come to. */
+  let claimed = 0;
   const placed = new Set<number>();
 
   const out = new Map<string, Uint8Array>();
@@ -300,6 +302,15 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
       throw new Error(`The entry "${name}" claims more data than the file holds, so it is damaged.`);
     }
     const payload = buf.subarray(dataAt, dataAt + compressedSize);
+    // The data of honest entries lies in places of its own, so that what they add up to is less than the file holds. The check above is
+    // on the place a local header is at, and a local header says by its own name length and extra length where its data begins: 4,000
+    // headers 30 bytes apart, each padded to end at the same byte, were 4,000 places for one stream of a million empty blocks (17
+    // seconds, a 5 MB zip, and nothing made, so the limit on what is made never grew). They cannot be told apart by where the headers
+    // are; they are told by how much they claim, which must fit in the file.
+    claimed += compressedSize;
+    if (claimed > buf.length) {
+      throw new Error("The entries of this zip claim more compressed data than the file holds, so they overlap and it is damaged.");
+    }
 
     total += uncompressedSize;
     if (total > limit) {

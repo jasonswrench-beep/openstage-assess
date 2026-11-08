@@ -78,8 +78,13 @@ export function layoutLines(runs: readonly TextRun[], page: number): { lines: Pd
     let end = Number.NEGATIVE_INFINITY;
     let sizeSum = 0;
     let weight = 0;
+    // What the line ends with is kept as it is added to, and the text is not asked. It was asked with `/\s$/.test(text)` once for each
+    // run, which looks at the whole of a text that grows by each run, so that the time went with the square of the number of runs:
+    // 100,000 runs on one line took 2 seconds and 400,000 took 44.
+    let endsInSpace = false;
     const add = (piece: string, run: TextRun): void => {
       text += piece;
+      if (piece !== "") endsInSpace = /\s/.test(piece.slice(-1));
       const last = segments[segments.length - 1];
       if (last && last.bold === run.bold && last.italic === run.italic) last.text += piece;
       else segments.push({ text: piece, bold: run.bold, italic: run.italic });
@@ -87,8 +92,9 @@ export function layoutLines(runs: readonly TextRun[], page: number): { lines: Pd
     for (const run of group) {
       if (text !== "") {
         const gap = run.x0 - end;
-        const spaced = /\s$/.test(text) || /^\s/.test(run.text);
-        if (gap >= TAB_GAP * run.size && !/\t$/.test(text)) add(spaced ? "" : "\t", run);
+        const spaced = endsInSpace || /^\s/.test(run.text);
+        // (It was `&& !/\t$/.test(text)` as well: a text that ends in a tab ends in white space, and so `spaced` already adds nothing.)
+        if (gap >= TAB_GAP * run.size) add(spaced ? "" : "\t", run);
         else if (gap > SPACE_GAP * run.size && !spaced) add(" ", run);
       }
       add(run.text, run);
@@ -96,7 +102,9 @@ export function layoutLines(runs: readonly TextRun[], page: number): { lines: Pd
       sizeSum += run.size * run.text.length;
       weight += run.text.length;
     }
-    const trimmed = text.replace(/\s+$/, "");
+    // Not `text.replace(/\s+$/, "")`: a pattern that begins with white space and is not anchored at the start takes N squared steps on
+    // a run of N spaces (200,000 in a string of a content stream, 816 bytes of file, took 11 seconds).
+    const trimmed = text.trimEnd();
     if (trimmed.trim() === "") continue;
     // The spaces at the front and the end go from the segments too, so that they say what the text says.
     let lead = text.length - text.trimStart().length;

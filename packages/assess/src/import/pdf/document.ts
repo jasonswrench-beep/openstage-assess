@@ -20,8 +20,17 @@ const MAX_STREAM_BYTES = 256 * 1024 * 1024;
 /** The widest row of a predicted stream that is believed: 16 MiB is far more than a page of any picture holds. */
 const MAX_ROW_BYTES = 16 * 1024 * 1024;
 const MAX_PAGES = 5000;
+/** The most rows a cross-reference stream may have. A test bank is not a file of two million objects. */
+const MAX_XREF_ROWS = 2_000_000;
 
-type XrefEntry = { kind: "file"; offset: number } | { kind: "stream"; stream: number; index: number };
+type XrefEntry =
+  | {
+      kind: "file";
+      offset: number;
+      /** Where the object may be read to: the start of the next object when the objects were found by searching, and the end of the file otherwise. */
+      end?: number;
+    }
+  | { kind: "stream"; stream: number; index: number };
 
 /** An object stream, with its objects still unread: each is read when it is asked for, and from its own start to the next one's. */
 interface ObjectStream {
@@ -50,6 +59,41 @@ const find = (buf: Uint8Array, word: string, from: number, backwards = false): n
   return backwards ? hay.lastIndexOf(needle, from) : hay.indexOf(needle, from);
 };
 
+/**
+ * Where a word first begins at or after a place, for a file that asks the same of thousands of places. Each ask used to search from its
+ * own place to the first one it found, which is no more than the next one for a file that is in order; for a file of 100,000 objects
+ * that say `stream` and have no `endstream` it was the rest of the file each time, and 2.5 MB took 37 seconds. What was found last is
+ * remembered as a stretch (no word begins from `from` up to `at`, and one begins at `at`, or none does after `from`), and a place inside it
+ * has its answer. A place before it is searched only as far as the stretch begins, and a place past it is a search of its own.
+ */
+export class WordFinder {
+  private readonly hay: Buffer;
+  private readonly needle: Buffer;
+  private known = false;
+  private from = 0;
+  private at = -1;
+
+  constructor(bytes: Uint8Array, word: string) {
+    this.hay = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    this.needle = Buffer.from(word, "latin1");
+  }
+
+  after(start: number): number {
+    if (this.known && start >= this.from && (this.at === -1 || start <= this.at)) return this.at;
+    let found: number;
+    if (this.known && start < this.from) {
+      // The word may begin in front of the stretch and run into it, so the search goes as far as the end of a word that begins at its edge.
+      const stop = Math.min(this.hay.length, this.from + this.needle.length - 1);
+      found = this.hay.subarray(0, stop).indexOf(this.needle, start);
+      if (found === -1) found = this.at;
+    } else found = this.hay.indexOf(this.needle, start);
+    this.known = true;
+    this.from = start;
+    this.at = found;
+    return found;
+  }
+}
+
 export class PdfDocument {
   readonly bytes: Uint8Array;
   readonly trailer: PdfDict = new Map();
@@ -59,12 +103,15 @@ export class PdfDocument {
   private readonly cache = new Map<number, PdfObject>();
   private readonly resolving = new Set<number>();
   private readonly objectStreams = new Map<number, ObjectStream>();
+  /** Where each stream's data ends, for the streams whose length is not to be believed. */
+  private readonly endstreams: WordFinder;
   private base = 0;
 
   constructor(bytes: Uint8Array) {
     if (bytes.length === 0) throw new PdfError("This file is empty.");
     if (bytes.length > MAX_PDF_BYTES) throw new PdfError(`This PDF is larger than ${MAX_PDF_BYTES / 1024 / 1024} MB, which is more than a test bank is.`);
     this.bytes = bytes;
+    this.endstreams = new WordFinder(bytes, "endstream");
     const header = find(bytes, "%PDF-", 0);
     if (header === -1 || header > 1024) throw new PdfError("This file is not a PDF: it does not begin with %PDF-.");
     this.base = header;
@@ -175,6 +222,13 @@ export class PdfDocument {
       const index = Array.isArray(rawIndex) ? rawIndex.map((n) => numberOf(n, Number.NaN)) : [0, size];
       if (!index.every((n) => Number.isInteger(n) && n >= 0)) return undefined;
       const width = w1 + w2 + w3;
+      // The widths and the index are believed, and the number of rows they come to was not looked at: a row of one byte is allowed, so
+      // 660 bytes of file unpacked to 8 million bytes and became a Map of 8 million entries (670 MB), and the table was believed, and
+      // the objects were looked up where it said and not found. No file has 2 million objects; a table that says it does is not a
+      // table, and the objects are found by searching, which says so. The rows are counted before any is stored, so that nothing is built.
+      let rows = 0;
+      for (let s = 0; s + 1 < index.length; s += 2) rows += index[s + 1] as number;
+      if (Math.min(rows, Math.floor(data.length / width)) > MAX_XREF_ROWS) return undefined;
       let p = 0;
       const read = (n: number): number => {
         let v = 0;
@@ -208,7 +262,12 @@ export class PdfDocument {
     const text = Buffer.from(b.buffer, b.byteOffset, b.byteLength).toString("latin1");
     const re = /(?:^|[\r\n\s])(\d+)\s+(\d+)\s+obj\b/g;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) this.xref.set(Number(m[1]), { kind: "file", offset: m.index + m[0].indexOf(m[1] as string) });
+    const found: Array<{ num: number; offset: number }> = [];
+    while ((m = re.exec(text))) found.push({ num: Number(m[1]), offset: m.index + m[0].indexOf(m[1] as string) });
+    // Each object is read from where it begins to where the next one begins and no further. An object that never closes (`7 0 obj [` and
+    // nothing after it) was read to the end of the FILE, and 5,000 of them, 64 KB, took 17 seconds. A stream's bytes are still looked
+    // for in the whole file: they are not read by the lexer, and a stream may hold the words "1 0 obj" in its data.
+    found.forEach((f, i) => this.xref.set(f.num, { kind: "file", offset: f.offset, end: i + 1 < found.length ? (found[i + 1] as { offset: number }).offset : b.length }));
 
     for (const num of [...this.xref.keys()]) {
       let object: PdfObject;
@@ -238,9 +297,12 @@ export class PdfDocument {
     for (;;) {
       at = find(b, "trailer", at);
       if (at === -1) break;
-      const dict = parseObject(new Lexer(b, at + 7));
+      const lex = new Lexer(b, at + 7);
+      const dict = parseObject(lex);
       if (isDict(dict)) for (const [k, v] of dict) this.trailer.set(k, v);
-      at += 7;
+      // The next search begins where this reading ended. It began 7 bytes on, so that "trailer << " repeated 20,000 times was 20,000
+      // readings that each ran to the end of the file (39 seconds); anything the reading went over is part of this trailer's dictionary.
+      at = Math.max(at + 7, lex.pos);
     }
     if (!this.trailer.has("Root")) {
       for (const num of this.xref.keys()) {
@@ -259,9 +321,10 @@ export class PdfDocument {
   // -------------------------------------------------------------------------
 
   /** The object at a place in the file, with its stream if it has one. */
-  private readIndirectAt(offset: number): PdfObject {
+  private readIndirectAt(offset: number, limit?: number): PdfObject {
     const b = this.bytes;
-    const lex = new Lexer(b, offset);
+    // The words of the object are read no further than `limit`; where its stream's bytes are is looked for in the whole file.
+    const lex = new Lexer(limit === undefined ? b : b.subarray(0, limit), offset);
     const num = lex.next();
     const gen = lex.next();
     const obj = lex.next();
@@ -292,7 +355,7 @@ export class PdfDocument {
       if (t.t === "kw" && t.v === "endstream") end = start + length;
     }
     if (end === -1) {
-      const e = find(b, "endstream", start);
+      const e = this.endstreams.after(start);
       if (e === -1) throw new PdfError(`A stream in this PDF (at byte ${offset}) does not end.`);
       end = e;
       if (b[end - 1] === 10) end--;
@@ -350,7 +413,7 @@ export class PdfDocument {
     this.resolving.add(num);
     try {
       let object: PdfObject;
-      if (entry.kind === "file") object = this.readIndirectAt(entry.offset);
+      if (entry.kind === "file") object = this.readIndirectAt(entry.offset, entry.end);
       else {
         // An object stream holds its objects under the numbers its own header gives, and the table gives the same number.
         object = this.innerObject(this.loadObjectStream(entry.stream), num);
@@ -463,10 +526,11 @@ export class PdfDocument {
     // for being above 0, and /Columns and /Colors written as 0.(200 zeros)1 passed it and multiplied to 0 again. So what is checked
     // is what the loop uses: whole numbers of columns and colours, a depth the format has, and a row that is at least one byte and
     // not larger than anything a page could hold. Every other value is refused in words and not guessed at (a row of 2147483648
-    // bytes read as no rows, and the page was lost without a word).
+    // bytes read as no rows, and the page was lost without a word). A row of at least one byte is not asked for in so many words: whole
+    // columns, whole colours and a depth of at least 1 cannot come to less.
     const whole = (n: number): boolean => Number.isInteger(n) && n >= 1;
     const rowBytes = Math.ceil((columns * colors * bits) / 8);
-    if (!whole(columns) || !whole(colors) || ![1, 2, 4, 8, 16].includes(bits) || !(rowBytes >= 1 && rowBytes <= MAX_ROW_BYTES)) {
+    if (!whole(columns) || !whole(colors) || ![1, 2, 4, 8, 16].includes(bits) || rowBytes > MAX_ROW_BYTES) {
       throw new PdfError("A stream in this PDF describes its rows with a width, colour count or bit depth that cannot be right, so it was not read.");
     }
     const bpp = Math.max(1, Math.ceil((colors * bits) / 8));
@@ -557,33 +621,71 @@ export class PdfDocument {
   }
 }
 
-function ascii85(data: Uint8Array): Uint8Array {
-  const text = Buffer.from(data).toString("latin1").replace(/\s+/g, "");
-  const body = text.replace(/^<~/, "").replace(/~>.*$/s, "");
-  const out: number[] = [];
-  let group: number[] = [];
-  for (const ch of body) {
-    if (ch === "z" && group.length === 0) {
-      out.push(0, 0, 0, 0);
-      continue;
-    }
-    group.push(ch.charCodeAt(0) - 33);
-    if (group.length === 5) {
-      let v = 0;
-      for (const d of group) v = v * 85 + d;
-      out.push((v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255);
-      group = [];
+/** The characters `\s` matches among the 256 a byte can be: the five of white space, the space, and the no-break space. */
+const isWhite = (c: number): boolean => c === 9 || c === 10 || c === 11 || c === 12 || c === 13 || c === 32 || c === 160;
+
+export function ascii85(data: Uint8Array, cap = MAX_STREAM_BYTES): Uint8Array {
+  // The output is bytes in a growing typed array, and the limit is looked at before a group is written. It was a plain array of numbers,
+  // 8 bytes for each byte of output, with no limit at all: 800 bytes of file made 895 MB, and with a heap of 256 MB the process was
+  // gone. (The same fault as the run-length decoder's, in the function next to it.) White space is taken out first, wherever it is,
+  // so that a start mark or an end mark with a space inside it is still one, as it was when this was done on a string.
+  const body = new Uint8Array(data.length);
+  let n = 0;
+  for (let i = 0; i < data.length; i++) if (!isWhite(data[i] as number)) body[n++] = data[i] as number;
+  const from = n >= 2 && body[0] === 0x3c && body[1] === 0x7e ? 2 : 0;
+  let to = n;
+  for (let i = from; i + 1 < n; i++) {
+    if (body[i] === 0x7e && body[i + 1] === 0x3e) {
+      to = i;
+      break;
     }
   }
-  if (group.length > 1) {
-    const n = group.length;
-    while (group.length < 5) group.push(84);
+
+  let out = new Uint8Array(Math.min(Math.max(1024, to), cap));
+  let length = 0;
+  const room = (extra: number): void => {
+    if (length + extra > cap) throw new PdfError("A stream in this PDF unpacks to more than a test bank could hold.");
+    if (length + extra > out.length) {
+      const bigger = new Uint8Array(Math.min(cap, Math.max(out.length * 2, length + extra)));
+      bigger.set(out.subarray(0, length));
+      out = bigger;
+    }
+  };
+  const group = [0, 0, 0, 0, 0];
+  let held = 0;
+  const value = (): number => {
     let v = 0;
     for (const d of group) v = v * 85 + d;
-    const bytes = [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255];
-    out.push(...bytes.slice(0, n - 1));
+    return v;
+  };
+  for (let i = from; i < to; i++) {
+    const c = body[i] as number;
+    if (c === 0x7a && held === 0) {
+      // Four zero bytes. Nothing is written: everything past `length` in the array is zero, and stays so.
+      room(4);
+      length += 4;
+      continue;
+    }
+    group[held++] = c - 33;
+    if (held === 5) {
+      const v = value();
+      room(4);
+      out[length++] = (v >>> 24) & 255;
+      out[length++] = (v >>> 16) & 255;
+      out[length++] = (v >>> 8) & 255;
+      out[length++] = v & 255;
+      held = 0;
+    }
   }
-  return Uint8Array.from(out);
+  if (held > 1) {
+    const count = held;
+    while (held < 5) group[held++] = 84;
+    const v = value();
+    const bytes = [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255];
+    room(count - 1);
+    for (let k = 0; k < count - 1; k++) out[length++] = bytes[k] as number;
+  }
+  return out.slice(0, length);
 }
 
 export function runLength(data: Uint8Array, cap = MAX_STREAM_BYTES): Uint8Array {

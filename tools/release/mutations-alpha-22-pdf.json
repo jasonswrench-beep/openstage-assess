@@ -1,0 +1,485 @@
+[
+  {
+    "label": "number token: the pattern is back to two ways to read each digit",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "const NUMBER_WORD = /^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)$/;",
+    "to": "const NUMBER_WORD = /^[+-]?(\\d+\\.?\\d*|\\.\\d+)$/;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "number token: a sign is not part of an integer",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "const INTEGER_WORD = /^[+-]?\\d+$/;",
+    "to": "const INTEGER_WORD = /^\\d+$/;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "number token: a point and digits is not a number",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "(?:\\d+(?:\\.\\d*)?|\\.\\d+)$/;",
+    "to": "(?:\\d+(?:\\.\\d*)?)$/;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "lexer: a stray close parenthesis calls the lexer again",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "      if (c === 0x29) {\n        this.pos++;\n        continue;\n      }",
+    "to": "      if (c === 0x29) {\n        this.pos++;\n        return this.next();\n      }",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "lexer: a lone greater-than calls the lexer again",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "        this.pos++;\n        continue;\n      }\n      if (c === 0x28) return this.literalString();",
+    "to": "        this.pos++;\n        return this.next();\n      }\n      if (c === 0x28) return this.literalString();",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "lexer: a lone greater-than ends the content",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "        this.pos++;\n        continue;\n      }\n      if (c === 0x28) return this.literalString();",
+    "to": "        this.pos++;\n        return { t: \"eof\" };\n      }\n      if (c === 0x28) return this.literalString();",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "depth: one level more is allowed",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "const MAX_DEPTH = 64;",
+    "to": "const MAX_DEPTH = 65;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "depth: the limit is never reached",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "  if (depth > MAX_DEPTH) throw new PdfError(",
+    "to": "  if (depth > 1_000_000) throw new PdfError(",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "depth: a dictionary passes its own depth on to its values",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "dict.set(k.v, fromToken(lex, v, depth + 1));",
+    "to": "dict.set(k.v, fromToken(lex, v, depth));",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "depth: an array passes its own depth on to its items",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "out.push(fromToken(lex, t, depth + 1));",
+    "to": "out.push(fromToken(lex, t, depth));",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "layout: the end of a line is cut by the pattern that is the square of the run",
+    "file": "packages/assess/src/import/pdf/layout.ts",
+    "from": "const trimmed = text.trimEnd();",
+    "to": "const trimmed = text.replace(/\\s+$/, \"\");",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "layout: only a space is white space at the end of a piece",
+    "file": "packages/assess/src/import/pdf/layout.ts",
+    "from": "if (piece !== \"\") endsInSpace = /\\s/.test(piece.slice(-1));",
+    "to": "if (piece !== \"\") endsInSpace = piece.slice(-1) === \" \";",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "layout: the first character of a piece is asked and not the last",
+    "file": "packages/assess/src/import/pdf/layout.ts",
+    "from": "endsInSpace = /\\s/.test(piece.slice(-1));",
+    "to": "endsInSpace = /\\s/.test(piece.slice(0, 1));",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "layout: a wide gap after white space is a tab all the same",
+    "file": "packages/assess/src/import/pdf/layout.ts",
+    "from": "if (gap >= TAB_GAP * run.size) add(spaced ? \"\" : \"\\t\", run);",
+    "to": "if (gap >= TAB_GAP * run.size) add(\"\\t\", run);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "layout: a wide gap is nothing",
+    "file": "packages/assess/src/import/pdf/layout.ts",
+    "from": "if (gap >= TAB_GAP * run.size) add(spaced ? \"\" : \"\\t\", run);",
+    "to": "if (gap >= TAB_GAP * run.size) add(\"\", run);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "layout: the whole text is asked whether it ends in white space",
+    "file": "packages/assess/src/import/pdf/layout.ts",
+    "from": "const spaced = endsInSpace || /^\\s/.test(run.text);",
+    "to": "const spaced = /\\s$/.test(text) || /^\\s/.test(run.text);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table: ten times as many rows are allowed",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const MAX_XREF_ROWS = 2_000_000;",
+    "to": "const MAX_XREF_ROWS = 20_000_000;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table: a tenth as many rows are allowed",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const MAX_XREF_ROWS = 2_000_000;",
+    "to": "const MAX_XREF_ROWS = 200_000;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table: the limit itself is too many",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "> MAX_XREF_ROWS) return undefined;",
+    "to": ">= MAX_XREF_ROWS) return undefined;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table: the rows are not added up",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "rows += index[s + 1] as number;",
+    "to": "rows += 0;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table: the rows are not cut to the bytes there are",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (Math.min(rows, Math.floor(data.length / width)) > MAX_XREF_ROWS) return undefined;",
+    "to": "if (rows > MAX_XREF_ROWS) return undefined;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: every object is read to the end of the file",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "end: i + 1 < found.length ? (found[i + 1] as { offset: number }).offset : b.length",
+    "to": "end: b.length",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: an object is read six bytes into the next",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "(found[i + 1] as { offset: number }).offset : b.length",
+    "to": "(found[i + 1] as { offset: number }).offset + 6 : b.length",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: the last object is cut four bytes short",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "(found[i + 1] as { offset: number }).offset : b.length }));",
+    "to": "(found[i + 1] as { offset: number }).offset : b.length - 4 }));",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: the next trailer is searched for 7 bytes on",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "at = Math.max(at + 7, lex.pos);",
+    "to": "at += 7;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: no trailer is looked for after the first",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "at = Math.max(at + 7, lex.pos);",
+    "to": "at = b.length;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: the limit on where an object is read to is ignored",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const lex = new Lexer(limit === undefined ? b : b.subarray(0, limit), offset);",
+    "to": "const lex = new Lexer(b, offset);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: the end of a stream is looked for only as far as its object may be read",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const e = this.endstreams.after(start);",
+    "to": "const e = find(lex.buf, \"endstream\", start);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "streams: the end of a stream is searched for from its own start each time",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const e = this.endstreams.after(start);",
+    "to": "const e = find(b, \"endstream\", start);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "finder: nothing is remembered",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "    this.known = true;\n    this.from = start;",
+    "to": "    this.known = false;\n    this.from = start;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "finder: a place before the stretch that finds nothing answers none",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (found === -1) found = this.at;",
+    "to": "if (found === -1) found = -1;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "finder: the search before the stretch stops short of a word that runs into it",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const stop = Math.min(this.hay.length, this.from + this.needle.length - 1);",
+    "to": "const stop = Math.min(this.hay.length, this.from);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: the objects of an object stream are those it has read so far",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "for (const inner of contents.offsets.keys())",
+    "to": "for (const inner of contents.read.keys())",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "reconstruct: an object of an object stream replaces a plain object of the same number",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (!this.xref.has(inner)) this.xref.set(inner, { kind: \"stream\", stream: num, index: i });",
+    "to": "this.xref.set(inner, { kind: \"stream\", stream: num, index: i });",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "object stream: the offsets are not put in order",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const starts = [...new Set(offsets.values())].sort((a, b) => a - b);",
+    "to": "const starts = [...new Set(offsets.values())];",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "object stream: an object runs to the one after the next",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "i + 1 < starts.length ? (starts[i + 1] as number)",
+    "to": "i + 2 < starts.length ? (starts[i + 2] as number)",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "object stream: an offset that is not a place is kept",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (!offsets.has(id.v) && Number.isInteger(off.v) && off.v >= 0) offsets.set(id.v, off.v);",
+    "to": "if (!offsets.has(id.v)) offsets.set(id.v, off.v);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table stream: a width of 9 is allowed",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "Number.isInteger(n) && n >= 0 && n <= 8) || w1",
+    "to": "Number.isInteger(n) && n >= 0 && n <= 9) || w1",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table stream: a width may be a fraction",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "Number.isInteger(n) && n >= 0 && n <= 8) || w1",
+    "to": "n >= 0 && n <= 8) || w1",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table stream: the index may hold a fraction",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (!index.every((n) => Number.isInteger(n) && n >= 0)) return undefined;",
+    "to": "if (!index.every((n) => n >= 0)) return undefined;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "table stream: the index may be below 0",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (!index.every((n) => Number.isInteger(n) && n >= 0)) return undefined;",
+    "to": "if (!index.every((n) => Number.isInteger(n))) return undefined;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: the no-break space is not white space",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "|| c === 32 || c === 160;",
+    "to": "|| c === 32;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: the mark at the start is not taken off",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "body[1] === 0x7e ? 2 : 0;",
+    "to": "body[1] === 0x7e ? 0 : 0;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: a tilde alone is the end mark",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (body[i] === 0x7e && body[i + 1] === 0x3e) {",
+    "to": "if (body[i] === 0x7e) {",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: the limit is reached one byte early",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (length + extra > cap) throw",
+    "to": "if (length + extra >= cap) throw",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: a z counts three bytes",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "      room(4);\n      length += 4;\n      continue;",
+    "to": "      room(4);\n      length += 3;\n      continue;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: the last group gives one byte too many",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "for (let k = 0; k < count - 1; k++) out[length++] = bytes[k] as number;",
+    "to": "for (let k = 0; k < count; k++) out[length++] = bytes[k] as number;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: the digits are in base 84",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "v = v * 85 + d;",
+    "to": "v = v * 84 + d;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: the output is given with the room that was not used",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "  return out.slice(0, length);\n}",
+    "to": "  return out;\n}",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "ascii85: the output grows by what is needed",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const bigger = new Uint8Array(Math.min(cap, Math.max(out.length * 2, length + extra)));",
+    "to": "const bigger = new Uint8Array(Math.min(cap, length + extra));",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "run length: the output grows by what is needed",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "      const bigger = new Uint8Array(Math.min(cap, Math.max(out.length * 2, length + extra)));\n      bigger.set(out.subarray(0, length));\n      out = bigger;\n    }\n  };\n  for (let i = 0; i < data.length; ) {",
+    "to": "      const bigger = new Uint8Array(Math.min(cap, length + extra));\n      bigger.set(out.subarray(0, length));\n      out = bigger;\n    }\n  };\n  for (let i = 0; i < data.length; ) {",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "predictor: a depth of 16 is refused",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "![1, 2, 4, 8, 16].includes(bits)",
+    "to": "![1, 2, 4, 8].includes(bits)",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "predictor: colours may be a fraction",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "!whole(colors) ||",
+    "to": "colors < 1 ||",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "predictor: columns may be a fraction",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "!whole(columns) ||",
+    "to": "columns < 1 ||",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "predictor: a row of exactly 16 MiB is too wide",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "|| rowBytes > MAX_ROW_BYTES) {",
+    "to": "|| rowBytes >= MAX_ROW_BYTES) {",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "fonts: the widths of a document are ten times as many",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "const MAX_WIDTHS_SET = 1_000_000;",
+    "to": "const MAX_WIDTHS_SET = 10_000_000;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "fonts: the widths of a document are a tenth as many",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "const MAX_WIDTHS_SET = 1_000_000;",
+    "to": "const MAX_WIDTHS_SET = 100_000;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "fonts: the widths of a description are made again for each font that names it",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "  if (known) return known;",
+    "to": "  if (known && false) return known;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "fonts: the budget of a document is made new for each font",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "    widthStores.set(doc, store);",
+    "to": "",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "fonts: the widths in an array cost nothing",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "k++, store.left--) widths.set(start + k",
+    "to": "k++) widths.set(start + k",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "fonts: the widths in a range cost nothing",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "c++, store.left--) widths.set(c, value);",
+    "to": "c++) widths.set(c, value);",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "zip: the sizes the entries claim are not added up",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "claimed += compressedSize;",
+    "to": "claimed = compressedSize;",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "zip: claiming exactly what the file holds is too much",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "if (claimed > buf.length) {",
+    "to": "if (claimed >= buf.length) {",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "zip: twice what the file holds may be claimed",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "if (claimed > buf.length) {",
+    "to": "if (claimed > buf.length * 2) {",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "zip: half of what the file holds is all that may be claimed",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "if (claimed > buf.length) {",
+    "to": "if (claimed > buf.length / 2) {",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "zip: the claims are never looked at",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "if (claimed > buf.length) {",
+    "to": "if (false) {",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "character map: the search for the end of a block begins one character after its beginning",
+    "file": "packages/assess/src/import/pdf/cmap.ts",
+    "from": "at = to + end.length;",
+    "to": "at = from + 1;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "paragraphs: the last word of a line is cut by a pattern that begins at every letter",
+    "file": "packages/assess/src/import/pdf/paragraphs.ts",
+    "from": "text.replace(/(?<!\\S)\\S+$/, \" \")",
+    "to": "text.replace(/\\S+$/, \" \")",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  },
+  {
+    "label": "paragraphs: the word before a broken hyphen is found from every letter",
+    "file": "packages/assess/src/import/pdf/paragraphs.ts",
+    "from": "/(?<![A-Za-zÀ-ɏ])([A-Za-zÀ-ɏ]+)-$/.exec(before)",
+    "to": "/([A-Za-zÀ-ɏ]+)-$/.exec(before)",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
+  }
+]
