@@ -71,7 +71,7 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
 
   openassess import <file.txt|file.docx|file.gift|file.aiken|file.xml|file.zip|file.imscc|file.csv> [--out <bank${BANK_EXTENSION}>] [--details] [--key-mark <mark>]
       Read a file (the standard test-bank format, Aiken or GIFT as text, Moodle XML, a QTI file or package, a
-      Common Cartridge .imscc, a question table or a Brightspace question library as .csv, or a Word .docx) and report the verdicts. A .txt file is told apart by what is
+      Common Cartridge .imscc, a question table or a Brightspace question library as .csv, a Blackboard upload file as .txt, or a Word .docx) and report the verdicts. A .txt file is told apart by what is
       in it. With --out, write the questions into a new bank.
       A Word file may mark the correct option by formatting it. The file is
       read to see whether it does, and the report says what was decided.

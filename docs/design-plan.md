@@ -485,6 +485,13 @@ Blackboard routes are not built. Its own pool package is the `.dat` format of D2
 reads only pools exported from Original. Its QTI import is Original only according to several university guides, and one
 Blackboard page mentions QTI 2.1, so the sources disagree.
 
+The upload file is read back too (`src/import/blackboard-upload.ts`, added on 7 November 2026 after the file this program writes came
+back as "No questions were found" and 66 pieces of text no question used): the key is the word correct beside an answer, true or
+false, the order of the items, and nothing else; a fill in the blank is a short answer since the file marks no blank; the rest is as
+in `CLAUDE.md`. Everything it reads was written by this program's own exporter or by hand from Blackboard's page; no file written by
+Blackboard has been read, and a file from a tool that writes more than this page documents (a quoted field, HTML, a points column)
+is not read as that.
+
 ## Ideas taken from the wider discussion
 
 The long discussion described a full assessment platform. Most of it is out of

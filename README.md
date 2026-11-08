@@ -313,14 +313,14 @@ packages/assess/        the engine, published as @openstage/assess
   src/import/           importers: the Standard Format, Word (docx/ is its XML and package reader), PDF (pdf/ is its
                         reader, from the file's objects to lines and paragraphs), Aiken, GIFT, Moodle XML, QTI and
                         the question table (spreadsheet.ts, with table-csv.ts and table-xlsx.ts to read the file)
-                        and the Brightspace question library CSV (d2l-csv.ts)
+                        and the Brightspace question library CSV (d2l-csv.ts) and Blackboard's upload file (blackboard-upload.ts)
   src/export/           exporters and the destination check: the spreadsheet, GIFT, Moodle XML, Brightspace CSV, QTI 1.2, QTI 2.1, Common Cartridge and Blackboard upload
   src/print/            a printed test: the layout, and the Word and PDF writers
   src/read/             a read API nothing uses yet; see docs/design-plan.md
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 2821 tests, run by Node's own test runner
+  test/                 2868 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question

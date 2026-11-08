@@ -178,6 +178,18 @@ question of every fixture, and of the real Word banks when they are here, comes 
 word of a multiselect as `AllOrNothing` or `RightMinusWrong`, the tokens a guide to the template lists; Brightspace's own article gives
 display names ("All or nothing", "Correct Selections") that people report are not accepted. No file written by Brightspace itself has been read.
 
+**A Blackboard upload file's key is its words, and nothing else.** `import/blackboard-upload.ts` reads the tab-delimited file the exporter
+writes and the page documents (the registry looks at a `.txt` or `.tsv` before the table and text readers: every row begins with a type
+and a tab, and a multiple choice, multiple answer or true or false row has the word correct, incorrect, true or false where the format puts
+it). A choice answer is right where the word after it is correct (either case); a word that is neither, or an answer with none, keeps the
+whole row as an essay that fails; no answer marked correct has no key and says so; two correct on a multiple choice stay as the file has
+them and the question needs fixing. True or false is the word; a fill in the blank row is a short answer with each accepted answer once (the
+file marks no blank); matching is each left and right side, ordering is the order listed, an essay's sample answer is its model answer; a
+gap, an odd field, a numeric, file response or other type is kept with every word, as an essay that fails. A double quote is a character
+like any other (the file has no quoting), so a stem that begins with one is read as written. It has no points, so each is worth 1, and says
+so. Its exporter is read back through it (`import-blackboard-upload.test.ts`: every question of every fixture, and of the real Word banks when
+they are here). No file written by Blackboard itself has been read.
+
 **A Moodle XML file's key is the weights it gives, and nothing else.** `import/moodle-xml.ts` reads an answer as right only where its
 `fraction` is the whole of the points (99.99 or more). A single answer question where none is has no key and says so; two leaves both
 marked as the file has them and fails the key check; part credit on a single answer, credit for a wrong answer in a short answer, and
@@ -406,7 +418,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2821 engine tests and 333 app tests, Node's own runner
+npm test                       # 2868 engine tests and 335 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
