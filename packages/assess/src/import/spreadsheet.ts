@@ -691,7 +691,7 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
     const where = [...new Set(rightColumns)].map((c) => `"${c}"`).join(" and ");
     say(
       "info",
-      `The right answer is in a column of its own (${where}) and the wrong answers are in the columns after it, so it is first in every row. The answers of ${plural(ctx.mixed, "question was", "questions were")} mixed, the same way each time this file is read and with the right answer kept with its own words, so that the key is not A throughout${
+      `The right answer is in a column of its own (${where}) and the wrong answers are in the columns after it, so it is first in every row. The answers of ${plural(ctx.mixed, "question", "questions")} were mixed, the same way each time this file is read and with the right answer kept with its own words, so that the key is not A throughout${
         ctx.kept > 0 ? `; ${plural(ctx.kept, "question keeps", "questions keep")} the order of the file, because an answer depends on its place (such as None of the above)` : ""
       }.`,
     );

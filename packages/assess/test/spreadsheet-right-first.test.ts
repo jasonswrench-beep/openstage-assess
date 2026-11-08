@@ -75,7 +75,7 @@ describe("a table with a column for the right answer and columns for the wrong o
     assert.deepEqual(right(first), ["Only the first"]);
     assert.deepEqual(right(second), ["Yes"]);
     const said = notes(r).find((n) => /right answer is in a column of its own/.test(n)) as string;
-    assert.match(said, /answers of 1 question was mixed/);
+    assert.match(said, /answers of 1 question were mixed/);
     assert.match(said, /1 question keeps the order of the file/);
   });
 
