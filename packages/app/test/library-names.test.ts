@@ -95,6 +95,16 @@ describe("a name the program makes from a title", () => {
     assert.equal(cleanName("con.txt"), "con_.txt");
   });
 
+  test("the underscore after a device's name is counted in the length", () => {
+    for (const long of [`Aux. ${"x".repeat(100)}`, `Aux.${"x".repeat(76)}`, `Aux.${"x".repeat(75)}`, `com1. ${"y".repeat(74)}`]) {
+      const name = cleanName(long);
+      assert.ok(name.length <= 80, `${name.length}: ${name}`);
+      assert.equal(checkName(name), name);
+      assert.match(name, /^(Aux|com1)_\./, name);
+    }
+    assert.equal(cleanName(`Aux.${"x".repeat(76)}`).length, 80, "the name is cut to 80 after the underscore, and not made 81");
+  });
+
   test("a lone half of an emoji is made the replacement character, before anything else is done to the title", () => {
     assert.equal(cleanName("A\ud83dB"), "A�B");
     assert.equal(cleanName("\ude00"), "�");
