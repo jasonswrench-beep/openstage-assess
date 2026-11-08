@@ -86,9 +86,12 @@ sheets, the findings of one kind in a question); a pattern that reads to the end
 bank of 1.3 KB take 10 seconds to open; a lazy `begin...end`, `\s+$`, a number pattern whose digits can be shared out in every way), so a
 pattern is anchored or finds its end once (`model/markup-scan.ts`, `indexOf`, a lookbehind, a plain scan); a list spread into a call
 (`push(...x)`, `Math.max(...x)`), which throws "Maximum call stack size exceeded" at about 125,000 items, so
-`test/spread-guard.test.ts` reads every source file and fails on one not listed with its reason; and a structure that is rebuilt for each
-item (a style chain for each paragraph, a table of file names for each item, a list copied for each identical option, a stream parsed
-to its end for each object, one budget for each font and not for the document). None of these is reached by a damaged-file run, because
+`test/spread-guard.test.ts` reads every source file of the engine (`.ts`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`) with a small reader of its
+own, also for `.apply(` and `Reflect.apply(` with a list, and fails on a spread or an apply that is not listed with its callee, its
+argument and its reason (it is a reader of text and not of the syntax tree, because TypeScript is not a dependency); and a structure that
+is rebuilt for each item (a style chain for each paragraph, a table of file names for each item, a list copied for each identical
+option, a stream parsed to its end for each object, a font's widths kept as a map of every code it names and not as the ranges it was
+given: a budget that dropped widths once a document had spent it took the spaces out of a question). None of these is reached by a damaged-file run, because
 each needs one number or one repeated word to be exactly wrong, so `pdf-hostile`, `hostile-readers`, `hostile-office` and `bank-hostile`
 read each hostile file in a process of its own under a time limit (`inChild` in `test/support/hostile-pdf.ts`), each was shown to fail on
 the source before its fix, and where a fix could change a legitimate result a differential test holds it to a verbatim copy of the old
@@ -157,17 +160,23 @@ interface sets all text with `textContent`, never as markup (`server.test.ts`
 reads every script for `innerHTML`). The key cookie is named for the port (a cookie belongs to a host and not a port, so two copies on
 127.0.0.1 shared one and the second took the first's key), and a file name the program makes itself (a bank's title with the kind of file
 after it) is cut to fit with `fitFileName` and never refused as though a stranger had sent it, while a name that comes from outside is
-still checked with `checkName` and refused. A name that is made is checked against what will be asked of it later: a name is claimed by creating the file (`writeNewFile`,
-`claimName` in `library.ts`: `wx` fails if it is there), never looked for and then used, because six exports asked for at once were all
-given one name and wrote over each other, and a bank removed twice could overwrite the copy in Deleted; the number they add (" 2") is
+still checked with `checkName` and refused. A name that is made is checked against what will be asked of it later: a name is claimed by creating the file (`writeNewFile` in
+`library.ts`: `wx` fails if it is there), and a bank's by a hard link of the finished file (`placeFile` and `placeMade`: the bank is
+written whole under a private name that nothing lists, and the link fails if the name is taken), never looked for and then used, because
+six exports asked for at once were all given one name and wrote over each other, and a bank removed twice could overwrite the copy in
+Deleted. A bank's name was claimed for a while by an empty file that the save then renamed over; on Windows a rename onto a file that
+something has open (the home screen's list, a virus scanner) is refused, so as many as six banks in a hundred failed to be made, and the empty file
+showed as a bank that could not be read. Where a volume makes no links the file is copied instead. The number they add (" 2") is
 counted in the length, because the second export of a title that fitted exactly was written 82 characters long and then could not be
 downloaded; the list a check shows is the list of names that will be written (`fitNames`); a cut falls between characters as a person sees
 them (a lone half of an emoji makes `encodeURIComponent` throw, and "URI malformed" is what the person saw in place of a finished
 export), and the engine's `safeName`, which makes the names of the printed test, the test paper, the results and the scores file, is
 held to the app's rules for a name (leading dots and spaces taken off together, no trailing dot or space, and a Windows device name such
-as "Aux. Verbs", COM0 or LPT² kept apart with an underscore, where the app's `cleanName` gives "Untitled" for a title that is only a
-device name), by `file-names.test.ts`, which holds it to a copy of `checkName`. Do not loosen any of it to make something
-easier to test.
+as "Aux. Verbs", COM0 or LPT² kept apart with an underscore, which the app's `cleanName` does as well: it gives "Untitled" only for a
+title that is nothing but a device name) by `library-names.test.ts` in the app, which holds both makers to the real `checkName` for
+thousands of generated titles; the copy of `checkName` in the engine's `file-names.test.ts` is a second check and not the first. A name
+from outside that is not well formed (a lone half of an emoji) is refused by `checkName`, and `cleanName` makes it well formed. Do not
+loosen any of it to make something easier to test.
 
 **A table's columns are never assumed.** A spreadsheet or CSV is read by the names in its
 first row. With no names it is read in the template's order only if its first cells are
