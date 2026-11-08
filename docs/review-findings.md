@@ -1258,6 +1258,14 @@ the command line with Node's own "File size (6651950811) is greater than 2 GiB",
 far smaller (the app takes at most 80 MB and had said only "That file is too large."; it says how large the file is, what the most is
 and what to do). The command line's wording was checked on the real 6 GB zip, not in a test, which would need a multi-gigabyte file.
 
+One more thing the 341 Word files showed: 149 of them (outlines, plot bibles, specifications, speeches) came out as "questions", each
+an essay the file never said it was, and flagged, so nothing was wrong, but a person who imports one by mistake saw "82 need review" and
+nothing at the top to say the file may not be a test bank. When five or more questions were read and every one is a guess at an essay,
+the file now says so once, as information: "All 82 questions were read as essay questions, because the file did not say what kind any
+of them is and none has options to choose from. This file may not be a test bank...". Essays the file stated (a Type: E line), a file with
+any choice question among them, and fewer than five are left without it; a list of essay prompts gets the note and the words allow for
+that. The accuracy gate is unmoved (61 of 61, 1421 of 1421): it is a file note and not a verdict.
+
 A table of 5000 questions was also pushed through the app to see where size hurts (7 November 2026, in the built-in browser). The
 server took 0.8 seconds to read it and send 3.8 MB; the review drew its 5000 rows (40,000 elements) in about 1.5 seconds; opening the
 saved bank took 0.8 seconds and a search 0.4 seconds. What was slow was choosing a question: every choice drew the whole list again,

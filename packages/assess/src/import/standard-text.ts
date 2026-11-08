@@ -1483,6 +1483,21 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
         ]);
   });
 
+  // A document that is not a test bank (an outline, a specification, a plot) reads as a long run of numbered or lettered items, each of
+  // them an essay the file never said it was: 82 and 129 "questions needing review" on two real documents, with nothing at the top to
+  // say the file may not be a bank. Every question a guess at an essay, and five or more of them, is said once for the file. A list of
+  // essay prompts reads the same, so the words leave room for that.
+  const allGuessedEssays = questions.length >= 5 && questions.every((q) => q.type === "essay" && q.findings.some((f) => f.code === FindingCode.TypeInferred && !f.dismissed));
+  const notABankFindings = allGuessedEssays
+    ? [
+        finding(
+          FindingCode.NotLikelyABank,
+          "info",
+          `All ${questions.length} questions were read as essay questions, because the file did not say what kind any of them is and none has options to choose from. This file may not be a test bank (an outline, a handout, notes?). If it is a list of essay prompts, that is what they are; if it is something else, it is not worth repairing here.`,
+        ),
+      ]
+    : [];
+
   const kept = scanned.questions.reduce((n, q) => n + (q.keptTables?.length ?? 0), 0);
   const keptFindings =
     kept === 0
@@ -1502,6 +1517,6 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
     // Text no question claimed is shown as it reads, so an equation in it is its words and not a tag.
     orphans: scanned.orphans.map((o) => ({ ...o, text: equationsAsWords(o.text) })),
     counts: countVerdicts(questions, scanned.orphans.length),
-    fileFindings: [...relabelFindings, ...scanned.fileFindings, ...formatting.fileFindings, ...keptFindings],
+    fileFindings: [...notABankFindings, ...relabelFindings, ...scanned.fileFindings, ...formatting.fileFindings, ...keptFindings],
   };
 }

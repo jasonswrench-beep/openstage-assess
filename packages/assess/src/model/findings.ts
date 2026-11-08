@@ -53,6 +53,8 @@ export const FindingCode = {
 
   // Import: the parser had to guess, and a human should look.
   TypeInferred: "import.type-inferred",
+  /** Said of a whole file: every question in it was a guess at an essay, which is what a document that is not a test bank reads as. */
+  NotLikelyABank: "import.not-likely-a-bank",
   UnsupportedType: "import.unsupported-type",
   UnreadContent: "import.unread-content",
   UnreadObject: "import.unread-object",
