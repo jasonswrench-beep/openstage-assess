@@ -14,11 +14,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync } from "node:zlib";
 
 import { importerForContent } from "../src/import/registry.ts";
 import { looksLikePdf, pdfImporter, pdfToBlocks } from "../src/import/pdf.ts";
 import { PdfDocument } from "../src/import/pdf/document.ts";
-import { PdfError } from "../src/import/pdf/objects.ts";
+import { PdfError, PdfName, PdfRef, PdfStream, PdfString, type PdfObject } from "../src/import/pdf/objects.ts";
 import { readPdfText } from "../src/import/pdf/reader.ts";
 import { assembleParagraphs } from "../src/import/pdf/paragraphs.ts";
 import { FindingCode, liveFindings, verdictFrom } from "../src/model/findings.ts";
@@ -27,6 +28,7 @@ import { createQuestion } from "../src/model/create.ts";
 import { plainToRich } from "../src/model/richtext.ts";
 import { printOptions, printTest } from "../src/print/index.ts";
 import type { Question, QuestionBody } from "../src/model/question.ts";
+import { assemble, helloPieces, inChild, readTextInChild, tableStreamPdf, type Piece } from "./support/hostile-pdf.ts";
 import { at, atCodes, buildPdf, type FontSpec, type PdfSpec } from "./support/pdf-builder.ts";
 
 const WIDTHS = Array.from({ length: 224 }, () => 500);
@@ -547,5 +549,278 @@ describe("the command-line review of a PDF and of a table", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A table of objects that is lost, an object stream, and a predictor
+// ---------------------------------------------------------------------------
+
+/** An object as plain data, so that two documents can be compared object by object. */
+function show(o: PdfObject | undefined): unknown {
+  if (o instanceof PdfName) return `/${o.name}`;
+  if (o instanceof PdfRef) return `${o.num} ${o.gen} R`;
+  if (o instanceof PdfString) return `(${Buffer.from(o.bytes).toString("latin1")})`;
+  if (o instanceof PdfStream) return { stream: show(o.dict), length: o.raw.length };
+  if (o instanceof Map) return Object.fromEntries([...o].map(([k, v]) => [k, show(v)]));
+  if (Array.isArray(o)) return o.map(show);
+  return o;
+}
+
+const DAMAGED = /table of objects in this PDF was damaged/;
+
+describe("a PDF written in the modern way whose table of objects is lost", () => {
+  const body = page(["1. Which of these is a question?", "a. One", "b. Two", "c. Three"]);
+  for (const compress of [false, true]) {
+    test(`is read all the same${compress ? " with its pages compressed" : ""}, with the objects that were inside its object stream found`, () => {
+      const whole = pdf({ pages: [body, page(["second page"])], modern: true, compress });
+      const broken = pdf({ pages: [body, page(["second page"])], modern: true, compress, brokenStartxref: true });
+      assert.deepEqual(linesOf(broken), linesOf(whole));
+      assert.match(notes(broken), DAMAGED, "and the person is told how it was found");
+      assert.doesNotMatch(notes(whole), DAMAGED);
+
+      // Every object, those inside the object stream and those outside it, is the same object when it is found by searching.
+      const a = new PdfDocument(whole);
+      const b = new PdfDocument(broken);
+      const wrong: number[] = [];
+      let inside = 0;
+      for (let n = 1; n <= 14; n++) {
+        const one = show(a.get(n));
+        if (JSON.stringify(one) !== JSON.stringify(show(b.get(n)))) wrong.push(n);
+        if (one !== null && !(typeof one === "object" && "stream" in (one as object))) inside++;
+      }
+      assert.deepEqual(wrong, [], "objects that differ");
+      assert.ok(inside >= 5, `${inside} objects that are not streams were found`);
+    });
+  }
+
+  test("and one of the old way with its start-of-table pointing at nothing is read the same", () => {
+    const whole = pdf({ pages: [body] });
+    assert.deepEqual(linesOf(pdf({ pages: [body], brokenStartxref: true })), linesOf(whole));
+    assert.match(notes(pdf({ pages: [body], brokenStartxref: true })), DAMAGED);
+  });
+
+  test("when the object stream lists its objects in the order of the last first, or in a shuffled order, is read whole, with or without its table", () => {
+    const whole = pdf({ pages: [body, page(["second page"])], modern: true });
+    for (const order of ["descending", "shuffled"] as const) {
+      for (const brokenStartxref of [false, true]) {
+        const read = pdf({ pages: [body, page(["second page"])], modern: true, objectStreamOrder: order, brokenStartxref });
+        assert.deepEqual(linesOf(read), linesOf(whole), `${order}${brokenStartxref ? ", table lost" : ""}`);
+        const a = new PdfDocument(whole);
+        const b = new PdfDocument(read);
+        for (let n = 1; n <= 14; n++) assert.deepEqual(show(b.get(n)), show(a.get(n)), `object ${n}, ${order}`);
+      }
+    }
+  });
+
+  test("keeps an object that is also in the object stream as the plain object, which is the one the searching found first", () => {
+    // Object 3, the page, is in the file twice: plain, saying Hello, and in an object stream, pointing at another content that says Goodbye.
+    // The object stream comes first in the file, so that it is opened before the plain page has been read and cached: if its copy took the
+    // place of the plain one in the table, the page that was read would be its copy.
+    const inner = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 8 0 R >>";
+    const head = "3 0 ";
+    const pieces: Piece[] = [
+      { num: 7, dict: `/Type /ObjStm /N 1 /First ${head.length}`, data: Buffer.from(head + inner, "latin1") },
+      { num: 8, dict: "", data: Buffer.from("BT /F1 12 Tf 72 700 Td (Goodbye) Tj ET", "latin1") },
+      ...helloPieces(),
+    ];
+    assert.deepEqual(linesOf(assemble(pieces, "trailer")), [["Hello"]]);
+  });
+});
+
+describe("an object stream", () => {
+  /** The objects of an object stream given as [number, offset] and a body, in a file with no table, so that they are found by searching. */
+  function opened(header: Array<[number, number]>, body: string, extra = ""): PdfDocument {
+    const head = `${header.map(([id, offset]) => `${id} ${offset}`).join(" ")}\n`;
+    const pieces: Piece[] = [...helloPieces(), { num: 7, dict: `/Type /ObjStm /N ${header.length} /First ${head.length} ${extra}`, data: Buffer.from(head + body, "latin1") }];
+    return new PdfDocument(assemble(pieces, "trailer"));
+  }
+  // Three arrays that never close, side by side: each ends where the next begins, and no later.
+  const BODY = "[ 1 2 [ 3 4 [ 5 6";
+
+  test("gives each object its own words, up to where the next begins and not the one after it", () => {
+    const doc = opened([[20, 0], [21, 6], [22, 12]], BODY);
+    assert.deepEqual(doc.get(20), [1, 2]);
+    assert.deepEqual(doc.get(21), [3, 4]);
+    assert.deepEqual(doc.get(22), [5, 6]);
+  });
+
+  for (const [what, header] of [
+    ["the last first", [[22, 12], [21, 6], [20, 0]]],
+    ["shuffled", [[22, 12], [20, 0], [21, 6]]],
+    ["with the middle one first", [[21, 6], [22, 12], [20, 0]]],
+  ] as Array<[string, Array<[number, number]>]>) {
+    test(`lists its objects ${what}, and each is still read from where it begins to where the next one by place begins`, () => {
+      const doc = opened(header, BODY);
+      assert.deepEqual(doc.get(20), [1, 2]);
+      assert.deepEqual(doc.get(21), [3, 4]);
+      assert.deepEqual(doc.get(22), [5, 6]);
+    });
+  }
+
+  test("drops an object whose offset is negative or not whole, and keeps the others", () => {
+    const doc = opened([[20, -5], [21, 0.5], [22, 0]], "[ 9 9 ]");
+    assert.equal(doc.get(20), null, "a negative offset is no place");
+    assert.equal(doc.get(21), null, "and nor is a fraction of a byte");
+    assert.deepEqual(doc.get(22), [9, 9]);
+  });
+
+  test("gives the first of two numbers listed twice, and the same object for two numbers at one place", () => {
+    const doc = opened([[20, 0], [20, 6], [21, 6], [22, 6]], "[ 1 ] [ 2 ]");
+    assert.deepEqual(doc.get(20), [1], "the first offset listed is the one");
+    assert.deepEqual(doc.get(21), [2]);
+    assert.deepEqual(doc.get(22), [2]);
+  });
+});
+
+describe("the numbers that describe a table of objects that is a stream", () => {
+  const readFile = (bytes: Buffer): { lines?: string[][]; notes: string } => {
+    const r = readTextInChild(bytes);
+    assert.equal(r.timedOut, false, `still reading after ${r.ms} ms`);
+    assert.equal(r.status, 0, r.stderr);
+    return { ...(r.lines ? { lines: r.lines } : {}), notes: (r.notes ?? []).join("\n") };
+  };
+
+  // Every file here has a table that is right about every object. It is believed unless a number that describes it is not one that is
+  // accepted, and then it is refused and the objects are looked for: the same page is read, and the person is told.
+  test("that are right are believed, and nothing is said", () => {
+    // (The last has a count of entries that no file has, and 28 bytes of them: it is the bytes that decide how many rows there are.)
+    for (const bytes of [tableStreamPdf("[1 2 1]", "[0 7]"), tableStreamPdf("[1 2 1 7]", "[0 7]"), tableStreamPdf("[1 2 1]", "[0 3 3 4]"), tableStreamPdf("[1 2 1]", "[0 100000000]")]) {
+      const r = readFile(bytes);
+      assert.deepEqual(r.lines, [["Hello"]]);
+      assert.doesNotMatch(r.notes, DAMAGED);
+    }
+  });
+
+  for (const [what, w, index, widths, dummy] of [
+    ["a number of entries that is not whole", "[1 2 1]", "[0 7.5]", [1, 2, 1], 0],
+    ["a first number that is below 0, with the rows to match", "[1 2 1]", "[-1 8]", [1, 2, 1], 1],
+    ["a width that is not whole, in the first field", "[0.5 2 1]", "[0 7]", [1, 2, 1], 0],
+    ["a width that is not whole, in the last", "[1 2 0.5]", "[0 7]", [1, 2, 1], 0],
+    ["a width of 9, which no writer uses", "[1 9 1]", "[0 7]", [1, 9, 1], 0],
+  ] as Array<[string, string, string, [number, number, number], number]>) {
+    test(`with ${what} is not believed, and the page is found by searching, with the person told`, () => {
+      const r = readFile(tableStreamPdf(w, index, widths, dummy));
+      assert.deepEqual(r.lines, [["Hello"]]);
+      assert.match(r.notes, DAMAGED);
+    });
+  }
+
+  test("with a width of 8, the widest, is believed", () => {
+    const r = readFile(tableStreamPdf("[1 8 1]", "[0 7]", [1, 8, 1]));
+    assert.deepEqual(r.lines, [["Hello"]]);
+    assert.doesNotMatch(r.notes, DAMAGED);
+  });
+});
+
+describe("a run-length stream", () => {
+  test("of 100,000 runs is unpacked in time that grows with the runs, and not with their square", () => {
+    const pairs = 100_000;
+    const encoded = new Uint8Array(pairs * 2);
+    for (let i = 0; i < pairs; i++) {
+      encoded[i * 2] = 129; // 128 copies of the next byte
+      encoded[i * 2 + 1] = 32;
+    }
+    const run = inChild(encoded, `const { runLength } = await engine("import/pdf/document.ts"); const t = performance.now(); const out = runLength(bytes); console.log(JSON.stringify({ length: out.length, ms: Math.round(performance.now() - t) }));`);
+    assert.equal(run.timedOut, false, `still unpacking after ${run.ms} ms`);
+    assert.equal(run.status, 0, run.stderr);
+    const out = JSON.parse(run.stdout) as { length: number; ms: number };
+    assert.equal(out.length, 12_800_000);
+    assert.ok(out.ms < 3000, `unpacked in ${out.ms} ms`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Predictors
+// ---------------------------------------------------------------------------
+
+describe("a predictor", () => {
+  /** A file of two pages: the first has the given content stream, packed and with the given parameters, the second says Hello. */
+  function twoPages(data: Buffer, parms: string): Uint8Array {
+    const pieces: Piece[] = [
+      { num: 1, body: "<< /Type /Catalog /Pages 2 0 R >>" },
+      { num: 2, body: "<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>" },
+      { num: 3, body: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>" },
+      { num: 4, dict: `/Filter /FlateDecode /DecodeParms ${parms}`, data },
+      { num: 5, body: "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>" },
+      { num: 6, body: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>" },
+      { num: 7, dict: "", data: Buffer.from("BT /F1 12 Tf 72 700 Td (Hello) Tj ET", "latin1") },
+    ];
+    return assemble(pieces);
+  }
+
+  const CONTENT = "BT /F1 12 Tf 72 600 Td (the first page) Tj ET";
+
+  /** The content cut into rows of `rowBytes` (spaces make up the last), each begun with a byte for how it is predicted: 1 is the byte to the left. */
+  function pngRows(content: string, rowBytes: number, bytesPerPixel: number): Buffer {
+    const padded = Buffer.from(content.padEnd(Math.ceil(content.length / rowBytes) * rowBytes, " "), "latin1");
+    const out: number[] = [];
+    for (let r = 0; r < padded.length; r += rowBytes) {
+      out.push(1);
+      for (let i = 0; i < rowBytes; i++) out.push(((padded[r + i] as number) - (i >= bytesPerPixel ? (padded[r + i - bytesPerPixel] as number) : 0)) & 255);
+    }
+    return Buffer.from(out);
+  }
+
+  /** The same, the way the format with a predictor of 2 does it: no byte in front, and the difference from the byte one pixel to the left. */
+  function tiffRows(content: string, rowBytes: number, bytesPerPixel: number): Buffer {
+    const padded = Buffer.from(content.padEnd(Math.ceil(content.length / rowBytes) * rowBytes, " "), "latin1");
+    const out = Buffer.from(padded);
+    for (let r = 0; r < padded.length; r += rowBytes) for (let i = bytesPerPixel; i < rowBytes; i++) out[r + i] = ((padded[r + i] as number) - (padded[r + i - bytesPerPixel] as number)) & 255;
+    return out;
+  }
+
+  // Predictors, columns, colours and depths that real files have, and that the check on them must not turn away. A real scan has 8 or
+  // 16 bits and 1 or 3 colours with a predictor of 15, a bi-level one has 1, and a width of more than 5 columns is anything but a toy.
+  for (const [predictor, columns, colors, bits] of [
+    [15, 5, 1, 8],
+    [15, 12, 1, 8],
+    [12, 7, 3, 8],
+    [11, 9, 1, 8],
+    [15, 3, 1, 16],
+    [15, 2, 3, 16],
+    [15, 16, 1, 1],
+    [15, 8, 1, 4],
+    [15, 4, 1, 2],
+    [15, 2, 3, 8],
+    [10, 4, 4, 8],
+    [2, 6, 1, 8],
+    [2, 2, 3, 8],
+  ] as const) {
+    test(`/Predictor ${predictor} with ${columns} columns of ${colors} colour${colors === 1 ? "" : "s"} at ${bits} bits is a width the reader knows, and the page is read through it`, () => {
+      const rowBytes = Math.ceil((columns * colors * bits) / 8);
+      const bytesPerPixel = Math.max(1, Math.ceil((colors * bits) / 8));
+      const rows = predictor === 2 ? tiffRows(CONTENT, rowBytes, bytesPerPixel) : pngRows(CONTENT, rowBytes, bytesPerPixel);
+      const bytes = twoPages(deflateSync(rows), `<< /Predictor ${predictor} /Columns ${columns} /Colors ${colors} /BitsPerComponent ${bits} >>`);
+      const result = readPdfText(bytes);
+      assert.deepEqual(result.pages.map((p) => p.lines.map((l) => l.text.trim())), [["the first page"], ["Hello"]]);
+      assert.doesNotMatch(result.notes.map((n) => n.message).join("\n"), /cannot be right/);
+    });
+  }
+
+  test("/Predictor 2 at a depth other than 8 is not unpacked, and not refused: the data is the data", () => {
+    const bytes = twoPages(deflateSync(Buffer.from(CONTENT, "latin1")), "<< /Predictor 2 /Columns 4 /BitsPerComponent 16 >>");
+    assert.deepEqual(linesOf(bytes), [["the first page"], ["Hello"]]);
+  });
+
+  // The ones that cannot be right, and are refused for that page alone, in words.
+  for (const [what, parms] of [
+    ["colours that are not whole", "<< /Predictor 15 /Columns 5 /Colors 1.5 >>"],
+    ["columns that are not whole", "<< /Predictor 15 /Columns 5.5 >>"],
+    ["a depth of 3", "<< /Predictor 15 /Columns 5 /BitsPerComponent 3 >>"],
+    ["a depth of 32", "<< /Predictor 15 /Columns 5 /BitsPerComponent 32 >>"],
+    ["a row of one byte more than 16 MiB", "<< /Predictor 15 /Columns 16777217 >>"],
+    ["a row of one byte more than 16 MiB made of colours", "<< /Predictor 15 /Columns 1 /Colors 8388609 /BitsPerComponent 16 >>"],
+  ] as const) {
+    test(`with ${what} is refused for that page in the reader's words, and the other page is kept`, () => {
+      const result = readPdfText(twoPages(deflateSync(pngRows(CONTENT, 5, 1)), parms));
+      assert.deepEqual(result.pages.map((p) => p.lines.length), [0, 1]);
+      assert.match(result.notes.map((n) => n.message).join("\n"), /A page could not be read[^]*cannot be right/);
+    });
+  }
+
+  test("with a row of exactly 16 MiB is not refused: the row is as wide as a row may be", () => {
+    const result = readPdfText(twoPages(deflateSync(pngRows(CONTENT, 5, 1)), "<< /Predictor 15 /Columns 16777216 >>"));
+    assert.doesNotMatch(result.notes.map((n) => n.message).join("\n"), /cannot be right/, "no row is whole in so little data, and the page has nothing, but it was not refused");
   });
 });

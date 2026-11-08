@@ -37,8 +37,15 @@ export interface PdfSpec {
   modern?: boolean;
   /** Compress content streams. */
   compress?: boolean;
-  /** Write a table of objects that points nowhere, so that the reader has to look for them. */
+  /** Write a table of objects that points nowhere, so that the reader has to look for them. (Only the table of the old way.) */
   damagedTable?: boolean;
+  /**
+   * Make the word `startxref` point at a place that is not a table, in a file of either way. The objects must then be found by searching,
+   * and in a file of the modern way many of them are inside an object stream, which is found the same way and then opened.
+   */
+  brokenStartxref?: boolean;
+  /** In a file of the modern way: the order the object stream lists its objects in, which has nothing to do with where they are. */
+  objectStreamOrder?: "descending" | "shuffled";
   /** Say the file is encrypted. */
   encrypted?: boolean;
   mediaBox?: [number, number, number, number];
@@ -54,6 +61,9 @@ export interface PdfSpec {
   decodeParms?: string;
   parmsPage?: number;
 }
+
+/** A place past the end of any file this builds. */
+const BROKEN_STARTXREF = 99_999_999;
 
 /** A line of text at a place: BT, the font, the place, the text, ET. */
 export function at(x: number, y: number, size: number, text: string, font = "F1"): string {
@@ -149,13 +159,17 @@ export function buildPdf(spec: PdfSpec): Uint8Array {
     const xrefAt = size;
     const rows = ["0000000000 65535 f "];
     for (const o of objects) rows.push(`${String(spec.damagedTable ? 9 : offsets.get(o.num)).padStart(10, "0")} 00000 n `);
-    write(Buffer.from(`xref\n0 ${objects.length + 1}\n${rows.join("\n")}\ntrailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R${trailerExtra} >>\nstartxref\n${spec.damagedTable ? 12345 : xrefAt}\n%%EOF\n`, "latin1"));
+    write(Buffer.from(`xref\n0 ${objects.length + 1}\n${rows.join("\n")}\ntrailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R${trailerExtra} >>\nstartxref\n${spec.damagedTable ? 12345 : spec.brokenStartxref ? BROKEN_STARTXREF : xrefAt}\n%%EOF\n`, "latin1"));
   } else {
     // Streams stay as they are; every other object goes in one object stream.
     const packed = objects.filter((o) => !o.stream);
     const loose = objects.filter((o) => o.stream);
     for (const o of loose) writeObject(o);
-    const head = packed.map((o, i) => `${o.num} ${i === 0 ? 0 : packed.slice(0, i).reduce((n, p) => n + Buffer.byteLength(String(p.body)) + 1, 0)}`).join(" ");
+    const pairs = packed.map((o, i) => `${o.num} ${i === 0 ? 0 : packed.slice(0, i).reduce((n, p) => n + Buffer.byteLength(String(p.body)) + 1, 0)}`);
+    // The header may list the objects in any order: where each begins is what it says, and the bodies stay where they are.
+    if (spec.objectStreamOrder === "descending") pairs.reverse();
+    else if (spec.objectStreamOrder === "shuffled") pairs.splice(0, pairs.length, ...pairs.filter((_, i) => i % 2 === 1).reverse(), ...pairs.filter((_, i) => i % 2 === 0));
+    const head = pairs.join(" ");
     const bodies = packed.map((o) => String(o.body)).join("\n");
     const first = head.length + 1;
     const stmNum = objects.length + 1;
@@ -184,7 +198,7 @@ export function buildPdf(spec: PdfSpec): Uint8Array {
     const packedXref = deflateSync(raw);
     write(Buffer.from(`${xrefNum} 0 obj\n<< /Type /XRef /Size ${xrefNum + 1} /W [1 4 1] /Root ${catalog} 0 R${trailerExtra} /Filter /FlateDecode /Length ${packedXref.length} >>\nstream\n`, "latin1"));
     write(packedXref);
-    write(Buffer.from(`\nendstream\nendobj\nstartxref\n${xrefAt}\n%%EOF\n`, "latin1"));
+    write(Buffer.from(`\nendstream\nendobj\nstartxref\n${spec.brokenStartxref ? BROKEN_STARTXREF : xrefAt}\n%%EOF\n`, "latin1"));
   }
   return new Uint8Array(Buffer.concat(chunks));
 }

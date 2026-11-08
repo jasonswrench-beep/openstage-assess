@@ -72,6 +72,21 @@ export type Token =
 /** Deepest nesting of arrays and dictionaries read. Nothing real goes near it. */
 const MAX_DEPTH = 64;
 
+/**
+ * A number as a PDF writes it: an optional sign, digits with an optional point, or a point and digits. The pattern was
+ * `(\d+\.?\d*|\.\d+)`, in which the digits before the point and the digits after it can both take the same digits, so that a run of
+ * k digits that did not end the word was divided between them in every way, from every place it could begin: 826 bytes of "1"
+ * repeated, then a letter, held the program for 10 seconds, and 2.5 KB for as long as it was left. After the digits only a point may
+ * come, so there is one way to read a word.
+ */
+const NUMBER_WORD = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
+const INTEGER_WORD = /^[+-]?\d+$/;
+
+function numberToken(word: string): Token | undefined {
+  if (!NUMBER_WORD.test(word)) return undefined;
+  return { t: "num", v: Number(word), integer: INTEGER_WORD.test(word) };
+}
+
 export class Lexer {
   readonly buf: Uint8Array;
   pos: number;
@@ -93,42 +108,47 @@ export class Lexer {
   }
 
   next(): Token {
-    this.skipSpace();
     const b = this.buf;
-    if (this.pos >= b.length) return { t: "eof" };
-    const c = b[this.pos] as number;
+    // A stray `)` or a lone `>` is passed over, and it was passed over by calling this again: a content stream of 200,000 of them was
+    // 200,000 calls deep and ended in "Maximum call stack size exceeded", a RangeError's words, in front of the person. It is a loop.
+    for (;;) {
+      this.skipSpace();
+      if (this.pos >= b.length) return { t: "eof" };
+      const c = b[this.pos] as number;
 
-    if (c === 0x5b || c === 0x5d || c === 0x7b || c === 0x7d) {
-      this.pos++;
-      return { t: "punct", v: String.fromCharCode(c) as "[" | "]" | "{" | "}" };
-    }
-    if (c === 0x3c) {
-      if (b[this.pos + 1] === 0x3c) {
-        this.pos += 2;
-        return { t: "punct", v: "<<" };
+      if (c === 0x5b || c === 0x5d || c === 0x7b || c === 0x7d) {
+        this.pos++;
+        return { t: "punct", v: String.fromCharCode(c) as "[" | "]" | "{" | "}" };
       }
-      return this.hexString();
-    }
-    if (c === 0x3e) {
-      if (b[this.pos + 1] === 0x3e) {
-        this.pos += 2;
-        return { t: "punct", v: ">>" };
+      if (c === 0x3c) {
+        if (b[this.pos + 1] === 0x3c) {
+          this.pos += 2;
+          return { t: "punct", v: "<<" };
+        }
+        return this.hexString();
       }
-      this.pos++;
-      return this.next();
-    }
-    if (c === 0x28) return this.literalString();
-    if (c === 0x29) {
-      this.pos++;
-      return this.next();
-    }
-    if (c === 0x2f) return this.name();
+      if (c === 0x3e) {
+        if (b[this.pos + 1] === 0x3e) {
+          this.pos += 2;
+          return { t: "punct", v: ">>" };
+        }
+        this.pos++;
+        continue;
+      }
+      if (c === 0x28) return this.literalString();
+      if (c === 0x29) {
+        this.pos++;
+        continue;
+      }
+      if (c === 0x2f) return this.name();
 
-    const start = this.pos;
-    while (this.pos < b.length && !isSpace(b[this.pos] as number) && !DELIMITERS.has(b[this.pos] as number)) this.pos++;
-    const word = Buffer.from(b.subarray(start, this.pos)).toString("latin1");
-    if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(word)) return { t: "num", v: Number(word), integer: /^[+-]?\d+$/.test(word) };
-    return { t: "kw", v: word };
+      const start = this.pos;
+      while (this.pos < b.length && !isSpace(b[this.pos] as number) && !DELIMITERS.has(b[this.pos] as number)) this.pos++;
+      const word = Buffer.from(b.subarray(start, this.pos)).toString("latin1");
+      const number = numberToken(word);
+      if (number) return number;
+      return { t: "kw", v: word };
+    }
   }
 
   private name(): Token {
@@ -212,12 +232,15 @@ export class Lexer {
  * a dictionary, and where their bytes end depends on a length that may be a reference, so the document reads them.
  */
 export function parseObject(lex: Lexer, depth = 0): PdfObject {
-  if (depth > MAX_DEPTH) throw new PdfError("An object in this PDF is nested too deeply to be real.");
   const token = lex.next();
   return fromToken(lex, token, depth);
 }
 
 export function fromToken(lex: Lexer, token: Token, depth: number): PdfObject {
+  // The depth was looked at here only, by the one caller that starts an object, and the arrays and dictionaries inside it called
+  // themselves without looking: `[` repeated 200,000 times in a trailer, a catalog or a page tree ended the whole file in "Maximum call
+  // stack size exceeded". Every level looks.
+  if (depth > MAX_DEPTH) throw new PdfError("An object in this PDF is nested too deeply to be real.");
   switch (token.t) {
     case "num": {
       if (token.integer && token.v >= 0) {
