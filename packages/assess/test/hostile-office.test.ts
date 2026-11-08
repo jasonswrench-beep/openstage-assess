@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 
 import {
   bigCellDocx,
+  columnLetters,
   emptyParagraphsDocx,
   listDocx,
   longEquationDocx,
@@ -31,8 +32,12 @@ import {
   workbook,
 } from "./support/hostile-office.ts";
 
-/** What a reader that does its work once takes, with a wide margin: every fixed file here reads in under a second. */
-const QUICK = 6000;
+/**
+ * What a reader that does its work once takes, with a wide margin: every fixed file here reads in two or three seconds at the most on
+ * a quiet machine, and the faults these files were made for took 13 to 30 seconds and more. A reader found that the first margin
+ * (six seconds) failed four of these tests on a machine with half as many processors as busy loops, with nothing wrong in the code.
+ */
+const QUICK = 12_000;
 
 describe("Word: a run with a very large number of text elements", () => {
   test("80,000 text elements in one run (3 KB) are read in a moment, not 25 seconds", () => {
@@ -180,6 +185,8 @@ describe("a part with more nodes than a document of any size has", () => {
     const { child, read } = readWordInChild(emptyParagraphsDocx(3_200_000), { timeoutMs: 40_000 });
     assert.equal(child.timedOut, false, `still reading after ${child.ms} ms`);
     assert.match(read?.refused ?? "", /more than 3000000 parts/);
+    assert.match(read?.refused ?? "", /more than this reader takes.*Split the test bank/s, "and says what to do");
+    assert.doesNotMatch(read?.refused ?? "", /not valid XML/, "a good file that is too big is not called damaged");
     assert.ok((child.rssMb ?? 0) < 1100, `held ${child.rssMb} MB`);
   });
 
@@ -187,6 +194,8 @@ describe("a part with more nodes than a document of any size has", () => {
     const { child, read } = readTableInChild(workbook({ sheets: [sheetXml(`<row r="1">${"<c/>".repeat(3_200_000)}</row>`)] }), { timeoutMs: 40_000 });
     assert.equal(child.timedOut, false, `still reading after ${child.ms} ms`);
     assert.match(read?.refused ?? "", /more than 3000000 parts/);
+    assert.match(read?.refused ?? "", /more than this reader takes.*Split the questions/s, "and says what to do");
+    assert.doesNotMatch(read?.refused ?? "", /not valid XML/, "a good file that is too big is not called damaged");
     assert.ok((child.rssMb ?? 0) < 1100, `held ${child.rssMb} MB`);
   });
 });
@@ -207,6 +216,20 @@ describe("Excel: one shared string named by many cells", () => {
     const { read } = readTableInChild(sharedStringTable(2, 32_767));
     assert.equal(read?.sheets?.[0]?.longest, 32_767);
     assert.doesNotMatch((read?.notes ?? []).join("\n"), /32,767/);
+  });
+
+  test("a string of 32,767 spaces named by 450,000 empty-looking cells (a few hundred KB of file) is tidied once, in a moment, not 20 seconds", () => {
+    let rows = "";
+    for (let r = 1; r <= 750; r++) {
+      let cells = "";
+      for (let c = 0; c < 600; c++) cells += `<c r="${columnLetters(c)}${r}" t="s"><v>0</v></c>`;
+      rows += `<row r="${r}">${cells}</row>`;
+    }
+    const { child, read } = readTableInChild(workbook({ sheets: [sheetXml(rows)], shared: [" ".repeat(32_767)] }), { timeoutMs: 40_000 });
+    assert.equal(child.timedOut, false, `still reading after ${child.ms} ms`);
+    assert.equal(read?.refused, undefined, `ended with: ${read?.refused}`);
+    assert.equal(read?.sheets?.[0]?.rows, 0, "and every cell of it is empty");
+    assert.ok(child.ms < QUICK, `read in ${child.ms} ms`);
   });
 
   test("three thousand cells of 32,767 characters are more text than a workbook of questions has, and are refused in words", () => {

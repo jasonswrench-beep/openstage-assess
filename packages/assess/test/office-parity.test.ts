@@ -302,6 +302,15 @@ describe("a start is at most the 32,767 Word lets a list start at", () => {
     assert.match(labelsFor(levels, [{ ilvl: 0 }])[0] as string, /^! its start \(40000\)/);
   });
 
+  test("a paragraph that is unread for its start is still counted, so the numbers after it are those they always were", () => {
+    // Level 2 starts past the limit. The paragraph at it is unread, and it uses level 1 once, as any paragraph below a level does, so
+    // the next paragraph at level 1 is the second. A reader that left it out of the count numbered those after it one lower.
+    const levels = lvl(0, 1) + lvl(1, 40_000);
+    const [a, b, c] = labelsFor(levels, [{ ilvl: 1 }, { ilvl: 0 }, { ilvl: 0 }]);
+    assert.match(a as string, /^! its start \(40000\)/);
+    assert.deepEqual([b, c], ["2.", "3."]);
+  });
+
   test("a bullet shows no number, so its start is nothing to look at", () => {
     assert.deepEqual(labelsFor(lvl(0, 1e12, "bullet", "•"), [{}, {}]), ["(bullet)", "(bullet)"]);
   });
@@ -526,6 +535,40 @@ describe("workbooks are read cell for cell as they were", () => {
     assert.equal(cut.sheets[0]?.rows[0]?.cells[0], text(32_767));
     assert.equal(cut.notes.length, 1);
     assert.match(cut.notes[0]?.message ?? "", /^A cell holds more than the 32,767 characters that Excel keeps in a cell, and was cut to that: Sheet1!A1\./);
+  });
+
+  test("Excel writes a line break in a cell as CR LF, which is one character in the cell: a cell of exactly 32,767 is kept whole", () => {
+    // 885 lines of 36 letters and a break, then 22 letters: 32,767 characters as Excel counts them, 33,652 as the file spells them.
+    const text = ("w".repeat(36) + "\n").repeat(885) + "w".repeat(22);
+    assert.equal(text.length, 32_767);
+    const written = text.replace(/\n/g, "\r\n");
+    const both = `<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>0</v></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>${written}</t></is></c></row>`;
+    const read = readXlsxNow(workbook({ sheets: [sheetXml(both)], shared: [written] }));
+    assert.deepEqual(read.sheets[0]?.rows.map((r) => r.cells), [[text, text], [text]]);
+    assert.deepEqual(read.notes, []);
+  });
+
+  test("one more character than Excel keeps, written with CR LF, is cut and said; so is a cell of more than twice that, and half of a pair is not left", () => {
+    const text = ("w".repeat(36) + "\n").repeat(885) + "w".repeat(23);
+    const written = text.replace(/\n/g, "\r\n");
+    const one = readXlsxNow(workbook({ sheets: [sheetXml(`<row r="1"><c r="A1" t="s"><v>0</v></c></row>`)], shared: [written] }));
+    assert.equal(one.sheets[0]?.rows[0]?.cells[0], text.slice(0, 32_767));
+    assert.match(one.notes[0]?.message ?? "", /^A cell holds more than the 32,767 characters that Excel keeps in a cell, and was cut to that: Sheet1!A1\./);
+
+    const huge = readXlsxNow(workbook({ sheets: [sheetXml(`<row r="1"><c r="A1" t="s"><v>0</v></c></row>`)], shared: ["q".repeat(70_000)] }));
+    assert.equal(huge.sheets[0]?.rows[0]?.cells[0], "q".repeat(32_767));
+    assert.equal(huge.notes.length, 1);
+
+    const emoji = readXlsxNow(workbook({ sheets: [sheetXml(`<row r="1"><c r="A1" t="s"><v>0</v></c></row>`)], shared: ["w".repeat(32_766) + "\u{1F600}"] }));
+    const kept = emoji.sheets[0]?.rows[0]?.cells[0] ?? "";
+    assert.equal(kept, "w".repeat(32_766), "the first half of an emoji is not kept");
+    assert.equal(emoji.notes.length, 1, "and what was taken off is said");
+  });
+
+  test("white space after the cut is not a loss, whether the cut is at the limit or at twice it", () => {
+    const read = readXlsxNow(workbook({ sheets: [sheetXml(`<row r="1"><c r="A1" t="s"><v>0</v></c></row>`)], shared: ["words" + " ".repeat(70_000)] }));
+    assert.equal(read.sheets[0]?.rows[0]?.cells[0], "words");
+    assert.deepEqual(read.notes, []);
   });
 
   test("white space after the cut is not a loss, and a cell of 40,000 spaces after its words is the words", () => {

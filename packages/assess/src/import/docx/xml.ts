@@ -60,9 +60,15 @@ export const DEFAULT_XML_LIMITS: Required<XmlLimits> = {
 };
 
 export class XmlError extends Error {
-  constructor(message: string) {
+  /**
+   * True when the XML may well be valid and is simply more than this reader takes (too long, too many parts, nested too deep), so that
+   * a message to a person does not call a good file damaged and can say what to do about its size.
+   */
+  readonly tooLarge: boolean;
+  constructor(message: string, tooLarge = false) {
     super(message);
     this.name = "XmlError";
+    this.tooLarge = tooLarge;
   }
 }
 
@@ -130,10 +136,10 @@ export function parseXml(source: string, limits: XmlLimits = {}): XmlElement {
   const maxNodes = limits.maxNodes ?? DEFAULT_XML_LIMITS.maxNodes;
 
   if (source.length > maxChars) {
-    throw new XmlError(`This XML is ${source.length} characters long, more than the ${maxChars} this reader accepts.`);
+    throw new XmlError(`This XML is ${source.length} characters long, more than the ${maxChars} this reader accepts.`, true);
   }
 
-  function fail(message: string, at: number): never {
+  function fail(message: string, at: number, tooLarge = false): never {
     let line = 1;
     let column = 1;
     for (let k = 0; k < at && k < source.length; k++) {
@@ -142,7 +148,7 @@ export function parseXml(source: string, limits: XmlLimits = {}): XmlElement {
         column = 1;
       } else column++;
     }
-    throw new XmlError(`${message} (line ${line}, column ${column})`);
+    throw new XmlError(`${message} (line ${line}, column ${column})`, tooLarge);
   }
 
   /** Character and named references decoded. Anything else starting with "&" is an error. */
@@ -194,7 +200,7 @@ export function parseXml(source: string, limits: XmlLimits = {}): XmlElement {
   let pendingAt = i;
 
   function countNode(at: number): void {
-    if (++nodes > maxNodes) fail(`This XML has more than ${maxNodes} parts, more than this reader accepts`, at);
+    if (++nodes > maxNodes) fail(`This XML has more than ${maxNodes} parts, more than this reader accepts`, at, true);
   }
 
   function addText(text: string, at: number): void {
@@ -302,7 +308,7 @@ export function parseXml(source: string, limits: XmlLimits = {}): XmlElement {
       else root = element;
 
       if (!selfClosing) {
-        if (stack.length >= maxDepth) fail(`Elements are nested more than ${maxDepth} deep, more than this reader accepts`, i);
+        if (stack.length >= maxDepth) fail(`Elements are nested more than ${maxDepth} deep, more than this reader accepts`, i, true);
         stack.push({ element, rawName, scope });
       }
       i = at;

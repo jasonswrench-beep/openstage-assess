@@ -107,6 +107,37 @@ function tidyNumber(raw: string): string {
   return Number.isFinite(n) ? String(Number(n.toPrecision(15))) : text;
 }
 
+/** What a cell says once it is cut to Excel's limit and tidied, and whether words were lost in the cut. */
+interface CellText {
+  text: string;
+  lost: boolean;
+}
+
+const NO_TEXT: CellText = { text: "", lost: false };
+
+/**
+ * Cuts a cell's text to what Excel keeps and tidies it. Excel writes each line break inside a cell as CR LF, which is one character in
+ * the cell and two in the file, so the text is cut at twice the limit first (that bounds the work whatever the string is), the line
+ * ends are made plain, and only then is it cut at the limit itself: cutting at the limit before the line ends are plain took the last
+ * words off a cell Excel had written at its own maximum, and said that it was over. A cut that would leave half of a character that is
+ * two code units long takes the half off, and that is a loss, since the other half is not white space.
+ */
+function cellText(raw: string): CellText {
+  let lost = false;
+  let value = raw;
+  if (value.length > 2 * MAX_CELL_CHARS) {
+    lost = value.slice(2 * MAX_CELL_CHARS).trim() !== "";
+    value = value.slice(0, 2 * MAX_CELL_CHARS);
+  }
+  value = value.replace(/\r\n?/g, "\n");
+  if (value.length > MAX_CELL_CHARS) {
+    if (!lost && value.slice(MAX_CELL_CHARS).trim() !== "") lost = true;
+    const half = value.charCodeAt(MAX_CELL_CHARS - 1);
+    value = value.slice(0, half >= 0xd800 && half <= 0xdbff ? MAX_CELL_CHARS - 1 : MAX_CELL_CHARS);
+  }
+  return { text: value.trim(), lost };
+}
+
 /** Resolves a relationship target against the folder of the part that holds it. */
 function resolvePart(folder: string, target: string): string {
   const joined = target.startsWith("/") ? target.slice(1) : `${folder}${target}`;
@@ -165,7 +196,11 @@ export function readXlsx(bytes: Uint8Array): TableFile {
       // The XML parts are UTF-8 in practice, and a byte order mark at the front is allowed.
       return parseXml(Buffer.from(data).toString("utf8").replace(/^﻿/, ""));
     } catch (error) {
-      if (error instanceof XmlError) throw new TableError(`The part "${name}" of this workbook is not valid XML. ${error.message}`);
+      if (error instanceof XmlError) {
+        // A part that is only too big is not damaged, and is not called that: a person who is told a good file is invalid has nothing to do.
+        if (error.tooLarge) throw new TableError(`The part "${name}" of this workbook is more than this reader takes, though it may be nothing wrong with the file. ${error.message}. Split the questions into two or more workbooks and import each.`);
+        throw new TableError(`The part "${name}" of this workbook is not valid XML. ${error.message}`);
+      }
       throw error;
     }
   };
@@ -193,6 +228,8 @@ export function readXlsx(bytes: Uint8Array): TableFile {
   const cut: string[] = [];
   let totalChars = 0;
   let places = 0;
+  /** The text of each shared string as a cell shows it, made the first time a cell names it. */
+  const sharedText = new Map<number, CellText>();
 
   const sheetList = kid(workbook, "sheets");
   const entries = sheetList ? kids(sheetList, "sheet") : [];
@@ -240,8 +277,23 @@ export function readXlsx(bytes: Uint8Array): TableFile {
         const v = kid(c, "v");
         const raw = v ? textOf(v) : "";
         let value: string;
-        if (type === "s") value = shared[Number(raw)] ?? "";
-        else if (type === "inlineStr") value = stringItem(kid(c, "is"));
+        let tidy: CellText | undefined;
+        if (type === "s") {
+          // A shared string is cut and tidied once however many cells name it: a string of 32,767 spaces named by 800,000 cells took 35
+          // seconds when each cell did it again (1.9 MB of file).
+          const at = Number(raw);
+          const given = shared[at];
+          // A number that names no string is an empty cell and is not kept, so a column of made-up numbers cannot fill the table.
+          if (given === undefined) tidy = NO_TEXT;
+          else {
+            tidy = sharedText.get(at);
+            if (tidy === undefined) {
+              tidy = cellText(given);
+              sharedText.set(at, tidy);
+            }
+          }
+          value = tidy.text;
+        } else if (type === "inlineStr") value = stringItem(kid(c, "is"));
         else if (type === "b") value = raw.trim() === "1" || raw.trim().toLowerCase() === "true" ? "TRUE" : "FALSE";
         else if (type === "e") {
           value = "";
@@ -250,16 +302,13 @@ export function readXlsx(bytes: Uint8Array): TableFile {
         else value = raw === "" ? "" : tidyNumber(raw);
         // A formula whose result was never stored: the cell would read as empty, so it is named.
         if (kid(c, "f") && raw === "" && type !== "inlineStr" && noValue.length < 5) noValue.push(`${name}!${c.attrs["r"] ?? ""}`);
-        if (value.length > MAX_CELL_CHARS) {
-          // Cut before anything is done to the text, so that a string of a megabyte is not tidied once for each cell that names it. White
-          // space after the cut is not a loss and is not reported as one.
-          if (value.slice(MAX_CELL_CHARS).trim() !== "") {
-            cutCount++;
-            if (cut.length < 5) cut.push(`${name}!${c.attrs["r"] ?? ""}`);
-          }
-          value = value.slice(0, MAX_CELL_CHARS);
+        // White space after the cut is not a loss and is not reported as one.
+        tidy ??= cellText(value);
+        if (tidy.lost) {
+          cutCount++;
+          if (cut.length < 5) cut.push(`${name}!${c.attrs["r"] ?? ""}`);
         }
-        value = value.replace(/\r\n?/g, "\n").trim();
+        value = tidy.text;
         if (value === "") continue;
         totalChars += value.length;
         if (totalChars > MAX_TOTAL_CHARS) {
