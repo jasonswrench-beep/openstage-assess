@@ -607,3 +607,37 @@ describe("the dialects of the Standard Format", () => {
     });
   });
 });
+
+// Found by running the importer over 341 real Word files: a document that is not a test bank (an outline, a specification) came out as
+// 82 or 129 "questions needing review", each an essay the file never said it was, with nothing at the top to say the file may not be a bank.
+describe("a file whose every question is a guess at an essay may not be a test bank", () => {
+  const prompts = (n: number): string => Array.from({ length: n }, (_, i) => `${i + 1}. Discuss the idea number ${i + 1} in two paragraphs.`).join("\n");
+  const said = (text: string) => parse(text).fileFindings.find((f) => f.code === FindingCode.NotLikelyABank);
+
+  test("five numbered prompts with no type and no options are said, once, as information", () => {
+    const result = parse(prompts(5));
+    const notes = result.fileFindings.filter((f) => f.code === FindingCode.NotLikelyABank);
+    assert.equal(notes.length, 1);
+    assert.equal(notes[0]?.severity, "info");
+    assert.match(notes[0]?.message ?? "", /All 5 questions were read as essay questions.*may not be a test bank.*list of essay prompts/);
+    assert.equal(result.questions.length, 5, "the questions are all kept, as before");
+  });
+
+  test("four are not enough to say, and neither is a file with one question that has options", () => {
+    assert.equal(said(prompts(4)), undefined);
+    assert.equal(said(`${prompts(5)}\n6. Pick one?\na. x\n*b. y`), undefined, "a choice question among them");
+  });
+
+  test("essays the file said were essays are not a guess", () => {
+    // Each also carries a finding of another kind (two Page lines), so that only "this was a guess" can tell it from a guessed essay.
+    const stated = Array.from({ length: 6 }, (_, i) => `Type: E\n${i + 1}. Discuss the idea number ${i + 1}.\nPage: 1\nPage: 2`).join("\n\n");
+    const result = parse(stated);
+    assert.equal(result.questions.every((q) => q.type === "essay" && q.findings.length > 0 && !q.findings.some((f) => f.code === FindingCode.TypeInferred)), true, JSON.stringify(result.questions.map((q) => q.findings.map((f) => f.code))));
+    assert.equal(said(stated), undefined);
+  });
+
+  test("a bank of choice questions never gets the note", () => {
+    const bank = Array.from({ length: 8 }, (_, i) => `${i + 1}) Question ${i + 1}?\n*a. yes\nb. no`).join("\n");
+    assert.equal(said(bank), undefined);
+  });
+});
