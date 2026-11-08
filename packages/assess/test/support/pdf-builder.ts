@@ -50,6 +50,9 @@ export interface PdfSpec {
   wrongLength?: boolean;
   /** Make this page's compressed content (counting from 0) something that is not compressed data at all. */
   badPage?: number;
+  /** The text of a /DecodeParms dictionary for the compressed content of one page, given by `parmsPage` (counting from 0). */
+  decodeParms?: string;
+  parmsPage?: number;
 }
 
 /** A line of text at a place: BT, the font, the place, the text, ET. */
@@ -116,7 +119,8 @@ export function buildPdf(spec: PdfSpec): Uint8Array {
     let data = spec.compress ? deflateSync(Buffer.from(content, "latin1")) : Buffer.from(content, "latin1");
     if (spec.truncateContent && index === 0) data = data.subarray(0, data.length - spec.truncateContent);
     if (spec.badPage === index) data = Buffer.from("this is not compressed data at all, whatever the dictionary says");
-    const stream = add(Buffer.alloc(0), { dict: spec.compress || spec.badPage === index ? "/Filter /FlateDecode" : "", data, ...(spec.wrongLength ? { length: 3 } : {}) });
+    const parms = spec.decodeParms !== undefined && spec.parmsPage === index ? ` /DecodeParms ${spec.decodeParms}` : "";
+    const stream = add(Buffer.alloc(0), { dict: spec.compress || spec.badPage === index ? `/Filter /FlateDecode${parms}` : "", data, ...(spec.wrongLength ? { length: 3 } : {}) });
     pageRefs.push(add(`<< /Type /Page /Parent ${pagesRoot} 0 R /MediaBox [${box.join(" ")}] /Resources ${resources} /Contents ${stream} 0 R >>`));
   }
   (objects[catalog - 1] as Obj).body = `<< /Type /Catalog /Pages ${pagesRoot} 0 R >>`;

@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { printOptions, printTest, STATUSES, type DestinationReport, type PrintFormat, type PrintOptions, type Question } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest } from "./errors.ts";
-import { checkName, freeFileName } from "./library.ts";
+import { checkName, fitFileName, freeFileName } from "./library.ts";
 
 const KINDS = ["student", "key"] as const;
 const FORMATS = ["docx", "pdf"] as const;
@@ -114,7 +114,7 @@ export async function printRoute(ctx: Context, req: ApiRequest, rawName: string,
         ? { ...before, files: [...before.files, ...result.report.files], general: [...new Set([...before.general, ...result.report.general])] }
         : result.report;
       if (action === "write" && result.file.bytes.length > 0) {
-        const fileName = await freeFileName(ctx.library.exports, checkName(result.file.name));
+        const fileName = await freeFileName(ctx.library.exports, checkName(fitFileName(result.file.name)));
         const path = join(ctx.library.exports, fileName);
         await writeFile(path, result.file.bytes);
         written.push({ name: fileName, path, kind, format, ...(result.file.pages !== undefined ? { pages: result.file.pages } : {}) });

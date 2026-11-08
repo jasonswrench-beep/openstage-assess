@@ -64,6 +64,20 @@ export function checkRow(box, label, hint, look = {}) {
 }
 
 /**
+ * Makes the "Skip to the content" link move focus and nothing else. It was a plain `href="#main"`, and the address is the router's:
+ * "#main" is no screen, so following the link showed "There is nothing here" in place of the page and, with a change open, asked
+ * whether to save it (and Discard lost it). Found by reading the router against the link, and seen in the browser.
+ * @param {HTMLElement} link
+ * @param {HTMLElement} target  with tabindex -1, so that it can take focus
+ */
+export function skipTo(link, target) {
+  link.addEventListener("click", (/** @type {Event} */ event) => {
+    event.preventDefault();
+    target.focus();
+  });
+}
+
+/**
  * Adds children to a node, leaving out the ones that are not there. The browser's own `append` would turn a missing child
  * into the word "null".
  * @param {Node} parent

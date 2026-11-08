@@ -9,6 +9,7 @@ import { ask } from "./dialogs.js";
 import { clear, h, plural, SEVERITY_NAMES } from "./dom.js";
 import { createEditor } from "./editor.js";
 import { arrowKeys, fillRows, markSelected, questionRow, ROWS_AT_FIRST } from "./list.js";
+import { notSavedBody, saveFields } from "./save-fields.js";
 
 /**
  * @param {HTMLElement} host
@@ -311,14 +312,7 @@ export async function renderReview(host, params, shell) {
       return;
     }
     const banks = /** @type {any[]} */ (state.banks).filter((b) => !b.error);
-    const titleInput = h("input", { type: "text", id: "save-title", value: session.file.replace(/\.[^.]+$/, ""), autocomplete: "off" });
-    const bankSelect = h("select", { id: "save-bank", disabled: banks.length === 0 }, ...banks.map((b) => h("option", { value: b.name, text: `${b.title} (${plural(b.questions, "question", "questions")})` })));
-    // Optional: the questions go into a folder of this name (the file's name to begin with), made if the bank has none, so that a
-    // chapter brought in is one folder and not a hundred questions among the others.
-    const folderInput = h("input", { type: "text", id: "save-folder", value: session.file.replace(/\.[^.]+$/, ""), autocomplete: "off", attrs: { maxlength: "80" } });
-    const folderOn = h("input", { type: "checkbox", id: "save-in-folder" });
-    const modeNew = h("input", { type: "radio", name: "save-mode", id: "mode-new", checked: true });
-    const modeOld = h("input", { type: "radio", name: "save-mode", id: "mode-old", disabled: banks.length === 0 });
+    const { body: fields, modeNew, folderOn, titleInput, bankSelect, folderInput } = saveFields({ file: session.file, banks });
     const notes = [`${plural(kept, "question", "questions")} will be saved.`];
     if (c.skipped > 0) notes.push(`${plural(c.skipped, "question", "questions")} you left out will not be.`);
     if (c.failed > 0) notes.push(`${plural(c.failed, "question has", "questions have")} no usable answer yet. They are saved, marked as failed, so you can fix them in the bank.`);
@@ -327,12 +321,7 @@ export async function renderReview(host, params, shell) {
       title: "Save into a bank",
       body: [
         ...notes,
-        h("div", { class: "check" }, modeNew, h("label", { for: "mode-new", text: "A new bank, called" })),
-        titleInput,
-        h("div", { class: "check" }, modeOld, h("label", { for: "mode-old", text: "Add to a bank you already have" })),
-        bankSelect,
-        h("div", { class: "check" }, folderOn, h("label", { for: "save-in-folder", text: "Put the questions in a folder called" })),
-        folderInput,
+        ...fields,
       ],
       actions: [
         { label: "Cancel", value: false },
@@ -347,8 +336,10 @@ export async function renderReview(host, params, shell) {
       const result = await post(`${base}/save`, choice.folder ? { ...where, folder: choice.folder } : where);
       saved = true;
       session.savedTo = { bank: result.bank, added: result.added };
-      const extra = result.notSaved.length > 0 ? ` ${plural(result.notSaved.length, "question", "questions")} could not be saved: ${result.notSaved.map(/** @param {any} n */ (n) => n.reason).join(" ")}` : "";
-      shell.notify(`Saved ${plural(result.added, "question", "questions")} into "${result.bank}"${result.folder ? `, in the folder "${result.folder}"` : ""}.${extra}`, "ok");
+      const failed = result.notSaved.length > 0;
+      shell.notify(`Saved ${plural(result.added, "question", "questions")} into "${result.bank}"${result.folder ? `, in the folder "${result.folder}"` : ""}.${failed ? ` ${plural(result.notSaved.length, "question", "questions")} could not be saved.` : ""}`, failed ? "error" : "ok");
+      // Which ones, and why, are said in a dialog that stays until it is answered: the line above fades, and the screen moves on.
+      if (failed) await ask({ title: "Some questions were not saved", body: notSavedBody(result), actions: [{ label: "OK", value: true, primary: true }] });
       shell.go(`#/bank/${encodeURIComponent(result.bank)}`);
     } catch (error) {
       shell.notify(/** @type {Error} */ (error).message, "error");

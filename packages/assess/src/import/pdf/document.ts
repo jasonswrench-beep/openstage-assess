@@ -421,6 +421,13 @@ export class PdfDocument {
     const columns = this.number(parms.get("Columns"), 1);
     const colors = this.number(parms.get("Colors"), 1);
     const bits = this.number(parms.get("BitsPerComponent"), 8);
+    // A stream that says it has no columns, no colours or no bits has rows of no width. The loop below steps a row at a time, so a
+    // row of 0 bytes never got anywhere: a PDF of 509 bytes with /Predictor 2 and /Columns 0 kept the whole program busy for as long
+    // as it was left (found by reading the loop's bound, which no damaged-file run had reached). A negative or odd number is the same
+    // fault by another road, so every one that is not a plain positive number is refused in words and not guessed at.
+    if (![columns, colors, bits].every((n) => Number.isFinite(n) && n > 0)) {
+      throw new PdfError("A stream in this PDF describes its rows with a width, colour count or bit depth that cannot be right, so it was not read.");
+    }
     const bpp = Math.max(1, Math.ceil((colors * bits) / 8));
     const rowBytes = Math.ceil((columns * colors * bits) / 8);
     if (predictor === 2) {

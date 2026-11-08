@@ -189,6 +189,37 @@ describe("a PDF that is not in order", () => {
     assert.deepEqual(result.pages.map((p) => p.lines.length), [1, 0, 1]);
     assert.match(result.notes.map((n) => n.message).join("\n"), /A page could not be read[^.]*page 2/);
   });
+
+  // Found by reading the loop's bound: a row of no bytes never moved the loop on, and a PDF of 509 bytes held the program for as long
+  // as it was left. It is tried in a process of its own with a time limit, so that a return of the fault fails this test and does not
+  // freeze every test after it.
+  for (const parms of [
+    "<< /Predictor 2 /Columns 0 >>",
+    "<< /Predictor 2 /Columns -3 >>",
+    "<< /Predictor 2 /Colors 0 /Columns 4 >>",
+    "<< /Predictor 2 /Columns 4 /BitsPerComponent 0 >>",
+    "<< /Predictor 12 /Columns 0 >>",
+    "<< /Predictor 15 /Columns -1 >>",
+  ]) {
+    test(`a stream whose rows have no width (${parms}) is refused for that page in words, and does not hold the program`, () => {
+      const bytes = pdf({ pages: [page(["page one is fine"]), page(["page two is not"]), page(["page three is fine"])], compress: true, parmsPage: 1, decodeParms: parms });
+      const dir = mkdtempSync(join(tmpdir(), "openassess-pdf-"));
+      try {
+        const file = join(dir, "rows.pdf");
+        writeFileSync(file, bytes);
+        const reader = new URL("../src/import/pdf/reader.ts", import.meta.url).href;
+        const script = `import { readFileSync } from "node:fs"; import { readPdfText } from ${JSON.stringify(reader)}; const r = readPdfText(new Uint8Array(readFileSync(process.argv[1]))); console.log(JSON.stringify({ lines: r.pages.map((p) => p.lines.length), notes: r.notes.map((n) => n.message) }));`;
+        const run = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", "--input-type=module", "-e", script, file], { encoding: "utf8", timeout: 20_000 });
+        assert.equal(run.error, undefined, `it did not finish: ${run.error?.message}`);
+        assert.equal(run.status, 0, run.stderr);
+        const out = JSON.parse(run.stdout) as { lines: number[]; notes: string[] };
+        assert.deepEqual(out.lines, [1, 0, 1], "the page with the bad rows is lost and the others are kept");
+        assert.match(out.notes.join("\n"), /A page could not be read[^.]*page 2[^]*cannot be right/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -32,9 +32,21 @@ export class FakeNode {
   addEventListener(type: string, handler: (event: unknown) => void): void {
     (this.listeners[type] ??= []).push(handler);
   }
-  /** Runs what was listening for a click, as a person clicking would. */
-  click(): void {
-    for (const handler of this.listeners["click"] ?? []) handler({});
+  /** Runs what was listening for a click, as a person clicking would, and says whether a listener cancelled what the click does. */
+  click(): { defaultPrevented: boolean } {
+    const event = {
+      defaultPrevented: false,
+      preventDefault(): void {
+        this.defaultPrevented = true;
+      },
+    };
+    for (const handler of this.listeners["click"] ?? []) handler(event);
+    return { defaultPrevented: event.defaultPrevented };
+  }
+  /** Whether `focus()` has been called, which is all that can be known without a window. */
+  focused = false;
+  focus(): void {
+    this.focused = true;
   }
   append(...kids: FakeNode[]): void {
     this.children.push(...kids);

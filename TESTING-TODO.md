@@ -115,6 +115,13 @@ item says what has been run and what has not. Items are removed when done, with 
   them were not stops at all, so a person using only the keyboard could not choose a file. Both are real buttons now with a focus ring,
   and the hidden inputs are out of the keyboard order and hidden from a screen reader. The other screens were not walked key by key;
   do that with the keyboard alone, and listen to the file buttons with a screen reader.
+  A fourth pass (8 November 2026, in the browser pane, with real key presses) found the skip link sending the page to "There is nothing
+  here" and, once fixed, that the first Tab went past it because the first screen was given focus. On a fresh load the first Tab now
+  lands on the link and Enter keeps the address and the page and moves focus to the main area. Three fields of the Save dialog that
+  had no name are named (checked by opening the dialog and reading the page's listing). Not done: the dialogs that open later were
+  not all opened and read; the interface review of 8 November (`docs/review-findings.md`) lists the rest, among them focus lost when a
+  control is rebuilt, result counts that are never announced, a page title that never changes, and input borders and left-out rows
+  below the contrast WCAG asks of them (worked out from the colours, not looked at). Listen to the Save dialog with a screen reader.
 - [ ] **Look at the review page.** `npm run assess -- review <a .docx or .txt file> --out review.html`, then open the page. It is
   the first thing you can see, so it is the first thing to judge: is it the right information in the right order, and what would
   you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank
