@@ -15,12 +15,21 @@ for the first nineteen pre-releases; they are here so that the process does not 
    - `OPENASSESS_FUZZ_ROUNDS=6000 node --experimental-strip-types --no-warnings --test test/fuzz-import.test.ts`, a long damaged-file
      run (no crash)
 4. If the Word reader, the formatting or the tables changed: the `check:word-*` commands in `CLAUDE.md`, which need Word.
-5. Plant each new fault, one at a time, in the code just written, and see a test fail for the right reason: `node tools/release/mutate.mjs
-   tools/release/mutations-alpha-20.json` does this for a list (file, the text to replace, what to put there, the tests that should
-   notice), puts every file back byte for byte, and prints any fault that survived. `mutations-alpha-20.json` is the list for the fixes
-   of alpha 20 and 21; it is also a way to see that their tests still bite. One fault is left out because it changes nothing: a width in
-   a cross-reference stream above 8, since a width that large is longer than the data and the loop never runs. Two readers of alpha
-   20 found more than a dozen faults that its tests missed, and the way to find the rest is to do this before they do.
+5. Plant each new fault, one at a time, in the code just written, and see a test fail for the right reason:
+   `node tools/release/mutate.mjs tools/release/mutations-alpha-22-pdf.json` does this for a list (each entry: a file, the text to
+   replace, what to put there, the tests that should notice). It runs a baseline first, keeps the original of every file outside the
+   repository and puts it back (also after a killed run: the next run restores what was left), and counts as a problem a fault that did
+   not go in (NOT APPLIED), one that stopped the tests from loading (BROKE LOADING), a test file that is not there, and a fault that
+   survived. Its exit code is 0 only when every fault was caught. The lists, `mutations-alpha-*.json`, are the faults planted in the
+   fixes of each release; run them all after a merge (a merge can quietly undo a test's bite). One fault is left out of the lists
+   because it changes nothing: a width in a cross-reference stream above 8, since a width that large is longer than the data and the
+   loop never runs. Each round of readers has found more than a dozen faults that the tests of the round before missed; the way to find
+   the rest is to do this before they do.
+6. Run both suites on a FRESH CLONE (`git clone` into an empty folder, then `npm test` or the `node --test` commands). A checkout on
+   Windows makes every file CRLF, and three tests that matched text across lines failed on a fresh clone for months without anyone
+   seeing it, because the working copy here is LF. Files in the private fixtures folders are not in a clone, so those tests skip.
+7. The sweeps over real files (a folder of PDFs, Word files, spreadsheets, zips): read them again and compare file by file with the
+   last release's, so that no real file reads differently; only the readers' own time limits (each file in its own process) are needed.
 
 ## Build and check the installer
 

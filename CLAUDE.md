@@ -77,20 +77,27 @@ the engine in `OpenReport`, the app in the amber box on the bank screen. A branc
 keep it is a bug (two were found). Do not add a path that drops a file the reader could not understand. A reader is also not slow on a damaged file: a pattern that
 begins with white space and is not anchored with `^` took N squared steps on a run of N spaces (a line of 100,000 spaces took 8 seconds,
 a table's first rows with cells of 32,767 spaces took 27), so such a pattern starts with `(?<!\s)` and the option patterns skip the space
-after a star only when there is a star; `long-lines.test.ts` puts runs in every place a line can have one. A small file must not be able to ask for
-minutes or gigabytes, and the way it did was always a count or a step that came from the file: a PDF stream with `/Predictor 2` and `/Columns 0`
-made the reader step by 0 and never end (509 bytes froze the app), and the first fix, which checked that each number is above 0, was
-passed by `/Columns` and `/Colors` written as 0.(200 zeros)1 whose product is 0, so what is checked is what the loop uses (the step, a
-whole number of columns and colours, a depth the format has, a row that fits a page). The same class was found in the cross-reference stream
-(entry widths of 0, a negative width, a count of 1e20), a font's width ranges (100,000 ranges of 70,000 codes), a character map never
-closed (a lazy pattern from every `begin`), an object stream (every object read to the end of the data), and run-length data (a number
-array, 8 bytes for each byte out). None of these is reached by a damaged-file run, because each needs one number or one repeated word to
-be exactly wrong, so `pdf-hostile.test.ts` reads each in a process of its own with a time limit. A limit on what a zip expands to is
-kept on what its entries really made and not on the sizes they declare, two names for one stretch of data are refused (10,000 of them
-cost 20 seconds and made nothing), and an empty entry is not turned away for holding too much (`zip-limits.test.ts`). Not bounded yet, and
-listed in `docs/review-findings.md`: a character map's lookup over every range, one line of very many text runs, deeply nested arrays in
-a content stream (a RangeError's words reach the person), and the peak memory of a zip, which is the limit plus an entry and is not pinned
-by a test.
+after a star only when there is a star; `long-lines.test.ts` puts runs in every place a line can have one. A small file must not be able to ask for minutes or gigabytes, and four kinds of fault have done it, each found by a reader
+who built the smallest file that did and timed it: a count or a step that comes from the file (a PDF stream with `/Predictor 2` and
+`/Columns 0` made the reader step by 0 and never end, 509 bytes froze the app; the first fix, which checked that each number is above 0,
+was passed by `/Columns` and `/Colors` written as 0.(200 zeros)1 whose product is 0, so what is checked is what the loop uses; and the
+same in a cross-reference table's widths, a font's width ranges, a Word list's start and level, a spreadsheet's shared strings and
+sheets, the findings of one kind in a question); a pattern that reads to the end from every start (`<[^>]*>` on a stem of `<` made a
+bank of 1.3 KB take 10 seconds to open; a lazy `begin...end`, `\s+$`, a number pattern whose digits can be shared out in every way), so a
+pattern is anchored or finds its end once (`model/markup-scan.ts`, `indexOf`, a lookbehind, a plain scan); a list spread into a call
+(`push(...x)`, `Math.max(...x)`), which throws "Maximum call stack size exceeded" at about 125,000 items, so
+`test/spread-guard.test.ts` reads every source file and fails on one not listed with its reason; and a structure that is rebuilt for each
+item (a style chain for each paragraph, a table of file names for each item, a list copied for each identical option, a stream parsed
+to its end for each object, one budget for each font and not for the document). None of these is reached by a damaged-file run, because
+each needs one number or one repeated word to be exactly wrong, so `pdf-hostile`, `hostile-readers`, `hostile-office` and `bank-hostile`
+read each hostile file in a process of its own under a time limit (`inChild` in `test/support/hostile-pdf.ts`), each was shown to fail on
+the source before its fix, and where a fix could change a legitimate result a differential test holds it to a verbatim copy of the old
+code. A limit on what a zip expands to is kept on what its entries really made and not on the sizes they declare, the compressed sizes
+the entries claim must add up to no more than the file, and two names for one stretch of data are refused. Word's own limits are used for
+a list (levels 0 to 8, a start of 32,767, a label of 300 characters) and a number beyond them is an unread list and never a guess. Not
+bounded yet, and listed in `docs/review-findings.md`: one huge token in a PDF content stream (about 100 bytes of memory for each byte),
+the peak memory of a zip (about three times its largest entry, not pinned by a test), a character map's lookup over every range, and a
+stem table whose cells each say `colspan="999"`.
 
 **A folder is a way of finding questions and never a place one can be lost.** Taking a folder away (`Bank.removeFolder`) leaves its
 questions in the bank, in no folder, and moves the folders inside it up (a name that would clash is numbered, never merged); a folder
@@ -150,12 +157,16 @@ interface sets all text with `textContent`, never as markup (`server.test.ts`
 reads every script for `innerHTML`). The key cookie is named for the port (a cookie belongs to a host and not a port, so two copies on
 127.0.0.1 shared one and the second took the first's key), and a file name the program makes itself (a bank's title with the kind of file
 after it) is cut to fit with `fitFileName` and never refused as though a stranger had sent it, while a name that comes from outside is
-still checked with `checkName` and refused. A name that is made is checked against what will be asked of it later: `freeFileName` and
-`uniqueName` count the number they add (" 2") in the length, because the second export of a title that fitted exactly was written 82
-characters long and then could not be downloaded; the list a check shows is the list of names that will be written (`fitNames`); a cut
-never splits an emoji (a lone half makes `encodeURIComponent` throw, and "URI malformed" is what the person saw in place of a finished
-export); and `cleanName` takes the dots and spaces at the start together, because a space left behind by dots made a name `checkName`
-refuses (`server.test.ts`, `sheets.test.ts`). Do not loosen any of it to make something
+still checked with `checkName` and refused. A name that is made is checked against what will be asked of it later: a name is claimed by creating the file (`writeNewFile`,
+`claimName` in `library.ts`: `wx` fails if it is there), never looked for and then used, because six exports asked for at once were all
+given one name and wrote over each other, and a bank removed twice could overwrite the copy in Deleted; the number they add (" 2") is
+counted in the length, because the second export of a title that fitted exactly was written 82 characters long and then could not be
+downloaded; the list a check shows is the list of names that will be written (`fitNames`); a cut falls between characters as a person sees
+them (a lone half of an emoji makes `encodeURIComponent` throw, and "URI malformed" is what the person saw in place of a finished
+export), and the engine's `safeName`, which makes the names of the printed test, the test paper, the results and the scores file, is
+held to the app's rules for a name (leading dots and spaces taken off together, no trailing dot or space, and a Windows device name such
+as "Aux. Verbs", COM0 or LPT² kept apart with an underscore, where the app's `cleanName` gives "Untitled" for a title that is only a
+device name), by `file-names.test.ts`, which holds it to a copy of `checkName`. Do not loosen any of it to make something
 easier to test.
 
 **A table's columns are never assumed.** A spreadsheet or CSV is read by the names in its

@@ -1183,6 +1183,86 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by three readers of alpha 21's fixes, and by a hunt for the same kind of fault in the other readers (8 November 2026, after alpha 21)
+
+Three readers who had not written the fixes ran them (the engine's, the app's, and the hunt), told to prove everything by running it.
+The fixes of the round before were again not complete, and the hunt found the class of fault that had been found in the PDF and zip
+readers (a count, a step or a repeated word in a small file) in nearly every other reader. All of it is fixed in alpha 22 except what
+is listed at the end; each fix was written by someone other than the reader who found it, in a worktree of its own, with hostile
+inputs read in a process of its own under a time limit, shown to fail on the previous commit's source, and held by faults planted one at
+a time (`tools/release/mutations-alpha-*.json`, 264 in all, run by `tools/release/mutate.mjs`).
+
+What the readers found in alpha 21's fixes:
+
+- **The engine's own `safeName` had not been given the dot-and-space fix**, so a bank titled ". Intro to Psych" exported and then
+  failed to print, to make a test paper, to write results and to open its saved scores; and "Aux. Verbs" or "Con. Ed. 101" made a
+  file name Windows reads as a device. It is fixed where the name is made (`export/text.ts`), with a table of titles and thousands of
+  generated ones held to a copy of the app's rules.
+- **A name was looked for and then used, not claimed**: six exports asked for at once were all given one name and wrote over each other,
+  six banks made at once gave three errors, and a bank removed twice could overwrite the copy in Deleted. Names are claimed by
+  creating the file (`wx`), in `library.ts` (`writeNewFile`, `claimName`).
+- **`tools/release/mutate.mjs` could report "every planted fault was caught" after a run that was killed** (the file stayed changed, the
+  next run printed NOT APPLIED and passed), counted tests that did not exist as killed, and always exited 0. It now keeps the originals
+  outside the repository, puts back what a killed run left, runs a baseline, counts a fault that did not go in or that broke the tests
+  from loading as a problem, and exits non-zero. Shown by killing it mid-run.
+- **Fourteen planted faults in the app and seventeen in the engine's new code got past the tests** (the first-screen focus rule, what the
+  Save dialog returns, a Cancel that saves, every address that carries a name, a folder served as a file, a reconstruct that lost the
+  objects of every modern PDF with a damaged table, 16-bit depths refused, quadratic growth in run-length data, object stream offsets in
+  any order, array-form font widths, the checks on a table's widths and counts, a map with many begins and one end). All are held now.
+- **Three tests failed on a fresh Windows clone** (a checkout is CRLF and they matched text across lines). They read the source with
+  the line ends made plain, and both suites were run on a fresh clone.
+- **Engine: the lexer's number pattern divided a run of k digits in every way** (826 bytes, 10 seconds; 2.5 KB, no end); **trailing
+  spaces in one text string** were quadratic (816 bytes, 11 seconds); **distinct local headers padded to one data start** got past the
+  new check for two names for one stretch of data (4,000 names in 5.3 MB, 17 seconds); **a table of one-byte entries** made a Map of
+  millions from 660 bytes; **the font width budget was per font**, so forty fonts that shared one array took 700 MB; **ASCII85** was an
+  array of numbers like run-length data was; **nesting** had no depth limit outside an object's top level, so a file of `[` x 200,000 ended
+  in "Maximum call stack size exceeded"; and **the top-level scans** read an object that never closes to the end of the file for each
+  (5,000 of them, 17 seconds).
+
+What the hunt found in the other readers (each measured on the real code with a time limit; the hostile files are small):
+
+- **A bank of 1.3 KB took 10 seconds to open and 46 to check** (`richTextToPlain`, a `<[^>]*>` pattern that reads to the end from
+  every `<` that has no `>`), and the same shape cost every exporter and the printed test 14 to 25 seconds on a 400 KB stored stem. Tags
+  are found by their first `>` once (`model/markup-scan.ts`).
+- **Word:** 80,000 text elements in one run (3 KB) took 25 seconds; a chain of 20,000 styles (168 KB) took 28 seconds, in the numbers
+  and in the look of the text; a list start of 1e12 ended in "Invalid string length", 1e9 took 1.5 GB, a level of 2e7 filled a Map; a
+  cell of 130,000 paragraphs ended in "Maximum call stack size exceeded"; the node limit allowed 5 GB (3 million empty paragraphs, 28
+  KB, took 1.5 GB). Word's own limits are used (levels 0 to 8, a start of 32,767, a label of 300 characters) and anything beyond is an
+  unread list, not a guessed number; the node limit is 3 million, chosen from the densest real Word part in the fixtures and not
+  from the private corpora, which were not available to the implementer (they read 1421 of 1421 unchanged when it was merged).
+- **Excel:** one shared string used by many cells multiplied (5.4 KB took 1 GB; a header search over 2,560 cells took 60 seconds from 7
+  KB), and a second `<sheet>` that names the same part was read again (+570 MB for 60 bytes). A cell is cut at Excel's own 32,767
+  characters and the cut is said, the text and the places of a whole workbook have budgets, two sheets that are one part are refused,
+  and a cell over 300 characters is not a column name.
+- **Spreading a list into a call** failed at about 125,000 items in fifteen places (Moodle, QTI, GIFT, the text importer, Word tables,
+  the quality check, two exporters, the printed test): all are loops, `test/spread-guard.test.ts` reads every source file and fails on
+  one that is not listed with its reason, and the findings of one kind in a question are cut to 25 with "and N more".
+- **Patterns that read to the end from every start** (images in Moodle HTML, the Moodle format sniff, Aiken and GIFT lines with 80,000
+  spaces, `[HTML]` blocks, the true/false choices pattern of the text scanner: 82 seconds for 8,000 spaces, the end-of-line patterns),
+  **the CSV reader** (a copy of the cell at every quotation mark: 200 KB took 10 seconds, and every .txt goes through that sniff),
+  **the text scanner** (a run of Points lines, the instruction check on every line of a long stem, options times answer lines: 73
+  seconds, copies without answers), **a QTI package** (a table of every file name for every item), **both PNG readers** (counted by
+  pixels, about 30 bytes each) are all linear now, with parity tests against verbatim copies of what they replaced.
+- **Banks:** removing a folder of 1,200 same-named children took 24 seconds (10,000: about four hours) and is 5 ms; the finder of copies
+  kept every pair and ran out of memory at 10,000 questions that share their words, and now joins pairs as it finds them with a limit
+  on the looks a question gets (`ALIKE_LOOK_LIMIT`), said in the report's new `limits` note; 40,000 identical options cost 5 seconds on
+  every save.
+- **One fault that was not about speed:** a statement ending in a colon, then an Answer line and no options, ended the import in
+  "Cannot read properties of undefined (reading 'text')". Fixed.
+
+Not changed, and said by the readers or the implementers:
+
+- One huge token in a PDF content stream (a name, string or hex string of 10 million characters in a 10 KB file) costs about 100 bytes of
+  memory for each byte, because each becomes a glyph object and a piece of text: 1.1 GB, and 40 million characters aborts a 256 MB
+  heap. The fix is a limit on the text of a page, which is a decision about what a page may hold and has not been made.
+- The peak memory of a zip is about three times its largest entry (a 190 MB entry against a 200 MB limit peaked at 646 MB; at the
+  default 512 MiB limit one large entry would be about 1.7 GB), and no test holds it.
+- `print/docx.ts`: a stem table whose cells each say `colspan="999"` makes a string of hundreds of megabytes (8,000 cells: 563 MB);
+  needs a stored stem that was not sanitized. A character map's lookup still scans every range for every glyph; `sheets/score.ts` is
+  sheets times decisions; the PDF writer is superlinear above 32,000 paragraphs in one stem; the Excel shared string table costs about
+  six bytes of memory for each character under the 64 million budget (about 0.4 GB at the cap).
+- The interface items listed with alpha 20 are still open.
+
 ### Found by two readers of the fixes made for the three readers below (8 November 2026, after alpha 20)
 
 Two readers who had not written the fixes read them, one the engine's and one the app's, and were told to prove what they claimed by

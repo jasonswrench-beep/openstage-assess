@@ -1,23 +1,5 @@
 [
   {
-    "label": "first screen starts focused again",
-    "file": "packages/app/ui/app.js",
-    "from": "let firstScreen = true;",
-    "to": "let firstScreen = false;",
-    "tests": [
-      "packages/app/test/accessible-names.test.ts"
-    ]
-  },
-  {
-    "label": "first screen flag never cleared where a screen is shown",
-    "file": "packages/app/ui/app.js",
-    "from": "    firstScreen = false;\n    return;",
-    "to": "    return;",
-    "tests": [
-      "packages/app/test/accessible-names.test.ts"
-    ]
-  },
-  {
     "label": "save choice: new/old inverted",
     "file": "packages/app/ui/save-fields.js",
     "from": "isNew: fields.modeNew.checked,",
@@ -135,15 +117,6 @@
     ]
   },
   {
-    "label": "cut may split an emoji",
-    "file": "packages/app/src/library.ts",
-    "from": "? cut.slice(0, -1) : cut;",
-    "to": "? cut : cut;",
-    "tests": [
-      "packages/app/test/server.test.ts"
-    ]
-  },
-  {
     "label": "leading dots only, as before the fix",
     "file": "packages/app/src/library.ts",
     "from": ".replace(/^[. ]+/, \"\"),",
@@ -222,33 +195,6 @@
     "to": "!(bits >= 1)",
     "tests": [
       "packages/assess/test/pdf.test.ts"
-    ]
-  },
-  {
-    "label": "predictor guard: no row limit",
-    "file": "packages/assess/src/import/pdf/document.ts",
-    "from": "rowBytes >= 1 && rowBytes <= MAX_ROW_BYTES",
-    "to": "rowBytes >= 1",
-    "tests": [
-      "packages/assess/test/pdf.test.ts"
-    ]
-  },
-  {
-    "label": "xref widths: sum may be zero",
-    "file": "packages/assess/src/import/pdf/document.ts",
-    "from": "|| w1 + w2 + w3 === 0) return undefined;",
-    "to": ") return undefined;",
-    "tests": [
-      "packages/assess/test/pdf-hostile.test.ts"
-    ]
-  },
-  {
-    "label": "font widths: no budget",
-    "file": "packages/assess/src/import/pdf/fonts.ts",
-    "from": "let budget = MAX_WIDTHS_SET;",
-    "to": "let budget = Infinity;",
-    "tests": [
-      "packages/assess/test/pdf-hostile.test.ts"
     ]
   },
   {

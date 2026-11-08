@@ -557,6 +557,26 @@ try {
   const secondName = secondExported.written?.[0]?.name ?? "";
   const downloaded = await send("GET", `/files/${encodeURIComponent(secondName)}`);
   check("the second export of a 70-character title is a file that can be downloaded", secondExport.status === 200 && secondName.length <= 80 && downloaded.status === 200, `${secondExport.status} ${secondName.length} chars, download ${downloaded.status}`);
+  // New in alpha 22, after a hunt in the other readers: small files that used to hold the program for ten seconds or more are answered at
+  // once. The content stream of the first has a run of 200,000 digits (a number pattern that shared them out in every way), the second a
+  // text string of 200,000 spaces, the third is a Word file of 80,000 text elements in one run.
+  const answeredQuickly = async (label, name, bytes) => {
+    const started = Date.now();
+    let status = 0;
+    try {
+      const reply = await fetch(base + `/api/import?name=${name}`, { method: "POST", headers: { cookie, "x-openassess": "1" }, body: new Uint8Array(bytes), signal: AbortSignal.timeout(20000) });
+      status = reply.status;
+      await reply.text();
+    } catch {
+      status = -1;
+    }
+    const took = Date.now() - started;
+    check(label, (status === 200 || status === 422) && took < 5000 && (await send("GET", "/api/state")).status === 200, `${status} in ${took} ms (${bytes.length} bytes)`);
+  };
+  const smokeFonts = { F1: { kind: "simple", base: "Helvetica", widths: widths14 } };
+  await answeredQuickly("a PDF with a run of 200,000 digits in its content is read at once", "digits.pdf", buildPdf14({ pages: [`${"1".repeat(200000)}x\nBT /F1 12 Tf 72 700 Td (Hello) Tj ET`], compress: true, fonts: smokeFonts }));
+  await answeredQuickly("a PDF with a text string of 200,000 spaces is read at once", "spaces.pdf", buildPdf14({ pages: [`BT /F1 12 Tf 72 700 Td (${" ".repeat(200000)}x) Tj ET`], compress: true, fonts: smokeFonts }));
+  await answeredQuickly("a Word file with 80,000 text elements in one run is read at once", "run80k.docx", docx({ body: `<w:p><w:r>${"<w:t>a</w:t>".repeat(80000)}</w:r></w:p>` }));
   const appJs = await text("/app.js");
   const saveFieldsJs = await text("/save-fields.js");
   check("the skip link is wired to move focus, and not left to the address", /skipTo\(/.test(appJs) && domJs.includes("export function skipTo") && /event\.preventDefault\(\)/.test(domJs));
