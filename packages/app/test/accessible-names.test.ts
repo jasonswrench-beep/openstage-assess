@@ -82,6 +82,29 @@ describe("the screens' scripts", () => {
     assert.match(forced, /\.qrow\[aria-current="true"\]:focus-visible \{[^}]*outline: 3px solid Highlight/);
   });
 
+  // Found by walking the home screen with the Tab key in the browser: the two hidden file inputs were stops that showed nothing, and the
+  // two labels that opened them were not stops at all, so a person at the keyboard could not choose a file or see where they were.
+  test("a file chooser that is hidden is opened by a real button, and the hidden input is not a stop for the keyboard or the screen reader", () => {
+    for (const file of scripts) {
+      const lines = source(file).split("\n");
+      const hidden: string[] = [];
+      lines.forEach((line, i) => {
+        if (!/h\("input", \{[^\n]*type: "file"/.test(line) || !/visually-hidden/.test(line)) return;
+        assert.match(line, /tabIndex: -1/, `${file}:${i + 1} hides a file input and leaves it a stop for the keyboard`);
+        assert.match(line, /"aria-hidden": "true"/, `${file}:${i + 1} hides a file input from sight and not from a screen reader`);
+        const id = /id: "([^"]+)"/.exec(line)?.[1];
+        assert.ok(id, `${file}:${i + 1} has an input with no id`);
+        hidden.push(id as string);
+      });
+      for (const id of hidden) {
+        lines.forEach((line, i) => assert.doesNotMatch(line, new RegExp(`h\\("label"[^\\n]*for: "${id}"`), `${file}:${i + 1} opens the hidden input ${id} with a label, which is no stop for the keyboard; use a button`));
+      }
+    }
+    const home = source("home.js");
+    assert.match(home, /h\("button", \{ type: "button", class: "button primary", text: "Choose a file", on: \{ click: \(\) => fileInput\.click\(\) \} \}\)/);
+    assert.match(home, /h\("button", \{ type: "button", class: "button", text: "Open a bank file…", on: \{ click: \(\) => bankInput\.click\(\) \} \}\)/);
+  });
+
   test("a link or button that repeats for each bank, sample or sheet says which one it is for", () => {
     const repeated: Array<[string, RegExp]> = [
       ["home.js", /text: "Open"/],
