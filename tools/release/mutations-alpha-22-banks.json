@@ -1,0 +1,282 @@
+[
+  {
+    "label": "folders: numbering of a clash starts at 3",
+    "file": "packages/assess/src/model/bank.ts",
+    "from": "let n = nextNumber.get(key) ?? 2;",
+    "to": "let n = nextNumber.get(key) ?? 3;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "folders: a name that was given out is not remembered as in use",
+    "file": "packages/assess/src/model/bank.ts",
+    "from": "    used.add(folderNameKey(chosen));",
+    "to": "    void chosen;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "folders: the names already there are taken as written and not by their key",
+    "file": "packages/assess/src/model/bank.ts",
+    "from": "const used = new Set(present.map(folderNameKey));",
+    "to": "const used = new Set(present);",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "folders: a moving name is looked up as written, not by its key",
+    "file": "packages/assess/src/model/bank.ts",
+    "from": "    const key = folderNameKey(name);",
+    "to": "    const key = name;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "folders: the next number is never kept, so each child counts from 2 again",
+    "file": "packages/assess/src/model/bank.ts",
+    "from": "nextNumber.set(key, n + 1);",
+    "to": "nextNumber.set(key, 2);",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "folders: the folder taken away stays in its list",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "siblings.length = at;",
+    "to": "siblings.length = at + 1;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "folders: the children come up in reverse order",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "for (const child of folder.children) siblings.push(child);",
+    "to": "for (const child of folder.children) siblings.unshift(child);",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "folders: the folder taken away is counted among those a child may clash with",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "const others = siblings.filter((f) => f.id !== id);",
+    "to": "const others = siblings;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "filing: a question already in the folder is moved to the end of it",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "const moving = ids.filter((id) => this.folderIdOf(id) !== folderId);",
+    "to": "const moving = ids;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "filing: the index of where a question is is not updated",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "        this.folderOf.set(id, folderId);",
+    "to": "        void folderId;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "filing: a question listed in two folders is taken out of the first only",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "if (node.questionIds.some((q) => going.has(q))) node.questionIds = node.questionIds.filter((q) => !going.has(q));",
+    "to": "if (node.questionIds.some((q) => going.has(q))) { node.questionIds = node.questionIds.filter((q) => !going.has(q)); break; }",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "filing: the questions go to the front of the folder",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "target.questionIds.push(id);",
+    "to": "target.questionIds.unshift(id);",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/folders.test.ts"]
+  },
+  {
+    "label": "filing: each question walks the whole tree again",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "    this.takeOutOfFolders(moving);",
+    "to": "    for (const id of moving) this.takeOutOfFolders([id]);",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "alike: a pair is judged by stems OR answers differing",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "if (stems[at] !== stems[other] && answers[at] !== answers[other]) continue;",
+    "to": "if (stems[at] !== stems[other] || answers[at] !== answers[other]) continue;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/quality-bank.test.ts"]
+  },
+  {
+    "label": "alike: the share needed is lower",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "if (shared / (a.size + b.size - shared) >= ALIKE_AT) parent",
+    "to": "if (shared / (a.size + b.size - shared) >= ALIKE_AT * 0.9) parent",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/quality-bank.test.ts"]
+  },
+  {
+    "label": "alike: a question is stopped a look late",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "if (looks >= lookLimit) {",
+    "to": "if (looks > lookLimit) {",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "alike: counting the words of two questions costs nothing",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "        looks += few.size;",
+    "to": "        looks += 0;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "alike: one look fewer is said to have been left",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "notLookedAt += list.length - k;",
+    "to": "notLookedAt += list.length - k - 1;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "alike: one question held back is not worth saying",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "if (stopped > 0) {",
+    "to": "if (stopped > 1) {",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "alike: every run of numbers and signs is the same run",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "number = signNumbers.size;",
+    "to": "number = 0;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/quality-bank.test.ts"]
+  },
+  {
+    "label": "alike: a group of one is a group",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "filter((g) => g.length > 1), stopped, notLookedAt",
+    "to": "filter((g) => g.length > 0), stopped, notLookedAt",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/quality-bank.test.ts"]
+  },
+  {
+    "label": "alike: a copy replaces the one before it and does not join it",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "    if (group) group.push(c);",
+    "to": "    if (group) group[0] = c;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/quality-bank.test.ts"]
+  },
+  {
+    "label": "alike: a question's equations are not written into its words",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "const latex = new Map(question.math.map((m) => [m.id, m.latex] as const));",
+    "to": "const latex = new Map<string, string>();",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/quality-bank.test.ts"]
+  },
+  {
+    "label": "alike: a question already in the group is looked at all the same",
+    "file": "packages/assess/src/quality/bank.ts",
+    "from": "if (find(other) === find(at)) continue;",
+    "to": "if (find(other) === -1) continue;",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "draw: the copies are found again for every rule",
+    "file": "packages/assess/src/bank/pick.ts",
+    "from": "(options.copies ?? findDuplicates(questions))",
+    "to": "(findDuplicates(questions))",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "draw: the copies found for the draw are thrown away",
+    "file": "packages/assess/src/bank/blueprint.ts",
+    "from": "...(copies ? { copies } : {}),",
+    "to": "...(copies ? { copies: [] } : {}),",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/blueprint.test.ts"]
+  },
+  {
+    "label": "options: the first place of a signature is forgotten",
+    "file": "packages/assess/src/quality/items.ts",
+    "from": "else seen.set(signature, [at]);",
+    "to": "else seen.set(signature, []);",
+    "tests": ["packages/assess/test/bank-hostile.test.ts", "packages/assess/test/quality-items.test.ts"]
+  },
+  {
+    "label": "options: the list of places is copied for each option",
+    "file": "packages/assess/src/quality/items.ts",
+    "from": "if (places) places.push(at);",
+    "to": "if (places) seen.set(signature, [...places, at]);",
+    "tests": ["packages/assess/test/bank-hostile.test.ts"]
+  },
+  {
+    "label": "names: the console devices are not devices",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "|conin\\$|conout\\$)",
+    "to": ")",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: a space before the dot is not looked past",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "(?= *(?:\\.|$))",
+    "to": "(?=(?:\\.|$))",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: the device word is followed by a dash and not an underscore",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "(word) => `${word}_`",
+    "to": "(word) => `${word}-`",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: COM0 and LPT0 are not devices",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "com[0-9\\xb9\\xb2\\xb3]",
+    "to": "com[1-9\\xb9\\xb2\\xb3]",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: a cut through a pair when one character is longer than the name",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "text.slice(0, last >= 0xd800 && last <= 0xdbff ? limit - 1 : limit)",
+    "to": "text.slice(0, limit)",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: a character that fits exactly is dropped",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "if (end + segment.length > limit) break;",
+    "to": "if (end + segment.length >= limit) break;",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: the runtime cannot tell characters apart",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "typeof Intl.Segmenter === \"function\"",
+    "to": "typeof Intl.Segmenter === \"undefined\"",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: the space left by the dots at the start is kept",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "while (start < end && (text[start] === \".\" || text[start] === \" \")) start++;",
+    "to": "while (start < end && text[start] === \".\") start++;",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: the dots and spaces at the end are taken off only if dots",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "while (end > start && (text[end - 1] === \".\" || text[end - 1] === \" \")) end--;",
+    "to": "while (end > start && text[end - 1] === \".\") end--;",
+    "tests": ["packages/assess/test/file-names.test.ts", "packages/assess/test/export-awkward-text.test.ts"]
+  },
+  {
+    "label": "names: the end is not tidied again after the cut",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "const cut = trimDotsAndSpaces(cutToLength(tidy.replace(DEVICE_NAME, (word) => `${word}_`), FILE_NAME_MAX));",
+    "to": "const cut = cutToLength(tidy.replace(DEVICE_NAME, (word) => `${word}_`), FILE_NAME_MAX);",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: the longest name is 90",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "export const FILE_NAME_MAX = 80;",
+    "to": "export const FILE_NAME_MAX = 90;",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  },
+  {
+    "label": "names: a title of nothing is called by a name of its own",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "if (tidy === \"\") return fallback;",
+    "to": "if (tidy === \"\") return \"questions\";",
+    "tests": ["packages/assess/test/file-names.test.ts"]
+  }
+]

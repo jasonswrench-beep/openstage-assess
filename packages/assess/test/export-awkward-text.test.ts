@@ -173,6 +173,15 @@ describe("the text and spreadsheet formats", () => {
     assert.equal(safeName(`Bank ${DIRTY}`), "Bank nul bell vt foo ff bar esc del lone low end");
     assert.equal(safeName("\u0000￾"), "questions", "a name that was all of them is no name");
   });
+
+  test("safeName takes the dots at the start together with the space they leave, and keeps a device's name from being one", () => {
+    assert.equal(safeName(". Intro to Psych"), "Intro to Psych");
+    assert.equal(safeName(".. Chapter 3"), "Chapter 3");
+    assert.equal(safeName("Aux. Verbs"), "Aux_. Verbs");
+    assert.equal(safeName("Con. Ed. 101"), "Con_. Ed. 101");
+    assert.equal(safeName("nul"), "nul_", "an extension after a bare device name is the device as well");
+    assert.equal(safeName(`${"x".repeat(79)}. y`), "x".repeat(79), "a cut that ends in a dot is tidied after the cut");
+  });
 });
 
 describe("a printed Word test", () => {

@@ -17,7 +17,7 @@
 import { shuffledFor } from "../model/random.ts";
 import type { Question } from "../model/question.ts";
 import { hasUsableKey } from "../quality/answer-key.ts";
-import { findDuplicates } from "../quality/bank.ts";
+import { findDuplicates, type DuplicateGroup } from "../quality/bank.ts";
 import { matchesFacets, type CoverageAxis } from "./coverage.ts";
 
 /** The most that can be asked for at once. */
@@ -40,6 +40,11 @@ export interface PickOptions {
   chosen?: readonly string[];
   /** The same seed picks the same questions from the same bank. */
   seed?: string;
+  /**
+   * The copies in these questions, when they are already worked out (`findDuplicates` of the same questions). A draw of many rules
+   * works them out once and not for each rule, which was 50 searches of the whole bank for 50 rules. Leave it out and they are found.
+   */
+  copies?: readonly DuplicateGroup[];
 }
 
 export interface PickResult {
@@ -65,7 +70,7 @@ export function pickQuestions(questions: readonly Question[], options: PickOptio
 
   // The copies in the bank, as groups: a group with a question in the test, or one picked, has no other picked.
   const groupOf = new Map<string, number>();
-  findDuplicates(questions).forEach((group, g) => group.questionIds.forEach((id) => groupOf.set(id, g)));
+  (options.copies ?? findDuplicates(questions)).forEach((group, g) => group.questionIds.forEach((id) => groupOf.set(id, g)));
   const usedGroups = new Set<number>();
   for (const id of taken) {
     const g = groupOf.get(id);
