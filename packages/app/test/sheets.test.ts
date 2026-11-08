@@ -873,4 +873,29 @@ describe("a test with a long name", () => {
       }
     });
   });
+
+  // Found by a reader who used the raw test name for the file an uploaded scores file is kept as, and saw no test fail.
+  test("a scores file brought in from somewhere else is kept under a name made safe, whatever the test is called", async () => {
+    await withApp(async (client, home) => {
+      const { bank, ids } = await seeded(client);
+      const test = await assemble(client, bank, ids, { name: `Midterm: Part 1? / Fall "Section" <002> ${"x".repeat(70)}` });
+      const record = await recordOf(client, bank, test["id"]);
+      const opened = await client.post<Json>(`/api/sheets/${encodeURIComponent(bank)}/tests/${test["id"]}/score`);
+      const sid = opened.json["id"] as string;
+      assert.equal((await post(client, `/api/scoring/${sid}/files?name=a.png`, writePng(drawn(record).render(marksFor(rightPlaces(record, "A"), 1))))).status, 200);
+      const saved = await client.post<Json>(`/api/scoring/${sid}/save`);
+      assert.equal(saved.status, 200, saved.text);
+      const savedName = saved.json["name"] as string;
+      assert.doesNotMatch(savedName, /[:?"<>/\\]/, "the name the program made for the first save is a file name");
+
+      const before = readdirSync(join(home, "Scores"));
+      const brought = await post(client, "/api/scoring/open?upload=1", new Uint8Array(readFileSync(join(home, "Scores", savedName))));
+      assert.equal(brought.status, 200, brought.text);
+      const added = readdirSync(join(home, "Scores")).filter((f) => !before.includes(f));
+      assert.equal(added.length, 1, "one file is kept");
+      assert.doesNotMatch(added[0] as string, /[:?"<>/\\]/, `${added[0]} is a file name`);
+      assert.ok((added[0] as string).length <= 80 && (added[0] as string).endsWith(".openassess-scores"), added[0]);
+      assert.equal((await client.post<Json>("/api/scoring/open", { name: added[0] })).status, 200, "and it can be opened by that name");
+    });
+  });
 });

@@ -4,15 +4,15 @@
  * was not saved is not lost by going somewhere else.
  */
 
-import { clear, h, skipTo } from "./dom.js";
+import { clear, h, screenFocus, skipTo } from "./dom.js";
 
 const main = /** @type {HTMLElement} */ (document.getElementById("main"));
 const status = /** @type {HTMLElement} */ (document.getElementById("status"));
 const skip = document.querySelector(".skip");
 if (skip) skipTo(/** @type {HTMLElement} */ (skip), main);
 // The first screen is not given focus: with focus already in the main area, the first Tab went past the skip link to the first
-// button, so the link was reached only backwards. A screen that is moved to afterwards is.
-let firstScreen = true;
+// button, so the link was reached only backwards. A screen that is moved to afterwards is (the rule is in dom.js, where it is tested).
+const focusAfterScreen = screenFocus();
 
 /** @type {{ canLeave?: () => Promise<boolean>, dirty?: () => boolean } | null} */
 let current = null;
@@ -84,11 +84,10 @@ async function show() {
       );
     }
     document.title = "OpenAssess";
-    if (!firstScreen) main.focus({ preventScroll: true });
-    firstScreen = false;
+    focusAfterScreen(main);
     return;
   }
-  firstScreen = false;
+  focusAfterScreen(null); // a page that is not a screen is still the first thing shown
   clear(main);
   main.append(h("div", { class: "screen" }, h("h1", { text: "There is nothing here" }), h("a", { class: "button", href: "#/", text: "Back to your banks" })));
 }

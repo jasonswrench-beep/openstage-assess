@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
-import { checkRow, h, skipTo } from "../ui/dom.js";
+import { checkRow, h, screenFocus, skipTo } from "../ui/dom.js";
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
 import { notSavedBody, saveChoice, saveFields } from "../ui/save-fields.js";
 import { FakeNode, findById, installFakeDocument } from "./support/fake-dom.ts";
@@ -143,12 +143,56 @@ describe("the skip link", () => {
     const app = source("app.js");
     assert.match(app, /skipTo\(\/\*\*[^\n]*\(skip\), main\)/, "the shell wires the link it finds on the page");
     assert.match(readFileSync(join(UI, "index.html"), "utf8"), /<a class="skip" href="#main">/, "and the link is still the page's first element");
-    assert.match(app, /if \(!firstScreen\) main\.focus\(/, "a screen the person moves to is given focus; the first one is not");
     assert.doesNotMatch(app, /\[\/\^#main/, "and #main is not a route");
-    // The flag starts true, and is cleared once a screen has been shown (by either way a screen can end: a route found, or none);
-    // left true every screen was without focus, and started false the first one was given it again.
-    assert.match(app, /^let firstScreen = true;$/m);
-    assert.equal(app.match(/^\s*firstScreen = false;$/gm)?.length, 2, "cleared where a screen is shown, and where there is none");
+    // Both ways a screen can end are given to the one rule: a route found (focus to the main area) and none (nothing to focus).
+    assert.match(app, /^const focusAfterScreen = screenFocus\(\);$/m);
+    assert.match(app, /^\s*focusAfterScreen\(main\);$/m, "a screen that was found");
+    assert.match(app, /^\s*focusAfterScreen\(null\);/m, "and a page that is no screen");
+  });
+
+  // Found by a reader who planted each of these in the shell and saw no test fail: the rule was two lines of text that a test matched.
+  test("the first thing shown is not given focus and each one after it is, whether or not the first was a screen", () => {
+    const main = h("main", { id: "main", tabIndex: -1 });
+    const focusAfter = screenFocus();
+    focusAfter(main);
+    assert.equal(main.focused, false, "the first screen leaves the skip link the first Tab stop");
+    focusAfter(main);
+    assert.equal(main.focused, true, "the next one is given focus");
+
+    const nothingFirst = screenFocus();
+    nothingFirst(null);
+    const next = h("main", { id: "main2", tabIndex: -1 });
+    nothingFirst(next);
+    assert.equal(next.focused, true, "a page that is no screen counts as the first thing shown, and the screen after it is focused");
+
+    const second = h("main", { id: "main3", tabIndex: -1 });
+    const noFocusOnNothing = screenFocus();
+    noFocusOnNothing(h("main"));
+    noFocusOnNothing(null); // nothing to focus is not an error
+    noFocusOnNothing(second);
+    assert.equal(second.focused, true);
+  });
+
+  // Found by a reader who removed encodeURIComponent from each of these and saw no test fail. A name can hold a percent sign, a hash, a
+  // question mark or an ellipsis, and in an address it is only itself when it is encoded.
+  test("every address and every path that carries a bank's or a file's name encodes it", () => {
+    const unencoded = /(?:#\/(?:bank|export|print|sheets|import)\/|\/files\/(?:samples\/)?|banks\/)\$\{(?!encodeURIComponent\()/;
+    const encoded = /(?:#\/(?:bank|export|print|sheets|import)\/|\/files\/(?:samples\/)?|banks\/)\$\{encodeURIComponent\(/g;
+    let count = 0;
+    for (const file of scripts) {
+      const text = source(file);
+      text.split("\n").forEach((line, i) => assert.doesNotMatch(line, unencoded, `${file}:${i + 1} puts a name in an address without encoding it`));
+      count += text.match(encoded)?.length ?? 0;
+    }
+    assert.ok(count >= 20, `only ${count} places found, so the pattern no longer finds the addresses it is meant to guard`);
+  });
+
+  // Found by a reader who planted these in the Save dialog: that Cancel or a closed dialog saves, and that the fields are left out.
+  test("the Save dialog saves only when Save was chosen, and shows the fields that say where", () => {
+    const review = source("review.js");
+    assert.match(review, /if \(!answer \|\| answer\.value !== true\) return;/, "a closed dialog or Cancel saves nothing");
+    assert.match(review, /\{ label: "Cancel", value: false \},\s*\{ label: "Save", value: true, primary: true \}/, "and Cancel is the false one");
+    assert.match(review, /body: \[\s*\.\.\.notes,\s*\.\.\.fields\.body,\s*\]/, "and the dialog shows its notes and its fields");
   });
 });
 

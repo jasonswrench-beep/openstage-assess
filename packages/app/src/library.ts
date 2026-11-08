@@ -5,7 +5,7 @@
  * path, so nothing a web page or a file asks for can reach anywhere else.
  */
 
-import { mkdir, readdir, stat } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, resolve, sep } from "node:path";
 
@@ -34,20 +34,35 @@ export async function openLibrary(home: string = defaultHome()): Promise<Library
 }
 
 const ILLEGAL = /[\\/:*?"<>|\u0000-\u001f]/;
-const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+// The names Windows keeps for devices, with or without an extension: CON, PRN, AUX, NUL, COM0 to COM9 and LPT0 to LPT9 (the
+// superscript digits too, which Windows treats as digits here), and the two console names.
+const RESERVED = /^(con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])(\..*)?$/i;
 
 /** The longest name `checkName` takes, in the units `String.length` counts. */
 const MAX_NAME = 80;
 
+const graphemes = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : undefined;
+
 /**
- * The first `n` units of `text`, without half of a character: an emoji is two units, and a cut between them left a lone surrogate that
- * made a name `encodeURIComponent` refuses ("URI malformed" in place of a finished export), found by a reader who cut names at every
- * length. The unit at the end is dropped when it is the first half of a pair.
+ * The first `n` units of `text` that end between two characters as a person sees them: an emoji is two units, a flag is four, a family
+ * is eleven, and a letter with its accent may be two. A cut between the two halves of an emoji left a lone surrogate that made a name
+ * `encodeURIComponent` refuse ("URI malformed" in place of a finished export), found by a reader who cut names at every length; a cut
+ * inside a flag or a family is no error and still is not what the person wrote. Where the platform cannot tell, only a pair is kept whole.
  */
 function cutAt(text: string, n: number): string {
-  const cut = text.slice(0, Math.max(0, n));
+  if (text.length <= n) return text;
+  const room = Math.max(0, n);
+  if (graphemes) {
+    let end = 0;
+    for (const { segment } of graphemes.segment(text)) {
+      if (end + segment.length > room) break;
+      end += segment.length;
+    }
+    return text.slice(0, end);
+  }
+  const cut = text.slice(0, room);
   const last = cut.charCodeAt(cut.length - 1);
-  return last >= 0xd800 && last <= 0xdbff && cut.length < text.length ? cut.slice(0, -1) : cut;
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }
 
 /** A name made safe, for one that is derived from a title or a file: illegal characters become dashes. */
@@ -107,46 +122,69 @@ export function insideLibrary(library: Library, path: string): boolean {
   return target === library.home || target.startsWith(library.home + sep);
 }
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
+/** Whether a file system call failed because the file is already there. */
+const alreadyThere = (error: unknown): boolean => (error as { code?: string } | null)?.code === "EEXIST";
+
+/**
+ * The `n`th name for a file: the name itself, then `name 2.ext`, `name 3.ext`. The number is counted in the length, and every name
+ * is within the longest `checkName` takes, because the app downloads and opens files by name and checks it again then: a second
+ * export of a title that fitted exactly was 82 long, was written, and could not be downloaded.
+ */
+function numberedFileName(name: string, n: number): string {
+  if (n === 1) return fitFileName(name);
+  const number = ` ${n}`;
+  const fitted = fitFileName(name, MAX_NAME - number.length);
+  const ext = extname(fitted);
+  return `${fitted.slice(0, fitted.length - ext.length)}${number}${ext}`;
 }
 
-/** `wanted`, or `wanted 2`, `wanted 3` and so on, so that nothing is ever overwritten by a new file of the same name. */
-export async function uniqueName(dir: string, wanted: string, extension: string): Promise<string> {
+/**
+ * Writes a new file under `name`, or under `name 2`, `name 3` if that is taken, and says which. A file is never written over: the
+ * name is claimed by creating the file (`wx` fails if it is there), and not by looking first and writing after, because with a look
+ * first six exports asked for at once were all given the same name and wrote over each other, and a second copy of the app on the
+ * same folder could do the same.
+ */
+export async function writeNewFile(dir: string, name: string, data: string | Uint8Array): Promise<string> {
+  for (let n = 1; n < 10_000; n++) {
+    const candidate = numberedFileName(name, n);
+    const path = join(dir, candidate);
+    try {
+      await writeFile(path, data, { flag: "wx" });
+      return candidate;
+    } catch (error) {
+      if (alreadyThere(error)) continue;
+      await rm(path, { force: true }).catch(() => undefined); // a file that was started and not finished is not left behind
+      throw error;
+    }
+  }
+  throw badRequest("There are too many files with that name. Move some out of the folder.");
+}
+
+/**
+ * Claims a name for a bank (or for a bank that was removed) by creating an empty file under it, and says which name it is: `wanted`
+ * as `cleanName` makes it, or with ` 2`, ` 3` after it, counted in the length. The caller replaces the empty file with the real one,
+ * and calls `releaseName` if it cannot. Looking first and creating after let two requests for one title both take it, and six at once
+ * gave three errors.
+ */
+export async function claimName(dir: string, wanted: string, extension: string): Promise<string> {
   const base = cleanName(wanted);
   for (let n = 1; n < 10_000; n++) {
-    // The number is counted in the length: a name of 80 with " 2" after it was 82, and `checkName` refused the second bank of a
-    // title that long, and a second import of the same long-named file.
     const number = ` ${n}`;
     const candidate = n === 1 ? base : `${cutAt(base, MAX_NAME - number.length).replace(/[. ]+$/, "")}${number}`;
-    if (!(await exists(join(dir, `${candidate}${extension}`)))) return candidate;
+    try {
+      await writeFile(join(dir, `${candidate}${extension}`), "", { flag: "wx" });
+      return candidate;
+    } catch (error) {
+      if (alreadyThere(error)) continue;
+      throw error;
+    }
   }
   throw badRequest("There are too many files with that name.");
 }
 
-/**
- * `name`, or `name 2.ext`, `name 3.ext`: a file that is already there is never written over. Every name it gives is within the
- * longest `checkName` takes, the number included, because the app downloads and opens files by name and checks it again then: a second
- * export of a title that fitted exactly was 82 long, was written, and could not be downloaded.
- */
-export async function freeFileName(dir: string, name: string): Promise<string> {
-  for (let n = 1; n < 10_000; n++) {
-    let candidate: string;
-    if (n === 1) candidate = fitFileName(name);
-    else {
-      const number = ` ${n}`;
-      const fitted = fitFileName(name, MAX_NAME - number.length);
-      const ext = extname(fitted);
-      candidate = `${fitted.slice(0, fitted.length - ext.length)}${number}${ext}`;
-    }
-    if (!(await exists(join(dir, candidate)))) return candidate;
-  }
-  throw badRequest("There are too many files with that name. Move some out of the folder.");
+/** Gives back a name that `claimName` made, when what was to go under it could not be written. */
+export async function releaseName(dir: string, name: string, extension: string): Promise<void> {
+  await rm(join(dir, `${name}${extension}`), { force: true }).catch(() => undefined);
 }
 
 export async function bankNames(library: Library): Promise<string[]> {

@@ -6,13 +6,12 @@
  * brought back inside it, and anything it does not know is refused.
  */
 
-import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { printOptions, printTest, STATUSES, type DestinationReport, type PrintFormat, type PrintOptions, type Question } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest } from "./errors.ts";
-import { checkName, fitFileName, fitNames, freeFileName } from "./library.ts";
+import { checkName, fitFileName, fitNames, writeNewFile } from "./library.ts";
 
 const KINDS = ["student", "key"] as const;
 const FORMATS = ["docx", "pdf"] as const;
@@ -115,10 +114,8 @@ export async function printRoute(ctx: Context, req: ApiRequest, rawName: string,
         ? { ...before, files: [...before.files, ...shown.files], general: [...new Set([...before.general, ...shown.general])] }
         : shown;
       if (action === "write" && result.file.bytes.length > 0) {
-        const fileName = await freeFileName(ctx.library.exports, checkName(fitFileName(result.file.name)));
-        const path = join(ctx.library.exports, fileName);
-        await writeFile(path, result.file.bytes);
-        written.push({ name: fileName, path, kind, format, ...(result.file.pages !== undefined ? { pages: result.file.pages } : {}) });
+        const fileName = await writeNewFile(ctx.library.exports, checkName(fitFileName(result.file.name)), result.file.bytes);
+        written.push({ name: fileName, path: join(ctx.library.exports, fileName), kind, format, ...(result.file.pages !== undefined ? { pages: result.file.pages } : {}) });
       }
     }
   }
