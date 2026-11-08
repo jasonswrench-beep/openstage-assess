@@ -94,8 +94,21 @@ describe("fillRows", () => {
     const line = moreLine(list);
     assert.ok(line, "the line is there");
     assert.match(line.words, /Showing the first 1,000 of 20,000 questions/);
-    assert.deepEqual(buttonsOf(line).map((b) => b.words), ["Show 1,000 more", "Show all 20,000 (slow)"]);
+    assert.deepEqual(buttonsOf(line).map((b) => b.words), ["Show 1,000 more"], "no Show all past 5,000: it froze the window for 8.6 seconds at 20,000");
     assert.equal(list.children.at(-1), line, "it ends the list");
+  });
+
+  test("offers Show all up to 5,000 questions and not beyond", () => {
+    const at5000 = h("ul", {});
+    fillRows(at5000, items(5000), row, { limit: 1000, more: () => undefined });
+    assert.deepEqual(buttonsOf(moreLine(at5000) as FakeNode).map((b) => b.words), ["Show 1,000 more", "Show all 5,000 (slow)"]);
+    const over = h("ul", {});
+    fillRows(over, items(5001), row, { limit: 1000, more: () => undefined });
+    assert.deepEqual(buttonsOf(moreLine(over) as FakeNode).map((b) => b.words), ["Show 1,000 more"]);
+    // Drawn as far as 4,500 of 5,000: the rest is under a thousand, so Show all would only repeat the first button.
+    const near = h("ul", {});
+    fillRows(near, items(5000), row, { limit: 4500, more: () => undefined });
+    assert.deepEqual(buttonsOf(moreLine(near) as FakeNode).map((b) => b.words), ["Show 500 more"]);
   });
 
   test("offers only the rest when the rest is no more than a thousand, and no 'show all'", () => {
