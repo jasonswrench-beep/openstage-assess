@@ -352,8 +352,11 @@ in the tests and in `assess sheets gate`.
   and at a JPEG page inside a phone's scanned PDF. Also in the Tauri window: choosing several files at once, and dropping files on
   the Scans panel (the window may take a drop for itself).
 - [ ] **Review with a screen reader and with the keyboard alone, on a real class.** The keys are built (a letter or a digit chooses
-  the bubble, 0 is blank, Enter records several, the arrows move, Z takes the last back) and announce what they did; nobody who
-  uses a screen reader has tried them. Also look at how long a class of 100 sheets takes to settle by key, and whether the piece of
+  the bubble, 0 is blank, Enter records several, the arrows move, Z takes the last back) and announce what they did. Real key
+  presses were tried in the built-in browser on 7 November 2026 on a sitting of three drawn sheets: B recorded the answer and said
+  "Recorded B for sheet 2, question 2. 2 to go." with focus on the next question, Z said "Took back the last decision. 3 to go." and
+  put focus back, and the right arrow moved to the next question and cleared the message. Nobody who uses a screen reader has tried
+  them. Also look at how long a class of 100 sheets takes to settle by key, and whether the piece of
   picture is large enough on a laptop screen to tell a faint mark from an erasure.
 - [ ] **A real-sheet corpus.** Volunteers fill in printed sheets by hand to a written answer list; scan them on the department
   copier (feeder, 200 and 300 dpi, grey and black and white), on a flatbed, and photograph them on an iPhone and an Android phone in
@@ -497,10 +500,11 @@ run on a machine other than the one it was built on.
   whole loop as a person would walk it. Write down the first place you hesitate; that is where the screen is wrong.
 - [ ] **Open a bank or an import of more than 1000 questions and use the end of the list.** The list draws its first 1000 rows, then a
   line that says how many are not drawn, with Show 1000 more and Show all. Looked at in the built-in browser on 7 November 2026 with
-  5000 and 20,000 questions (timings are in `docs/review-findings.md`), not with a keyboard alone or a screen reader. Try: Tab to the
-  buttons after the last row, press one, and check that focus lands on the first new row; that the line is read as part of the list;
-  that searching or choosing a filter starts again from the first thousand; that a question you chose stays drawn when you show
-  fewer. Is "Show all 20,000 (slow)" a button you would ever press, or would you rather not have it?
+  5000 and 20,000 questions (timings are in `docs/review-findings.md`). With real key presses in that browser (a 2500-question
+  import): Enter on Show 1,000 more drew the next 1000 and put focus on the first new row, two arrow-downs moved it two rows, and Enter
+  chose that question with focus staying on the row. Not with a screen reader. Try: that the line is read as part of the list; that
+  searching or choosing a filter starts again from the first thousand. Show all is offered only up to 5000 questions, so past that
+  a person asks for a thousand more at a time: is that enough, or would you want to jump to the end?
 - [ ] **Run the window** (`packages/app/shell/src-tauri/target/release/openassess-shell.exe` after `npm run build:exe` in
   `packages/app/shell`) and close it. Check Task Manager afterwards: there should be no `node.exe` left. It was checked
   here by closing the window and listing processes; the force-quit case (End task on the window) was checked by killing it.
