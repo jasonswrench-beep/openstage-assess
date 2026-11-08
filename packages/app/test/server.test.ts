@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
 import { Bank, unzipSync } from "../src/engine.ts";
-import { checkName, claimName, cleanName, fitFileName, writeNewFile } from "../src/library.ts";
+import { checkName, cleanName, fitFileName, placeFile, writeNewFile } from "../src/library.ts";
 import { revealCommand } from "../src/server.ts";
 import { chunkedPost, liarPost, liarPostReply, rawRequest, withApp, type Client } from "./support/app.ts";
 
@@ -372,10 +372,13 @@ describe("the library", () => {
         }
         if (wanted === "short.csv") assert.ok(seen.has("short 2.csv") && seen.has("short 3.csv"), "a short name is numbered as it always was");
       }
+      // A bank is given its name by a link to a finished file, and a name that is taken is the next one.
+      const finished = join(dir, "finished.tmp");
+      writeFileSync(finished, "a finished bank");
       for (const title of ["a".repeat(79), "b".repeat(90), `${"c".repeat(78)} d`]) {
         const seen = new Set<string>();
         for (let i = 0; i < 12; i++) {
-          const name = await claimName(dir, title, ".openassess"); // an empty file is made under the name
+          const name = await placeFile(dir, cleanName(title), ".openassess", finished);
           assert.ok(name.length <= 80 && checkName(name) === name, name);
           assert.ok(!seen.has(name), `${name} came twice`);
           seen.add(name);

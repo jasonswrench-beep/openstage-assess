@@ -7,7 +7,7 @@
  * over an earlier file, except the scores file this sitting made itself, which a later save updates.
  */
 
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
@@ -49,6 +49,7 @@ function fileLabel(value: string | null, fallback: string): string {
 // Saved scores
 
 async function scoresFiles(library: Library): Promise<Array<{ name: string; bytes: number; modified: string; test?: string; sheets?: number; problem?: string }>> {
+  await mkdir(library.scores, { recursive: true }); // a folder taken away while the app runs comes back
   const names = (await readdir(library.scores)).filter((n) => n.toLowerCase().endsWith(SCORES_EXTENSION)).sort((a, b) => a.localeCompare(b));
   const out = [];
   for (const name of names) {
@@ -119,7 +120,28 @@ async function openScores(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   return ok(view(session));
 }
 
-async function save(ctx: Context, s: ScoringSession): Promise<ApiResponse> {
+/**
+ * Saves the sitting. Saves that overlap are done one after another, and one asked for while an earlier one for the same state is
+ * being done shares its answer: the first save claims the file's name and a later one updates that file, and two that began together
+ * each claimed a name of their own (eight saves made eight scores files, seven of them strays that looked like the real one).
+ */
+function save(ctx: Context, s: ScoringSession): Promise<ApiResponse> {
+  const running = s.saving;
+  if (running && running.revision === s.revision) return running.done as Promise<ApiResponse>;
+  const after = running ? running.done.then(() => undefined, () => undefined) : Promise.resolve();
+  const mine = { revision: s.revision, done: after.then(() => saveOnce(ctx, s)) };
+  s.saving = mine;
+  const clear = (): void => {
+    if (s.saving === mine) delete s.saving;
+  };
+  mine.done.then(clear, clear);
+  return mine.done;
+}
+
+async function saveOnce(ctx: Context, s: ScoringSession): Promise<ApiResponse> {
+  // What is saved is the state at this moment, worked out before the first wait, and that is the state the sitting is marked as saved
+  // at: a change made while the file is being written is not in it, and the sitting still says it has an unsaved change.
+  const revision = s.revision;
   const c = compute(s);
   const file = newScoresFile(s.test, c.batch, c.entries, {
     decisions: s.decisions,
@@ -132,9 +154,12 @@ async function save(ctx: Context, s: ScoringSession): Promise<ApiResponse> {
   const bytes = writeScoresFile(file);
   // The first save claims a name no other file has, with the bytes in it; a later save updates that same file, which is this sitting's own.
   const name = s.savedAs ?? (await writeNewFile(ctx.library.scores, scoresFileName(s.test.name, dateOf(undefined)), bytes));
-  if (s.savedAs) await writeFile(join(ctx.library.scores, name), bytes);
+  if (s.savedAs) {
+    await mkdir(ctx.library.scores, { recursive: true }); // a folder taken away while the app runs comes back
+    await writeFile(join(ctx.library.scores, name), bytes);
+  }
   s.savedAs = name;
-  s.savedRevision = s.revision;
+  s.savedRevision = revision;
   return ok({ name, path: join(ctx.library.scores, name), sheets: c.batch.sheets.length, view: view(s) });
 }
 

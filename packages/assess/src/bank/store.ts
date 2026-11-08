@@ -7,6 +7,7 @@
  * thing is testable without a disk.
  */
 
+import { randomBytes } from "node:crypto";
 import { open, readFile, rename, rm } from "node:fs/promises";
 import { basename } from "node:path";
 
@@ -135,6 +136,29 @@ function isUsableFolderFile(value: unknown): value is FolderFile {
   };
   const filter = (f: unknown): boolean => f !== null && typeof f === "object" && typeof (f as Record<string, unknown>)["id"] === "string" && typeof (f as Record<string, unknown>)["name"] === "string";
   return record["root"].every((node) => folder(node, 0)) && record["filters"].every(filter);
+}
+
+/** How many times a rename is tried before a refusal is believed. */
+const RENAME_TRIES = 8;
+
+/**
+ * A rename onto a file, tried again a few times when the system says the file is busy. On Windows a rename onto a file that another
+ * handle has open, or that another rename is replacing at that moment, is refused (EPERM, EBUSY or EACCES) and is fine a few
+ * milliseconds later: a reader found one ordinary edit of a bank fail this way when anything had the bank open, and twelve saves of
+ * one bank at once, from two copies of the app, failed this way though each had a temporary file of its own. A refusal that is for
+ * good (a read-only file, a folder in the way) is still refused, after about a third of a second.
+ */
+async function renameWhenFree(from: string, to: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as { code?: string } | null)?.code;
+      if (attempt >= RENAME_TRIES || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 10 * attempt + Math.floor(Math.random() * 10)));
+    }
+  }
 }
 
 export class Bank {
@@ -525,7 +549,10 @@ export class Bank {
     const target = path ?? this.path;
     if (!target) throw new Error("This bank has no path yet. Pass one to save().");
     const bytes = this.toBytes();
-    const temp = `${target}.writing`;
+    // A name of its own for each save. It was always `<bank>.writing`, so two saves of one bank (two copies of the app on one library,
+    // or two requests in one) took each other's file and one of them failed with ENOENT. It still ends in `.writing`, which nothing
+    // lists, and is still removed if the save fails.
+    const temp = `${target}.${process.pid}-${randomBytes(6).toString("hex")}.writing`;
     try {
       // Written, then flushed to the disk, before the rename: a rename of a file whose contents are still in the system's memory can
       // survive a power cut that the contents do not, and leave an empty bank where the old one was.
@@ -536,7 +563,7 @@ export class Bank {
       } finally {
         await file.close();
       }
-      await rename(temp, target);
+      await renameWhenFree(temp, target);
     } catch (error) {
       // A failed save leaves the bank that was there, and no half-written file beside it.
       await rm(temp, { force: true });

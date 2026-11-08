@@ -194,8 +194,57 @@ describe("what a check could not do in full", () => {
     const note = { severity: "info" as const, check: "alike" as const, message: "The search was cut short for 3 questions." };
     const view = qualityView(bank, { checked: 0, changed: 0, notes: {}, questions: [], report: { duplicates: [], keyBalance: [], limits: [note] } } as never);
     assert.deepEqual(view.limits, [note]);
-    const panel = (await import("node:fs")).readFileSync(join(import.meta.dirname, "..", "ui", "bank.js"), "utf8");
-    assert.match(panel, /result\.limits && result\.limits\.length > 0/);
-    assert.match(panel, /What this check could not do in full/);
+  });
+
+  // The panel is run on a page of its own and read, as a person reads it. A test that matched the screen's source for the heading did not
+  // notice a panel that showed the check's code ("alike") in place of the check's words.
+  test("the panel built from that reply says the check's words under the heading, and builds without a list of them", async () => {
+    const { installFakeDocument } = await import("./support/fake-dom.ts");
+    installFakeDocument();
+    // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
+    const { qualityPanel } = await import("../ui/quality-panel.js");
+    const note = { severity: "info", check: "alike", message: "The search for near copies was cut short for 3 questions." };
+    const none = { checked: 2, changed: 0, notes: {}, questions: [], duplicates: [], keyBalance: [] };
+    const { panel, heading } = qualityPanel({ ...none, limits: [note] }, { questions: [] }, { showNotes: () => undefined, select: () => undefined });
+    assert.equal(heading.words, "Quality notes");
+    const text = (panel as unknown as { words: string }).words;
+    assert.ok(text.includes("What this check could not do in full"), text);
+    assert.ok(text.includes(note.message), "the words of the check are shown");
+    assert.ok(!text.includes(note.check), "and its code is not");
+    const items = (panel as unknown as { querySelectorAll(s: string): Array<{ words: string }> }).querySelectorAll("li");
+    assert.deepEqual(items.map((li) => li.words), [note.message], "one line for the one note, with nothing added to it");
+
+    // A reply without the list (a server older than the screen) and one with an empty list show no heading for it.
+    for (const reply of [none, { ...none, limits: [] }]) {
+      const quiet = qualityPanel(reply, { questions: [] }, { showNotes: () => undefined, select: () => undefined });
+      assert.ok(!(quiet.panel as unknown as { words: string }).words.includes("could not do in full"));
+    }
+  });
+
+  test("the panel names the kinds of note in the screen's words, and a question that is the same twice by its place in the list", async () => {
+    const { installFakeDocument } = await import("./support/fake-dom.ts");
+    installFakeDocument();
+    // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
+    const { qualityPanel } = await import("../ui/quality-panel.js");
+    const result = {
+      checked: 3,
+      changed: 0,
+      notes: { "quality.all-or-none-of-the-above": 2, "not.a.known.code": 1 },
+      questions: [{ id: "q1" }, { id: "q2" }],
+      duplicates: [{ questionIds: ["q1", "q3"], titles: ["First", ""], message: "These two read the same." }],
+      keyBalance: [{ message: "Most right answers are C." }],
+      limits: [],
+    };
+    const chosen: string[] = [];
+    const { panel } = qualityPanel(result, { questions: [{ id: "q1" }, { id: "q2" }, { id: "q3" }] }, { showNotes: () => undefined, select: (id: string) => void chosen.push(id) });
+    const node = panel as unknown as { words: string; querySelectorAll(s: string): Array<{ words: string; click(): unknown }> };
+    assert.ok(node.words.includes("3 notes on 2 questions"), node.words);
+    assert.ok(node.words.includes("An option that depends on the others (all of the above, none of the above): 2"), "a known kind in the screen's words");
+    assert.ok(node.words.includes("not.a.known.code: 1"), "and one it has no words for by its code, not dropped");
+    assert.ok(node.words.includes("Most right answers are C."));
+    const buttons = node.querySelectorAll("button");
+    assert.deepEqual(buttons.map((b) => b.words), ["Show the questions with notes", "Question 1: First", "Question 3: Untitled question"]);
+    buttons[2]?.click();
+    assert.deepEqual(chosen, ["q3"], "a question is opened by its button");
   });
 });

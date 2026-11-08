@@ -79,6 +79,11 @@ export interface ScoringSession {
   fileId?: string;
   /** The revision at which the class figures were kept in the bank, so that keeping them twice is not done by accident. */
   statsKeptAt?: number;
+  /**
+   * The save in progress and the revision it was asked for at, so that a save asked for while it is being done waits for it (and is
+   * told the same name) and does not claim a second scores file: eight clicks of the Save button made eight files.
+   */
+  saving?: { revision: number; done: Promise<unknown> };
   revision: number;
   savedRevision: number;
   used: number;

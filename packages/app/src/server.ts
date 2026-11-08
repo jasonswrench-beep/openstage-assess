@@ -148,6 +148,16 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
 }
 
 /**
+ * The header that tells the window to keep a response as a file, and under what name. The name is in the form RFC 8187 gives
+ * (`filename*=UTF-8''...`), which allows letters, digits and a few signs and nothing else: `encodeURIComponent` leaves `'`, `(`, `)`,
+ * `*` and `!` as they are, and a title such as "Bob's quiz (v2)" has them, so they are written as codes too. A browser is lenient and a
+ * proxy or another client may not be.
+ */
+export function attachmentHeader(name: string): string {
+  return `attachment; filename*=UTF-8''${encodeURIComponent(name).replace(/['()*!]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`;
+}
+
+/**
  * What to run to show a file in its folder. Explorer wants the quotes inside its one argument, `/select,"C:\a b\c.csv"`. Node
  * puts quotes around a whole argument that holds a space, `"/select,C:\a b\c.csv"`, which Explorer cannot read, so it opens
  * the Documents folder instead and says nothing. A space is nearly always there ("Quiz - Brightspace.csv", a bank titled "PDF
@@ -216,7 +226,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       headers({
         "content-type": type,
         "content-length": String(body.length),
-        ...(download ? { "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(download)}` } : {}),
+        ...(download ? { "content-disposition": attachmentHeader(download) } : {}),
       }),
     );
     res.end(body);

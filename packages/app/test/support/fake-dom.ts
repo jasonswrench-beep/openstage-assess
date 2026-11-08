@@ -45,8 +45,11 @@ export class FakeNode {
   }
   /** Whether `focus()` has been called, which is all that can be known without a window. */
   focused = false;
-  focus(): void {
+  /** What each call to `focus()` was given, so that a test can say a move of focus did not scroll the page (`{ preventScroll: true }`). */
+  focusArguments: unknown[] = [];
+  focus(options?: unknown): void {
     this.focused = true;
+    this.focusArguments.push(options);
   }
   append(...kids: FakeNode[]): void {
     this.children.push(...kids);

@@ -15,6 +15,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
+import { bankCard } from "../ui/bank-cards.js";
+// @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
 import { checkRow, h, screenFocus, skipTo } from "../ui/dom.js";
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
 import { notSavedBody, saveChoice, saveFields } from "../ui/save-fields.js";
@@ -111,9 +113,10 @@ describe("the screens' scripts", () => {
 
   test("a link or button that repeats for each bank, sample or sheet says which one it is for", () => {
     const repeated: Array<[string, RegExp]> = [
-      ["home.js", /text: "Open"/],
-      ["home.js", /text: "Export"/],
-      ["home.js", /text: "Print"/],
+      ["bank-cards.js", /text: "Open"/],
+      ["bank-cards.js", /text: "Export"/],
+      ["bank-cards.js", /text: "Print"/],
+      ["bank-cards.js", /text: "Remove"/],
       ["home.js", /text: "Try it"/],
       ["home.js", /text: s\.template \? "Save a copy to fill in…" : "Save a copy…"/],
       ["scoring.js", /"Hide" : "Look"/],
@@ -125,6 +128,27 @@ describe("the screens' scripts", () => {
       assert.ok(line, `${file} still has a control matching ${pattern}`);
       assert.match(line as string, /"aria-label"/, `${file}: ${pattern} is the same words on every card or row, so it needs an aria-label that names what it is for`);
     }
+  });
+
+  // The cards are built and read, as the first screen builds them: a bank, a file that is no bank, and a file whose name cannot be used.
+  test("a bank's card has its three links, a file that is no bank has a way to put it aside, and a name that cannot be used has none", () => {
+    // The actions of a card, not the link that is its title.
+    const names = (node: FakeNode): Array<[string, string | undefined]> => node.querySelectorAll("a.button").concat(node.querySelectorAll("button.button")).map((c) => [c.words, c.getAttribute("aria-label")]);
+    const removed: string[] = [];
+    const actions = { remove: (bank: { name: string }) => void removed.push(bank.name) };
+    const good = bankCard({ name: "Biology 101", title: "Biology 101", questions: 12, modified: "" }, actions) as unknown as FakeNode;
+    assert.deepEqual(names(good), [["Open", "Open Biology 101"], ["Export", "Export Biology 101"], ["Print", "Print Biology 101"]]);
+
+    const broken = bankCard({ name: "Stub", title: "Stub", questions: 0, error: "This file is empty." }, actions) as unknown as FakeNode;
+    assert.ok(broken.words.includes("This file could not be read: This file is empty."), broken.words);
+    assert.deepEqual(names(broken), [["Remove", "Remove Stub"]], "a link to a bank that does not open is not offered, and a way to put it aside is");
+    broken.querySelectorAll("button")[0]?.click();
+    assert.deepEqual(removed, ["Stub"]);
+
+    const unusable = bankCard({ name: "x".repeat(100), title: "x", questions: 0, error: "its name cannot be used by OpenAssess. Rename the file in the Banks folder, and it will be listed here.", unusableName: true }, actions) as unknown as FakeNode;
+    assert.ok(unusable.words.includes("Rename the file in the Banks folder"), unusable.words);
+    assert.deepEqual(names(unusable), [], "the server cannot look such a file up by name, so nothing here would work");
+    assert.equal(removed.length, 1);
   });
 });
 
@@ -160,6 +184,9 @@ describe("the skip link", () => {
     assert.equal(main.focused, false, "the first screen leaves the skip link the first Tab stop");
     focusAfter(main);
     assert.equal(main.focused, true, "the next one is given focus");
+    // Found by a reader who took the option out: focus moved to the main area without it scrolls the page to the top of that area, and
+    // a person who had scrolled to the bottom of a long list lost their place.
+    assert.deepEqual(main.focusArguments, [{ preventScroll: true }], "and the move does not scroll the page");
 
     const nothingFirst = screenFocus();
     nothingFirst(null);
