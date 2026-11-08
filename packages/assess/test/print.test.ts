@@ -654,6 +654,14 @@ describe("printing a test", () => {
     assert.deepEqual(key.report.files, ["Unit 3 - Answer key.docx"]);
   });
 
+  test("names a file for a title that begins with dots, or with the name of a device, so that the app takes the name", () => {
+    // ". Intro" lost its dot and kept its space, and "Aux. Verbs" was a file Windows treats as a device: the app refused both.
+    assert.equal(printTest([MC, TF], opts("student", { title: ". Intro to Psych" }), "docx").file.name, "Intro to Psych - Student copy.docx");
+    assert.equal(printTest([MC, TF], opts("key", { title: ".. Chapter 3" }), "pdf").file.name, "Chapter 3 - Answer key.pdf");
+    assert.equal(printTest([MC, TF], opts("student", { title: "Aux. Verbs" }), "pdf").file.name, "Aux_. Verbs - Student copy.pdf");
+    assert.equal(printTest([MC, TF], opts("student", { title: "Con. Ed. 101" }), "docx").file.name, "Con_. Ed. 101 - Student copy.docx");
+  });
+
   test("keeps the font size and the number of lines within what a page can hold", () => {
     const wild = printOptions({ title: "T", fontSize: 400, shortAnswerLines: -3, essayLines: 4000 });
     assert.equal(wild.fontSize, 14);

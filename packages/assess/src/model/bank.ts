@@ -121,6 +121,35 @@ export function folderNameKey(name: string): string {
   return name.normalize("NFC").toLowerCase();
 }
 
+/**
+ * The names folders keep when they move into a list that already holds `present`, in the order they arrive: a name that clashes
+ * with one already there (or one that arrived before it) is kept under "name (2)", "name (3)", and so on, never merged and never
+ * dropped. A name is told from another by `folderNameKey`.
+ *
+ * Worked out with the keys in use in a set and, for each name, the number to try next: the number of a name that clashed is
+ * never free again (the keys in use only grow), so the next of that name starts after it. The first form tried every number from 2
+ * against every folder for every folder that moved, which for a folder with 1,200 children called the same was 24 seconds, and
+ * for 10,000 about four hours. A key is `folderNameKey` of the name, and the key of "name (n)" is the key of the name with " (n)"
+ * after it (a space is not a character that composes with the one before it, and no letter after the name changes how a capital
+ * sigma is lowered), so the next number can be kept for a key and not for each spelling of it.
+ */
+export function namesMovingUp(present: readonly string[], arriving: readonly string[]): string[] {
+  const used = new Set(present.map(folderNameKey));
+  const nextNumber = new Map<string, number>();
+  return arriving.map((name) => {
+    const key = folderNameKey(name);
+    let chosen = name;
+    if (used.has(key)) {
+      let n = nextNumber.get(key) ?? 2;
+      while (used.has(folderNameKey(`${name} (${n})`))) n++;
+      chosen = `${name} (${n})`;
+      nextNumber.set(key, n + 1);
+    }
+    used.add(folderNameKey(chosen));
+    return chosen;
+  });
+}
+
 /** A folder as the list shows it. `own` is the questions in it alone, `total` those in it and in every folder inside it. */
 export interface FolderListing {
   id: string;

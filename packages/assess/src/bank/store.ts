@@ -36,6 +36,7 @@ import {
   emptyFolderFile,
   folderIndex,
   folderNameKey,
+  namesMovingUp,
   questionsUnder,
   walkFolders,
   type BankManifest,
@@ -913,13 +914,16 @@ export class Bank {
     const unknown = folder.questionIds.length - unfiled;
     for (const q of folder.questionIds) this.folderOf.delete(q);
     const others = siblings.filter((f) => f.id !== id);
-    for (const child of folder.children) {
-      let name = child.name;
-      for (let n = 2; others.some((f) => folderNameKey(f.name) === folderNameKey(name)); n++) name = `${child.name} (${n})`;
-      child.name = name;
-      others.push(child);
-    }
-    siblings.splice(at, 1, ...folder.children);
+    const names = namesMovingUp(others.map((f) => f.name), folder.children.map((c) => c.name));
+    folder.children.forEach((child, i) => {
+      child.name = names[i] as string;
+    });
+    // The children go where the folder was, in place and one at a time: a spread of a list into `splice` throws a RangeError from
+    // about 125,000 elements, and a damaged bank can hold that many folders in one.
+    const after = siblings.splice(at + 1);
+    siblings.length = at;
+    for (const child of folder.children) siblings.push(child);
+    for (const next of after) siblings.push(next);
     this.note(`removed the folder ${folder.name}${unfiled > 0 ? `; ${unfiled} question${unfiled === 1 ? " is" : "s are"} in no folder now` : ""}${unknown > 0 ? `; it also named ${unknown} question${unknown === 1 ? "" : "s"} this bank could not read` : ""}`, "unknown");
     return { unfiled, movedUp: folder.children.length };
   }
@@ -946,7 +950,7 @@ export class Bank {
       throw new Error(`No question with the id ${questionId} is in this bank.`);
     }
     const target = this.folderNamed(folderId);
-    this.takeOutOfFolders(questionId);
+    this.takeOutOfFolders([questionId]);
     target.questionIds.push(questionId);
     this.folderOf.set(questionId, folderId);
   }
@@ -956,7 +960,7 @@ export class Bank {
     if (!this.questions.has(questionId)) {
       throw new Error(`No question with the id ${questionId} is in this bank.`);
     }
-    this.takeOutOfFolders(questionId);
+    this.takeOutOfFolders([questionId]);
     this.folderOf.delete(questionId);
   }
 
@@ -972,25 +976,28 @@ export class Bank {
     if (missing.length > 0) {
       throw new Error(`No question with the id ${missing[0]} is in this bank.${missing.length > 1 ? ` (${missing.length - 1} more are not either.)` : ""}`);
     }
-    if (folderId !== undefined) this.folderNamed(folderId);
-    let filed = 0;
-    let alreadyThere = 0;
-    for (const id of ids) {
-      if (this.folderIdOf(id) === folderId) {
-        alreadyThere++;
-        continue;
+    const target = folderId === undefined ? undefined : this.folderNamed(folderId);
+    const moving = ids.filter((id) => this.folderIdOf(id) !== folderId);
+    // All of them leave every folder in one walk of the tree. Taking each out on its own walked every folder, and looked through every
+    // list, for every question: 20,000 questions took 2.3 seconds, and the cost was the square of the bank.
+    this.takeOutOfFolders(moving);
+    for (const id of moving) {
+      if (target && folderId !== undefined) {
+        target.questionIds.push(id);
+        this.folderOf.set(id, folderId);
+      } else {
+        this.folderOf.delete(id);
       }
-      if (folderId === undefined) this.unfile(id);
-      else this.moveToFolder(id, folderId);
-      filed++;
     }
-    return { filed, alreadyThere };
+    return { filed: moving.length, alreadyThere: ids.length - moving.length };
   }
 
-  /** Every place it is listed, not the first: a damaged file can list one question twice, and it would stay in the second. */
-  private takeOutOfFolders(questionId: string): void {
+  /** Every place they are listed, not the first: a damaged file can list one question twice, and it would stay in the second. */
+  private takeOutOfFolders(questionIds: readonly string[]): void {
+    if (questionIds.length === 0) return;
+    const going = new Set(questionIds);
     for (const node of this.allFolders()) {
-      if (node.questionIds.includes(questionId)) node.questionIds = node.questionIds.filter((q) => q !== questionId);
+      if (node.questionIds.some((q) => going.has(q))) node.questionIds = node.questionIds.filter((q) => !going.has(q));
     }
   }
 
