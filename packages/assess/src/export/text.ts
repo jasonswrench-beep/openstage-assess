@@ -216,13 +216,60 @@ export function keyProblem(question: Question, destination = "the destination"):
     : `It has no usable answer key, and ${destination} needs one.`;
 }
 
-/** A name that is safe as a file name on Windows. */
+/** The longest `safeName` makes, in the units `String.length` counts. It is the longest name the app takes (`checkName` in the app's library). */
+export const FILE_NAME_MAX = 80;
+
+const GRAPHEMES: Intl.Segmenter | undefined = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : undefined;
+
+/**
+ * The start of `text` that fits in `limit` units, cut between characters as a person sees them: an emoji is two units, a flag is four,
+ * a family is eleven, and a letter with accents is as many as it has marks. A cut through the middle left half of one, a lone
+ * surrogate that `encodeURIComponent` refuses ("URI malformed" in place of a finished export), a flag of one country's half, a
+ * family with a dangling joiner. Where one character alone is longer than `limit` it is cut between its code points, never inside a
+ * surrogate pair; and where the runtime cannot tell characters apart, only the pair is kept whole.
+ */
+export function cutToLength(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  let end = 0;
+  if (GRAPHEMES) {
+    for (const { segment } of GRAPHEMES.segment(text)) {
+      if (end + segment.length > limit) break;
+      end += segment.length;
+    }
+  }
+  if (end > 0) return text.slice(0, end);
+  const last = text.charCodeAt(Math.max(0, limit) - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? limit - 1 : limit);
+}
+
+/** The names Windows keeps for its devices: "aux.txt" and "COM1.pdf" are the device, whatever follows the dot (and a space before the dot is ignored). */
+const DEVICE_NAME = /^(?:con|prn|aux|nul|com[0-9\xb9\xb2\xb3]|lpt[0-9\xb9\xb2\xb3]|conin\$|conout\$)(?= *(?:\.|$))/i;
+
+/**
+ * A name that is safe as a file name on Windows, and fits the app: no character a name cannot have, no dot or space at either end
+ * (an end made by the cut as well as the one the title had), at most `FILE_NAME_MAX` units, never cut inside a character, and not a
+ * device's name. A title that begins ". Intro" or ".. Chapter 3" had its dots taken off and its space left (a name the app then
+ * refused to write, in four places), and "Aux. Verbs" or "Con. Ed. 101" was the device and not a file. A device's name is given an
+ * underscore after the word ("Aux_. Verbs"), so that the title is still all there.
+ */
 export function safeName(name: string | undefined, fallback = "questions"): string {
-  const cleaned = stripInvalidCharacters(name ?? "")
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^\.+/, "")
-    .replace(/[. ]+$/, "");
-  return cleaned.length > 0 ? cleaned.slice(0, 80) : fallback;
+  const tidy = trimDotsAndSpaces(
+    stripInvalidCharacters(name ?? "")
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
+      .replace(/\s+/g, " "),
+  );
+  if (tidy === "") return fallback;
+  // The dots and spaces at the end are taken off again after the cut, which can leave a name ending in either. They are not taken
+  // off with a pattern (`[. ]+$`), which starts a new attempt at every dot of a run and took 3 seconds for 100,000 of them.
+  const cut = trimDotsAndSpaces(cutToLength(tidy.replace(DEVICE_NAME, (word) => `${word}_`), FILE_NAME_MAX));
+  return cut === "" ? fallback : cut;
+}
+
+/** `text` without the dots and spaces at either end. */
+function trimDotsAndSpaces(text: string): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && (text[start] === "." || text[start] === " ")) start++;
+  while (end > start && (text[end - 1] === "." || text[end - 1] === " ")) end--;
+  return text.slice(start, end);
 }

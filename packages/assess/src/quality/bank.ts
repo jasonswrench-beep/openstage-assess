@@ -26,6 +26,14 @@ export const ALIKE_AT = 0.85;
 /** Fewer words than this and a question is not compared for being alike: a short one is only the same as another when it is the same. */
 export const ALIKE_MIN_WORDS = 6;
 /**
+ * The most that is looked at for one question when searching for the alike, where a look is a question found under one of its
+ * rarest words, and one more for each word counted between two questions. A question is looked at against the few that share its
+ * rarest words, so a bank is far from it unless thousands of its questions share the same words; a bank whose questions all share
+ * the same words and differ only in their order is quadratic by itself, and this is what bounds it. A question that reaches it is said, with how much was left, and a question alike to it may not be
+ * listed. A judgement and not a measure of anything: change it on a bank of real questions, never to make a test pass.
+ */
+export const ALIKE_LOOK_LIMIT = 20_000;
+/**
  * English words that a stem can lose or swap without asking anything different. Two stems that differ only in these ("Which one of the
  * following gases" and "Which of the following gases", "a country in Oceania" and "a country of Oceania") are one stem for deciding
  * whether a different right answer makes two questions parallel and not copies. A word that changes the question (before, not, half,
@@ -61,6 +69,8 @@ export interface KeyBalance {
 export interface BankQualityReport {
   duplicates: DuplicateGroup[];
   keyBalance: KeyBalance[];
+  /** What a check could not do in full, as an info note. Empty unless a bank is made of questions that are alike to thousands of others. */
+  limits: QualityLimit[];
 }
 
 // ---------------------------------------------------------------------------
@@ -68,9 +78,8 @@ export interface BankQualityReport {
 // ---------------------------------------------------------------------------
 
 /** The text of a rich value with each equation written in as its LaTeX, since an equation is not in the text itself. */
-function textWithMath(question: Question, value: RichText): string {
+function textWithMath(latex: ReadonlyMap<string, string>, value: RichText): string {
   const content = value.content;
-  const latex = new Map(question.math.map((m) => [m.id, m.latex] as const));
   const written = content.replace(/<oa-math\s[^>]*ref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi, (_whole, ref: string) => ` ${latex.get(ref) ?? ref} `);
   return richTextToPlain(written);
 }
@@ -93,7 +102,10 @@ interface Compared {
 /** What of a question is compared, or undefined for a question that is left out. */
 function compared(question: Question): Compared | undefined {
   if (question.metadata.status === "retired" || question.media.length > 0) return undefined;
-  const stemText = textWithMath(question, question.stem);
+  // Made once for the question and not for each piece of text in it: a question with 20,000 options and 20,000 equations built the
+  // table 20,000 times.
+  const latex = new Map(question.math.map((m) => [m.id, m.latex] as const));
+  const stemText = textWithMath(latex, question.stem);
   const stem = normalForm(stemText);
   // `parts` is everything that makes two questions the same question, the answer among it. `wording` is what a student reads, as
   // written (the words are taken from it by `wordTokens`): the stem and the options, and not the answer, so that the same question
@@ -105,7 +117,7 @@ function compared(question: Question): Compared | undefined {
     case "multipleChoice":
     case "multipleResponse": {
       const options = optionsOf(question).filter((o) => !isPlaceholderOption(o));
-      const raw = options.map((o) => textWithMath(question, o.content));
+      const raw = options.map((o) => textWithMath(latex, o.content));
       const texts = raw.map(normalForm);
       // Right or wrong, with the words: the same options with a different one marked right are two questions.
       parts.push(...options.map((o, i) => `${o.correct ? "+" : "-"}${texts[i]}`).sort());
@@ -122,7 +134,7 @@ function compared(question: Question): Compared | undefined {
       parts.push(...((body["accepted"] ?? []) as string[]).map(normalForm).sort());
       break;
     case "matching": {
-      const rawPairs = ((body["pairs"] ?? []) as Array<{ left: RichText; right: string }>).map((p) => [textWithMath(question, p.left), p.right] as const);
+      const rawPairs = ((body["pairs"] ?? []) as Array<{ left: RichText; right: string }>).map((p) => [textWithMath(latex, p.left), p.right] as const);
       const rawExtras = (body["distractors"] ?? []) as string[];
       const pairs = rawPairs.map(([l, r]) => [normalForm(l), normalForm(r)] as const);
       const extras = rawExtras.map(normalForm);
@@ -132,7 +144,7 @@ function compared(question: Question): Compared | undefined {
     }
     case "ordering": {
       // A copy is sorted: sorting the question's own list would reorder it.
-      const raw = [...((body["items"] ?? []) as Array<{ content: RichText; position: number }>)].sort((a, b) => a.position - b.position).map((i) => textWithMath(question, i.content));
+      const raw = [...((body["items"] ?? []) as Array<{ content: RichText; position: number }>)].sort((a, b) => a.position - b.position).map((i) => textWithMath(latex, i.content));
       parts.push(...raw.map(normalForm));
       wording.push(...raw);
       break;
@@ -155,9 +167,48 @@ function compared(question: Question): Compared | undefined {
   return { question, same: [question.type, stem, ...parts].join("\u0001"), stem, stemKey, answer, words, signs };
 }
 
-/** Disjoint sets, for putting questions that are alike in pairs into groups of any size. */
-function groupsOf(count: number, pairs: Array<[number, number]>): number[][] {
-  const parent = Array.from({ length: count }, (_, i) => i);
+/** What the search for questions that are alike did, and where it stopped short. */
+interface AlikeSearch {
+  /** The questions that are alike, in groups of any size (indexes into the compared questions, each group in order, groups by their first). */
+  groups: number[][];
+  /** How many questions had their search stopped by `ALIKE_LOOK_LIMIT`. */
+  stopped: number;
+  /** About how many questions those searches did not get to look at (a question that shares two of the words is counted twice, so it is at most this many). */
+  notLookedAt: number;
+}
+
+/**
+ * The groups of the compared questions whose words overlap by `ALIKE_AT` (two are alike when this share of their words are the same
+ * words), found without comparing every pair (prefix filtering over the rarest words) and without keeping the pairs: a pair that is
+ * found is joined into its group at once. Keeping them made the list as long as the pairs, and questions that share every word and
+ * differ only in the order of them are all alike to each other: 10,000 of them were 50 million pairs and ran out of memory.
+ */
+function alikeGroups(items: Compared[], lookLimit: number): AlikeSearch {
+  const frequency = new Map<string, number>();
+  for (const item of items) for (const w of item.words) frequency.set(w, (frequency.get(w) ?? 0) + 1);
+  const ordered = items.map((item) => [...item.words].sort((a, b) => (frequency.get(a) as number) - (frequency.get(b) as number) || (a < b ? -1 : 1)));
+  const sets = items.map((item) => new Set(item.words));
+  // A number is a difference that makes two questions different, and so is a sign: "x > 3" and "x < 3" are not one question. Each
+  // different run of them has a number of its own, so that the key of a word below is short: the run itself, put in front of every
+  // word of a question with 50,000 numbers in it, was 100,000 characters in each of the thousands of keys.
+  const signNumbers = new Map<string, number>();
+  const numbers = items.map((item) => {
+    let number = signNumbers.get(item.signs);
+    if (number === undefined) {
+      number = signNumbers.size;
+      signNumbers.set(item.signs, number);
+    }
+    return number;
+  });
+  // Two questions whose stems differ AND whose right answers differ are not a question asked twice: "the ripple frequency of a full-wave
+  // supply" (120 Hz) and "of a half-wave supply" (60 Hz) share every option and all but one word of the stem. A bank of real questions
+  // (549 multiple choice, one exam's) had 23 groups of that kind and almost none that were copies, so they are left alone. A stem that
+  // reads the same with another answer marked is still said (a conflict between two copies), and so is a pair that agrees on the answer.
+  const stems = items.map((item) => item.stemKey);
+  const answers = items.map((item) => item.answer);
+
+  // Disjoint sets, for putting the questions that are alike in pairs into groups of any size.
+  const parent = Array.from({ length: items.length }, (_, i) => i);
   const find = (i: number): number => {
     let root = i;
     while (parent[root] !== root) root = parent[root] as number;
@@ -168,57 +219,67 @@ function groupsOf(count: number, pairs: Array<[number, number]>): number[][] {
     }
     return root;
   };
-  for (const [a, b] of pairs) parent[find(a)] = find(b);
-  const byRoot = new Map<number, number[]>();
-  for (let i = 0; i < count; i++) byRoot.set(find(i), [...(byRoot.get(find(i)) ?? []), i]);
-  return [...byRoot.values()].filter((g) => g.length > 1);
-}
 
-/** Pairs of the compared questions whose words overlap by `ALIKE_AT`, found without comparing every pair (prefix filtering over the rarest words). */
-function alikePairs(items: Compared[]): Array<[number, number]> {
-  const frequency = new Map<string, number>();
-  for (const item of items) for (const w of item.words) frequency.set(w, (frequency.get(w) ?? 0) + 1);
-  const ordered = items.map((item) => [...item.words].sort((a, b) => (frequency.get(a) as number) - (frequency.get(b) as number) || (a < b ? -1 : 1)));
-  const sets = items.map((item) => new Set(item.words));
-  // A number is a difference that makes two questions different, and so is a sign: "x > 3" and "x < 3" are not one question.
-  const numbers = items.map((item) => item.signs);
-  // Two questions whose stems differ AND whose right answers differ are not a question asked twice: "the ripple frequency of a full-wave
-  // supply" (120 Hz) and "of a half-wave supply" (60 Hz) share every option and all but one word of the stem. A bank of real questions
-  // (549 multiple choice, one exam's) had 23 groups of that kind and almost none that were copies, so they are left alone. A stem that
-  // reads the same with another answer marked is still said (a conflict between two copies), and so is a pair that agrees on the answer.
-  const stems = items.map((item) => item.stemKey);
-  const answers = items.map((item) => item.answer);
   // Questions are looked up by a word of their prefix AND by their numbers and signs, since a pair with different ones is never alike
   // (the check below): looking only among questions with the same ones gives the same pairs and none of the work for the rest. A bank of
   // 20,000 questions whose wording is the same but for a number took 23 seconds to look through, and 1 second after this.
   const index = new Map<string, number[]>();
-  const found: Array<[number, number]> = [];
+  // The last question each one was looked at for, so that one found under two of the words is looked at once.
+  const lookedAtFor = new Int32Array(items.length).fill(-1);
+  let stopped = 0;
+  let notLookedAt = 0;
 
   items.forEach((_item, at) => {
     const words = ordered[at] as string[];
     if (words.length < ALIKE_MIN_WORDS) return;
     const prefix = words.slice(0, words.length - Math.ceil(ALIKE_AT * words.length) + 1);
-    const candidates = new Set<number>();
-    for (const w of prefix) for (const other of index.get(`${numbers[at]}\u0002${w}`) ?? []) candidates.add(other);
-    for (const other of candidates) {
-      const a = sets[at] as Set<string>;
-      const b = sets[other] as Set<string>;
-      if (Math.min(a.size, b.size) < ALIKE_AT * Math.max(a.size, b.size)) continue;
-      if (numbers[at] !== numbers[other]) continue;
-      if (stems[at] !== stems[other] && answers[at] !== answers[other]) continue;
-      let shared = 0;
-      for (const w of a) if (b.has(w)) shared++;
-      if (shared / (a.size + b.size - shared) >= ALIKE_AT) found.push([other, at]);
+    const keys = prefix.map((w) => `${numbers[at]}\u0002${w}`);
+    const a = sets[at] as Set<string>;
+    let looks = 0;
+    search: for (let p = 0; p < keys.length; p++) {
+      const list = index.get(keys[p] as string);
+      if (!list) continue;
+      for (let k = 0; k < list.length; k++) {
+        if (looks >= lookLimit) {
+          stopped++;
+          notLookedAt += list.length - k;
+          for (let rest = p + 1; rest < keys.length; rest++) notLookedAt += index.get(keys[rest] as string)?.length ?? 0;
+          break search;
+        }
+        looks++;
+        const other = list[k] as number;
+        if (lookedAtFor[other] === at) continue;
+        lookedAtFor[other] = at;
+        // Already in one group with this question: a pair between them changes nothing, whatever the check would say.
+        if (find(other) === find(at)) continue;
+        const b = sets[other] as Set<string>;
+        if (Math.min(a.size, b.size) < ALIKE_AT * Math.max(a.size, b.size)) continue;
+        if (numbers[at] !== numbers[other]) continue;
+        if (stems[at] !== stems[other] && answers[at] !== answers[other]) continue;
+        // The words are counted in the smaller of the two, which is the same count.
+        const [few, many] = a.size <= b.size ? [a, b] : [b, a];
+        looks += few.size;
+        let shared = 0;
+        for (const w of few) if (many.has(w)) shared++;
+        if (shared / (a.size + b.size - shared) >= ALIKE_AT) parent[find(other)] = find(at);
+      }
     }
     // Added to the list in place: a list rebuilt for each question (a copy of everything before it) made this quadratic by itself.
-    for (const w of prefix) {
-      const key = `${numbers[at]}\u0002${w}`;
+    for (const key of keys) {
       const list = index.get(key);
       if (list) list.push(at);
       else index.set(key, [at]);
     }
   });
-  return found;
+
+  const byRoot = new Map<number, number[]>();
+  for (let i = 0; i < items.length; i++) {
+    const root = find(i);
+    const group = byRoot.get(root);
+    if (group) group.push(i);
+    else byRoot.set(root, [i]);
+  }
+  return { groups: [...byRoot.values()].filter((g) => g.length > 1), stopped, notLookedAt };
 }
 
 function quoted(titles: string[]): string {
@@ -227,18 +288,42 @@ function quoted(titles: string[]): string {
   return `${shown.join(", ")}${extra > 0 ? ` and ${extra} more` : ""}`;
 }
 
+/** Something the checks across questions could not do in full, and by how much. Advice, like the rest: it says what was not looked at, not that anything is wrong. */
+export interface QualityLimit {
+  severity: "info";
+  /** Which check was held back. */
+  check: "alike";
+  message: string;
+}
+
+/** The copies and the questions that are very much alike, and what the search for the second had to leave out. */
+export interface DuplicateSearch {
+  groups: DuplicateGroup[];
+  limits: QualityLimit[];
+}
+
 export function findDuplicates(questions: readonly Question[]): DuplicateGroup[] {
+  return searchDuplicates(questions).groups;
+}
+
+/** `findDuplicates`, and with it what the search could not look at (nothing, on any bank whose questions are not alike to thousands of others). */
+export function searchDuplicates(questions: readonly Question[], lookLimit = ALIKE_LOOK_LIMIT): DuplicateSearch {
   const kept = questions.flatMap((q) => {
     const c = compared(q);
     return c ? [c] : [];
   });
   kept.sort((a, b) => a.question.id.localeCompare(b.question.id));
 
+  // Added to each list in place: a list rebuilt for each question made N identical questions N squared (8,000 took 1.85 seconds).
   const bySame = new Map<string, Compared[]>();
-  for (const c of kept) bySame.set(c.same, [...(bySame.get(c.same) ?? []), c]);
+  for (const c of kept) {
+    const group = bySame.get(c.same);
+    if (group) group.push(c);
+    else bySame.set(c.same, [c]);
+  }
   // One of each kind of question stands for its copies when looking for the alike.
   const representatives = [...bySame.values()].map((g) => g[0] as Compared);
-  const alike = groupsOf(representatives.length, alikePairs(representatives));
+  const { groups: alike, stopped, notLookedAt } = alikeGroups(representatives, lookLimit);
 
   const out: DuplicateGroup[] = [];
   const inAlike = new Set<string>();
@@ -266,7 +351,17 @@ export function findDuplicates(questions: readonly Question[]): DuplicateGroup[]
       message: `${group.length === 2 ? "Two questions are" : `${group.length} questions are`} the same, with the same wording and the same answers: ${quoted(titles)}. Keep one.`,
     });
   }
-  return out.sort((a, b) => (a.questionIds[0] as string).localeCompare(b.questionIds[0] as string));
+  out.sort((a, b) => (a.questionIds[0] as string).localeCompare(b.questionIds[0] as string));
+
+  const limits: QualityLimit[] = [];
+  if (stopped > 0) {
+    limits.push({
+      severity: "info",
+      check: "alike",
+      message: `The search for questions that are very much alike was cut short for ${stopped === 1 ? "1 question" : `${stopped} questions`}: ${stopped === 1 ? "it has" : "each has"} more questions with words in common than the ${lookLimit} looks a question is given, so up to ${notLookedAt === 1 ? "1 comparison was" : `${notLookedAt} comparisons were`} not made, and a question very much alike to ${stopped === 1 ? "it" : "one of them"} may not be listed. Questions that are the same, word for word and answer for answer, were all found.`,
+    });
+  }
+  return { groups: out, limits };
 }
 
 // ---------------------------------------------------------------------------
@@ -360,5 +455,6 @@ export function keyBalance(questions: readonly Question[], tests: readonly TestR
 }
 
 export function checkBankQuality(questions: readonly Question[], tests: readonly TestRecord[] = []): BankQualityReport {
-  return { duplicates: findDuplicates(questions), keyBalance: keyBalance(questions, tests) };
+  const found = searchDuplicates(questions);
+  return { duplicates: found.groups, keyBalance: keyBalance(questions, tests), limits: found.limits };
 }

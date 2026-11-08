@@ -258,7 +258,11 @@ function duplicateOptions(question: Question): Finding | undefined {
   const seen = new Map<string, number[]>();
   const add = (signature: string, at: number) => {
     if (signature === "") return;
-    seen.set(signature, [...(seen.get(signature) ?? []), at]);
+    // Added to the list in place: a list rebuilt for each option (a copy of every one before it) made N identical options N squared
+    // (40,000 of them took 5 seconds on every save).
+    const places = seen.get(signature);
+    if (places) places.push(at);
+    else seen.set(signature, [at]);
   };
   let what = "options";
   let name = (at: number) => `option ${placeLetter(at)}`;

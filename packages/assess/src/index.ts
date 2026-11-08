@@ -84,8 +84,8 @@ export type { Blueprint, BlueprintCheck, BlueprintCondition, BlueprintDraw, Blue
 export * from "./quality/answer-key.ts";
 export * from "./quality/placeholders.ts";
 export { checkItemQuality, withFreshQuality, QUALITY_CODES, LONG_MATCHING_LIST } from "./quality/items.ts";
-export { checkBankQuality, findDuplicates, keyBalance, overusedLetter } from "./quality/bank.ts";
-export type { BankQualityReport, DuplicateGroup, KeyBalance } from "./quality/bank.ts";
+export { checkBankQuality, findDuplicates, keyBalance, overusedLetter, searchDuplicates } from "./quality/bank.ts";
+export type { BankQualityReport, DuplicateGroup, DuplicateSearch, KeyBalance, QualityLimit } from "./quality/bank.ts";
 
 // Import
 export * from "./import/types.ts";
@@ -110,6 +110,7 @@ export type { TableFile, TableSheet, TableRow } from "./import/table.ts";
 
 // Export
 export * from "./export/types.ts";
+export { FILE_NAME_MAX, cutToLength, safeName } from "./export/text.ts";
 export {
   exportOpenStageSpreadsheet,
   checkOpenStageSpreadsheet,
