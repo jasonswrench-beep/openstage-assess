@@ -24,7 +24,7 @@
 import { addFindings, createQuestion, DEFAULT_POINTS, withRecomputedFindings } from "../model/create.ts";
 import { finding, FindingCode, type Finding, type Severity } from "../model/findings.ts";
 import { localId } from "../model/ids.ts";
-import { plainToRich } from "../model/richtext.ts";
+import { isBlankText, plainToRich } from "../model/richtext.ts";
 import { shuffledFor } from "../model/random.ts";
 import { dependsOnPlace } from "../model/test.ts";
 import type { Feedback, Metadata, Question, QuestionBody } from "../model/question.ts";
@@ -129,15 +129,74 @@ function columnOf(cell: string): Column | null {
  * game writes its columns ("Question - max 95 characters", "Answer 1 - max 60 characters", "Correct answer(s) - choose at least one"), is
  * its name without the description, tried only when the whole of the cell is not a name, so that a name that is meant ("Feedback - if
  * right" is not "Feedback") is never cut short. A bracket of a letter or a number ("Option (A)") is not a description.
+ *
+ * What follows must be an instruction about filling the column in (INSTRUCTION), and nothing else is cut. A description that says
+ * something about the column ("Answer - wrong", "Answer (incorrect)", "Feedback - when right", "Answer - hint") changes what it is, and
+ * cutting it read the wrong-answer column as the Correct one, which marked a wrong option right in a question that read as parsed.
+ * A cell that is not cut is a column that is not understood, which is said, and nothing is guessed from it.
  */
 function nameUsed(cell: string): string {
   if (columnNamed(cell) !== null) return cell;
-  const shorter = cell.replace(DESCRIPTION, "").trim();
-  return shorter !== "" && shorter !== cell.trim() && columnNamed(shorter) !== null ? shorter : cell;
+  // Plain scans only, with no pattern that can backtrack: a cell may be 32,767 characters and a table's first rows are all tried.
+  const one = cell.replace(/\s+/g, " ").trim();
+  for (const shorter of [beforeDash(one), beforeBracket(one)]) {
+    if (shorter !== null && shorter !== "" && columnNamed(shorter) !== null) return shorter;
+  }
+  return cell;
 }
 
-/** What follows a name and describes it: from a dash with a space each side, or a bracket that holds words, to the end of the cell. */
-const DESCRIPTION = /\s+[-\u2013\u2014]\s+.*$|\s*\((?=[^)]*(?:\s|[a-z]{3}))[^)]*\).*$/i;
+/**
+ * The only words a description may be made of: a limit or an instruction for filling a column in, and nothing about what the column holds
+ * (no right, wrong, correct, incorrect, true, false, hint, feedback, explanation). Every word of the description has to be one of these or
+ * a number, and one has to be a cue that it is an instruction. "choose at least one" and "max 95 characters" are; "choose the wrong
+ * answers" is not, because of one word, and a description that begins like an instruction and then says what the column holds would
+ * otherwise read the column of wrong answers as the key.
+ */
+const INSTRUCTION_WORDS: ReadonlySet<string> = new Set([
+  "max", "maximum", "min", "minimum", "up", "to", "at", "most", "least", "no", "more", "fewer", "less", "than", "between", "and", "or", "of",
+  "limit", "limited", "choose", "select", "pick", "enter", "required", "optional", "one", "two", "three", "four", "five", "all", "that", "apply",
+  "the", "a", "an", "only", "exactly", "per", "question", "text", "characters", "chars", "words", "letters", "digits", "answer", "answers", "option", "options",
+]);
+const INSTRUCTION_CUES: ReadonlySet<string> = new Set(["max", "maximum", "min", "minimum", "up", "most", "least", "between", "limit", "limited", "choose", "select", "pick", "enter", "required", "optional", "characters", "chars", "words", "letters", "digits"]);
+
+function isInstruction(description: string): boolean {
+  const words = description.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w !== "");
+  return words.length > 0 && words.every((w) => /^\d+$/.test(w) || INSTRUCTION_WORDS.has(w)) && words.some((w) => INSTRUCTION_CUES.has(w));
+}
+
+/** How many dashes of a header cell are tried as the start of a description. A name has none or one or two; a cell of thousands is not one. */
+const MOST_DASHES = 8;
+
+/**
+ * The name before the first dash, with a space each side, after which only an instruction follows. A dash that is part of the name
+ * ("Feedback - if right - max 100 characters") is passed over, and the name that is left is looked up as it always is.
+ */
+function beforeDash(one: string): string | null {
+  let tried = 0;
+  for (let i = nextDash(one, 1); i !== -1 && i < one.length - 1 && tried < MOST_DASHES; i = nextDash(one, i + 1)) {
+    if (one[i - 1] !== " " || one[i + 1] !== " ") continue;
+    tried++;
+    if (isInstruction(one.slice(i + 2))) return one.slice(0, i - 1).trim();
+  }
+  return null;
+}
+
+function nextDash(one: string, from: number): number {
+  for (let i = from; i < one.length; i++) if (one[i] === "-" || one[i] === "\u2013" || one[i] === "\u2014") return i;
+  return -1;
+}
+
+/** The name before the first bracket, when what is inside it is an instruction, and so is what follows it if anything does. */
+function beforeBracket(one: string): string | null {
+  const at = one.indexOf("(");
+  if (at <= 0) return null;
+  const close = one.indexOf(")", at);
+  const inside = close === -1 ? one.slice(at + 1) : one.slice(at + 1, close);
+  const after = close === -1 ? "" : one.slice(close + 1).trim();
+  // What follows the bracket may be a dash and a further instruction ("Question (required) - max 95 characters") and nothing else.
+  const afterIsFine = after === "" || (nextDash(after, 0) === 0 && after[1] === " " && isInstruction(after.slice(2)));
+  return isInstruction(inside) && afterIsFine ? one.slice(0, at).trim() : null;
+}
 
 function columnNamed(cell: string): Column | null {
   const name = squash(cell.replace(LANGUAGE_SUFFIX, ""));
@@ -246,13 +305,17 @@ interface Ctx {
 const isTrue = (s: string): boolean => TRUE_WORDS.has(s.trim().toLowerCase());
 const isFalse = (s: string): boolean => FALSE_WORDS.has(s.trim().toLowerCase());
 
-/** A cell's words with its line breaks kept and the spaces on each line tidied. */
+/**
+ * A cell's words with its line breaks kept and the spaces on each line tidied. A cell that shows nothing (only a zero width space, a
+ * control character, a soft hyphen) is an empty cell: it was kept as a stem or an answer with no words, read as parsed.
+ */
 function words(cell: string): string {
-  return cell
+  const tidy = cell
     .split("\n")
     .map((line) => line.replace(/[ \t]+/g, " ").trim())
     .join("\n")
     .trim();
+  return isBlankText(tidy) ? "" : tidy;
 }
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;

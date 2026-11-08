@@ -203,9 +203,141 @@ describe("what a description may and may not cut", () => {
     assert.ok(!r.fileFindings.some((f) => /not used/.test(f.message)), r.fileFindings.map((f) => f.message).join("\n"));
   });
 
+  // Found by an independent reviewer. The first rule cut anything after a dash, so "Answer - wrong" was the Answer column, which is the
+  // Correct column, and the wrong answers were the key in a question that read as parsed. A description is cut only when it is an
+  // instruction for filling the column in; a word about what the column holds changes what it is, and the column is then not understood,
+  // which is said, and nothing is guessed from it.
+  describe("a description that says what the column holds is never cut", () => {
+    const base = (header: string, row = "Which is cold?,Ice,Fire,Lava,Sun,Fire,A"): ImportResult => csv(`Question,A,B,C,D,${header},Correct\n${row}`);
+
+    test("so a column of wrong answers before the Correct column is not read as the key", () => {
+      for (const header of ["Answer - wrong", "Answer (Incorrect)", "Answer - incorrect", "Answer - right", "Answer - correct", "Answer - hint", "Answer - explanation", "Key - not this one", "Answer (wrong one)"]) {
+        const r = base(header);
+        assert.deepEqual(right(first(r)), ["Ice"], header);
+        assert.equal(verdictFrom(first(r).findings), "parsed", header);
+        assert.match(r.fileFindings.map((f) => f.message).join("\n"), new RegExp(`These columns were not used: ${header.replace(/[()]/g, "\\$&")}`), header);
+        assert.ok(!r.fileFindings.some((f) => /repeats one already read/.test(f.message)), `${header}: Correct is read, not dropped`);
+      }
+    });
+
+    test("so feedback for one outcome is not the general feedback, which every answer is shown", () => {
+      for (const header of ["Feedback - when right", "Feedback - when correct", "Feedback - for a right answer", "Feedback - for a wrong answer", "Feedback - hint"]) {
+        const r = csv(`Question,A,B,Correct,${header}\nWhich?,x,y,A,Well done`);
+        assert.equal(first(r).feedback.general, undefined, header);
+        assert.match(r.fileFindings.map((f) => f.message).join("\n"), /These columns were not used: Feedback - /, header);
+      }
+    });
+
+    test("and a bracket that says what a column holds is not cut either", () => {
+      const r = csv("Question,Option A (correct),Option B,Correct\nWhich?,x,y,B");
+      assert.match(r.fileFindings.map((f) => f.message).join("\n"), /These columns were not used: Option A \(correct\)/);
+    });
+  });
+
+  describe("an instruction for filling the column in is cut", () => {
+    test("whichever way a template words it", () => {
+      for (const instruction of ["max 95 characters", "Max. 95", "maximum 95 characters", "min 2", "minimum of 2", "up to 95 characters", "at most 60", "at least one", "no more than 95 characters", "between 1 and 95 characters", "limit 95", "choose one", "select all that apply", "pick one", "enter the question", "required", "optional", "95 characters", "95 words"]) {
+        const r = csv(`Question - ${instruction},A,B,Correct\nWhich?,x,y,B`);
+        assert.equal(r.questions.length, 1, instruction);
+        assert.deepEqual(right(first(r)), ["y"], instruction);
+      }
+      for (const [name, instruction] of [["Question", "(max 95 characters)"], ["Question", "(required)"], ["Question", "(up to 95 words)"]]) {
+        const r = csv(`${name} ${instruction},A,B,Correct\nWhich?,x,y,B`);
+        assert.equal(r.questions.length, 1, instruction);
+      }
+    });
+
+    test("with the dash a long dash too, and a line break in the cell the same as a space", () => {
+      assert.equal(csv("Question – max 95 characters,A,B,Correct\nWhich?,x,y,B").questions.length, 1);
+      assert.equal(csv("Question — max 95 characters,A,B,Correct\nWhich?,x,y,B").questions.length, 1);
+      // A template that wraps its descriptions has the line break inside a quoted cell.
+      assert.equal(csv('"Question - max 95\ncharacters",A,B,Correct\nWhich?,x,y,B').questions.length, 1);
+      assert.equal(csv('"Question - max 95 characters\n",A,B,Correct\nWhich?,x,y,B').questions.length, 1);
+      assert.equal(csv('"Question -\nmax 95",A,B,Correct\nWhich?,x,y,B').questions.length, 1);
+    });
+
+    test("only a word that begins like an instruction, not a longer word that happens to start with one", () => {
+      for (const words of ["maxim of the day", "selection shown", "entering", "optionally", "pickle", "requirements"]) {
+        assert.equal(csv(`Question - ${words},A,B,Correct\nWhich?,x,y,B`).questions.length, 0, words);
+      }
+    });
+  });
+
+  test("a dash that is part of the name is passed over, and the name before the instruction is looked up as it always is", () => {
+    // "Feedback - if right" is a name of its own, so an instruction after it leaves the name.
+    const feedback = csv("Question,A,B,Correct,Feedback - if right - max 100 characters\nWhich?,x,y,B,Yes it is");
+    assert.equal(plain((first(feedback).feedback as { correct?: unknown }).correct ?? ""), "Yes it is");
+    assert.equal(first(feedback).feedback.general, undefined);
+    // "Answer - wrong" is not a name, so the instruction after it does not make one: the column is not understood, and the key stays.
+    const r = csv("Question,A,B,C,D,Answer - wrong - max 60 characters,Correct\nWhich?,Ice,Fire,Lava,Sun,Fire,A");
+    assert.deepEqual(right(first(r)), ["Ice"]);
+    assert.match(r.fileFindings.map((f) => f.message).join("\n"), /These columns were not used: Answer - wrong - max 60 characters/);
+    // Two instructions in a row are one description.
+    assert.equal(csv("Question - max 95 characters - required,A,B,Correct\nWhich?,x,y,B").questions.length, 1);
+    assert.equal(csv("Question (required) - max 95 characters,A,B,Correct\nWhich?,x,y,B").questions.length, 1);
+  });
+
+  test("a description that begins like an instruction and then says what the column holds is not cut", () => {
+    for (const header of ["Answer - choose the wrong answers", "Answer (select the incorrect ones)", "Answer - enter a wrong answer", "Answer - max 60 characters, wrong", "Answer - choose one that is false", "Answer (required) - hint"]) {
+      const r = csv(`Question,A,B,C,D,${header.replace(/,/g, ";")},Correct\nWhich is cold?,Ice,Fire,Lava,Sun,Fire,A`);
+      assert.deepEqual(right(first(r)), ["Ice"], header);
+      assert.ok(!r.fileFindings.some((f) => /repeats one already read/.test(f.message)), header);
+    }
+  });
+
+  test("a dash with no space on a side is part of a word, even before an instruction", () => {
+    // "Questions" is a name, so cutting one letter too many or too few after a dash with a space on one side only would make a column of it.
+    for (const header of ["Question-max 95 characters", "Question -max 95 characters", "Question- max 95 characters", "Questions- max 95 characters", "Questions -max 95 characters"]) {
+      assert.equal(csv(`${header},A,B,Correct\nWhich?,x,y,B`).questions.length, 0, header);
+    }
+  });
+
+  test("small words alone are not an instruction: one of the cues has to be there", () => {
+    for (const header of ["Question - the text", "Question - a question", "Question - one of the", "Question - of the answer"]) {
+      assert.equal(csv(`${header},A,B,Correct\nWhich?,x,y,B`).questions.length, 0, header);
+    }
+    assert.equal(csv("Question - enter the text,A,B,Correct\nWhich?,x,y,B").questions.length, 1, "with a cue it is");
+  });
+
   test("a hyphen with no spaces is part of a word, so a name that begins like another is not that column", () => {
     const r = csv("Question,A,B,Correct,Chapter-notes\nWhich?,x,y,A,Unit 4");
     assert.equal(first(r).metadata.chapter, undefined, "Chapter-notes is not the Chapter column");
     assert.match(r.fileFindings.map((f) => f.message).join("\n"), /These columns were not used: Chapter-notes/);
+  });
+});
+
+// Found by an independent reviewer. A cell of only a zero width space, a control character or a soft hyphen was compared with "" before
+// the cleaning took it away, so it was a stem or an answer with no words in it, stored as an empty paragraph and read as parsed.
+describe("a cell that shows nothing is an empty cell", () => {
+  const c = (code: number): string => String.fromCharCode(code);
+  // Not U+0000, which makes the whole file refused as not a CSV, before any cell is read.
+  const NOTHING = [0x200b, 0x0001, 0x001f, 0x00ad, 0xfffe, 0x200d, 0x2060].map(c);
+
+  test("a stem of it is a row with no question text, kept as a note and not read as a question", () => {
+    for (const none of NOTHING) {
+      const r = csv(`Question,A,B,Correct\n${none},x,y,B\nReal question?,x,y,B`);
+      assert.equal(r.questions.length, 1, `U+${none.charCodeAt(0).toString(16)}`);
+      assert.equal(r.orphans.length, 1);
+      assert.match(r.orphans[0]?.reason ?? "", /no question text/);
+    }
+  });
+
+  test("an answer of it is no answer, as an empty answer cell is none, and does not hold a place or become the key", () => {
+    for (const none of NOTHING) {
+      const r = csv(`Question,A,B,C,Correct\nWhich?,x,${none},z,C`);
+      assert.deepEqual(options(first(r)).map(([t]) => t), ["x", "z"], `U+${none.charCodeAt(0).toString(16)}`);
+      assert.deepEqual(right(first(r)), ["z"]);
+    }
+    // An answer that is blank can not be named as the right one: it is not one.
+    const named = csv(`Question,A,B,C,Correct\nWhich?,x,${c(0x200b)},z,B`);
+    assert.deepEqual(right(first(named)), []);
+    assert.equal(verdictFrom(first(named).findings), "failed");
+  });
+
+  test("a cell with a visible word in it is kept, whatever invisible characters are round it", () => {
+    const r = csv(`Question,A,B,Correct\n${c(0x200b)}Which?${c(0x200b)},${c(0x200b)}Ice,Fire,A`);
+    assert.equal(plain(first(r).stem), "Which?");
+    assert.deepEqual(right(first(r)), ["Ice"]);
+    assert.equal(verdictFrom(first(r).findings), "parsed");
   });
 });

@@ -23,7 +23,7 @@ import { addFindings, createQuestion, DEFAULT_POINTS, withRecomputedFindings } f
 import { finding, FindingCode, type Finding, type Severity } from "../model/findings.ts";
 import { localId } from "../model/ids.ts";
 import type { Question, QuestionBody } from "../model/question.ts";
-import { plainToRich } from "../model/richtext.ts";
+import { isBlankText, plainToRich } from "../model/richtext.ts";
 import { unreadObjectFindings } from "../model/unread-objects.ts";
 import { decodeTableText } from "./table-csv.ts";
 import { countVerdicts, type Importer, type ImportOptions, type ImportResult, type Orphan, type SourceBlock } from "./types.ts";
@@ -41,6 +41,15 @@ const KEPT_TYPES: Record<string, string> = {
   QB: "A quiz bowl question is not read.",
 };
 const ALL_TYPES = new Set([...READ_TYPES, ...Object.keys(KEPT_TYPES)]);
+
+/**
+ * What a row's first field may be to be a question type at all: capital letters and underscores, as every type the file documents is
+ * (FIB_PLUS, JUMBLED_SENTENCE). The reader keeps a row with a type it does not know as a failed essay, and the check for the kind of
+ * file must agree with it: it asked for a listed type on every row, so a file with one row of a type that is not listed was taken for a
+ * table, and the table reader marked the word "incorrect" as a right answer.
+ */
+const TYPE_WORD = /^[A-Z_]{2,12}$/;
+const isTypeWord = (field: string): boolean => ALL_TYPES.has(field.toUpperCase()) || TYPE_WORD.test(field.toUpperCase());
 
 const SHORT = 120;
 const quoted = (s: string): string => (s.length > SHORT ? `${s.slice(0, SHORT - 1)}...` : s).replace(/\s+/g, " ").trim();
@@ -60,10 +69,12 @@ function rowsOf(text: string): Row[] {
     .replace(/^﻿/, "")
     .split(/\r\n|\n|\r/)
     .forEach((line, i) => {
-      if (line.trim() === "") return;
-      const fields = line.split("\t").map((f) => f.trim());
-      // A row that ends in tabs has empty fields at the end that say nothing.
+      // A field that shows nothing (only a zero width space, a control character, a soft hyphen) is an empty field. Compared as it was
+      // read it was a stem, an answer or an item with no words in it, stored as an empty paragraph, and read as parsed.
+      const fields = line.split("\t").map((f) => (isBlankText(f) ? "" : f.trim()));
+      // A row that ends in tabs has empty fields at the end that say nothing, and a row with nothing in it is not one.
       while (fields.length > 0 && fields[fields.length - 1] === "") fields.pop();
+      if (fields.length === 0) return;
       rows.push({ number: i + 1, fields });
     });
   return rows;
@@ -84,9 +95,9 @@ function strictShape(fields: string[]): boolean {
 }
 
 /**
- * Whether the start of a file is a Blackboard upload file. Every row begins with one of the file's types and a tab, and at least one is
- * a multiple choice, multiple answer or true or false row with the words correct, incorrect, true or false where they belong, or there are
- * several rows of the other types. A table with no header row whose first cells are types (the template's order) is not caught: its
+ * Whether the start of a file is a Blackboard upload file. Every row begins with a type (one of the file's, or any word that is made like
+ * one) and a tab, and at least one is a multiple choice, multiple answer or true or false row with the words correct, incorrect, true or
+ * false where they belong, or there are several rows of the listed other types. A table with no header row whose first cells are types (the template's order) is not caught: its
  * answers come before a letter, not before the word correct.
  */
 export function looksLikeBlackboardUpload(bytes: Uint8Array): boolean {
@@ -98,7 +109,7 @@ export function looksLikeBlackboardUpload(bytes: Uint8Array): boolean {
   }
   const rows = rowsOf(text).slice(0, 40);
   if (rows.length === 0) return false;
-  if (!rows.every((r) => r.fields.length >= 2 && ALL_TYPES.has((r.fields[0] as string).toUpperCase()))) return false;
+  if (!rows.every((r) => r.fields.length >= 2 && isTypeWord(r.fields[0] as string))) return false;
   if (rows.some((r) => strictShape(r.fields))) return true;
   return rows.length >= 3 && rows.filter((r) => ["ESS", "FIB", "MAT", "ORD"].includes((r.fields[0] as string).toUpperCase())).length >= 3;
 }
@@ -239,7 +250,7 @@ function parseBlackboard(bytes: Uint8Array, options: ImportOptions): ImportResul
   const orphans: Orphan[] = [];
   for (const row of rows) {
     const type = (row.fields[0] ?? "").toUpperCase();
-    if (!ALL_TYPES.has(type) && !/^[A-Z_]{2,12}$/.test(type)) {
+    if (!isTypeWord(type)) {
       orphans.push({ source: { file: ctx.file, firstBlock: row.number - 1, lastBlock: row.number - 1 }, text: row.fields.filter((c) => c !== "").join(" | "), reason: "This row does not begin with a question type (MC, MA, TF, FIB, MAT, ORD or ESS), so it was not read as a question." });
       continue;
     }

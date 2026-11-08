@@ -77,13 +77,16 @@ export const QUESTION_START = anyOf(
 const PAREN_NUMBER = /^\s*\((\d{1,4})\)\s+(\S.*)$/;
 /** How far a bracketed number may jump from the last and still be the next question: a skipped number or two, or a repeat. */
 const MAX_SKIP = 3;
-export const OPTION_START = /^\s*(\*?)\s*([a-tA-T])\s*[.)]\s+(.*)$/;
+// The space after a star is skipped only when there is a star (`(?<=\*)`). With `(\*?)\s*` after `^\s*` there are two ways to read the
+// same run of spaces when there is no star, and a line of N spaces took N squared steps to fail (a text file that began with a line of
+// 100,000 spaces took 8 seconds to read; the same three patterns accept the same lines).
+export const OPTION_START = /^\s*(\*?)(?:(?<=\*)\s*)?([a-tA-T])\s*[.)]\s+(.*)$/;
 /**
  * Labels that are options only in the order a bank letters them, "(A) text" and "A: text": the star, the letter and the
  * words are the first three groups, as in OPTION_START. "(T) Ice floats." in a true or false bank, and "A: ..." in a list of
  * questions and answers, are not options, so the letter has to be the next one the question is waiting for.
  */
-const OPTION_START_ORDERED = anyOf(/^\s*(\*?)\s*\(([a-tA-T])\)\s+(.*)$/, /^\s*(\*?)\s*([a-tA-T])\s*:\s+(.*)$/);
+const OPTION_START_ORDERED = anyOf(/^\s*(\*?)(?:(?<=\*)\s*)?\(([a-tA-T])\)\s+(.*)$/, /^\s*(\*?)(?:(?<=\*)\s*)?([a-tA-T])\s*:\s+(.*)$/);
 export const TITLE_LINE = /^\s*Title\s*:\s*(.*)$/i;
 // Up to three letters: the generic format has E, F, MT, MA and MC, and the D2L,
 // Moodle and Blackboard dialects add MR, S, FMB, ORD and JUM.
@@ -208,9 +211,9 @@ const ANSWER_SPACE = /^_{3,}[_\s]*$/;
  */
 const PAGE_NOTE = String.raw`\(\s*(?:pp?|pages?)\.?\s*(\d+(?:\s*[-–—,&]\s*\d+)*)\s*\)`;
 export const PAGE_LINE = new RegExp(`^${PAGE_NOTE}$`, "i");
-const PAGE_SUFFIX = new RegExp(`\\s*${PAGE_NOTE}\\s*$`, "i");
+const PAGE_SUFFIX = new RegExp(`(?<!\\s)\\s*${PAGE_NOTE}\\s*$`, "i");
 /** A true or false question's answer at the end of its line, in brackets: "(T)", "(False)". */
-const TF_SUFFIX = /\s*\(\s*(true|false|t|f)\s*\)\s*$/i;
+const TF_SUFFIX = /(?<!\s)\s*\(\s*(true|false|t|f)\s*\)\s*$/i;
 /** A bare "1.14", the chapter and the number of a question, alone on a line with the question on the next. */
 const DOTTED_NUMBER = /^\s*(\d{1,3})\.(\d{1,3})\s*$/;
 /**
@@ -235,7 +238,7 @@ const CHAPTER_TITLE = /^\s*chapter\s+\w+(?:-\w+)?(?:\s+(?:test\s+)?(?:questions|
  * "(Page 12)", "(Source: the syllabus)". Only a note that names where the question
  * comes from is taken off; "(or d)" is part of the answer and is left to fail.
  */
-const SOURCE_NOTE = /\s*\(\s*((?:textbook\s+)?(?:reference|ref|source|section|chapter|page|pages|pp?\.?)\b[^()]*)\)\s*\.?\s*$/i;
+const SOURCE_NOTE = /(?<!\s)\s*\(\s*((?:textbook\s+)?(?:reference|ref|source|section|chapter|page|pages|pp?\.?)\b[^()]*)\)\s*\.?\s*$/i;
 /**
  * A note in brackets that gives a question's difficulty, objective or another label this
  * profile knows, alone on a line: "(Difficulty 3)". Like the page, it describes the question
@@ -249,10 +252,13 @@ const NOTE_LINE = /^\(\s*([A-Za-z][A-Za-z' ]{1,24}?)\s*:?\s+([^()]{1,40}?)\s*\)$
  * the spellings of the label that publishers use, so that "answer:" in the middle of a
  * sentence is not one, and only when what follows is a key and not more words.
  */
-const INLINE_ANSWER = /\s+(?:ANS|Ans|Answers?|Correct(?: Answers?)?)\s*:\s*(\S.*)$/;
+// The three patterns below begin with white space and are not anchored, so on a run of N spaces that does not lead to what they look for
+// each of the N places inside the run was tried and read to the end of it: N squared steps (60,000 spaces in a bracket took 1.8 seconds).
+// `(?<!\s)` lets a match begin only where the run begins, which is where the leftmost match began anyway.
+const INLINE_ANSWER = /(?<!\s)\s+(?:ANS|Ans|Answers?|Correct(?: Answers?)?)\s*:\s*(\S.*)$/;
 /** What ends an option that is the right one: "(Correct)" or a check mark. A star at the end is read only as a habit. */
-const END_CORRECT = /\s*(?:\(\s*correct\s*\)|[✓✔])\s*$/i;
-const END_STAR = /\s*\*\s*$/;
+const END_CORRECT = /(?<!\s)\s*(?:\(\s*correct\s*\)|[✓✔])\s*$/i;
+const END_STAR = /(?<!\s)\s*\*\s*$/;
 
 /**
  * Capital letters and a full stop in a line, where the next option of a line that runs several together starts.

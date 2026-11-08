@@ -74,7 +74,10 @@ junk and "the layout is not read". A bank that opens with
 a part it cannot read (a question file that is not JSON, a folder file of the wrong shape, a lost file) opens with the rest, keeps the
 damaged file byte for byte through every save (`passthrough`; a damaged folder file is kept as `folders.damaged.json`), and says so:
 the engine in `OpenReport`, the app in the amber box on the bank screen. A branch of the bank reader that reports a file and does not
-keep it is a bug (two were found). Do not add a path that drops a file the reader could not understand.
+keep it is a bug (two were found). Do not add a path that drops a file the reader could not understand. A reader is also not slow on a damaged file: a pattern that
+begins with white space and is not anchored with `^` took N squared steps on a run of N spaces (a line of 100,000 spaces took 8 seconds,
+a table's first rows with cells of 32,767 spaces took 27), so such a pattern starts with `(?<!\s)` and the option patterns skip the space
+after a star only when there is a star; `long-lines.test.ts` puts runs in every place a line can have one.
 
 **A folder is a way of finding questions and never a place one can be lost.** Taking a folder away (`Bank.removeFolder`) leaves its
 questions in the bank, in no folder, and moves the folders inside it up (a name that would clash is numbered, never merged); a folder
@@ -137,8 +140,15 @@ as the names only if it names two known columns, so a note with the word Questio
 is not mistaken for them. A cell that holds an error, or a formula with no stored result,
 is read as empty and named, never as text that could be taken for a letter. A name with a
 description after a dash that has a space each side ("Question - max 95 characters", "Answer 1 - max
-60 characters") is read as the name without it, tried only when the whole cell is not a name, and
-a bracket that holds a letter or a number is never a description. Answer columns
+60 characters") or in a bracket is read as the name without it, tried only when the whole cell is not a name, and
+only when every word of the description is one of a short list of instruction words (`INSTRUCTION_WORDS` in `isInstruction`: max,
+min, up to, at least, choose, select, required, optional, a count of characters or words, with a few small words and numbers) and at
+least one is a cue that it is an instruction. A description that says what the column holds ("Answer - wrong", "Answer (incorrect)",
+"Feedback - when right", "Answer - hint") is never cut, and neither is one that begins like an instruction and goes on to say it
+("Answer - choose the wrong answers"): the first rule cut anything, and read the column of wrong answers as the Correct column, so a
+wrong option was marked right in a question that read as parsed. A dash that is part of the name is passed over ("Feedback - if
+right - max 100 characters" is the feedback for a right answer), and at most eight dashes of a cell are tried. A bracket that holds a letter
+or a number is never a description. A cell is matched by plain scans and never a pattern that can backtrack. Answer columns
 may be named by number ("Option 1" to "Option 4"); a number in the Correct cell then names the
 column with that number, and a letter names none, while in a table with lettered columns it is
 the other way about, and a table that mixes the two reads no number as a place (`numbered` in
@@ -186,8 +196,11 @@ display names ("All or nothing", "Correct Selections") that people report are no
 
 **A Blackboard upload file's key is its words, and nothing else.** `import/blackboard-upload.ts` reads the tab-delimited file the exporter
 writes and the page documents (the registry looks at a `.txt` or `.tsv` before the table and text readers: every row begins with a type
-and a tab, and a multiple choice, multiple answer or true or false row has the word correct, incorrect, true or false where the format puts
-it). A choice answer is right where the word after it is correct (either case); a word that is neither, or an answer with none, keeps the
+word, one of the listed ones or any made like one (`TYPE_WORD`, the rule the reader itself uses: one unlisted type among the rows sent a
+file to the table reader, which marked the word "incorrect" as a right answer), and a tab, and a multiple choice, multiple answer or true
+or false row has the word correct, incorrect, true or false where the format puts it). A field that shows nothing (only a zero width
+space, a control character, a soft hyphen: `isBlankText`) is an empty field, so a stem, an answer or an item made of it is flagged and not
+stored as an empty paragraph read as parsed. A choice answer is right where the word after it is correct (either case); a word that is neither, or an answer with none, keeps the
 whole row as an essay that fails; no answer marked correct has no key and says so; two correct on a multiple choice stay as the file has
 them and the question needs fixing. True or false is the word; a fill in the blank row is a short answer with each accepted answer once (the
 file marks no blank); matching is each left and right side, ordering is the order listed, an essay's sample answer is its model answer; a
@@ -424,7 +437,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2875 engine tests and 336 app tests, Node's own runner
+npm test                       # 2912 engine tests and 336 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

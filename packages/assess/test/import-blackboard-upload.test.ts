@@ -74,6 +74,51 @@ describe("choosing the reader", () => {
     assert.ok(!looksLikeBlackboardUpload(bytes(few)));
     assert.ok(looksLikeBlackboardUpload(bytes(several)));
   });
+
+  // Found by an independent reviewer. The check for the kind of file asked for a listed type on every row, and the reader keeps any
+  // type made like one as a failed essay, so one row of a type that is not listed sent the whole file to the table reader, which
+  // took the word "incorrect" for a right answer in a question that read as parsed.
+  describe("a row of a type that is not listed does not send the file to the table reader", () => {
+    const three = [row("MC", "Which is cold 1?", "Ice", "correct", "Fire", "incorrect", "Lava", "incorrect"), row("MC", "Which is cold 2?", "Fire", "incorrect", "Snow", "correct"), row("TF", "Ice is cold.", "true")];
+    const odd = rows(...three, row("FIB_PLUS", "The [x] is [y]", "x", "cat", "y", "mat"));
+
+    test("whatever the file is called, it is an upload file, and the odd row is kept as a failed essay with all its words", () => {
+      for (const name of ["bank.tsv", "bank.csv", "bank.txt", "bank"]) {
+        assert.equal(importerForContent(name, bytes(odd)), blackboardUploadImporter, name);
+      }
+      const r = read(odd, "bank.tsv");
+      assert.equal(r.questions.length, 4);
+      assert.equal(r.orphans.length, 0);
+      assert.deepEqual(options(r.questions[0] as Question), [["Ice", true], ["Fire", false], ["Lava", false]]);
+      assert.deepEqual(options(r.questions[1] as Question), [["Fire", false], ["Snow", true]]);
+      const kept = r.questions[3] as Question;
+      assert.equal(kept.type, "essay");
+      assert.equal(verdictFrom(kept.findings), "failed");
+      assert.match(said(kept), /error: .*FIB_PLUS/);
+      for (const word of ["The [x] is [y]", "cat", "mat"]) assert.match(plain(kept.stem), new RegExp(word.replace(/[[\]]/g, "\\$&")), "every word of the row is kept");
+      // No question has the word correct or incorrect as an answer: that is what the table reader made of the file.
+      for (const q of r.questions.slice(0, 2)) assert.ok(!options(q).some(([text]) => /^(in)?correct$/i.test(text)));
+    });
+
+    test("every other type word of the page is the same, in either case", () => {
+      for (const type of ["EAO", "JUMBLED_SENTENCE", "OPN", "LIK", "HOT", "CALC", "fib_plus", "Calc_Numeric"]) {
+        const r = read(rows(...three, row(type, "Odd one", "a", "b")), "bank.tsv");
+        assert.equal(r.questions.length, 4, type);
+        assert.equal((r.questions[3] as Question).type, "essay", type);
+        assert.equal(verdictFrom((r.questions[3] as Question).findings), "failed", type);
+      }
+    });
+
+    test("a first field that is not made like a type still keeps a file from being one", () => {
+      for (const first of ["Q1", "X", "TOO_LONG_FOR_A_TYPE", "Total score", "1", ""]) {
+        assert.ok(!looksLikeBlackboardUpload(bytes(rows(...three, row(first, "something", "else")))), JSON.stringify(first));
+      }
+    });
+
+    test("without a row that has the words where the page puts them, odd types are not enough", () => {
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(row("FIB_PLUS", "x", "y"), row("EAO", "x", "y"), row("OPN", "x", "y"), row("LIK", "x", "y")))));
+    });
+  });
 });
 
 describe("this program's own Blackboard file, read back", () => {
@@ -276,5 +321,74 @@ describe("the shape of the file", () => {
     const took = performance.now() - start;
     assert.equal(r.questions.length, 3000);
     assert.ok(took < 1500, `${Math.round(took)} ms`);
+  });
+});
+
+// Found by an independent reviewer. A field made only of characters that draw nothing, or that the cleaning takes away, was compared with
+// "" before the cleaning, so it was a stem, an answer or an item with no words in it: stored as an empty paragraph and read as parsed.
+describe("a field that shows nothing is an empty field", () => {
+  const c = (code: number): string => String.fromCharCode(code);
+  // Code points and not the characters, because a zero width space written into a source file cannot be told from nothing.
+  const NOTHING = [0x200b, 0x0000, 0x0001, 0x00ad, 0xfffe, 0x200d, 0x2060].map(c);
+
+  test("a stem of it is an empty stem, with the error and the placeholder an empty one gets", () => {
+    for (const none of NOTHING) {
+      const q = first(read(rows(row("MC", none, "a", "correct", "b", "incorrect"), row("TF", "Ok?", "true"))));
+      assert.ok(liveFindings(q.findings).some((f) => f.code === FindingCode.EmptyStem && f.severity === "error"), `U+${none.charCodeAt(0).toString(16)}`);
+      assert.match(plain(q.stem), /no question text in the source/);
+      assert.equal(verdictFrom(q.findings), "failed");
+    }
+    for (const type of ["TF", "FIB", "ESS"]) {
+      const q = first(read(rows(row(type, c(0x200b), type === "TF" ? "true" : "x"), row("TF", "Ok?", "true"), row("TF", "Ok?", "true"))));
+      assert.ok(liveFindings(q.findings).some((f) => f.code === FindingCode.EmptyStem), type);
+    }
+  });
+
+  test("an answer of it is an empty answer: kept as (missing), with the error, and not read as the right one by what it looks like", () => {
+    for (const none of NOTHING) {
+      const q = first(read(rows(row("MC", "Which?", none, "correct", "b", "incorrect"))));
+      assert.ok(liveFindings(q.findings).some((f) => f.code === FindingCode.EmptyOption && f.severity === "error"), `U+${none.charCodeAt(0).toString(16)}`);
+      assert.equal(options(q)[0]?.[0], "(missing)");
+      assert.equal(verdictFrom(q.findings), "failed");
+    }
+  });
+
+  test("an item or a side of a pair of it keeps the whole row as a failed essay, and nothing is guessed to fill it", () => {
+    for (const none of NOTHING) {
+      const ordering = first(read(rows(row("ORD", "Order.", "a", none, "c"), row("TF", "Ok?", "true"))));
+      assert.equal(ordering.type, "essay");
+      assert.equal(verdictFrom(ordering.findings), "failed");
+      assert.match(said(ordering), /An item has no text/);
+      const matching = first(read(rows(row("MAT", "Match.", "a", none, "b", "2"), row("TF", "Ok?", "true"))));
+      assert.equal(matching.type, "essay");
+      assert.match(said(matching), /nothing on one side/);
+    }
+  });
+
+  test("an accepted answer of it is left out, and a fill in the blank with no other is a failed essay", () => {
+    for (const none of NOTHING) {
+      const q = first(read(rows(row("FIB", "Symbol?", none, "Au"), row("TF", "Ok?", "true"))));
+      assert.equal(q.type, "shortAnswer");
+      assert.deepEqual((q.body as any).accepted, ["Au"]);
+      const alone = first(read(rows(row("FIB", "Symbol?", none), row("TF", "Ok?", "true"))));
+      assert.equal(alone.type, "essay", "the only answer is blank, so there is none");
+      assert.equal(verdictFrom(alone.findings), "failed");
+    }
+  });
+
+  test("a last field of it is no field, so a row that ends in one is the row it was, and a line of it alone is not a row", () => {
+    const ended = first(read(rows(row("MC", "Which?", "a", "correct", "b", "incorrect", c(0x200b)))));
+    assert.deepEqual(options(ended), [["a", true], ["b", false]]);
+    assert.equal(verdictFrom(ended.findings), "parsed");
+    const r = read(rows(row("TF", "Ok?", "true"), c(0x200b), row(c(0x200b), c(0x00ad)), row("TF", "Ok again?", "false")));
+    assert.equal(r.questions.length, 2);
+    assert.equal(r.orphans.length, 0);
+  });
+
+  test("text with a visible word in it is kept as typed, even with such characters around it", () => {
+    const q = first(read(rows(row("MC", c(0x200b) + "Which?" + c(0x200b), c(0x200b) + "Ice", "correct", "Fire", "incorrect"))));
+    assert.equal(plain(q.stem), "Which?");
+    assert.deepEqual(options(q).map(([t]) => t), ["Ice", "Fire"]);
+    assert.equal(verdictFrom(q.findings), "parsed");
   });
 });

@@ -143,6 +143,19 @@ export function normalizeCharacters(text: string): string {
 }
 
 /**
+ * Whether text shows nothing: once what `normalizeCharacters` removes is gone, only white space and characters that draw nothing are
+ * left (a zero width joiner, a direction mark, a word joiner, a byte order mark, any other format or control character). A stem, an
+ * option or an item that is only these is empty to the person who reads it, and was stored as an empty paragraph and read as parsed
+ * because the importers compared the raw cell with "" before the cleaning took the characters away. Only for deciding; nothing is
+ * rewritten, and text with a single visible character in it is never blank.
+ */
+export function isBlankText(text: string): boolean {
+  // Nearly every text has a visible ASCII character, and this is asked of every cell of a large file.
+  if (/[!-~]/.test(text)) return false;
+  return normalizeCharacters(text).replace(/[\p{White_Space}\p{Cf}\p{Cc}\p{Zs}\p{Zl}\p{Zp}]/gu, "") === "";
+}
+
+/**
  * The flat form of typography, for comparing and never for storing: curly quotes to straight, the en dash to a hyphen, the em dash
  * to two, the ellipsis to three dots. Two texts that differ only in how a quotation mark is drawn are the same text to a search, to
  * the check for copies and to the accuracy gate, and are not the same to the person who wrote them.

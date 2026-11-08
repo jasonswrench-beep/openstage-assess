@@ -1183,6 +1183,45 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by a second reader of the Blackboard reader and the header rule (7 November 2026, before alpha 15)
+
+An independent reader proved six faults in the commits since alpha 14, one of them a wrong key that read as authored. Each was
+reproduced before it was fixed, and each has a test and a planted-fault run.
+
+- **A column of wrong answers could become the key** (introduced by the rule that cut a description from a column name). The rule cut
+  anything after a dash, so "Answer - wrong", "Answer (Incorrect)" and "Answer - hint" were the Answer column, which is the Correct
+  column; placed before the real Correct column they were the key, and the real one was dropped with a warning about a repeat. A
+  question read as parsed with the wrong option marked right. "Feedback - when right" became the general feedback, shown to wrong
+  answers too. Now a description is cut only when every word of it is one of a short list of instruction words (max, min, up to, at
+  least, choose, select, required, optional, a count of characters or words, a few small words) and one is a cue, so even "Answer -
+  choose the wrong answers" is left alone; every other description leaves the column not understood, which is said. A cell with a line
+  break after the dash is matched too, and a dash that belongs to the name is passed over ("Feedback - if right - max 100 characters").
+  A first version of the fix cut anything that began with an instruction word; reading it again before it was released showed it would
+  still have cut "Answer - choose the wrong answers", so the whole description is held to the list.
+- **The check for the kind of file and the reader disagreed**: a Blackboard-shaped file with one row of an unlisted type (the page's
+  own FIB_PLUS, EAO, JUMBLED_SENTENCE and others) was sent to the table reader, which marked the word "incorrect" as a right answer.
+  The check now accepts the same type words the reader accepts.
+- **Text with nothing in it that shows was stored as nothing and read as parsed**: a stem, answer or item of only a zero width space,
+  a control character or a soft hyphen was an empty paragraph, never flagged. `isBlankText` decides, and the Blackboard rows and the
+  table cells that show nothing are empty fields. The text reader's own stem check was not changed and is not known to have the fault.
+- **Patterns that begin with white space and are not anchored were slow on a long run of spaces** (N squared steps): a line of
+  100,000 spaces took 8 seconds, a table whose first rows had cells of 32,767 spaces took 27, and the new header rule had made the
+  second worse. Nine patterns in the text reader, one in a Word table's page note and the header rule were found by feeding every reader
+  runs of spaces, tabs and no-break spaces in each place a line can have one (`long-lines.test.ts`); all read in milliseconds now. The
+  Word table's pattern is not covered by that test.
+- **The note that a file may not be a bank was said of banks.** It is now said only when the file never named a kind of question,
+  no question carries an answer, and no stem holds its own options. Five questions with `Type: SA` lines, or written
+  `1. Which is cold? a) Ice b) Fire c) Lava` with an Answer line, were told they were probably not worth repairing.
+- **A zip that is Blackboard's own pool export** (its questions in `.dat` files) was told only what a QTI file holds. It is now named
+  as what it is, with what this program does read from Blackboard. The `.dat` files are still not read: no real one has been seen
+  here, and a guess at their shape would be a guess at a key.
+
+What the reader checked and found sound: 30,000 rounds of damaged Blackboard files against an independent reading of the key (no wrong
+key, nothing unstorable), 3,000 rounds of the exporter read back, the key words (`correct.`, `in correct`, full-width letters and
+`True.` fail loudly), and 50,000 rows in 1.3 seconds. Not changed: fewer than three essay, fill in the blank, matching or ordering rows
+are not recognised as an upload file by their content, so this program's own export of two essays does not read back by itself
+(the existing test documents the choice).
+
 ### Found by a reader who had not seen the code (7 November 2026, after the table layouts and the Brightspace CSV reader)
 
 A separate reader was asked to find real faults in the changes since the last release and to prove each with an input that

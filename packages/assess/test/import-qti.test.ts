@@ -668,6 +668,55 @@ describe("a Common Cartridge package", () => {
     const none = read(zipOf({ "notes.html": "x" }), "download.zip");
     assert.ok(!/another kind/.test(none.fileFindings.map((f) => f.message).join(" | ")), "nothing is offered when the zip holds nothing this program reads");
   });
+
+  describe("a package Blackboard exports for its own use (questions in .dat files)", () => {
+    const manifest = `<manifest xmlns:bb="http://www.blackboard.com/content-packaging/"><resources><resource bb:file="res00001.dat" type="assessment/x-bb-pool" identifier="res00001"/></resources></manifest>`;
+    const dat = `<?xml version="1.0"?><POOL><QUESTIONLIST/></POOL>`;
+    const said = (files: Record<string, string>): { questions: number; text: string } => {
+      const got = read(zipOf(files), "export.zip");
+      return { questions: got.questions.length, text: got.fileFindings.map((f) => `[${f.severity}] ${f.message}`).join(" | ") };
+    };
+
+    test("is called what it is, with what this program does read from Blackboard, and none of its files are read", () => {
+      const one = said({ "imsmanifest.xml": manifest, "res00001.dat": dat });
+      assert.equal(one.questions, 0);
+      assert.match(one.text, /\[warn\] No question was found in this file\. It is a package that Blackboard exports for its own use, with its questions in a \.dat file, and this program does not read that form\./);
+      assert.match(one.text, /It does read the tab delimited file that Blackboard takes in \(one question to a row, beginning with its type\), and a Word, Excel or text file of the questions\./);
+      assert.ok(!/A QTI file holds/.test(one.text), "the words about QTI do not say what the person has");
+    });
+
+    test("is known by either of the two ways its manifest names Blackboard, and by a manifest inside a folder of the zip", () => {
+      const bySpace = `<manifest xmlns:bb="http://www.blackboard.com/content-packaging/"><resources><resource type="webcontent" href="res00001.dat"/></resources></manifest>`;
+      const byType = `<manifest><resources><resource type="assessment/x-bb-qti-pool" href="res00001.dat"/></resources></manifest>`;
+      const cases: Record<string, Record<string, string>> = { "the namespace alone": { "imsmanifest.xml": bySpace, "res00001.dat": dat }, "the resource type alone": { "imsmanifest.xml": byType, "res00001.dat": dat }, "a manifest in a folder": { "export/imsmanifest.xml": manifest, "export/res00001.dat": dat } };
+      for (const [name, files] of Object.entries(cases)) {
+        assert.match(said(files).text, /package that Blackboard exports for its own use/, name);
+      }
+    });
+
+    test("counts its .dat files, and counts none of the Mac's own litter", () => {
+      assert.match(said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "res00002.dat": dat, "__MACOSX/._res00001.dat": "x" }).text, /with its questions in 2 \.dat files,/);
+      assert.match(said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "sub/RES00002.DAT": dat }).text, /with its questions in 2 \.dat files,/, "by the end of the name, whatever its case or folder");
+    });
+
+    test("is not claimed for a zip whose manifest does not name Blackboard, or that has no .dat file, or no manifest", () => {
+      const plain = `<manifest><resources><resource type="webcontent" href="a.dat"/></resources></manifest>`;
+      // A name that only has ".dat" inside it is not a .dat file, and a file that is only named like the manifest is not the manifest.
+      const lookalikes: Array<Record<string, string>> = [{ "imsmanifest.xml": manifest, "notes.dat.txt": "x", "res.data": "x" }, { "my-imsmanifest.xml": manifest, "res00001.dat": dat }, { "imsmanifest.xml.bak": manifest, "res00001.dat": dat }];
+      const unclaimed: Array<Record<string, string>> = [{ "imsmanifest.xml": plain, "a.dat": dat }, { "imsmanifest.xml": manifest, "res.txt": "x" }, { "res00001.dat": dat }, { "__MACOSX/._res.dat": "x", "imsmanifest.xml": manifest }, ...lookalikes];
+      for (const files of unclaimed) {
+        const got = said(files);
+        assert.ok(!/Blackboard/.test(got.text), `no claim for ${Object.keys(files).join(", ")}`);
+        assert.match(got.text, /A QTI file holds item elements/);
+      }
+    });
+
+    test("says nothing about Blackboard when questions were found, whatever else the package holds", () => {
+      const got = read(zipOf({ "imsmanifest.xml": manifest, "res00001.dat": dat, "quiz.xml": quiz }), "export.zip");
+      assert.equal(got.questions.length, 2);
+      assert.ok(!got.fileFindings.some((f) => /Blackboard exports/.test(f.message)));
+    });
+  });
 });
 
 /** Every file of a zip as text, by name, for comparing two packages. */
