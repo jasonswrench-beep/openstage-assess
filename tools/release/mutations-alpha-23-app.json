@@ -1,0 +1,593 @@
+[
+  {
+    "label": "R1 writeNewFile: the half-written file is not taken away",
+    "file": "packages/app/src/library.ts",
+    "from": "await io.remove(path).catch(() => undefined); // a file that was started and not finished is not left behind",
+    "to": "void 0;",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R2 writeNewFile: every error is taken for a taken name",
+    "file": "packages/app/src/library.ts",
+    "from": "if (alreadyThere(error)) continue;",
+    "to": "continue;",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R6 writeNewFile gives up after 20 names",
+    "file": "packages/app/src/library.ts",
+    "from": "for (let n = 1; n < MOST_NAMES; n++) {\n    const candidate = numberedFileName(name, n);",
+    "to": "for (let n = 1; n < 20; n++) {\n    const candidate = numberedFileName(name, n);",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R7 placeFile gives up after 20 names",
+    "file": "packages/app/src/library.ts",
+    "from": "for (let n = 1; n < MOST_NAMES; n++) {\n    const candidate = numberedBankName(base, n);",
+    "to": "for (let n = 1; n < 20; n++) {\n    const candidate = numberedBankName(base, n);",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "both give up after 100 names",
+    "file": "packages/app/src/library.ts",
+    "from": "const MOST_NAMES = 10_000;",
+    "to": "const MOST_NAMES = 100;",
+    "tests": [
+      "packages/app/test/library-names.test.ts",
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "writeNewFile does not make a folder that is gone",
+    "file": "packages/app/src/library.ts",
+    "from": "await io.mkdir(dir);\n  for (let n = 1; n < MOST_NAMES; n++) {\n    const candidate = numberedFileName(name, n);",
+    "to": "for (let n = 1; n < MOST_NAMES; n++) {\n    const candidate = numberedFileName(name, n);",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "placeFile does not make a folder that is gone",
+    "file": "packages/app/src/library.ts",
+    "from": "await io.mkdir(dir);\n  for (let n = 1; n < MOST_NAMES; n++) {\n    const candidate = numberedBankName(base, n);",
+    "to": "for (let n = 1; n < MOST_NAMES; n++) {\n    const candidate = numberedBankName(base, n);",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "placeMade does not make a folder that is gone",
+    "file": "packages/app/src/library.ts",
+    "from": "  await io.mkdir(dir);\n  const temp = join(dir,",
+    "to": "  const temp = join(dir,",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "the list of banks does not make a folder that is gone",
+    "file": "packages/app/src/library.ts",
+    "from": "await io.mkdir(library.banks);",
+    "to": "void 0;",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts"
+    ]
+  },
+  {
+    "label": "the private file is left behind",
+    "file": "packages/app/src/library.ts",
+    "from": "    await io.remove(temp).catch(() => undefined);",
+    "to": "    void 0;",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "the private file is listed as a bank",
+    "file": "packages/app/src/library.ts",
+    "from": "`.new-${randomBytes(8).toString(\"hex\")}.tmp`",
+    "to": "`.new-${randomBytes(8).toString(\"hex\")}.openassess`",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "an empty file with the bank's name is made before the bank is saved",
+    "file": "packages/app/src/library.ts",
+    "from": "    await make(temp);",
+    "to": "    await io.createFile(join(dir, `${base}${extension}`), \"\");\n    await make(temp);",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "a link that fails for another reason is not copied",
+    "file": "packages/app/src/library.ts",
+    "from": "if (alreadyThere(error)) return false;\n    // Not a name that is taken",
+    "to": "throw error;\n    // Not a name that is taken",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "a name that is taken is copied to",
+    "file": "packages/app/src/library.ts",
+    "from": "    if (alreadyThere(error)) return false;\n    // Not a name that is taken",
+    "to": "    // Not a name that is taken",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "a copy that fails for another reason is taken for a taken name",
+    "file": "packages/app/src/library.ts",
+    "from": "if (alreadyThere(error) || (await io.exists(path))) return false;",
+    "to": "return false;",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "a folder in the way is not a taken name for a copy",
+    "file": "packages/app/src/library.ts",
+    "from": "if (alreadyThere(error) || (await io.exists(path))) return false;",
+    "to": "if (alreadyThere(error)) return false;",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "a busy file is not tried again",
+    "file": "packages/app/src/library.ts",
+    "from": "if (attempt >= tries || !busy(error)) throw error;",
+    "to": "throw error;",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "a file that is not there is waited for",
+    "file": "packages/app/src/library.ts",
+    "from": "if (attempt >= tries || !busy(error)) throw error;",
+    "to": "if (attempt >= tries) throw error;",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "R9 the cut without a segmenter keeps a lone half",
+    "file": "packages/app/src/library.ts",
+    "from": "return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;",
+    "to": "return cut;",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "the platform's way of telling characters apart is not used",
+    "file": "packages/app/src/library.ts",
+    "from": "segmenter: Intl.Segmenter | null = graphemes",
+    "to": "segmenter: Intl.Segmenter | null = null",
+    "tests": [
+      "packages/app/test/library-names.test.ts",
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "R12 checkName takes a name with a space at the start",
+    "file": "packages/app/src/library.ts",
+    "from": "name !== name.trim() ||",
+    "to": "name !== name.trimEnd() ||",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R13 checkName takes a name that ends in a dot",
+    "file": "packages/app/src/library.ts",
+    "from": "/^\\.|[. ]$/.test(name)",
+    "to": "/^\\.|[ ]$/.test(name)",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "the longest name taken is 81",
+    "file": "packages/app/src/library.ts",
+    "from": "name.length > MAX_NAME ||",
+    "to": "name.length > MAX_NAME + 1 ||",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R15 fitFileName leaves a dot or a space before the cut mark",
+    "file": "packages/app/src/library.ts",
+    "from": "const head = withoutTrailingDotsAndSpaces(cutAt(stem, room));",
+    "to": "const head = cutAt(stem, room);",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R16 fitFileName looks 30 from the end for the end worth keeping",
+    "file": "packages/app/src/library.ts",
+    "from": "Math.max(0, stem.length - 40)",
+    "to": "Math.max(0, stem.length - 30)",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R16 fitFileName looks 50 from the end for the end worth keeping",
+    "file": "packages/app/src/library.ts",
+    "from": "Math.max(0, stem.length - 40)",
+    "to": "Math.max(0, stem.length - 50)",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R19 a numbered bank name keeps a dot or a space where it was cut",
+    "file": "packages/app/src/library.ts",
+    "from": "return `${withoutTrailingDotsAndSpaces(cutAt(base, MAX_NAME - number.length))}${number}`;",
+    "to": "return `${cutAt(base, MAX_NAME - number.length)}${number}`;",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "P6 cleanName keeps a lone half of an emoji",
+    "file": "packages/app/src/library.ts",
+    "from": "const tidy = wellFormed(input)",
+    "to": "const tidy = input",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts",
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "P6 checkName takes a lone half of an emoji",
+    "file": "packages/app/src/library.ts",
+    "from": "name.length > MAX_NAME || !isWellFormed(name) ||",
+    "to": "name.length > MAX_NAME ||",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts",
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "cleanName: a device's name and a dot loses its words",
+    "file": "packages/app/src/library.ts",
+    "from": "(word) => `${word}_`",
+    "to": "(word) => word",
+    "tests": [
+      "packages/app/test/library-names.test.ts",
+      "packages/app/test/names-and-files.test.ts"
+    ]
+  },
+  {
+    "label": "cleanName: a device's name, a space and a dot is only the device's name",
+    "file": "packages/app/src/library.ts",
+    "from": "BARE_DEVICE.test(whole)",
+    "to": "RESERVED.test(whole)",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "cleanName: the end is not tidied after the cut",
+    "file": "packages/app/src/library.ts",
+    "from": "const cleaned = withoutTrailingDotsAndSpaces(cutAt(whole.replace(DEVICE_START, (word) => `${word}_`), MAX_NAME));",
+    "to": "const cleaned = cutAt(whole.replace(DEVICE_START, (word) => `${word}_`), MAX_NAME);",
+    "tests": [
+      "packages/app/test/server.test.ts",
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "cleanName: the underscore is added after the cut",
+    "file": "packages/app/src/library.ts",
+    "from": "cutAt(whole.replace(DEVICE_START, (word) => `${word}_`), MAX_NAME)",
+    "to": "cutAt(whole, MAX_NAME).replace(DEVICE_START, (word) => `${word}_`)",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "RESERVED: spaces before the dot make no device",
+    "file": "packages/app/src/library.ts",
+    "from": "RegExp(`^${DEVICE}( *",
+    "to": "RegExp(`^${DEVICE}(",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "RESERVED: the superscript digits are no device",
+    "file": "packages/app/src/library.ts",
+    "from": "com[0-9¹²³]|lpt[0-9¹²³])\";",
+    "to": "com[0-9]|lpt[0-9])\";",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "RESERVED: CONIN$ is no device",
+    "file": "packages/app/src/library.ts",
+    "from": "nul|conin",
+    "to": "nul|conix",
+    "tests": [
+      "packages/app/test/library-names.test.ts"
+    ]
+  },
+  {
+    "label": "R30 remove opens the bank first",
+    "file": "packages/app/src/banks.ts",
+    "from": "await stat(source);",
+    "to": "await this.open(name);",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "remove leaves the copy in Deleted when the first name cannot be taken off",
+    "file": "packages/app/src/banks.ts",
+    "from": "        await this.files.remove(target).catch(() => undefined);\n        // A name that was taken off by someone else",
+    "to": "        // A name that was taken off by someone else",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "remove: a bank taken off by someone else is an error and not a 404",
+    "file": "packages/app/src/banks.ts",
+    "from": "if ((error as { code?: string } | null)?.code === \"ENOENT\") {",
+    "to": "if (false) {",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "P7 list: a name that cannot be used stops the list",
+    "file": "packages/app/src/banks.ts",
+    "from": "      } catch {\n        // A file put in the Banks folder by hand",
+    "to": "      } catch (error) {\n        throw error;\n        // A file put in the Banks folder by hand",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts"
+    ]
+  },
+  {
+    "label": "P7 list: the name that cannot be used is not marked",
+    "file": "packages/app/src/banks.ts",
+    "from": "          unusableName: true,",
+    "to": "",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts"
+    ]
+  },
+  {
+    "label": "create: the title is not made into a name",
+    "file": "packages/app/src/banks.ts",
+    "from": "cleanName(clean), BANK_EXTENSION",
+    "to": "clean, BANK_EXTENSION",
+    "tests": [
+      "packages/app/test/bank-claim.test.ts"
+    ]
+  },
+  {
+    "label": "P9 an import save in progress is not waited for",
+    "file": "packages/app/src/api.ts",
+    "from": "  if (session.saving) return session.saving;",
+    "to": "  void 0;",
+    "tests": [
+      "packages/app/test/concurrent-saves.test.ts"
+    ]
+  },
+  {
+    "label": "P9 an import save that failed cannot be tried again",
+    "file": "packages/app/src/api.ts",
+    "from": "if (session.saving === saving) delete session.saving;",
+    "to": "void 0;",
+    "tests": [
+      "packages/app/test/concurrent-saves.test.ts"
+    ]
+  },
+  {
+    "label": "P4 a sitting's save does not wait for the one in progress",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "  const running = s.saving;",
+    "to": "  const running = undefined as typeof s.saving;",
+    "tests": [
+      "packages/app/test/concurrent-saves.test.ts"
+    ]
+  },
+  {
+    "label": "P4 a save for a state that has changed shares the one in progress",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "running.revision === s.revision",
+    "to": "true",
+    "tests": [
+      "packages/app/test/concurrent-saves.test.ts"
+    ]
+  },
+  {
+    "label": "P4 the sitting is marked as saved at a later state",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "s.savedRevision = revision;",
+    "to": "s.savedRevision = s.revision;",
+    "tests": [
+      "packages/app/test/concurrent-saves.test.ts"
+    ]
+  },
+  {
+    "label": "P4 the save in progress is never let go",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "if (s.saving === mine) delete s.saving;",
+    "to": "void 0;",
+    "tests": [
+      "packages/app/test/concurrent-saves.test.ts"
+    ]
+  },
+  {
+    "label": "the header leaves ! as it is",
+    "file": "packages/app/src/server.ts",
+    "from": "/['()*!]/g",
+    "to": "/['()*]/g",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts"
+    ]
+  },
+  {
+    "label": "the header is not made by attachmentHeader",
+    "file": "packages/app/src/server.ts",
+    "from": "\"content-disposition\": attachmentHeader(download)",
+    "to": "\"content-disposition\": `attachment; filename*=UTF-8''${encodeURIComponent(download)}`",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts"
+    ]
+  },
+  {
+    "label": "the list of scores does not make a folder that is gone",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "await mkdir(library.scores, { recursive: true }); // a folder taken away while the app runs comes back\n  const names",
+    "to": "const names",
+    "tests": [
+      "packages/app/test/names-and-files.test.ts"
+    ]
+  },
+  {
+    "label": "R26 an export's path is the name asked for",
+    "file": "packages/app/src/exports.ts",
+    "from": "path: join(ctx.library.exports, fileName), questions: file.questions",
+    "to": "path: join(ctx.library.exports, file.name), questions: file.questions",
+    "tests": [
+      "packages/app/test/written-paths.test.ts"
+    ]
+  },
+  {
+    "label": "R27 a printed test's path is the name asked for",
+    "file": "packages/app/src/printing.ts",
+    "from": "path: join(ctx.library.exports, fileName), kind, format",
+    "to": "path: join(ctx.library.exports, result.file.name), kind, format",
+    "tests": [
+      "packages/app/test/written-paths.test.ts"
+    ]
+  },
+  {
+    "label": "R28 a sheet's path is the name asked for",
+    "file": "packages/app/src/sheets.ts",
+    "from": "written.push({ name, path: join(ctx.library.exports, name), kind: file.kind",
+    "to": "written.push({ name, path: join(ctx.library.exports, file.name), kind: file.kind",
+    "tests": [
+      "packages/app/test/written-paths.test.ts"
+    ]
+  },
+  {
+    "label": "R29 a result's path is the name asked for",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "written.push({ name, path: join(ctx.library.exports, name), kind });",
+    "to": "written.push({ name, path: join(ctx.library.exports, wanted), kind });",
+    "tests": [
+      "packages/app/test/written-paths.test.ts"
+    ]
+  },
+  {
+    "label": "a scores file's path is in the wrong folder",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "return ok({ name, path: join(ctx.library.scores, name), sheets:",
+    "to": "return ok({ name, path: join(ctx.library.exports, name), sheets:",
+    "tests": [
+      "packages/app/test/written-paths.test.ts"
+    ]
+  },
+  {
+    "label": "R20 the limits panel shows the check's code",
+    "file": "packages/app/ui/quality-panel.js",
+    "from": "result.limits.map(/** @param {any} note */ (note) => h(\"li\", { text: note.message }))",
+    "to": "result.limits.map(/** @param {any} note */ (note) => h(\"li\", { text: note.check }))",
+    "tests": [
+      "packages/app/test/quality.test.ts"
+    ]
+  },
+  {
+    "label": "R21 the limits panel fails on a reply without limits",
+    "file": "packages/app/ui/quality-panel.js",
+    "from": "if (result.limits && result.limits.length > 0) {",
+    "to": "if (result.limits.length > 0) {",
+    "tests": [
+      "packages/app/test/quality.test.ts"
+    ]
+  },
+  {
+    "label": "R22 focus is given without preventScroll",
+    "file": "packages/app/ui/dom.js",
+    "from": "target.focus({ preventScroll: true })",
+    "to": "target.focus()",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "a card of a name that cannot be used offers Remove",
+    "file": "packages/app/ui/bank-cards.js",
+    "from": "        b.unusableName\n        ? null",
+    "to": "        false\n        ? null",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "a card of a file that is no bank offers nothing",
+    "file": "packages/app/ui/bank-cards.js",
+    "from": "h(\"button\", { type: \"button\", class: \"button danger\", text: \"Remove\", attrs: { \"aria-label\": `Remove ${b.name}` }, on: { click: () => actions.remove(b) } })",
+    "to": "h(\"span\", { text: \"\" })",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "a card's Remove does not say which file",
+    "file": "packages/app/ui/bank-cards.js",
+    "from": "attrs: { \"aria-label\": `Remove ${b.name}` }",
+    "to": "attrs: { \"aria-label\": \"Remove\" }",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "P8 the temporary file of a save has one name",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "const temp = `${target}.${process.pid}-${randomBytes(6).toString(\"hex\")}.writing`;",
+    "to": "const temp = `${target}.writing`;",
+    "tests": [
+      "packages/assess/test/small-defects.test.ts"
+    ]
+  },
+  {
+    "label": "a busy rename is not tried again",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "if (attempt >= RENAME_TRIES ||",
+    "to": "if (true ||",
+    "tests": [
+      "packages/assess/test/small-defects.test.ts"
+    ]
+  },
+  {
+    "label": "a failed save leaves its temporary file",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "      await rm(temp, { force: true });",
+    "to": "      void 0;",
+    "tests": [
+      "packages/assess/test/small-defects.test.ts"
+    ]
+  }
+]

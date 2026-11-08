@@ -157,6 +157,10 @@ describe("a library folder that is taken away while the app runs", () => {
       assert.equal(made.status, 200, made.text);
       rmSync(join(home, "Banks"), { recursive: true });
       assert.equal((await client.post<Json>("/api/banks", { title: "Newer" })).status, 200, "a bank can be made in a folder that is gone");
+      rmSync(join(home, "Scores"), { recursive: true });
+      const scores = await client.get<Json>("/api/scores");
+      assert.equal(scores.status, 200, scores.text);
+      assert.deepEqual(scores.json["files"], []);
     });
   });
 });

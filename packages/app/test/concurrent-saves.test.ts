@@ -7,7 +7,7 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { scoringRoute } from "../src/scoring-routes.ts";
@@ -88,6 +88,18 @@ describe("a scoring sitting saved by requests that overlap", () => {
       assert.equal((a.json as Json)["name"], (b.json as Json)["name"], "one file");
       assert.equal(readdirSync(join(home, "Scores")).length, 1);
       assert.equal(session.revision, session.savedRevision, "and the second save held the change");
+    });
+  });
+
+  test("a save asked for after the earlier one is done writes the file again", async () => {
+    await withApp(async (client, home) => {
+      const { sid } = await sitting(client);
+      const first = await client.post<Json>(`/api/scoring/${sid}/save`);
+      const path = join(home, "Scores", first.json["name"] as string);
+      rmSync(path);
+      const again = await client.post<Json>(`/api/scoring/${sid}/save`);
+      assert.equal(again.json["name"], first.json["name"]);
+      assert.ok(existsSync(path), "the file was written again, because that save had finished");
     });
   });
 

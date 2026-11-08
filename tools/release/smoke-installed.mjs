@@ -235,7 +235,8 @@ try {
   const kept10 = await (await send("GET", bp10)).json();
   check("and the bank holds only the recipes that were good", JSON.stringify((kept10.blueprints ?? []).map((b) => b.name).sort()) === JSON.stringify(["Smoke cells", "Smoke recipe"]), JSON.stringify((kept10.blueprints ?? []).map((b) => b.name)));
 
-  const { zipSync, textEntry } = await import(pathToFileURL(join(res, "app/packages/assess/src/container/zip.ts")).href);
+  // The files the installer carries, or the repository's own when the script is tried from source (there is no built folder then).
+  const { zipSync, textEntry } = await import(pathToFileURL(join(fromSource ? repo : join(res, "app"), "packages/assess/src/container/zip.ts")).href);
   const d2lItem = `<item d2l_2p0:id="2" ident="OBJ_1002" label="QUES_1001" title="Which planet is closest to the Su" ><itemmetadata><qtimetadata><qti_metadatafield><fieldlabel>qmd_questiontype</fieldlabel><fieldentry>Multiple Choice</fieldentry></qti_metadatafield><qti_metadatafield><fieldlabel>qmd_weighting</fieldlabel><fieldentry>2.0000</fieldentry></qti_metadatafield></qtimetadata></itemmetadata><presentation><flow><material><mattext texttype="text/html"><![CDATA[Which planet is closest to the Sun?]]></mattext></material><response_lid ident="QUES_1001_LID" rcardinality="Multiple"><render_choice shuffle="no"><flow_label class="Block"><response_label ident="QUES_1001_A1"><flow_mat><material><mattext texttype="text/html"><![CDATA[Venus]]></mattext></material></flow_mat></response_label></flow_label><flow_label class="Block"><response_label ident="QUES_1001_A2"><flow_mat><material><mattext texttype="text/html"><![CDATA[Mercury]]></mattext></material></flow_mat></response_label></flow_label></render_choice></response_lid></flow></presentation><resprocessing><respcondition title="C1"><conditionvar><varequal respident="QUES_1001_LID">QUES_1001_A1</varequal></conditionvar><setvar action="Set">0.0000</setvar></respcondition><respcondition title="C2"><conditionvar><varequal respident="QUES_1001_LID">QUES_1001_A2</varequal></conditionvar><setvar action="Set">100.0000</setvar></respcondition></resprocessing></item>`;
   const library = zipSync([textEntry("imsmanifest.xml", '<manifest xmlns:d2l_2p0="http://desire2learn.com/xsd/d2lcp_v2p0" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"><resources><resource identifier="res_question_library" type="webcontent" d2l_2p0:material_type="d2lquestionlibrary" href="questiondb.xml" /></resources></manifest>'), textEntry("questiondb.xml", '<?xml version="1.0" encoding="UTF-8"?><questestinterop><objectbank ident="QLIB_1" xmlns:d2l_2p0="http://desire2learn.com/xsd/d2lcp_v2p0"><section ident="SECT_1" title="Section-Test">' + d2lItem + "</section></objectbank></questestinterop>")]);
   const lib = await (await send("POST", "/api/import?name=questiondb.zip", new Uint8Array(library))).json();
@@ -292,8 +293,9 @@ try {
   check("the stylesheet has a forced-colours block, and an empty message line stays in the page", /forced-colors: active/.test(css) && /\.toast:empty/.test(css));
   const indexHtml = await text("/");
   check("the message line is in the page and is not hidden", /id="status"[^>]*role="status"/.test(indexHtml) && !/id="status"[^>]*hidden/.test(indexHtml));
-  const homeScript = await text("/home.js");
-  check("the home screen says which bank each link is for and which sample each button is for", /Open \$\{b\.title\}/.test(homeScript) && /Try it: \$\{s\.title\}/.test(homeScript));
+  // The cards of the banks are built in their own script (so that a test can build them), and the samples' in the home screen's.
+  const homeScript = (await text("/home.js")) + (await text("/bank-cards.js"));
+  check("the home screen says which bank each link is for and which sample each button is for", /Open \$\{b\.title\}/.test(homeScript) && /Remove \$\{b\.name\}/.test(homeScript) && /Try it: \$\{s\.title\}/.test(homeScript));
   const scoringJs = await text("/scoring.js");
   check("the score review names each Look button for its sheet, and says what it did from one place that stays in the page", /Look at"} sheet/.test(scoringJs) && /announcer/.test(scoringJs));
   const exportJs = await text("/export.js");
