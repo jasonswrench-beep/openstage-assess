@@ -147,3 +147,65 @@ describe("answer columns named by number", () => {
     assert.deepEqual(right(first(r)), ["Paris"]);
   });
 });
+
+// A template for a quiz game writes its columns with a description after each name. Found by trying one: it read as "layout not known".
+describe("a column name with a description after it", () => {
+  const GAME = [
+    'Question - max 95 characters,Answer 1 - max 60 characters,Answer 2 - max 60 characters,Answer 3 - max 60 characters,Answer 4 - max 60 characters,"Time limit (sec) – 5, 10, 20, 30, 60, 90, 120, or 240 secs",Correct answer(s) - choose at least one',
+    '"Which planet is closest to the Sun?",Venus,Mercury,Earth,Mars,20,2',
+    '"Which are gases?",Oxygen,Iron,Nitrogen,Gold,30,"1,3"',
+  ].join("\n");
+
+  test("is its name, so a quiz game's template is read: the numbers in the last column name the answer columns", () => {
+    const r = csv(GAME);
+    assert.equal(r.questions.length, 2);
+    assert.deepEqual(right(first(r)), ["Mercury"]);
+    assert.equal(verdictFrom(first(r).findings), "parsed");
+    const second = r.questions[1] as Question;
+    assert.equal(second.type, "multipleResponse");
+    assert.deepEqual(right(second), ["Oxygen", "Nitrogen"]);
+    assert.match(said(second), /read as a multiple response\. Check that it is/);
+  });
+
+  test("a column that is not one of ours is still said not to be used, by the whole of its name", () => {
+    const r = csv(GAME);
+    const note = r.fileFindings.find((f) => /not used/.test(f.message));
+    assert.match(note?.message ?? "", /These columns were not used: Time limit \(sec\)/);
+  });
+
+  test("is never cut when the whole of the cell is a name, and a bracket of a letter or a number is not a description", () => {
+    // "Feedback - if right" is a name of its own (feedback for a right answer) and must not become the general Feedback column.
+    const feedback = csv("Question,A,B,Correct,Feedback - if right\nWhich?,x,y,B,Yes it is");
+    assert.equal(plain((first(feedback).feedback as { correct?: unknown }).correct ?? ""), "Yes it is");
+    assert.equal(first(feedback).feedback.general, undefined);
+    // "Option (A)" and "Answer (1)" are the columns for A and 1.
+    assert.deepEqual(right(first(csv("Question,Option (A),Option (B),Correct\nWhich?,x,y,B"))), ["y"]);
+    assert.deepEqual(right(first(csv("Question,Answer (1),Answer (2),Correct\nWhich?,x,y,2"))), ["y"]);
+  });
+
+  test("a name whose cut form is not a name either is left alone, and so is a dash with no spaces", () => {
+    const r = csv("Question,A,B,Correct,Note - for me\nWhich?,x,y,A,remember");
+    assert.match(r.fileFindings.map((f) => f.message).join("\n"), /These columns were not used: Note - for me/);
+    const hyphen = csv("Question,A,B,Correct,Multi-part\nWhich?,x,y,A,z");
+    assert.match(hyphen.fileFindings.map((f) => f.message).join("\n"), /These columns were not used: Multi-part/);
+  });
+
+  test("a table that is only text with a dash in its first cell is not taken for one with a question column", () => {
+    const r = csv("Notes on the week - a few lines,second cell\nmore text,still more");
+    assert.equal(r.questions.length, 0);
+  });
+});
+
+describe("what a description may and may not cut", () => {
+  test("a bracket that holds a letter is part of the name, even when a description follows it", () => {
+    const r = csv("Question,Option (A) - max 60 characters,Option (B) - max 60 characters,Correct\nWhich?,x,y,B");
+    assert.deepEqual(right(first(r)), ["y"]);
+    assert.ok(!r.fileFindings.some((f) => /not used/.test(f.message)), r.fileFindings.map((f) => f.message).join("\n"));
+  });
+
+  test("a hyphen with no spaces is part of a word, so a name that begins like another is not that column", () => {
+    const r = csv("Question,A,B,Correct,Chapter-notes\nWhich?,x,y,A,Unit 4");
+    assert.equal(first(r).metadata.chapter, undefined, "Chapter-notes is not the Chapter column");
+    assert.match(r.fileFindings.map((f) => f.message).join("\n"), /These columns were not used: Chapter-notes/);
+  });
+});

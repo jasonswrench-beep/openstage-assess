@@ -132,7 +132,10 @@ question types; any other layout is refused with a message, because reading one 
 words as another's is how a key lands where there was none. A row below the first counts
 as the names only if it names two known columns, so a note with the word Question in it
 is not mistaken for them. A cell that holds an error, or a formula with no stored result,
-is read as empty and named, never as text that could be taken for a letter. Answer columns
+is read as empty and named, never as text that could be taken for a letter. A name with a
+description after a dash that has a space each side ("Question - max 95 characters", "Answer 1 - max
+60 characters") is read as the name without it, tried only when the whole cell is not a name, and
+a bracket that holds a letter or a number is never a description. Answer columns
 may be named by number ("Option 1" to "Option 4"); a number in the Correct cell then names the
 column with that number, and a letter names none, while in a table with lettered columns it is
 the other way about, and a table that mixes the two reads no number as a place (`numbered` in
@@ -418,7 +421,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2868 engine tests and 335 app tests, Node's own runner
+npm test                       # 2875 engine tests and 335 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
