@@ -1,7 +1,7 @@
 // Runs the app exactly as the installer carries it (its own node.exe, its own copy of the files) and takes a Word file with a picture and
 // curly quotes through import, save, the bank's picture route, print and export, as the window would.
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -571,6 +571,13 @@ try {
   results.push("FAIL " + (error instanceof Error ? error.message : String(error)));
 } finally {
   child.kill();
+  // The temporary library it made is not left behind (about a megabyte each run); the server has to let go of it first.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  try {
+    rmSync(home, { recursive: true, force: true });
+  } catch {
+    // a file still held for a moment; it is in the temporary folder and goes with the next clean-up
+  }
 }
 console.log(results.join("\n"));
 process.exitCode = results.some((r) => r.startsWith("FAIL")) ? 1 : 0;

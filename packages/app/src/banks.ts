@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 import { Bank, BANK_EXTENSION, countMismatchMessage, type OpenReport } from "./engine.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
-import { bankFile, bankNames, checkName, cleanName, uniqueName, type Library } from "./library.ts";
+import { bankFile, bankNames, checkName, claimName, cleanName, releaseName, type Library } from "./library.ts";
 
 export interface BankInfo {
   name: string;
@@ -154,9 +154,13 @@ export class BankStore {
   async create(title: string): Promise<string> {
     const clean = title.trim();
     if (clean === "") throw badRequest("A bank needs a title.");
-    const name = await uniqueName(this.library.banks, clean, BANK_EXTENSION);
-    const bank = Bank.createEmpty(clean);
-    await bank.save(bankFile(this.library, name));
+    const name = await claimName(this.library.banks, clean, BANK_EXTENSION);
+    try {
+      await Bank.createEmpty(clean).save(bankFile(this.library, name));
+    } catch (error) {
+      await releaseName(this.library.banks, name, BANK_EXTENSION);
+      throw error;
+    }
     return name;
   }
 
@@ -169,8 +173,13 @@ export class BankStore {
       throw badRequest(`That file is not an OpenAssess bank: ${(error as Error).message}`);
     }
     const wanted = cleanName(fileName.replace(/\.openassess$/i, "") || opened.bank.manifest.title);
-    const name = await uniqueName(this.library.banks, wanted, BANK_EXTENSION);
-    await opened.bank.save(bankFile(this.library, name));
+    const name = await claimName(this.library.banks, wanted, BANK_EXTENSION);
+    try {
+      await opened.bank.save(bankFile(this.library, name));
+    } catch (error) {
+      await releaseName(this.library.banks, name, BANK_EXTENSION);
+      throw error;
+    }
     return { name, skipped: opened.report.invalid.filter((entry) => !entry.loaded).length };
   }
 
@@ -187,9 +196,15 @@ export class BankStore {
     checkName(name);
     return this.exclusive(name, async () => {
       await this.open(name);
-      const kept = await uniqueName(this.library.deleted, name, BANK_EXTENSION);
+      // The name in Deleted is claimed first, so that a bank removed twice under one name keeps both, and the rename lands on our own empty file.
+      const kept = await claimName(this.library.deleted, name, BANK_EXTENSION);
       const target = join(this.library.deleted, `${kept}${BANK_EXTENSION}`);
-      await rename(bankFile(this.library, name), target);
+      try {
+        await rename(bankFile(this.library, name), target);
+      } catch (error) {
+        await releaseName(this.library.deleted, kept, BANK_EXTENSION);
+        throw error;
+      }
       this.held.delete(name);
       return target;
     });

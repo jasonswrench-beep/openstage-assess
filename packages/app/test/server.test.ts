@@ -6,14 +6,14 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
 import { Bank, unzipSync } from "../src/engine.ts";
-import { checkName, cleanName, fitFileName, freeFileName, uniqueName } from "../src/library.ts";
+import { checkName, claimName, cleanName, fitFileName, writeNewFile } from "../src/library.ts";
 import { revealCommand } from "../src/server.ts";
 import { chunkedPost, liarPost, liarPostReply, rawRequest, withApp, type Client } from "./support/app.ts";
 
@@ -321,9 +321,33 @@ describe("the library", () => {
     for (let n = 70; n <= 82; n++) whole(cleanName(`${"a".repeat(n)}${"😀".repeat(5)}`));
     for (let n = 30; n <= 60; n++) whole(fitFileName(`${"😀".repeat(n)} - Brightspace.csv`));
     for (let n = 30; n <= 70; n++) whole(fitFileName(`${"b".repeat(n)}${"😀".repeat(20)}.txt`));
+    // Found by a reader: a flag is four units, a family eight or more, a letter with its accent two; a cut inside one is no error and
+    // is not what the person wrote either, so the cut falls between characters as they are seen.
+    const flag = String.fromCodePoint(0x1f1fa, 0x1f1f8);
+    const family = String.fromCodePoint(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467);
+    const accented = "é";
+    for (let n = 70; n <= 82; n++) {
+      for (const unit of [flag, family, accented]) {
+        const name = cleanName(`${"a".repeat(n)}${unit.repeat(4)}`);
+        whole(name);
+        const kept = name.slice(n > 80 ? 80 : n);
+        assert.ok(kept === "" || kept.length % unit.length === 0, `${JSON.stringify(name.slice(-8))}: a ${unit.length}-unit character was cut`);
+      }
+    }
+  });
+
+  // Found by a reader: COM0 and LPT0 and the superscript digits are reserved too, and a name that Windows would take for a device is
+  // refused when it comes from outside and is not made by the program.
+  test("the names Windows keeps for devices are refused, with or without an extension and in any case", () => {
+    for (const reserved of ["CON", "prn", "Aux", "NUL", "COM0", "com9", "LPT0", "lpt3", "COM¹", "LPT².txt", "con.txt", "Aux. Verbs", "CONIN$", "conout$"]) {
+      assert.throws(() => checkName(reserved), /cannot be used as a file name/, reserved);
+    }
+    for (const fine of ["Console", "Auxiliary", "COM10", "LPT", "Con-Ed", "Null"]) assert.equal(checkName(fine), fine);
   });
 
   test("a name of exactly the longest length is left alone, and one more is cut", () => {
+    assert.equal(checkName("a".repeat(80)), "a".repeat(80), "80 is the longest name taken");
+    assert.throws(() => checkName("a".repeat(81)), /cannot be used as a file name/, "and 81 is not");
     assert.equal(fitFileName("a".repeat(80)), "a".repeat(80));
     assert.equal(fitFileName(`${"a".repeat(76)}.csv`), `${"a".repeat(76)}.csv`);
     const cut = fitFileName("a".repeat(81));
@@ -339,24 +363,23 @@ describe("the library", () => {
       for (const wanted of [`${"x".repeat(60)} - Brightspace.csv`, `${"y".repeat(100)}.txt`, `${"😀".repeat(45)} - Common Cartridge.imscc`, `${"z".repeat(80)}`, "short.csv"]) {
         const seen = new Set<string>();
         for (let i = 0; i < 14; i++) {
-          const name = await freeFileName(dir, wanted);
+          const name = await writeNewFile(dir, wanted, "x"); // writing the file is what claims the name
           assert.ok(name.length <= 80, `${name.length} characters: ${name}`);
           assert.equal(checkName(name), name, "and it is a name that can be downloaded");
           assert.doesNotThrow(() => encodeURIComponent(name));
           assert.ok(!seen.has(name), `${name} came twice, so a file would have been written over`);
           seen.add(name);
-          writeFileSync(join(dir, name), "x");
         }
         if (wanted === "short.csv") assert.ok(seen.has("short 2.csv") && seen.has("short 3.csv"), "a short name is numbered as it always was");
       }
       for (const title of ["a".repeat(79), "b".repeat(90), `${"c".repeat(78)} d`]) {
         const seen = new Set<string>();
         for (let i = 0; i < 12; i++) {
-          const name = await uniqueName(dir, title, ".openassess");
+          const name = await claimName(dir, title, ".openassess"); // an empty file is made under the name
           assert.ok(name.length <= 80 && checkName(name) === name, name);
           assert.ok(!seen.has(name), `${name} came twice`);
           seen.add(name);
-          writeFileSync(join(dir, `${name}.openassess`), "x");
+          assert.ok(existsSync(join(dir, `${name}.openassess`)), "and the name is held from then on");
         }
       }
     } finally {
@@ -403,6 +426,30 @@ describe("the library", () => {
       assert.ok(!existsSync(join(home, "Banks", "Old.openassess")));
       assert.deepEqual(readdirSync(join(home, "Deleted")), ["Old.openassess"]);
       assert.equal((await client.get("/api/banks/Old")).status, 404);
+    });
+  });
+
+  // Found by a reader: the name was looked for and then used, so requests at the same moment all found the same name free. Six exports
+  // asked for at once were given one name and wrote over each other, and six banks made at once gave three errors. The name is claimed
+  // by creating the file, which fails if it is there.
+  test("banks made at the same time under one title each get a name of their own, and a bank removed twice keeps both copies", async () => {
+    await withApp(async (client, home) => {
+      const made = await Promise.all(Array.from({ length: 6 }, () => client.post("/api/banks", { title: "Biology" })));
+      assert.deepEqual(made.map((r) => r.status), [200, 200, 200, 200, 200, 200], made.map((r) => r.text).join(" "));
+      const names = made.map((r) => r.json["name"] as string);
+      assert.equal(new Set(names).size, 6, "six different names");
+      assert.equal(readdirSync(join(home, "Banks")).length, 6);
+      for (const name of names) assert.equal((await client.get(`/api/banks/${encodeURIComponent(name)}`)).status, 200, `${name} opens`);
+
+      // A bank removed, made again under the same name and removed again: the first copy in Deleted is not written over.
+      await client.post("/api/banks", { title: "Old" });
+      assert.equal((await client.put("/api/banks/Old", { title: "First copy" })).status, 200);
+      assert.equal((await client.del("/api/banks/Old")).status, 200);
+      await client.post("/api/banks", { title: "Old" });
+      assert.equal((await client.del("/api/banks/Old")).status, 200);
+      assert.deepEqual(readdirSync(join(home, "Deleted")).sort(), ["Old 2.openassess", "Old.openassess"]);
+      const first = Bank.fromBytes(new Uint8Array(readFileSync(join(home, "Deleted", "Old.openassess")))).bank;
+      assert.equal(first.manifest.title, "First copy", "the first copy is still the first copy");
     });
   });
 
@@ -956,7 +1003,10 @@ describe("exporting", () => {
             const written = await client.post(`${bank}/export`, { destination });
             assert.equal(written.status, 200, `${destination}, title of ${length}, write ${round}: ${written.text}`);
             const names = (written.json["written"] as Array<{ name: string }>).map((f) => f.name);
-            if (round === 1) assert.deepEqual([...names].sort(), [...checked.json.report.files].sort(), `${destination}: what the check lists is what is written`);
+            if (round === 1) {
+              assert.deepEqual([...names].sort(), [...checked.json.report.files].sort(), `${destination}: what the check lists is what is written`);
+              assert.deepEqual([...(written.json["report"] as { files: string[] }).files].sort(), [...names].sort(), `${destination}: and so is what the write itself reports`);
+            }
             for (const name of names) {
               assert.ok(name.length <= 80, `${destination}: ${name}`);
               assert.ok(readdirSync(join(home, "Exports")).includes(name), `${name} is in the folder`);
@@ -970,6 +1020,27 @@ describe("exporting", () => {
         }
       });
     }
+  });
+
+  test("exports asked for at the same moment are each given a name of their own, and none is written over another", async () => {
+    await withApp(async (client, home) => {
+      const bank = await seeded(client);
+      const replies = await Promise.all(Array.from({ length: 8 }, () => client.post(`${bank}/export`, { destination: "gift" })));
+      assert.ok(replies.every((r) => r.status === 200), replies.map((r) => r.text.slice(0, 80)).join(" | "));
+      const names = replies.flatMap((r) => (r.json["written"] as Array<{ name: string }>).map((f) => f.name));
+      assert.equal(new Set(names).size, 8, "eight names");
+      assert.equal(readdirSync(join(home, "Exports")).length, 8, "and eight files, not fewer");
+      for (const name of names) assert.ok(readFileSync(join(home, "Exports", name), "utf8").includes("What is two plus two?"), `${name} holds the questions whole`);
+    });
+  });
+
+  test("a folder in the exports folder is not a file that can be downloaded", async () => {
+    await withApp(async (client, home) => {
+      mkdirSync(join(home, "Exports", "somefolder"));
+      assert.equal((await client.get("/files/somefolder")).status, 404);
+      writeFileSync(join(home, "Exports", "real.txt"), "x");
+      assert.equal((await client.get("/files/real.txt")).status, 200);
+    });
   });
 
   test("lists the places a bank can be exported to", async () => {

@@ -6,7 +6,6 @@
  * two files, the second with a number in its name.
  */
 
-import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
@@ -40,7 +39,7 @@ import {
 } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest } from "./errors.ts";
-import { checkName, cleanName, fitFileName, fitNames, freeFileName } from "./library.ts";
+import { checkName, cleanName, fitFileName, fitNames, writeNewFile } from "./library.ts";
 
 interface Destination {
   id: string;
@@ -141,10 +140,8 @@ export async function exportRoute(ctx: Context, req: ApiRequest, rawName: string
 
   const written: Array<{ name: string; path: string; questions: number }> = [];
   for (const file of result.files) {
-    const fileName = await freeFileName(ctx.library.exports, checkName(fitFileName(file.name)));
-    const path = join(ctx.library.exports, fileName);
-    await writeFile(path, file.bytes ?? file.content, "utf8");
-    written.push({ name: fileName, path, questions: file.questions });
+    const fileName = await writeNewFile(ctx.library.exports, checkName(fitFileName(file.name)), file.bytes ?? file.content);
+    written.push({ name: fileName, path: join(ctx.library.exports, fileName), questions: file.questions });
   }
   return { status: 200, json: { report: fitNames(result.report), written } };
 }

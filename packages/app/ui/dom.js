@@ -78,6 +78,22 @@ export function skipTo(link, target) {
 }
 
 /**
+ * Where focus goes when a screen has been shown. After the first screen it goes to the main area, so that a person who moved to a new
+ * screen starts at its top; after the very first it does not, because with focus already inside the page the first Tab went past the
+ * skip link to the first button. Call it once for each thing shown, with the element to focus or null when there is none; the first
+ * call, whichever it is, is the first screen.
+ * @returns {(target: HTMLElement | null) => void}
+ */
+export function screenFocus() {
+  let first = true;
+  return (target) => {
+    const wasFirst = first;
+    first = false;
+    if (!wasFirst && target) target.focus({ preventScroll: true });
+  };
+}
+
+/**
  * Adds children to a node, leaving out the ones that are not there. The browser's own `append` would turn a missing child
  * into the word "null".
  * @param {Node} parent
