@@ -7,6 +7,7 @@
  */
 
 import { aikenImporter, looksLikeAiken } from "./aiken.ts";
+import { blackboardUploadImporter, looksLikeBlackboardUpload } from "./blackboard-upload.ts";
 import { d2lCsvImporter, looksLikeD2lCsv } from "./d2l-csv.ts";
 import { giftImporter, looksLikeGift } from "./gift.ts";
 import { looksLikeMoodleXml, moodleXmlImporter } from "./moodle-xml.ts";
@@ -17,7 +18,7 @@ import { standardTextImporter } from "./standard-text.ts";
 import type { Importer, ImportOptions, ImportResult } from "./types.ts";
 import { wordImporter } from "./word.ts";
 
-export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, moodleXmlImporter, qtiImporter, spreadsheetImporter, d2lCsvImporter, pdfImporter];
+export const IMPORTERS: Importer[] = [standardTextImporter, wordImporter, aikenImporter, giftImporter, moodleXmlImporter, qtiImporter, spreadsheetImporter, d2lCsvImporter, blackboardUploadImporter, pdfImporter];
 
 /** The importer that reads files with this name's extension, if there is one. */
 export function importerFor(file: string): Importer | undefined {
@@ -53,6 +54,11 @@ export function importerForContent(file: string, bytes: Uint8Array): Importer {
   // A .csv whose first row is a NewQuestion row is a Brightspace question library, and not a table, whatever it was named.
   if ((named === spreadsheetImporter && /.csv$/i.test(file)) || !named || named === standardTextImporter) {
     if (looksLikeD2lCsv(bytes)) return d2lCsvImporter;
+  }
+  // A text file whose every row begins with a Blackboard question type and a tab, with the words correct, incorrect, true or false where the
+  // format puts them, is Blackboard's upload file and not a table, whatever it was named (.txt or .tsv).
+  if ((named === spreadsheetImporter && /.(csv|tsv)$/i.test(file)) || !named || named === standardTextImporter) {
+    if (looksLikeBlackboardUpload(bytes)) return blackboardUploadImporter;
   }
   if (named && named !== standardTextImporter) return named;
   // A PDF is told by what it begins with, whatever it was named.

@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Bank, exportCommonCartridge, exportQti12, exportQti21, createQuestion, plainToRich } from "../src/engine.ts";
+import { Bank, exportBlackboardUpload, exportCommonCartridge, exportQti12, exportQti21, createQuestion, plainToRich } from "../src/engine.ts";
 import { withApp, type Client } from "./support/app.ts";
 
 type Json = Record<string, any>;
@@ -136,6 +136,42 @@ describe("a QTI package or file", () => {
       assert.equal(reply.status, 200, reply.text);
       assert.equal(reply.json["counts"].total, 0);
       assert.ok(reply.json["fileFindings"].some((f: Json) => f.severity === "error" && /zip/i.test(f.message)));
+    });
+  });
+});
+
+describe("a Blackboard upload file", () => {
+  // The file this program writes for Blackboard used to come back as "No questions were found" and a page of text no question used.
+  test("this program's own file is told by what it holds, read with every key, and what is saved is what was read", async () => {
+    await withApp(async (client) => {
+      const file = exportBlackboardUpload(questions(), { name: "Bank" }).files[0] as { content: string };
+      const reply = await send(client, "Bank - Blackboard.txt", Buffer.from(file.content, "utf8"));
+      assert.equal(reply.status, 200, reply.text);
+      assert.equal(reply.json["profile"], "blackboard-upload");
+      assert.equal(reply.json["counts"].total, 3);
+      assert.equal(reply.json["counts"].failed, 0, JSON.stringify(reply.json["counts"]));
+      assert.equal(reply.json["counts"].orphans, 0);
+      const types = [];
+      for (let n = 0; n < 3; n++) types.push((await client.get<Json>(`/api/sessions/${reply.json["id"]}/questions/${n}`)).json["question"].type);
+      assert.deepEqual(types, ["multipleChoice", "trueFalse", "shortAnswer"]);
+      const paris = (await client.get<Json>(`/api/sessions/${reply.json["id"]}/questions/0`)).json["question"];
+      assert.deepEqual(paris.body.options.filter((o: Json) => o.correct).map((o: Json) => o.text), ["Paris"]);
+      assert.match(reply.json["fileFindings"].map((f: Json) => f.message).join("\n"), /no points/);
+      const saved = await client.post<Json>(`/api/sessions/${reply.json["id"]}/save`, { title: "From Blackboard" });
+      assert.equal(saved.status, 200, saved.text);
+      assert.equal(saved.json["added"], 3);
+    });
+  });
+
+  test("a row whose key cannot be read is refused in words and kept, not guessed", async () => {
+    await withApp(async (client) => {
+      const text = ["MC\tWhich?\ta\tcorrect\tb\tmaybe", "TF\tIce is cold.\ttrue"].join("\r\n") + "\r\n";
+      const reply = await send(client, "upload.txt", Buffer.from(text, "utf8"));
+      assert.equal(reply.json["profile"], "blackboard-upload");
+      assert.deepEqual([reply.json["counts"].parsed, reply.json["counts"].failed], [1, 1]);
+      const bad = (await client.get<Json>(`/api/sessions/${reply.json["id"]}/questions/0`)).json["question"];
+      assert.equal(bad.type, "essay");
+      assert.match(JSON.stringify(bad.findings), /neither correct nor incorrect/);
     });
   });
 });

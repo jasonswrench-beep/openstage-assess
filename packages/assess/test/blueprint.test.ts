@@ -424,7 +424,9 @@ describe("a rule that asks for values on more than one axis", () => {
       const a = drawBlueprint(grid, bp, { seed: "one" });
       assert.deepEqual(drawBlueprint([...grid].reverse(), bp, { seed: "one" }).ids, a.ids);
       const reached = new Set<string>();
-      for (const seed of ["two", "three", "four", "five", "six", "seven", "eight", "nine"]) for (const id of drawBlueprint(grid, bp, { seed }).ids) reached.add(id);
+      // The draw depends on the questions' ids, which are made fresh in each run, so a fixed few seeds could fail to reach one of four
+      // questions by chance (eight seeds: about one run in sixty). Forty make that about one in a hundred billion.
+      for (const seed of Array.from({ length: 40 }, (_, i) => `seed-${i}`)) for (const id of drawBlueprint(grid, bp, { seed }).ids) reached.add(id);
       assert.deepEqual(where([...reached]), ["1/apply", "1/apply", "1/apply", "1/apply"]);
     });
 
