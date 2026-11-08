@@ -121,6 +121,25 @@ const WRONG_ANSWER = /^(?:(?:incorrect|wrong|distractor|distracter)(?:answer|opt
 /** A column named "Question #" or "Question No." numbers the questions; it is not their words. */
 function columnOf(cell: string): Column | null {
   if (cell.includes("#")) return null;
+  return columnNamed(nameUsed(cell));
+}
+
+/**
+ * The words of a header cell that name its column. Usually the whole cell. A name with a description after it, as a template for a quiz
+ * game writes its columns ("Question - max 95 characters", "Answer 1 - max 60 characters", "Correct answer(s) - choose at least one"), is
+ * its name without the description, tried only when the whole of the cell is not a name, so that a name that is meant ("Feedback - if
+ * right" is not "Feedback") is never cut short. A bracket of a letter or a number ("Option (A)") is not a description.
+ */
+function nameUsed(cell: string): string {
+  if (columnNamed(cell) !== null) return cell;
+  const shorter = cell.replace(DESCRIPTION, "").trim();
+  return shorter !== "" && shorter !== cell.trim() && columnNamed(shorter) !== null ? shorter : cell;
+}
+
+/** What follows a name and describes it: from a dash with a space each side, or a bracket that holds words, to the end of the cell. */
+const DESCRIPTION = /\s+[-\u2013\u2014]\s+.*$|\s*\((?=[^)]*(?:\s|[a-z]{3}))[^)]*\).*$/i;
+
+function columnNamed(cell: string): Column | null {
   const name = squash(cell.replace(LANGUAGE_SUFFIX, ""));
   const wrong = WRONG_ANSWER.exec(name);
   if (wrong) {
@@ -188,7 +207,7 @@ function readHeader(cells: readonly string[]): Header {
   // Numbered only when every answer column is. A table that mixes the two ("A" and "Option 2") has no one way to say which column
   // a cell means, so its numbers are not read as places.
   const answerAt = order.map((c, i) => (c !== null && /^a\d$/.test(c) ? i : -1)).filter((i) => i !== -1);
-  const numbered = answerAt.length > 0 && answerAt.every((i) => /\d$/.test(squash((cells[i] as string).replace(LANGUAGE_SUFFIX, ""))));
+  const numbered = answerAt.length > 0 && answerAt.every((i) => /\d$/.test(squash(nameUsed(cells[i] as string).replace(LANGUAGE_SUFFIX, ""))));
   return { order, unused, repeated, conflicting, numbered };
 }
 
