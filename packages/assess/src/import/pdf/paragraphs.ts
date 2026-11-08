@@ -61,7 +61,9 @@ function vocabularyOf(pages: ReadonlyArray<{ lines: readonly PdfLine[] }>): Set<
     p.lines.forEach((line, i) => {
       let text = line.text;
       // The last word of a line that ends in a hyphen is half of one, and so is the first of the next.
-      if (/-$/.test(text)) text = text.replace(/\S+$/, " ");
+      // Both patterns begin where a word begins and not at any letter: a line of 80,000 letters, a space and a hyphen took 2 seconds to
+      // try from each letter in turn, and 400,000 of them would take a minute.
+      if (/-$/.test(text)) text = text.replace(/(?<!\S)\S+$/, " ");
       if (i > 0 && /-$/.test((p.lines[i - 1] as PdfLine).text)) text = text.replace(/^\s*\S+/, " ");
       for (const m of text.matchAll(WORD)) vocab.add(m[0].toLowerCase());
     });
@@ -71,7 +73,7 @@ function vocabularyOf(pages: ReadonlyArray<{ lines: readonly PdfLine[] }>): Set<
 
 /** What a broken word is joined as: whole, if the document spells it whole and not hyphenated; otherwise with its hyphen kept. */
 function joinBroken(before: string, after: string, vocab: ReadonlySet<string>): string {
-  const left = /([A-Za-zÀ-ɏ]+)-$/.exec(before);
+  const left = /(?<![A-Za-zÀ-ɏ])([A-Za-zÀ-ɏ]+)-$/.exec(before);
   const right = /^([A-Za-zÀ-ɏ]+)/.exec(after);
   if (!left || !right) return `${before} ${after}`;
   const whole = `${left[1]}${right[1]}`.toLowerCase();

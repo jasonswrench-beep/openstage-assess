@@ -30,8 +30,11 @@ export interface PdfFont {
   decode(bytes: Uint8Array): Glyph[];
 }
 
-/** The most widths one font's /W array may set in all; a font has at most 65,536 codes. */
-const MAX_WIDTHS_SET = 400_000;
+/**
+ * The most widths the /W arrays of all the fonts of one document may set, in all; a font has at most 65,536 codes, so this is
+ * fifteen fonts that are full. About 40 MB when it is used up.
+ */
+const MAX_WIDTHS_SET = 1_000_000;
 
 /** The font's own name, without the six capitals and a plus that a subset puts in front. */
 const plainName = (base: string): string => base.replace(/^[A-Z]{6}\+/, "");
@@ -160,31 +163,58 @@ function simpleFont(doc: PdfDocument, font: PdfDict, baseName: string): PdfFont 
   return out;
 }
 
+/** What the widths of a document's fonts have used of the budget, and the widths already made for each descendant font. */
+interface WidthStore {
+  left: number;
+  made: Map<PdfDict, Map<number, number>>;
+}
+const widthStores = new WeakMap<PdfDocument, WidthStore>();
+
+/**
+ * The widths a composite font's descendant sets in its /W array, by code. Made once for each descendant, and from one budget for the
+ * whole document. The budget was one for each font: a Type0 font is a dictionary of its own and any number of them may name the same
+ * descendant, so 40 fonts of 145 bytes each, that shared one /W, made 40 maps of 400,000 widths (700 MB), and 100 would have made
+ * 1.7 GB. A real document has a few dozen fonts of a few hundred widths each; when the budget is gone the fonts after it have no widths
+ * of their own and take the descendant's default, which only changes how wide a gap must be to be a space.
+ */
+function widthsOf(doc: PdfDocument, descendant: PdfDict | undefined): Map<number, number> {
+  if (!descendant) return new Map();
+  let store = widthStores.get(doc);
+  if (!store) {
+    store = { left: MAX_WIDTHS_SET, made: new Map() };
+    widthStores.set(doc, store);
+  }
+  const known = store.made.get(descendant);
+  if (known) return known;
+  const widths = new Map<number, number>();
+  store.made.set(descendant, widths);
+  const w = doc.array(descendant.get("W"));
+  if (w) {
+    // Each range was kept to 70,000 codes and the number of ranges was not: 100,000 ranges of 70,000 codes, from a file of 3 KB, took two
+    // minutes. A font has at most 65,536 codes, so a budget for the whole of the widths is more than any real font needs.
+    for (let i = 0; i < w.length && store.left > 0; ) {
+      const start = doc.number(w[i]);
+      const second = doc.resolve(w[i + 1]);
+      if (Array.isArray(second)) {
+        for (let k = 0; k < second.length && store.left > 0; k++, store.left--) widths.set(start + k, doc.number(second[k]));
+        i += 2;
+      } else {
+        const end = doc.number(second);
+        const value = doc.number(w[i + 2]);
+        for (let c = start; c <= end && c - start < 70000 && store.left > 0; c++, store.left--) widths.set(c, value);
+        i += 3;
+      }
+    }
+  }
+  return widths;
+}
+
 function compositeFont(doc: PdfDocument, font: PdfDict, baseName: string): PdfFont {
   const descendant = doc.dict(doc.array(font.get("DescendantFonts"))?.[0]);
   const descriptor = descendant ? doc.dict(descendant.get("FontDescriptor")) : undefined;
   const toUnicode = toUnicodeOf(doc, font);
   const dw = descendant ? doc.number(descendant.get("DW"), 1000) : 1000;
-  const widths = new Map<number, number>();
-  const w = descendant ? doc.array(descendant.get("W")) : undefined;
-  if (w) {
-    // Each range was kept to 70,000 codes and the number of ranges was not: 100,000 ranges of 70,000 codes, from a file of 3 KB, took two
-    // minutes. A font has at most 65,536 codes, so one budget for the whole of the widths is more than any real font needs.
-    let budget = MAX_WIDTHS_SET;
-    for (let i = 0; i < w.length && budget > 0; ) {
-      const start = doc.number(w[i]);
-      const second = doc.resolve(w[i + 1]);
-      if (Array.isArray(second)) {
-        for (let k = 0; k < second.length && budget > 0; k++, budget--) widths.set(start + k, doc.number(second[k]));
-        i += 2;
-      } else {
-        const end = doc.number(second);
-        const value = doc.number(w[i + 2]);
-        for (let c = start; c <= end && c - start < 70000 && budget > 0; c++, budget--) widths.set(c, value);
-        i += 3;
-      }
-    }
-  }
+  const widths = widthsOf(doc, descendant);
   const { bold, italic } = weightOf(baseName, descriptor, doc);
   // Codes are two bytes unless the map says otherwise (an Identity encoding, which is what a text PDF from a word processor has).
   const codeBytes = Math.max(1, toUnicode && toUnicode.codeBytes > 0 ? toUnicode.codeBytes : 2);
