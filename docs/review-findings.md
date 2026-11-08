@@ -1190,7 +1190,7 @@ The fixes of the round before were again not complete, and the hunt found the cl
 readers (a count, a step or a repeated word in a small file) in nearly every other reader. All of it is fixed in alpha 22 except what
 is listed at the end; each fix was written by someone other than the reader who found it, in a worktree of its own, with hostile
 inputs read in a process of its own under a time limit, shown to fail on the previous commit's source, and held by faults planted one at
-a time (`tools/release/mutations-alpha-*.json`, 264 in all, run by `tools/release/mutate.mjs`).
+a time (`tools/release/mutations-alpha-*.json`, 258 in all, run by `tools/release/mutate.mjs`).
 
 What the readers found in alpha 21's fixes:
 
