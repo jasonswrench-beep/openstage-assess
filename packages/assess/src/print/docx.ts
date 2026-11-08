@@ -97,7 +97,9 @@ function pictureXml(block: PictureBlock, pictures: Pictures): string {
  * must be followed by a paragraph in Word, so a small one ends it, which also keeps two tables from running into one.
  */
 function tableXml(block: TableBlock, textWidth: number, fontSize: number): string {
-  const columns = Math.max(1, ...block.table.rows.map((row) => row.reduce((sum, c) => sum + c.colspan, 0)));
+  // A loop and not `Math.max(1, ...rows)`: a stem table of 130,000 rows is more arguments than a call can take.
+  let columns = 1;
+  for (const row of block.table.rows) columns = Math.max(columns, row.reduce((sum, c) => sum + c.colspan, 0));
   const room = Math.max(72, textWidth - block.indent);
   const width = tw(room / columns);
   const rule = (side: string): string => `<w:${side} w:val="single" w:sz="4" w:space="0" w:color="808080"/>`;

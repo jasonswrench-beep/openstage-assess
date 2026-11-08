@@ -236,7 +236,9 @@ function csvCell(value: string): string {
 }
 
 function renderCsv(rows: readonly Row[]): string {
-  const width = Math.max(2, ...rows.map((row) => row.answers.length));
+  // A loop and not `Math.max(2, ...)`: a bank of 130,000 questions is more arguments than a call can take.
+  let width = 2;
+  for (const row of rows) width = Math.max(width, row.answers.length);
   const letters = Array.from({ length: width }, (_, i) => LETTERS.charAt(i));
   const header = ["Type", "Question", ...letters, "Correct", "Points", "Feedback if right", "Feedback if wrong"];
   const lines = rows.map((row) => [

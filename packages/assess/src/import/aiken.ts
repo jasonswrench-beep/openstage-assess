@@ -25,8 +25,11 @@ import { countVerdicts, type Importer, type ImportOptions, type ImportResult, ty
 
 export const AIKEN_PROFILE_ID = "aiken";
 
-const OPTION = /^\s*([A-Za-z])\s*[.)]\s+(\S.*?)\s*$/;
-const ANSWER = /^\s*ANSWER\s*:\s*(.*?)\s*$/i;
+// The text a pattern captures and then trims is written as `\S(?:.*\S)?` (from the first character that shows to the last) and not as
+// `\S.*?` followed by `\s*$`: the lazy form tried the end of the capture at every character, and each try read the white space after it, so a
+// line with 80,000 spaces in the middle took four seconds (and one of a megabyte, twelve minutes). The captures are the same.
+export const OPTION = /^\s*([A-Za-z])\s*[.)]\s+(\S(?:.*\S)?)\s*$/;
+export const ANSWER = /^\s*ANSWER\s*:\s*((?:\S(?:.*\S)?)?)\s*$/i;
 /** A number in front of the question: that is the Standard Format, which has its own reader. */
 const NUMBERED = /^\s*(?:Q(?:uestion)?\s*)?\d{1,4}\s*[.):]\s/i;
 

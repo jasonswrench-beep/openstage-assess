@@ -8,6 +8,7 @@
 
 import { checkAnswerKey } from "../quality/answer-key.ts";
 import { liveFindings } from "../model/findings.ts";
+import { replacePlaceholders } from "../model/markup-scan.ts";
 import { collectRefs, escapeHtml, richTextToPlain, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
 import type { Question, QuestionType } from "../model/question.ts";
 import type { DestinationReport, ReportItem } from "./types.ts";
@@ -87,20 +88,21 @@ export const FORMATTING = /<(strong|em|u|s|sub|sup|code|pre|ul|ol|li|blockquote|
  * would leave a question such as "What does [the chart] show?" reading "What does show?".
  */
 function objectsAsText(html: string, question: Question, losses: Losses): string {
-  return html
-    .replace(/<oa-media\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-media>/gi, (_whole, ref: string) => {
-      losses.pictures++;
-      const media = question.media.find((m) => m.id === ref);
-      if (media?.decorative) return " ";
-      const alt = media ? media.alt.trim() : "";
-      return alt.length > 0 ? ` [Picture: ${escapeHtml(alt)}] ` : " [Picture] ";
-    })
-    .replace(/<oa-math\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi, (_whole, ref: string) => {
-      losses.equations++;
-      const math = question.math.find((m) => m.id === ref);
-      const latex = math ? math.latex.trim() : "";
-      return latex.length > 0 ? ` [Equation: ${escapeHtml(latex)}] ` : " [Equation] ";
-    });
+  // The placeholders are found by `replacePlaceholders`, which reads an unclosed `<oa-media` once; the pattern it replaces read to the end
+  // of the text from every one of them (a stem of 40,000 took each exporter twenty seconds).
+  const withPictures = replacePlaceholders(html, "media", (ref) => {
+    losses.pictures++;
+    const media = question.media.find((m) => m.id === ref);
+    if (media?.decorative) return " ";
+    const alt = media ? media.alt.trim() : "";
+    return alt.length > 0 ? ` [Picture: ${escapeHtml(alt)}] ` : " [Picture] ";
+  });
+  return replacePlaceholders(withPictures, "math", (ref) => {
+    losses.equations++;
+    const math = question.math.find((m) => m.id === ref);
+    const latex = math ? math.latex.trim() : "";
+    return latex.length > 0 ? ` [Equation: ${escapeHtml(latex)}] ` : " [Equation] ";
+  });
 }
 
 /**
@@ -120,7 +122,7 @@ export function plainText(text: RichText, question: Question, losses: Losses, ke
 
   if (!keepBreaks && plain.includes("\n")) {
     losses.breaks = true;
-    plain = plain.replace(/\s*\n\s*/g, " ");
+    plain = plain.replace(/(?<!\s)\s*\n\s*/g, " ");
   }
   return plain.trim();
 }

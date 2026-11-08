@@ -15,6 +15,7 @@ import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse
 import type { ExportResult, ReportItem } from "./types.ts";
 import { buildReport, exportable, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
 import { escapeHtml, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
+import { replacePlaceholders } from "../model/markup-scan.ts";
 import { sniffImage } from "../model/image.ts";
 
 export const MOODLE_XML_ID = "moodle-xml";
@@ -37,8 +38,6 @@ interface Planned {
   equations?: number;
 }
 
-const MATH_ELEMENT = /<oa-math\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi;
-
 /**
  * The equations in a text, written the way Moodle reads them: LaTeX between \( and \), which its MathJax filter turns into the
  * equation. Nothing is lost, since the LaTeX is what the equation is. An equation with no LaTeX, or LaTeX that holds the characters
@@ -46,7 +45,7 @@ const MATH_ELEMENT = /<oa-math\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/g
  */
 function carryEquations(text: RichText, question: Question, carried: { count: number }): RichText {
   if (text.format === "plain") return text;
-  const content = text.content.replace(MATH_ELEMENT, (whole, ref: string) => {
+  const content = replacePlaceholders(text.content, "math", (ref, whole) => {
     const latex = question.math.find((m) => m.id === ref)?.latex.trim() ?? "";
     if (latex === "" || latex.includes("\\)") || latex.includes("$$")) return whole;
     carried.count++;
@@ -67,7 +66,7 @@ const SAFE_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 function carryPictures(text: RichText, question: Question, media: ReadonlyMap<string, Uint8Array> | undefined): { text: RichText; files: Array<{ name: string; bytes: Uint8Array }> } {
   if (media === undefined || text.format === "plain") return { text, files: [] };
   const files = new Map<string, Uint8Array>();
-  const content = text.content.replace(/<oa-media\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-media>/gi, (whole, ref: string) => {
+  const content = replacePlaceholders(text.content, "media", (ref, whole) => {
     const entry = question.media.find((m) => m.id === ref);
     const bytes = entry ? media.get(entry.file) : undefined;
     const info = bytes ? sniffImage(bytes) : undefined;

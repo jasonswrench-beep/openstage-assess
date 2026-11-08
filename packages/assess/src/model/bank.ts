@@ -96,7 +96,8 @@ export function folderIndex(nodes: readonly FolderNode[]): Map<string, string> {
 /** All question ids under a folder, including its descendants. */
 export function questionsUnder(node: FolderNode): string[] {
   const out = [...node.questionIds];
-  for (const child of node.children) out.push(...questionsUnder(child));
+  // One at a time: a folder of 130,000 questions is more arguments than a call can take.
+  for (const child of node.children) for (const id of questionsUnder(child)) out.push(id);
   return out;
 }
 

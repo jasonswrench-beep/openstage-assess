@@ -18,6 +18,8 @@
  * the surrounding HTML.
  */
 
+import { placeholderRefs, replaceBareElements, stripTags } from "./markup-scan.ts";
+
 export interface RichText {
   format: "rich" | "plain";
   content: string;
@@ -335,17 +337,27 @@ export function sanitizeRichText(input: string): SanitizeResult {
 /** Plain text for search, previews, reading level and duplicate detection. */
 export function richTextToPlain(value: RichText | string): string {
   const content = typeof value === "string" ? value : value.content;
-  const withBreaks = content
-    .replace(/<\s*br\s*\/?\s*>/gi, "\n")
-    .replace(/<\s*\/\s*(p|li|tr|div|blockquote|h[1-6])\s*>/gi, "\n")
-    // The cells of a row are words apart, or a table of two columns reads as one word to a row.
-    .replace(/<\s*\/\s*(td|th)\s*>/gi, " ")
-    .replace(/<oa-media[^>]*>\s*<\/oa-media>/gi, " ")
-    .replace(/<oa-math[^>]*>\s*<\/oa-math>/gi, " ")
-    .replace(/<[^>]*>/g, "");
+  // `<\s*br\s*(?:\/\s*)?>` and not `\s*\/?\s*`: the same text, but one run of white space cannot be shared out between two `\s*` in as many
+  // ways as it has characters. The tags are found by `markup-scan.ts` and not by `<[^>]*>`, which reads to the end of the text from every
+  // `<` that has no `>` after it (a stem of 200,000 of them took ten seconds to open, in every bank that held one).
+  const withBreaks = stripTags(
+    replaceBareElements(
+      replaceBareElements(
+        content
+          .replace(/<\s*br\s*(?:\/\s*)?>/gi, "\n")
+          .replace(/<\s*\/\s*(p|li|tr|div|blockquote|h[1-6])\s*>/gi, "\n")
+          // The cells of a row are words apart, or a table of two columns reads as one word to a row.
+          .replace(/<\s*\/\s*(td|th)\s*>/gi, " "),
+        "oa-media",
+        " ",
+      ),
+      "oa-math",
+      " ",
+    ),
+  );
   return decodeEntities(withBreaks)
     .replace(/[ \t]+/g, " ")
-    .replace(/\s*\n\s*/g, "\n")
+    .replace(/(?<!\s)\s*\n\s*/g, "\n")
     .trim();
 }
 
@@ -359,11 +371,7 @@ export function collectRefs(value: RichText | string): Refs {
   const content = typeof value === "string" ? value : value.content;
   const media: string[] = [];
   const math: string[] = [];
-  const pattern = /<oa-(media|math)\s[^>]*ref\s*=\s*"([^"]*)"/gi;
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(content)) !== null) {
-    const kind = (m[1] as string).toLowerCase();
-    const ref = m[2] as string;
+  for (const { kind, ref } of placeholderRefs(content)) {
     if (kind === "media") media.push(ref);
     else math.push(ref);
   }

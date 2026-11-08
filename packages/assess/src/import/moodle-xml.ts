@@ -21,6 +21,7 @@ import { finding, FindingCode, type Finding, type Severity } from "../model/find
 import { localId } from "../model/ids.ts";
 import type { MediaRef, Question, QuestionBody } from "../model/question.ts";
 import { isEmptyRichText, plainToRich, rich, richTextToPlain, sanitizeRichText, type RichText } from "../model/richtext.ts";
+import { hasTag } from "../model/markup-scan.ts";
 import { unreadObjectFindings } from "../model/unread-objects.ts";
 import { allText, elements, first, parseXml, XmlError, type XmlElement } from "./docx/xml.ts";
 import { PictureKeeper, type FoundPicture } from "./html-pictures.ts";
@@ -194,7 +195,7 @@ class Reader {
     const raw = allText(first(container, "text") ?? { name: "", attrs: {}, children: [] }).trim();
     if (raw === "" && elements(container, "file").length === 0) return undefined;
     const format = attr(container, "format") || "moodle_auto_format";
-    const markup = format === "html" || (format === "moodle_auto_format" && /<[a-z][^>]*>/i.test(raw));
+    const markup = format === "html" || (format === "moodle_auto_format" && hasTag(raw));
     if (format === "markdown") this.note(FindingCode.MarkupRemoved, "warn", "A text is marked as Markdown, which was not converted. It is kept as it was written.");
     if (!markup) return raw === "" ? undefined : plainToRich(raw);
     const html = modelTags(this.pictures.replaceImages(raw, this.finder(this.filesOf(container))));
@@ -557,7 +558,8 @@ export const moodleXmlImporter: Importer = {
     blocks.forEach((q, i) => {
       const own = matched ? (raw[i] as string).split(/\r?\n/) : [`<question type="${attr(q, "type")}"> ${quoted(textOf(first(q, "name")))}`];
       place.push({ first: lines.length, last: lines.length + own.length - 1 });
-      lines.push(...own);
+      // One at a time: a question whose text holds 130,000 line breaks is more arguments than a call can take (a 130 KB file).
+      for (const line of own) lines.push(line);
     });
 
     const questions: Question[] = [];

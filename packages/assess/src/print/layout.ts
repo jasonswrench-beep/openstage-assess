@@ -21,6 +21,7 @@ import type { DestinationReport, ReportItem } from "../export/types.ts";
 import { buildReport, hasText, plural, TYPE_NAMES } from "../export/text.ts";
 import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
 import { shuffledFor } from "../model/random.ts";
+import { markupTokens, replacePlaceholders } from "../model/markup-scan.ts";
 import { escapeHtml, type RichText } from "../model/richtext.ts";
 import { readTableHtml, replaceTables } from "../model/table.ts";
 import { sniffImage, type ImageInfo } from "../model/image.ts";
@@ -324,10 +325,11 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
       return `<oa-table n="${kept.length - 1}"></oa-table>`;
     });
   }
-  const tokens = content.match(/<[^>]+>|[^<]+/g) ?? [];
+  // `markupTokens` is `content.match(/<[^>]+>|[^<]+/g)`, which read to the end of the text from every `<` that had no `>` after it.
+  const tokens = markupTokens(content);
   for (const token of tokens) {
     if (!token.startsWith("<")) {
-      add(decode(token.replace(/\s*\n\s*/g, " ")));
+      add(decode(token.replace(/(?<!\s)\s*\n\s*/g, " ")));
       continue;
     }
     const closing = token.startsWith("</");
@@ -391,7 +393,7 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
         if (closing) break;
         flush();
         const table = kept[Number(/n="(\d+)"/.exec(token)?.[1])];
-        if (table) paragraphs.push([{ text: table.rows.map((r) => r.map((c) => c.text.replace(/\s*\n\s*/g, " ")).join(" | ")).join("\n"), table }]);
+        if (table) paragraphs.push([{ text: table.rows.map((r) => r.map((c) => c.text.replace(/(?<!\s)\s*\n\s*/g, " ")).join(" | ")).join("\n"), table }]);
         break;
       }
       case "oa-media": {
@@ -439,18 +441,17 @@ export function paragraphsOf(text: RichText, question: Question, losses: Losses,
 
 /** A table's markup with each picture and equation in it written as the words that stand for it, and counted, since a cell holds words. */
 function wordsForObjects(html: string, question: Question, losses: Losses): string {
-  return html
-    .replace(/<oa-media\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-media>/gi, (_whole, ref: string) => {
-      const media = question.media.find((m) => m.id === ref);
-      if (media?.decorative) return " ";
-      losses.pictures++;
-      return media && media.alt.trim() !== "" ? ` [Picture: ${escapeHtml(media.alt.trim())}] ` : " [Picture] ";
-    })
-    .replace(/<oa-math\b[^>]*\bref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi, (_whole, ref: string) => {
-      losses.equations++;
-      const math = question.math.find((m) => m.id === ref);
-      return math && math.latex.trim() !== "" ? ` [Equation: ${escapeHtml(math.latex.trim())}] ` : " [Equation] ";
-    });
+  const withPictures = replacePlaceholders(html, "media", (ref) => {
+    const media = question.media.find((m) => m.id === ref);
+    if (media?.decorative) return " ";
+    losses.pictures++;
+    return media && media.alt.trim() !== "" ? ` [Picture: ${escapeHtml(media.alt.trim())}] ` : " [Picture] ";
+  });
+  return replacePlaceholders(withPictures, "math", (ref) => {
+    losses.equations++;
+    const math = question.math.find((m) => m.id === ref);
+    return math && math.latex.trim() !== "" ? ` [Equation: ${escapeHtml(math.latex.trim())}] ` : " [Equation] ";
+  });
 }
 
 const asText = (paragraphs: Run[][]): string => paragraphs.map((p) => p.map((r) => r.text).join("")).join(" ").replace(/\s+/g, " ").trim();
@@ -467,6 +468,12 @@ const OPTION_INDENT = 58;
 const MAX_PICTURE_HEIGHT = 288;
 /** What a pixel is on paper, in points: a picture is drawn at the size its pixels are at 96 to the inch, and never larger. */
 const POINTS_PER_PIXEL = 0.75;
+
+/** The contents of a list replaced by another list, which is not the same list, one at a time. */
+function replaceAll<T>(list: T[], next: readonly T[]): void {
+  list.length = 0;
+  for (const item of next) list.push(item);
+}
 
 /**
  * A paragraph that holds a picture becomes the paragraph without it and the picture on a line under it. A picture is not placed
@@ -689,9 +696,11 @@ function buildQuestion(question: Question, number: number, o: PrintOptions, pict
   }
 
   // A picture stands on a line of its own under the words it was in, at the size it is printed.
-  out.splice(0, out.length, ...expandPictures(out, PAPERS[o.paper]));
+  // The new list is put in place by a loop and not spread into `splice`, whose arguments are the limit of what a call can take (a question
+  // of 130,000 options threw "Maximum call stack size exceeded"). `test/spread-guard.test.ts` holds every spread into a call to a reason.
+  replaceAll(out, expandPictures(out, PAPERS[o.paper]));
   // A table of the question stands as a table in a Word file, between the words round it.
-  out.splice(0, out.length, ...expandTables(out));
+  replaceAll(out, expandTables(out));
 
   if (!key && question.type !== "essay") {
     // The answer sheet's own spacing: a little room after each question.
@@ -761,7 +770,7 @@ export function layoutTest(questions: readonly Question[], options: PrintOptions
     number++;
     total += question.points;
     if (key) strip.push(`${number}-${stripAnswer(question)}`);
-    body.push(...built.blocks);
+    for (const block of built.blocks) body.push(block);
     items.push({ ...base, outcome: built.notes.length > 0 ? "exportedWithLosses" : "exported", notes: built.notes });
   });
 
@@ -782,7 +791,7 @@ export function layoutTest(questions: readonly Question[], options: PrintOptions
       : "Mark your answers on your answer sheet, not on this booklet.";
     blocks.push({ kind: "para", runs: [{ text, bold: true }], size, indent: 0, before: 2, after: 4 });
   }
-  blocks.push(...body);
+  for (const block of body) blocks.push(block);
   if (key && options.keyStrip && strip.length > 0) {
     blocks.push({ kind: "para", runs: [{ text: "Answers in order, for scoring by hand" }], size, bold: true, indent: 0, before: 14, after: 3, keepNext: true });
     // Ten to a line, so that a line can be held against a sheet. A dash on its own is a question a sheet cannot carry, and a question mark is one with no answer recorded.

@@ -34,6 +34,7 @@
  */
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
+import { pushAll } from "../model/lists.ts";
 import type { Metadata } from "../model/question.ts";
 import { AT_LEAST, CHOICE_HINTS, SHARE } from "./standard-text-format.ts";
 import { gridFor, tableTag } from "./table-tags.ts";
@@ -116,6 +117,30 @@ const ACCEPTED_LIST = /^\s*accept(?:ed|able)\s+answers\s*:/i;
 const PAIR_LINE = /^[^=]+\s=\s[^=]+$/;
 /** The instruction of a matching exercise, which is what lets lines of pairs under it be read as one. */
 const MATCH_INSTRUCTION = /\bmatch(?:ing)?\b/i;
+
+/**
+ * What the lines of a stem have said so far about a matching exercise: whether any of them holds the instruction, and whether any is a
+ * pair already. It is asked at every line added to a stem that has no options, and was answered by joining all the lines and reading them
+ * again each time (a stem of 32,000 lines took ten seconds). The lines before the last are read once and kept; the last is read each time,
+ * because `splitStemLine` shortens it in place.
+ */
+const stemReadings = new WeakMap<object, { read: number; instruction: boolean; pair: boolean }>();
+function stemSaysMatch(question: { stemLines: string[] }): boolean {
+  let held = stemReadings.get(question);
+  if (held === undefined) {
+    held = { read: 0, instruction: false, pair: false };
+    stemReadings.set(question, held);
+  }
+  const lines = question.stemLines;
+  const last = lines.length - 1;
+  for (; held.read < last; held.read++) {
+    const line = lines[held.read] as string;
+    if (MATCH_INSTRUCTION.test(line)) held.instruction = true;
+    if (PAIR_LINE.test(line.trim())) held.pair = true;
+  }
+  const end = lines[last] ?? "";
+  return (held.instruction || MATCH_INSTRUCTION.test(end)) && !(held.pair || PAIR_LINE.test(end.trim()));
+}
 export const CORRECT_FEEDBACK = /^\s*~\s*(.*)$/;
 export const INCORRECT_FEEDBACK = /^\s*@\s*(.*)$/;
 const ANSWER_ENTRY = /^\s*(\d{1,4})\s*[.)]\s*(.*)$/;
@@ -196,7 +221,10 @@ function isAnswerKeyHeading(text: string): boolean {
 }
 
 /** The two words of a true or false question's choices on one line, apart from each other. */
-const TF_CHOICES = /^true\s*(?:\/|\||-|\bor\b|\s{2,}|\t)\s*false\.?$/i;
+// Two or more white space characters, or a tab, are a separator too. They are asked of the whole run between the words with a look ahead,
+// and not as `\s*(?:\s{2,}|\t)\s*`, whose three runs of white space could be shared out in as many ways as the run has characters: "true" and
+// 8,000 spaces and a letter took eighty-two seconds.
+export const TF_CHOICES = /^true(?:\s*(?:\/|\||-|\bor\b)\s*|(?=\s\s)\s+|(?=\s*\t)\s+)false\.?$/i;
 /** A true or false question's answer, alone on a line. */
 const TF_ANSWER = /^(?:true|false)\.?$/i;
 /** The line of underscores a printed test leaves to write an answer on. */
@@ -325,7 +353,10 @@ const KEY_ENTRY_ALL = /(\d{1,4}(?:\.\d{1,3})?)\s*[.):]\s*(true|false|none|[-–�
 /** A dotted entry with anything after it, "4.5. Bromine" or "4.5. —": it is an entry only if a question has that label. */
 const DOTTED_ENTRY = /^\s*(\d{1,3}\.\d{1,3})\s*[.):]?\s*(.*)$/;
 /** What a key puts where a question has no key in it: nothing, a dash, or n/a. It is not an answer. */
-const NO_KEY = /^\s*(?:[-–—]*|n\/?a|none)\s*$/i;
+// Nothing, or a dash, or n/a. Written as two ways to match (white space alone, or white space round a word) and not as one pattern with an
+// optional middle between two runs of white space, which could be shared out in as many ways as the run had characters (a line of 32,000
+// spaces and a letter took 350 ms).
+export const NO_KEY = /^\s*$|^\s*(?:[-–—]+|n\/?a|none)\s*$/i;
 
 /** The entries a line holds when all it holds is entries, or nothing if it holds anything else. */
 function keyEntriesOnLine(text: string): Array<{ label: string; value: string }> | undefined {
@@ -722,11 +753,21 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
     return follows ? { number, label: `${chapter}.${number}`, rest: "" } : undefined;
   };
 
+  // Where a run of directive lines ends is the same for every line in it, so the walk is made once for a run and not again from each of its
+  // lines (32,000 lines of "Points: 1" took twenty-four seconds). What the line after the run is, a question start or not, depends on where
+  // the scan has got to, and is asked each time.
+  let directiveRun: { from: number; end: number } | undefined;
   const directiveRunLeadsToQuestion = (i: number): boolean => {
-    let j = nextContent(i);
-    while (j !== -1 && isDirective(textAt(j))) j = nextContent(j);
+    let j: number;
+    if (directiveRun !== undefined && i >= directiveRun.from && i < directiveRun.end) j = directiveRun.end;
+    else {
+      j = nextContent(i);
+      while (j !== -1 && isDirective(textAt(j))) j = nextContent(j);
+      // A run that goes to the end of the file ends at the count, which no line is at.
+      directiveRun = { from: i, end: j === -1 ? count : j };
+    }
     // Any way of starting a question, "4.2 ..." and "(2) ..." as well as "2. ...", so that a Type line above one is a Type line.
-    return j !== -1 && questionStartAt(j) !== undefined;
+    return j !== -1 && j < count && questionStartAt(j) !== undefined;
   };
 
   /** The line after this one is an option or a feedback line: a question has begun. */
@@ -1612,7 +1653,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
       if (key.length > 0 && ACCEPTED_LABEL.test(line)) {
         question.acceptedLabel = true;
         const forms = ACCEPTED_LIST.test(line) ? splitAcceptedList(key) : [key];
-        question.answerLines.push(...forms);
+        pushAll(question.answerLines, forms);
         if (forms.length > 1) {
           question.notes.push(
             finding(
@@ -1756,8 +1797,7 @@ export function scanStandardText(blocks: SourceBlock[], file: string, defaultPoi
           hint === undefined &&
           question.options.length === 0 &&
           question.stemLines.length > 0 &&
-          MATCH_INSTRUCTION.test(question.stemLines.join(" ")) &&
-          !question.stemLines.some((l) => PAIR_LINE.test(l.trim()))
+          stemSaysMatch(question)
         ) {
           const pairs = pairRunAt(i);
           if (pairs.length >= 2) {
@@ -2108,7 +2148,7 @@ function resolveKeys(
       } else if (covered.length > 1) {
         for (const q of covered) {
           q.keyAmbiguous = true;
-          q.ambiguousKeyValues.push(...entry.values);
+          pushAll(q.ambiguousKeyValues, entry.values);
         }
       } else {
         unmatched.push({ block, entry });
@@ -2161,36 +2201,44 @@ const contentOf = (q: RawQuestion): string => `${same(q.stemLines)}\u0000${q.opt
  * folded is reported with where it was, so that nothing goes without a word.
  */
 function foldCopiesWithoutAnswers(questions: RawQuestion[], file: string, fileFindings: Finding[]): void {
-  const withAnswers = new Map<string, RawQuestion[]>();
+  // Each group of copies is a list filled in place and a place to take the next one from, because the copies taken are always the first of
+  // their group: copying the group for every question that joined it, walking its taken ones again for every copy without answers, and
+  // searching the whole list for every question that was folded, took 19 seconds for 40,000 pairs.
+  const withAnswers = new Map<string, { copies: RawQuestion[]; next: number }>();
   for (const q of questions) {
     if (!q.keyed) continue;
     const content = contentOf(q);
-    withAnswers.set(content, [...(withAnswers.get(content) ?? []), q]);
+    const group = withAnswers.get(content);
+    if (group === undefined) withAnswers.set(content, { copies: [q], next: 0 });
+    else group.copies.push(q);
   }
   if (withAnswers.size === 0) return;
 
-  const taken = new Set<RawQuestion>();
-  const folded: RawQuestion[] = [];
+  const folded = new Set<RawQuestion>();
   let kept = 0;
+  let first = Infinity;
+  let last = -Infinity;
   for (const q of questions) {
     if (q.keyed) continue;
     const gives = q.answerLines.length > 0 || q.options.some((o) => o.starred);
-    const twin = gives ? undefined : withAnswers.get(contentOf(q))?.find((k) => !taken.has(k));
-    if (twin) {
-      taken.add(twin);
-      folded.push(q);
+    const group = gives ? undefined : withAnswers.get(contentOf(q));
+    if (group !== undefined && group.next < group.copies.length) {
+      group.next++;
+      folded.add(q);
+      first = Math.min(first, q.firstBlock);
+      last = Math.max(last, q.lastBlock);
     } else kept++;
   }
-  if (folded.length === 0) return;
+  if (folded.size === 0) return;
 
-  for (const q of folded) questions.splice(questions.indexOf(q), 1);
-  const first = Math.min(...folded.map((q) => q.firstBlock));
-  const last = Math.max(...folded.map((q) => q.lastBlock));
+  let written = 0;
+  for (const q of questions) if (!folded.has(q)) questions[written++] = q;
+  questions.length = written;
   fileFindings.push(
     finding(
       FindingCode.RepeatedQuestionsFolded,
       "info",
-      `${folded.length} ${folded.length === 1 ? "question appears" : "questions appear"} twice: once without answers, in lines ${first + 1} to ${last + 1}, and again after the answer key heading, with them. ` +
+      `${folded.size} ${folded.size === 1 ? "question appears" : "questions appear"} twice: once without answers, in lines ${first + 1} to ${last + 1}, and again after the answer key heading, with them. ` +
         `Each was imported once, from the copy with the answers, and the copy without them was not imported. ` +
         (kept > 0 ? `${kept} ${kept === 1 ? "question before the heading says" : "questions before the heading say"} something different from every question after ${kept === 1 ? "it" : "them"}, and ${kept === 1 ? "was" : "were"} kept as written.` : "Nothing before the heading was left over."),
       { source: { file, firstBlock: first, lastBlock: last } },
