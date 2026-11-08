@@ -819,6 +819,36 @@ function gather(bytes: Uint8Array, name: string): Found | { refusal: string } {
   return { docs, files, problems, unreadQti: [...files.keys()].filter((n) => n.toLowerCase().endsWith(".qti")).length };
 }
 
+/**
+ * Whether a manifest of the package has a `resource` element whose `type` is one of Blackboard's own assessments ("assessment/x-bb-qti-pool",
+ * "assessment/x-bb-qti-test"). Read as XML, so that the same words in a comment, in another attribute (`xsi:type`, `data-type`) or on
+ * another element are nothing, a manifest of any size is read whole, every manifest of the package is looked at, and one saved as UTF-16 is
+ * read as that. A manifest that is not XML names nothing.
+ */
+function namesBlackboardAssessment(files: Map<string, Uint8Array>): boolean {
+  for (const [name, data] of files) {
+    if (!/(^|\/)imsmanifest\.xml$/i.test(name)) continue;
+    try {
+      const text = manifestText(data);
+      const stack: XmlElement[] = [parseXml(text)];
+      for (let e = stack.pop(); e !== undefined; e = stack.pop()) {
+        if (e.name.split(":").pop() === "resource" && /^assessment\/x-bb-/i.test(e.attrs["type"] ?? "")) return true;
+        stack.push(...elements(e));
+      }
+    } catch (error) {
+      if (!(error instanceof XmlError)) throw error;
+    }
+  }
+  return false;
+}
+
+function manifestText(data: Uint8Array): string {
+  if (data[0] === 0xff && data[1] === 0xfe) return new TextDecoder("utf-16le").decode(data.subarray(2));
+  if (data[0] === 0xfe && data[1] === 0xff) return new TextDecoder("utf-16be").decode(data.subarray(2));
+  const text = Buffer.from(data).toString("utf8");
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
   const file = options.file ?? "input.zip";
   const ctx: Context = { file, at: options.at ?? new Date().toISOString(), author: options.author ?? "import", media: new Map(), defaultPoints: options.defaultPoints ?? DEFAULT_POINTS, files: new Map() };
@@ -932,8 +962,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
     // Blackboard. It takes a resource that is an assessment: a course export that holds only documents and announcements has .dat files
     // too, and a manifest that merely mentions the company is nothing.
     const datFiles = [...found.files.keys()].filter((n) => /\.dat$/i.test(n) && !n.split("/").some((part) => part.startsWith("__MACOSX") || part.startsWith("._")));
-    const manifest = [...found.files.entries()].find(([n]) => /(^|\/)imsmanifest\.xml$/i.test(n));
-    const blackboard = datFiles.length > 0 && manifest !== undefined && /\btype\s*=\s*["']assessment\/x-bb-[a-z0-9._-]*["']/i.test(Buffer.from(manifest[1]).toString("utf8").slice(0, 200000));
+    const blackboard = datFiles.length > 0 && namesBlackboardAssessment(found.files);
     const another =
       readable.length > 0
         ? ` This zip holds ${shown}, which ${readable.length === 1 ? "is a file" : "are files"} of another kind. Unzip it and import ${readable.length === 1 ? "that file" : "those files"} on ${readable.length === 1 ? "its" : "their"} own.`

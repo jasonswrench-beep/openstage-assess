@@ -727,6 +727,31 @@ describe("a Common Cartridge package", () => {
       assert.ok(!/Blackboard exports/.test(said({ "imsmanifest.xml": titled, "a.dat": dat }).text));
     });
 
+    // Found by a third reviewer: the manifest was matched as text in its first 200,000 characters, so words in a comment or another attribute
+    // counted, a long export lost the message, only the first manifest was looked at, and a manifest saved as UTF-16 was not read.
+    test("is read from the manifest's resources as XML: a comment, another attribute or a long manifest make no difference", () => {
+      const pool = (type: string, extra = ""): string => `<manifest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><resources>${extra}<resource ${type} href="res00001.dat"/></resources></manifest>`;
+      const claimed = (files: Record<string, string | Uint8Array>): boolean => /package that Blackboard exports for its own use/.test(read(zipOf(files), "export.zip").fileFindings.map((f) => f.message).join(" | "));
+      // The words are in a comment, in an attribute that is not the type, or on an element that is not a resource.
+      assert.ok(!claimed({ "imsmanifest.xml": `<manifest><!-- <resource type="assessment/x-bb-pool"/> --><resources/></manifest>`, "a.dat": dat }));
+      assert.ok(!claimed({ "imsmanifest.xml": pool('xsi:type="assessment/x-bb-pool" type="webcontent"'), "a.dat": dat }));
+      assert.ok(!claimed({ "imsmanifest.xml": pool('data-type="assessment/x-bb-test" type="webcontent"'), "a.dat": dat }));
+      assert.ok(!claimed({ "imsmanifest.xml": `<manifest><resources><item type="assessment/x-bb-test"/></resources></manifest>`, "a.dat": dat }));
+      // A prefix on the element is still a resource, and a type in either kind of quote counts.
+      assert.ok(claimed({ "imsmanifest.xml": `<imscp:manifest xmlns:imscp="x"><imscp:resources><imscp:resource type='assessment/x-bb-qti-pool'/></imscp:resources></imscp:manifest>`, "a.dat": dat }));
+      // A thousand and more documents come first, in more than 200,000 characters of manifest, and the pool is last.
+      const documents = Array.from({ length: 2500 }, (_, i) => `<resource type="resource/x-bb-document" identifier="res${i}" href="res${i}.dat" title="${"d".repeat(60)}"/>`).join("");
+      assert.ok(documents.length > 200000);
+      assert.ok(claimed({ "imsmanifest.xml": pool('type="assessment/x-bb-qti-pool"', documents), "a.dat": dat }), "the pool is last");
+      // Another manifest of the package, not the first one found, names the pool.
+      assert.ok(claimed({ "imsmanifest.xml": `<manifest><resources/></manifest>`, "export/imsmanifest.xml": pool('type="assessment/x-bb-qti-test"'), "a.dat": dat }));
+      // A manifest saved as UTF-16 is read as that, and one that is not XML at all names nothing and does not stop the import.
+      const utf16 = new Uint8Array(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(pool('type="assessment/x-bb-qti-pool"'), "utf16le")]));
+      assert.ok(claimed({ "imsmanifest.xml": utf16, "a.dat": dat }));
+      assert.ok(!claimed({ "imsmanifest.xml": "this is not xml <<<", "a.dat": dat }));
+      assert.ok(!claimed({ "imsmanifest.xml": "", "a.dat": dat }));
+    });
+
     test("keeps the advice to import a file that is beside it, after what it says it is", () => {
       const got = said({ "imsmanifest.xml": manifest, "res00001.dat": dat, "bank.txt": "x" });
       assert.match(got.text, /package that Blackboard exports for its own use/);

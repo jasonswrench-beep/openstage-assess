@@ -1183,6 +1183,34 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by a third reader, of the second round of fixes (7 November 2026, after alpha 16)
+
+The code of the second round was given to a third independent reader. It proved four faults, one of them a wrong key, and found the other
+pieces sound: 400,000 random headers never landed on the key from a name that is not one, 40,000 random Blackboard files gave no wrong key
+through the Blackboard reader, every code point alone was checked against `isBlankText`, and the old and new stem check agreed on ten
+million strings. Fixed, each with a test and planted faults:
+
+- **Wrong key: the guard in the table reader asked for exact alternation.** A Blackboard row whose answer was itself "Correct" or
+  "Incorrect" (an answer to "Is the claim correct?"), or that had a gap, broke the alternation, got no warning, and the option named
+  "Incorrect" was marked right in a question that read as parsed. About one in six of a random run of Blackboard rows with such answers
+  (6,700 of 40,000) was read wrong and not flagged. The guard now
+  looks at the cells where Blackboard puts its words (the second and fourth answer cell, whatever the answers say) and at a Correct
+  cell that is only the word. The test for it had asserted that rows that do not alternate are not flagged, which is the property the
+  fault used.
+- **A Blackboard file was sent to the table reader because its first question had an answer "Stem".** The guard for a table's header
+  looked at every field of the first row. A header never begins with one of the file's types, and it is only looked for when the first
+  field is not one.
+- **"Correct answer - max 60 characters" was refused.** The guard that a cut onto the key needs a description about choosing was meant
+  for the bare words that are also the text of an answer. It covers Answer, Ans and Key; Correct answer, Right answer and the like are
+  only ever the key, as they were before.
+- **The Blackboard pool message was matched as text.** The manifest's first 200,000 characters were searched, so an export with more than
+  about 1,500 resources before the assessment lost the message, and the same words in a comment, in `xsi:type` or `data-type`, or on an
+  element that is not a resource gave a false one; only the first manifest was looked at and one saved as UTF-16 was not read. The
+  manifest is parsed as XML now and its `resource` elements are looked at, in every manifest of the package.
+
+Not changed: the header rule costs about 8 ms for a cell of 32,767 characters, twice the first version's 4 ms, and a hostile table with
+many such cells is slow in bulk either way (a table of 100,000 such cells would take over ten minutes).
+
 ### Found by a reader of the fixes for the first (7 November 2026, after alpha 15)
 
 A second independent reader was given the fixes of the entry below and asked to break them. It proved seven faults, two of them wrong

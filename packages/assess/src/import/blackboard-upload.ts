@@ -117,8 +117,10 @@ export function looksLikeBlackboardUpload(bytes: Uint8Array): boolean {
   }
   const rows = rowsOf(text).slice(0, 40);
   if (rows.length === 0) return false;
-  // A first row that names a Question column is the header of a table, whatever follows it.
-  if (rows[0]?.fields.some((f) => ["question", "questions", "question text", "stem"].includes(wordOf(f)))) return false;
+  // A first row that names a Question column is the header of a table, whatever follows it. A header never begins with one of the file's
+  // own types, and a row that does is a question whose answer or sample answer may well be the word "Stem".
+  const firstRow = rows[0];
+  if (firstRow && !ALL_TYPES.has((firstRow.fields[0] ?? "").toUpperCase()) && firstRow.fields.some((f) => ["question", "questions", "question text", "stem"].includes(wordOf(f)))) return false;
   const typed = rows.filter((r) => r.fields.length >= 2 && looksTyped(r.fields[0] as string));
   // A row with a strict shape is firm evidence, so a few stray lines among the rows (a count at the end, a lone type) do not undo it: the
   // reader keeps each as an orphan or a failed essay, which is said, and a file sent to the table reader instead marked "incorrect" as the
