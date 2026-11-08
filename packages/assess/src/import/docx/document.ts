@@ -353,17 +353,20 @@ export function documentToBlocks(root: XmlElement, numbering?: Numbering, format
   function run(r: XmlElement, b: Lines): void {
     // Text that Word hides is not on the page a person reads. A note to self, or an old answer, left hidden in the file
     // must not turn up in a question, so it is not read, and the count says it was there.
-    if (formatting?.hidden(first(r, "w:rPr"), b.style)) {
+    const properties = first(r, "w:rPr");
+    if (formatting?.hidden(properties, b.style)) {
       b.hidden += elements(r, "w:t").map(allText).join("");
       return;
     }
-    const format = formatting ? formatting.run(first(r, "w:rPr"), b.style) : NO_FORMAT;
+    const format = formatting ? formatting.run(properties, b.style) : NO_FORMAT;
+    // Looked up once for the run and not for each text element in it: `first` reads the run's children from the start, so a run of
+    // k text elements cost k squared when it was asked inside the loop (80,000 of them, 3 KB of file, took 25 seconds).
+    const fonts = properties ? first(properties, "w:rFonts")?.attrs : undefined;
     for (const child of r.children) {
       if (typeof child === "string") continue;
       switch (child.name) {
         case "w:t": {
           // Text in the Symbol font shows as Greek letters and signs whatever letters it is written with.
-          const fonts = first(first(r, "w:rPr") ?? { name: "", attrs: {}, children: [] }, "w:rFonts")?.attrs;
           if (fonts && (isSymbolFont(fonts["w:ascii"]) || isSymbolFont(fonts["w:hAnsi"]))) {
             const shown = inSymbolFont(allText(child), { ascii: fonts["w:ascii"], hAnsi: fonts["w:hAnsi"] });
             stats.symbolsRead += shown.changed;
