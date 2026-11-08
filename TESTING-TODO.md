@@ -324,6 +324,12 @@ been tried in Blackboard. Use `Blackboard, Upload questions (text file)` in the 
   nothing around it.
 - [ ] **A numeric question.** It is left out because the page does not say what the tolerance means. If you know, or can try
   one, say what the third field does.
+- [ ] **Import a file that Blackboard itself wrote, or one a colleague wrote for it.** The reader (`blackboard-upload.ts`, added on
+  7 November 2026) was built from the page and from this program's own file, and every row of the exporter's file reads back. It has not
+  met a real one. Look for: a row that begins with a type it does not know (it is kept as an essay and fails, with the words), a field
+  that is quoted or holds HTML (read as plain text, with the marks in it), a points or feedback column (not part of the documented
+  file, so it would be read as another answer), and a multiple answer question, whose partial credit the file cannot say (read as all
+  or nothing).
 
 ## Answer sheets
 
