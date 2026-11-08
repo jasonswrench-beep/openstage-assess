@@ -310,8 +310,8 @@
   {
     "label": "ascii85: the limit is reached one byte early",
     "file": "packages/assess/src/import/pdf/document.ts",
-    "from": "if (length + extra > cap) throw",
-    "to": "if (length + extra >= cap) throw",
+    "from": "Math.max(1024, to), cap));\n  let length = 0;\n  const room = (extra: number): void => {\n    if (length + extra > cap) throw",
+    "to": "Math.max(1024, to), cap));\n  let length = 0;\n  const room = (extra: number): void => {\n    if (length + extra >= cap) throw",
     "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
   },
   {
@@ -338,15 +338,15 @@
   {
     "label": "ascii85: the output is given with the room that was not used",
     "file": "packages/assess/src/import/pdf/document.ts",
-    "from": "  return out.slice(0, length);\n}",
-    "to": "  return out;\n}",
+    "from": "out[length++] = bytes[k] as number;\n  }\n  return out.slice(0, length);\n}",
+    "to": "out[length++] = bytes[k] as number;\n  }\n  return out;\n}",
     "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
   },
   {
     "label": "ascii85: the output grows by what is needed",
     "file": "packages/assess/src/import/pdf/document.ts",
-    "from": "const bigger = new Uint8Array(Math.min(cap, Math.max(out.length * 2, length + extra)));",
-    "to": "const bigger = new Uint8Array(Math.min(cap, length + extra));",
+    "from": "Math.max(1024, to), cap));\n  let length = 0;\n  const room = (extra: number): void => {\n    if (length + extra > cap) throw new PdfError(\"A stream in this PDF unpacks to more than a test bank could hold.\");\n    if (length + extra > out.length) {\n      const bigger = new Uint8Array(Math.min(cap, Math.max(out.length * 2, length + extra)));",
+    "to": "Math.max(1024, to), cap));\n  let length = 0;\n  const room = (extra: number): void => {\n    if (length + extra > cap) throw new PdfError(\"A stream in this PDF unpacks to more than a test bank could hold.\");\n    if (length + extra > out.length) {\n      const bigger = new Uint8Array(Math.min(cap, length + extra));",
     "tests": ["packages/assess/test/pdf-hostile.test.ts", "packages/assess/test/pdf.test.ts"]
   },
   {

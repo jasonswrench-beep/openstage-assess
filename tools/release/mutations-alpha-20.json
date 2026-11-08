@@ -218,8 +218,8 @@
   {
     "label": "run length limit looked at after",
     "file": "packages/assess/src/import/pdf/document.ts",
-    "from": "if (length + extra > cap) throw",
-    "to": "if (length > cap) throw",
+    "from": "Math.max(1024, data.length * 2), cap));\n  let length = 0;\n  const room = (extra: number): void => {\n    if (length + extra > cap) throw",
+    "to": "Math.max(1024, data.length * 2), cap));\n  let length = 0;\n  const room = (extra: number): void => {\n    if (length > cap) throw",
     "tests": [
       "packages/assess/test/pdf-hostile.test.ts"
     ]
