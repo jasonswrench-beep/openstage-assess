@@ -44,10 +44,19 @@ export interface XmlLimits {
   maxNodes?: number;
 }
 
+/**
+ * A node costs 180 to 500 bytes once it is in the tree and has been read (an empty cell of a sheet 183, an empty Word paragraph 500),
+ * so the 10 million nodes this once allowed were 2 to 5 GB, from a file of 17 to 30 KB: `<w:p/>` three million times took 1.5 GB.
+ * Three million is above any real part. The parts Word wrote in this repository's fixtures spend 29.7 characters or more on each node
+ * (the densest is the document of equations, measured with parseXml on every part of fixtures/word-authored), so a part of that
+ * density at the 64 million character limit has at most 2.2 million of them, and a test bank of a thousand questions has a few
+ * hundred thousand. An Excel sheet is denser (about 11 characters a node and three nodes a cell), and three million nodes is a
+ * million cells, which is 90,000 rows of the eleven columns of the template. The large private corpora were not at hand to measure.
+ */
 export const DEFAULT_XML_LIMITS: Required<XmlLimits> = {
   maxChars: 64 * 1024 * 1024,
   maxDepth: 256,
-  maxNodes: 10_000_000,
+  maxNodes: 3_000_000,
 };
 
 export class XmlError extends Error {

@@ -31,6 +31,7 @@
  * object that is asked about each paragraph once, in order, and not a function.
  */
 
+import { styleChains } from "./style-chains.ts";
 import { elements, first, type XmlElement } from "./xml.ts";
 
 interface Level {
@@ -120,6 +121,20 @@ function readLevel(lvl: XmlElement): Level {
 // Number formats
 // ---------------------------------------------------------------------------
 
+/**
+ * Word has nine list levels, 1 to 9, which a file counts from 0. A level outside them is a file Word did not write, and reading it
+ * once filled a table of twenty million places (860 MB, then "Map maximum size exceeded").
+ */
+const MAX_LEVEL = 8;
+/** The most Word lets a list start at ("Start at" in its list dialog). A start past it is a number nobody typed. */
+const MAX_START = 32_767;
+/**
+ * The most characters a label may have. A label is what stands in front of a question, "12." or "Question 12:"; one of this length
+ * is not one, and a start of 1e9 in letters, which Word repeats (aa, bb, cc), was a label of 38 million letters kept for each
+ * paragraph. The same goes for a level text that names the count a hundred thousand times.
+ */
+const MAX_LABEL = 300;
+
 /** a to z, then aa, bb, cc: Word repeats the letter, it does not count in base 26. */
 function letters(n: number, upper: boolean): string {
   const index = (n - 1) % 26;
@@ -162,8 +177,11 @@ function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
-/** A count in a format, or undefined for a format this reader does not know. */
-function formatCount(n: number, format: string): string | undefined {
+/**
+ * A count in a format; undefined for a format this reader does not know; null for a count that would be written in more characters
+ * than a label may have (only letters, which repeat, are ever so long).
+ */
+function formatCount(n: number, format: string): string | undefined | null {
   switch (format) {
     case "decimal":
       return String(n);
@@ -171,6 +189,7 @@ function formatCount(n: number, format: string): string | undefined {
       return n >= 0 && n < 10 ? `0${n}` : String(n);
     case "lowerLetter":
     case "upperLetter":
+      if (n >= 1 && Math.floor((n - 1) / 26) + 1 > MAX_LABEL) return null;
       return n >= 1 ? letters(n, format === "upperLetter") : String(n);
     case "lowerRoman":
     case "upperRoman":
@@ -238,16 +257,13 @@ export function readNumbering(parts: NumberingParts): Numbering {
     }
   }
 
-  /** A style and the styles it is based on, nearest first. A loop in the chain ends it. */
-  const chainOf = (styleId: string | undefined): string[] => {
-    const chain: string[] = [];
-    let at = styleId;
-    while (at !== undefined && !chain.includes(at) && styles.has(at)) {
-      chain.push(at);
-      at = styles.get(at)?.basedOn;
-    }
-    return chain;
-  };
+  // A style, and the styles it is based on, nearest first, make its chain; a loop in it ends it where it would repeat, and a style the
+  // file does not define ends it too. Asked of a chain one style at a time it cost the length of the chain for each style and for each
+  // paragraph, and a chain of 20,000 styles (168 KB of file) took 28 seconds to read, so the chains are worked out once for all the
+  // styles together (`styleChains`) and each question about one is a lookup.
+  const chains = styleChains(styles);
+  const withLevel = chains.nearest((s) => s.ilvl !== undefined);
+  const withList = chains.nearest((s) => s.numId !== undefined);
 
   /**
    * The definition a list instance takes its levels from, following a link to a
@@ -281,18 +297,17 @@ export function readNumbering(parts: NumberingParts): Numbering {
     if (style?.numId === undefined || style.numId === "0") return undefined;
     const instance = instances.get(style.numId);
     if (!instance) return undefined;
-    let ilvl = style.ilvl;
-    for (const above of chainOf(style.basedOn)) {
-      if (ilvl !== undefined) break;
-      ilvl = styles.get(above)?.ilvl;
-    }
-    ilvl ??= 0;
+    // The style's own level, or the nearest one down its chain that has one.
+    const near = withLevel.get(styleId);
+    const ilvl = (near ? styles.get(near.style)?.ilvl : undefined) ?? 0;
     return { level: `${instance.definition}/${ilvl}`, tiedTo: definitions.get(instance.definition)?.levels.get(ilvl)?.style };
   };
 
+  const claims = new Map<string, ReturnType<typeof claimOf>>();
   const holders = new Map<string, string>();
   for (const id of styles.keys()) {
     const claim = claimOf(id);
+    claims.set(id, claim);
     if (!claim) continue;
     if (claim.tiedTo !== undefined) holders.set(claim.level, claim.tiedTo);
     else if (!holders.has(claim.level)) holders.set(claim.level, id);
@@ -300,10 +315,33 @@ export function readNumbering(parts: NumberingParts): Numbering {
 
   /** Whether the list a style names is really the style's: it holds the level, or is based on the style that does. */
   const holdsItsLevel = (styleId: string): boolean => {
-    const claim = claimOf(styleId);
+    const claim = claims.get(styleId);
     if (!claim) return true;
     const holder = holders.get(claim.level);
-    return holder === undefined || holder === styleId || chainOf(styleId).includes(holder);
+    return holder === undefined || holder === styleId || chains.reaches(styleId, holder);
+  };
+
+  /**
+   * What a paragraph style gives a paragraph that names no list or level of its own: the list of the nearest style on its chain that
+   * names one (and holds the level it names), and the nearest level. A style that names a level some other style holds names
+   * nothing, and the search ends there: a level it names is not looked at either. The answer belongs to the style and not to the
+   * paragraph, so it is worked out once for each style the paragraphs use.
+   */
+  const fromStyle = new Map<string, { list: string | undefined; level: number | undefined }>();
+  const styleGives = (styleId: string | undefined): { list: string | undefined; level: number | undefined } => {
+    if (styleId === undefined || !styles.has(styleId)) return { list: undefined, level: undefined };
+    const known = fromStyle.get(styleId);
+    if (known) return known;
+    const listAt = withList.get(styleId);
+    const levelAt = withLevel.get(styleId);
+    let given: { list: string | undefined; level: number | undefined };
+    if (listAt && !holdsItsLevel(listAt.style)) {
+      given = { list: undefined, level: levelAt && levelAt.steps < listAt.steps ? styles.get(levelAt.style)?.ilvl : undefined };
+    } else {
+      given = { list: listAt ? styles.get(listAt.style)?.numId : undefined, level: levelAt ? styles.get(levelAt.style)?.ilvl : undefined };
+    }
+    fromStyle.set(styleId, given);
+    return given;
   };
 
   const counters = new Map<string, Map<number, number>>();
@@ -315,20 +353,10 @@ export function readNumbering(parts: NumberingParts): Numbering {
       const directId = direct ? valueOf(direct, "w:numId") : undefined;
       const directLevel = direct ? integer(valueOf(direct, "w:ilvl")) : undefined;
       const styleId = (properties ? valueOf(properties, "w:pStyle") : undefined) ?? defaultStyle;
-      const chain = chainOf(styleId);
 
       // The nearest style in the chain that names a list, and the nearest that names a
       // level. A style that names a level some other style holds names nothing.
-      let styleList: string | undefined;
-      let styleLevel: number | undefined;
-      for (const id of chain) {
-        const style = styles.get(id);
-        if (styleList === undefined && style?.numId !== undefined) {
-          if (holdsItsLevel(id)) styleList = style.numId;
-          else break;
-        }
-        if (styleLevel === undefined && style?.ilvl !== undefined) styleLevel = style.ilvl;
-      }
+      const { list: styleList, level: styleLevel } = styleGives(styleId);
 
       const numId = directId ?? styleList;
       if (numId === undefined || numId === "0") return undefined;
@@ -344,6 +372,8 @@ export function readNumbering(parts: NumberingParts): Numbering {
       // chose a different list, or the first. A level that a definition ties to a
       // style does not pull the style's paragraphs to that level: the style has to say it.
       const ilvl = directLevel ?? styleLevel ?? 0;
+      // The counting below keeps a count for every level above this one, so a level of twenty million was twenty million counts.
+      if (ilvl < 0 || ilvl > MAX_LEVEL) return { unread: `its level (${ilvl + 1}) is not one of the nine levels (1 to 9) that a Word list has` };
 
       const levelOf = (at: number): Level | undefined => instance.overrides.get(at)?.level ?? definition.levels.get(at);
       const level = levelOf(ilvl);
@@ -353,6 +383,15 @@ export function readNumbering(parts: NumberingParts): Numbering {
       // it, so a number for it would be a guess.
       if (level.restart !== undefined && !(level.restart >= 0 && level.restart <= Math.max(ilvl - 1, 0))) {
         return { unread: `its level (${ilvl + 1}) says it restarts after level ${level.restart}, which Word does not accept` };
+      }
+
+      // Counting from a number that Word's own list dialog would not take is a guess at what was meant, and in letters it is a label of
+      // millions of them. The starts that can show in this label are those of this level (and its override) and of the levels above,
+      // which are counted once if they have not been used. A bullet shows no number.
+      if (level.format !== "bullet") {
+        let biggest = Math.max(level.start, instance.overrides.get(ilvl)?.start ?? 0);
+        for (let above = 0; above < ilvl; above++) biggest = Math.max(biggest, levelOf(above)?.start ?? 0);
+        if (biggest > MAX_START) return { unread: `its start (${biggest}) is more than the 32,767 that Word lets a list start at` };
       }
 
       // Count it. The first paragraph of an instance at a level starts that level
@@ -384,23 +423,42 @@ export function readNumbering(parts: NumberingParts): Numbering {
 
       if (level.format === "bullet") return { bullet: true };
 
+      // A text longer than a label may be is not read, before it is: a text that names the count a hundred thousand times was a
+      // label of that many numbers for each paragraph.
+      if (level.text.length > MAX_LABEL) return { unread: `the text of its level is more than ${MAX_LABEL} characters long, which is not a label` };
+
       let unknown: string | undefined;
+      let tooLong = false;
+      let startTooBig: number | undefined;
+      let made = 0;
       const text = level.text.replace(/%([1-9])/g, (_, digit: string) => {
+        if (tooLong) return "";
         const at = Number(digit) - 1;
         const there = levelOf(at);
-        const n = at === ilvl ? value : (count.get(at) ?? there?.start ?? 1);
+        const shownBefore = count.get(at);
+        const n = at === ilvl ? value : (shownBefore ?? there?.start ?? 1);
+        // A level below this one that has not been counted shows its start, which the check above did not look at.
+        if (at > ilvl && shownBefore === undefined && n > MAX_START) startTooBig = n;
         const own = there?.format ?? "decimal";
         // Legal style turns letters, numerals and ordinals into plain numbers, the
         // level's own included.
         const format = level.legal && /^(lower|upper)(Letter|Roman)$|^ordinal$/.test(own) ? "decimal" : own;
         const shown = formatCount(n, format);
+        if (shown === null) {
+          tooLong = true;
+          return "";
+        }
         if (shown === undefined) {
           unknown = format;
           return "";
         }
-        return shown;
+        made += shown.length;
+        if (made > MAX_LABEL) tooLong = true;
+        return tooLong ? "" : shown;
       });
       if (unknown !== undefined) return { unread: `its numbering format (${unknown}) is not one this reader knows` };
+      if (tooLong || text.length > MAX_LABEL) return { unread: `the number it would show is more than ${MAX_LABEL} characters long, which is not a label` };
+      if (startTooBig !== undefined) return { unread: `its start (${startTooBig}) is more than the 32,767 that Word lets a list start at` };
 
       const label = text.trim();
       return label === "" ? {} : { label };
