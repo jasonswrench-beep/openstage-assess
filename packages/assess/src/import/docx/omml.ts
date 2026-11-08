@@ -26,6 +26,8 @@ export type MathResult = { ok: true; math: MathReading } | { ok: false; reason: 
 /** Deeper than any equation is, and more elements than one should have: a file that has more is damaged or hostile. */
 const MAX_DEPTH = 60;
 const MAX_NODES = 5000;
+/** The most text one run of an equation may hold before it is taken apart into parts: a part is at least a character. */
+const MAX_RUN_TEXT = 4 * MAX_NODES;
 
 class Unread extends Error {}
 const refuse = (reason: string): never => {
@@ -97,7 +99,7 @@ class Reader {
     if (isProperties(name)) return;
     switch (name) {
       case "m:r":
-        out.push(...this.run(c, inArray));
+        for (const part of this.run(c, inArray)) out.push(part);
         return;
       case "m:f":
         out.push({ k: "frac", num: this.row(first(c, "m:num"), depth + 1, inArray), den: this.row(first(c, "m:den"), depth + 1, inArray), bar: valueOf(first(c, "m:fPr"), "m:type") !== "noBar" });
@@ -224,13 +226,23 @@ class Reader {
     else if (sty === "b") variant = "bold";
     else if (sty === "bi") variant = "bold-italic";
     else if (sty === "p") variant = "normal";
-    return tokens(text, variant, inArray);
+    // The parts of a run are parts of the equation like any other, and were not counted: a run of 130,000 signs (130 KB of text, a
+    // few hundred bytes in the file) was 130,000 parts handed to one call, which failed with "Maximum call stack size exceeded", and
+    // a part of 64 MB would have been 64 million objects. The text is taken as it comes only up to what could be that many parts.
+    if (text.length > MAX_RUN_TEXT) refuse("it has a run of text longer than any equation has");
+    const made = tokens(text, variant, inArray, MAX_NODES - this.count);
+    this.count += made.length;
+    return made;
   }
 }
 
 /** The text of a run as numbers, letters and signs. A word in a plain run (sin, cm) is one name. */
-function tokens(text: string, variant: Variant | undefined, inArray: boolean): Node[] {
+function tokens(text: string, variant: Variant | undefined, inArray: boolean, room: number): Node[] {
   const out: Node[] = [];
+  // Past the room the equation has left, a part is a refusal, so a run cannot hold more than that many.
+  const push = (node: Node): void => {
+    if (out.push(node) > room) refuse("it has more parts than an equation has");
+  };
   const chars = [...text];
   let i = 0;
   const isDigit = (c: string | undefined): boolean => c !== undefined && c >= "0" && c <= "9";
@@ -243,20 +255,20 @@ function tokens(text: string, variant: Variant | undefined, inArray: boolean): N
       let v = c;
       i++;
       while (i < chars.length && (isDigit(chars[i]) || ((chars[i] === "." || chars[i] === ",") && isDigit(chars[i + 1])))) v += chars[i++];
-      out.push({ k: "num", v, ...(variant ? { variant } : {}) });
+      push({ k: "num", v, ...(variant ? { variant } : {}) });
     } else if (isLetter(c)) {
       let v = c;
       i++;
       // A combining mark belongs to the letter before it.
       while (i < chars.length && /\p{M}/u.test(chars[i] as string)) v += chars[i++];
       if (variant === "normal") while (i < chars.length && isLetter(chars[i])) v += chars[i++];
-      out.push({ k: "id", v, ...(variant ? { variant } : {}) });
+      push({ k: "id", v, ...(variant ? { variant } : {}) });
     } else if (/\p{M}/u.test(c) && out.length > 0 && out[out.length - 1]?.k === "id") {
       (out[out.length - 1] as { v: string }).v += c;
       i++;
     } else {
       // "&" in an array of equations is where the lines line up.
-      out.push({ k: "op", v: inArray && c === "&" ? "&align" : c });
+      push({ k: "op", v: inArray && c === "&" ? "&align" : c });
       i++;
     }
   }

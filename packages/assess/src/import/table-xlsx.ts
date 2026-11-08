@@ -22,6 +22,27 @@ import { MAX_COLUMNS, MAX_ROWS, TableError, type TableFile, type TableNote, type
 /** Expanded size beyond which a workbook is not read. Far more than a list of questions. */
 const MAX_BYTES = 256 * 1024 * 1024;
 
+/**
+ * The most characters Excel keeps in a cell. A cell of a workbook that has more was not written by Excel, and every cell that names
+ * a shared string gets all of it: one string of a megabyte named by 300 cells was 300 MB read and a gigabyte once the questions were
+ * built, and the first rows of a sheet are searched for the names of the columns cell by cell.
+ */
+const MAX_CELL_CHARS = 32_767;
+
+/**
+ * The most characters in all the cells of a workbook together, a shared string counted again for each cell that names it. A bank of
+ * a thousand questions has a million or so; this is sixty times that. It is what keeps a few kilobytes of file (one string of 32,767
+ * characters named by every cell of a sheet) from being many gigabytes of cells.
+ */
+const MAX_TOTAL_CHARS = 64 * 1024 * 1024;
+
+/**
+ * The most places in all the rows of a workbook together. A row is kept as the list of its cells from the first column on, with an
+ * empty string for each cell with nothing in it, so a row with one cell in column IV is 256 places and 2 KB: 200,000 of them are 1 MB
+ * of file and 960 MB of memory. A table of questions has some twenty columns.
+ */
+const MAX_PLACES = 16_000_000;
+
 const OLE_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
 
 function startsWith(bytes: Uint8Array, text: string): boolean {
@@ -167,9 +188,32 @@ export function readXlsx(bytes: Uint8Array): TableFile {
   const noValue: string[] = [];
   const errors: string[] = [];
   let beyond = 0;
+  /** Cells that had more than Excel allows in a cell, and were cut: how many, and the first few by name. */
+  let cutCount = 0;
+  const cut: string[] = [];
+  let totalChars = 0;
+  let places = 0;
 
   const sheetList = kid(workbook, "sheets");
-  for (const entry of sheetList ? kids(sheetList, "sheet") : []) {
+  const entries = sheetList ? kids(sheetList, "sheet") : [];
+  // A part is read once for each sheet that names it, and keeps its rows once for each as well: sixty bytes of `<sheet>` was another
+  // 570 MB. Excel does not write two sheets that are one part, and which of them the cells belong to is not something to guess.
+  const taken = new Map<string, string>();
+  for (const entry of entries) {
+    const relId = entry.attrs["r:id"];
+    const path = relId === undefined ? undefined : rels.byId.get(relId);
+    if (path === undefined || !byLowerCase.has(path.toLowerCase())) continue;
+    const name = entry.attrs["name"] ?? "";
+    const earlier = taken.get(path.toLowerCase());
+    if (earlier !== undefined) {
+      throw new TableError(
+        `This workbook lists the sheets "${earlier}" and "${name}", and both are the one part "${path}" of the file, so its cells would be read twice. Excel does not write that. Open the file in Excel and save it as a new workbook, with one sheet for each.`,
+      );
+    }
+    taken.set(path.toLowerCase(), name);
+  }
+
+  for (const entry of entries) {
     const name = entry.attrs["name"] ?? "";
     const relId = entry.attrs["r:id"];
     const path = relId === undefined ? undefined : rels.byId.get(relId);
@@ -206,8 +250,24 @@ export function readXlsx(bytes: Uint8Array): TableFile {
         else value = raw === "" ? "" : tidyNumber(raw);
         // A formula whose result was never stored: the cell would read as empty, so it is named.
         if (kid(c, "f") && raw === "" && type !== "inlineStr" && noValue.length < 5) noValue.push(`${name}!${c.attrs["r"] ?? ""}`);
+        if (value.length > MAX_CELL_CHARS) {
+          // Cut before anything is done to the text, so that a string of a megabyte is not tidied once for each cell that names it. White
+          // space after the cut is not a loss and is not reported as one.
+          if (value.slice(MAX_CELL_CHARS).trim() !== "") {
+            cutCount++;
+            if (cut.length < 5) cut.push(`${name}!${c.attrs["r"] ?? ""}`);
+          }
+          value = value.slice(0, MAX_CELL_CHARS);
+        }
         value = value.replace(/\r\n?/g, "\n").trim();
         if (value === "") continue;
+        totalChars += value.length;
+        if (totalChars > MAX_TOTAL_CHARS) {
+          throw new TableError(
+            `This workbook has more text in its cells than a table of questions has: over ${MAX_TOTAL_CHARS / (1024 * 1024)} million characters, counting a piece of text again for each cell that holds it. ` +
+              "A bank of a thousand questions has about a million. Split the questions into smaller workbooks, or check that a cell is not filled down a whole column.",
+          );
+        }
         any = true;
         if (column >= MAX_COLUMNS) {
           beyond++;
@@ -223,6 +283,13 @@ export function readXlsx(bytes: Uint8Array): TableFile {
         truncated = true;
         continue;
       }
+      places += cells.length;
+      if (places > MAX_PLACES) {
+        throw new TableError(
+          `This workbook has more cells than a table of questions has: over ${MAX_PLACES / 1_000_000} million places in its rows, where a row counts every column up to its last cell with something in it, empty ones included. ` +
+            "A table of questions is a few thousand rows of some twenty columns. Look for a stray cell far to the right, or far below, and clear the columns and rows beyond the table.",
+        );
+      }
       rows.push({ number, cells });
     }
     if (truncated) notes.push({ severity: "warn", message: `Only the first ${MAX_ROWS} rows of the sheet "${name}" were read.` });
@@ -234,5 +301,11 @@ export function readXlsx(bytes: Uint8Array): TableFile {
   if (noValue.length > 0) notes.push({ severity: "warn", message: `A cell holds a formula with no stored result, and was read as empty: ${noValue.join(", ")}. Open the file in Excel and save it again, and the results are stored.` });
   if (errors.length > 0) notes.push({ severity: "warn", message: `A cell shows an error, and was read as empty: ${errors.join(", ")}.` });
   if (beyond > 0) notes.push({ severity: "warn", message: `${beyond} cells beyond column ${MAX_COLUMNS} were not read.` });
+  if (cutCount > 0) {
+    notes.push({
+      severity: "warn",
+      message: `${cutCount === 1 ? "A cell holds" : `${cutCount} cells hold`} more than the 32,767 characters that Excel keeps in a cell, and ${cutCount === 1 ? "was" : "were"} cut to that: ${cut.join(", ")}${cutCount > cut.length ? " and others" : ""}. The words after the cut are not in the question.`,
+    });
+  }
   return { kind: "xlsx", sheets, notes };
 }

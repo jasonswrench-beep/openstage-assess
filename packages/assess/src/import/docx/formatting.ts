@@ -28,6 +28,7 @@
  */
 
 import type { SourceRun } from "../types.ts";
+import { styleChains, type Near } from "./style-chains.ts";
 import { elements, first, type XmlElement } from "./xml.ts";
 
 /** What a run looks like. A property that is absent is off. */
@@ -126,25 +127,21 @@ export function readFormatting(styles: XmlElement | undefined): Formatting {
     }
   }
 
-  /** A style and the styles it is based on, nearest first. A loop ends the chain. */
-  const chainOf = (id: string | undefined): StyleFormatting[] => {
-    const chain: StyleFormatting[] = [];
-    const seen = new Set<string>();
-    let at = id;
-    while (at !== undefined && !seen.has(at)) {
-      seen.add(at);
-      const style = byId.get(at);
-      if (!style) break;
-      chain.push(style);
-      at = style.basedOn;
+  // A style and the styles it is based on, nearest first, make its chain; a loop in it ends it where it would repeat. The nearest say
+  // on a property along a chain is worked out once for all the styles (see style-chains.ts), because asked of one chain at a time it
+  // cost the length of the chain for each pair of styles a paragraph and a run used, and 20,000 paragraphs in 20,000 styles of one
+  // chain took half a minute.
+  const chains = styleChains(byId);
+  const nears = new Map<keyof Said, Map<string, Near>>();
+  /** The nearest say on a property along the chain of a style (itself first), or undefined if no style on it says. */
+  function nearest<K extends keyof Said>(styleId: string | undefined, key: K): Said[K] | undefined {
+    let near = nears.get(key);
+    if (!near) {
+      near = chains.nearest((style) => style.said[key] !== undefined);
+      nears.set(key, near);
     }
-    return chain;
-  };
-
-  /** The nearest say on a property along a chain, nearest first. */
-  function nearest<K extends keyof Said>(chain: StyleFormatting[], key: K): Said[K] | undefined {
-    for (const style of chain) if (style.said[key] !== undefined) return style.said[key];
-    return undefined;
+    const found = styleId === undefined ? undefined : near.get(styleId);
+    return found === undefined ? undefined : (byId.get(found.style) as StyleFormatting).said[key];
   }
 
   // What the styles alone give, for a paragraph style and a character style. The
@@ -155,9 +152,13 @@ export function readFormatting(styles: XmlElement | undefined): Formatting {
     const known = fromStyles.get(key);
     if (known) return known;
 
-    const paragraph = chainOf(paragraphStyle ?? defaultParagraphStyle);
-    const character = chainOf(characterStyle);
-    const both = [...character, ...paragraph];
+    const paragraph = paragraphStyle ?? defaultParagraphStyle;
+    const character = characterStyle;
+    // The character style's chain, then the paragraph style's: the first to say anything is the nearest. (Not `??`: null is an answer.)
+    const nearestOfBoth = <K extends keyof Said>(name: K): Said[K] | undefined => {
+      const atCharacter = nearest(character, name);
+      return atCharacter !== undefined ? atCharacter : nearest(paragraph, name);
+    };
 
     // A toggle: the paragraph level (with the document's defaults beneath it)
     // and the character level each give a value, and they are combined by XOR.
@@ -175,11 +176,11 @@ export function readFormatting(styles: XmlElement | undefined): Formatting {
       bold: toggled("bold"),
       italic: toggled("italic"),
       hidden: toggled("hidden"),
-      underline: settle(nearest(both, "underline"), defaults.underline, false),
+      underline: settle(nearestOfBoth("underline"), defaults.underline, false),
       // Word takes a highlight from a paragraph style or from the run itself, and
       // ignores one in a character style, whatever it says. Checked against Word.
       highlight: settle(nearest(paragraph, "highlight"), defaults.highlight, null),
-      color: settle(nearest(both, "color"), defaults.color, null),
+      color: settle(nearestOfBoth("color"), defaults.color, null),
     };
     fromStyles.set(key, result);
     return result;

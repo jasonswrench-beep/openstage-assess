@@ -118,11 +118,23 @@ const FALSE_WORDS = new Set(["false", "f", "no", "n", "0"]);
  */
 const WRONG_ANSWER = /^(?:(?:incorrect|wrong|distractor|distracter)(?:answer|option|choice|response)?|(?:answer|option|choice|response)(?:incorrect|wrong))(\d+)$/;
 
+/**
+ * The most characters a cell may have and still be the name of a column. The longest name a template writes is some sixty with the
+ * limit it gives the column ("Answer 1 - max 60 characters"), and a cell longer than this is text. It is tested before anything is
+ * done with the cell, because the first rows of a sheet are searched for the row of names cell by cell (256 cells in each of ten rows),
+ * and finding where a description begins reads all the cell once for each of up to eight dashes: 1,792 cells of 32,000 characters took
+ * 25 seconds, and a CSV has no limit on a cell at all.
+ */
+const MAX_NAME_CHARS = 300;
+
 /** A column named "Question #" or "Question No." numbers the questions; it is not their words. */
 function columnOf(cell: string): Column | null {
-  if (cell.includes("#")) return null;
+  if (cell.length > MAX_NAME_CHARS || cell.includes("#")) return null;
   return columnNamed(nameUsed(cell));
 }
+
+/** The start of a cell's words for a message to quote: a cell may be 32,767 characters, and a message is not read to the end. */
+const gist = (cell: string): string => (cell.length > 80 ? `${cell.slice(0, 77)}...` : cell);
 
 /**
  * The words of a header cell that name its column. Usually the whole cell. A name with a description after it, as a template for a quiz
@@ -257,7 +269,7 @@ function readHeader(cells: readonly string[]): Header {
   const order = cells.map((cell) => {
     const column = columnOf(cell);
     if (column === null) {
-      if (cell !== "") unused.push(cell);
+      if (cell !== "") unused.push(gist(cell));
       return null;
     }
     if (seen.has(column)) {
@@ -776,7 +788,7 @@ function importTable(file: TableFile, options: ImportOptions): ImportResult {
     say("warn", "No row names the columns, and the first cells are not question types, so the layout is not known and nothing was read. Put a first row in with a cell called Question and the names of the other columns (Type, A, B, C, D, Correct), as in the blank table.");
   }
   for (const sheet of headerless && read.length === 0 ? [] : skipped) {
-    const start = (sheet.rows[0] as TableRow).cells.filter((c) => c !== "").slice(0, 3).join(" | ");
+    const start = (sheet.rows[0] as TableRow).cells.filter((c) => c !== "").slice(0, 3).map(gist).join(" | ");
     // A sheet of notes (a line or two of prose, as the blank table's "How to fill it in") is said and not warned about; one that
     // is laid out as a table might hold questions under names that were not understood, so it is a warning.
     const tableLike = sheet.rows.length >= 3 && sheet.rows.some((r) => r.cells.filter((c) => c !== "").length >= 3);

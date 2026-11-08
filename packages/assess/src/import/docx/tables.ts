@@ -69,6 +69,14 @@ interface Context {
   previous: string;
 }
 
+/**
+ * Everything in `items` added to the end of `target`. Never `target.push(...items)`: that hands every item to the call as an argument,
+ * and past about 125,000 of them the call fails with "Maximum call stack size exceeded". A cell of 130,000 paragraphs is 14 KB of file.
+ */
+function pushAll<T>(target: T[], items: readonly T[]): void {
+  for (const item of items) target.push(item);
+}
+
 const textOf = (line: Line): string => (line.listLabel ? `${line.listLabel} ${line.text}` : line.text);
 const cellText = (cell: Cell | undefined): string => (cell ? cell.lines.map(textOf).join(" ").replace(/\s+/g, " ").trim() : "");
 const isEmpty = (cell: Cell | undefined): boolean => cellText(cell) === "";
@@ -101,8 +109,10 @@ function join(parts: Line[], from: Cell | undefined): Line {
   for (const next of parts.slice(1)) {
     const part = baked(next);
     text += ` ${part.text}`;
-    if (runs && part.runs) runs.push({ text: " " }, ...part.runs);
-    else runs = undefined;
+    if (runs && part.runs) {
+      runs.push({ text: " " });
+      pushAll(runs, part.runs);
+    } else runs = undefined;
   }
   return {
     text,
@@ -212,26 +222,27 @@ function readGrid(rows: Cell[][], context: Context): Line[] | undefined {
     const stemLine = first(stem);
     const label: Line = made(context, `${number}.`, at("number") ?? stem);
     lines.push(stemLine ? join([label, stemLine], stem) : made(context, `${number}. `, stem));
-    lines.push(...rest(stem));
+    pushAll(lines, rest(stem));
 
     roles.forEach((role, i) => {
       if (role.role !== "option") return;
       const cell = row[i];
       const line = first(cell);
       if (!line) return;
-      lines.push(join([made(context, `${role.letter}.`, cell), line], cell), ...rest(cell));
+      lines.push(join([made(context, `${role.letter}.`, cell), line], cell));
+      pushAll(lines, rest(cell));
     });
 
     roles.forEach((role, i) => {
       const cell = row[i];
       if (isEmpty(cell)) return;
       const header = (headers[i] as string).trim();
-      if (role.role === "labelled") lines.push(...labelledLines(context, role.label, cell));
+      if (role.role === "labelled") pushAll(lines, labelledLines(context, role.label, cell));
       else if (role.role === "correctFeedback") lines.push(made(context, `~ ${cellText(cell)}`, cell));
       else if (role.role === "incorrectFeedback") lines.push(made(context, `@ ${cellText(cell)}`, cell));
       else if (role.role === "other") stray(header, cell);
     });
-    lines.push(...strays);
+    pushAll(lines, strays);
 
     const key = at("key");
     if (!isEmpty(key)) lines.push(made(context, `Answer: ${cellText(key)}`, key));
@@ -271,7 +282,7 @@ function readLabelled(rows: Cell[][], context: Context): Line[] | undefined {
       if (alone) {
         lines.push({ ...(shown[0] as Line), text: `${(shown[0] as Line).text.trim()} `, ...(shown[0]?.runs ? { runs: [...shown[0].runs, { text: " " }] } : {}) });
         labelled++;
-      } else lines.push(...shown);
+      } else pushAll(lines, shown);
       continue;
     }
     const labelCell = filled[0] as Cell;
@@ -293,7 +304,7 @@ function readLabelled(rows: Cell[][], context: Context): Line[] | undefined {
       parts[0] = { ...marked, text: `*${marked.text.trim()}`, ...(marked.runs ? { runs: [{ text: "*" }, ...marked.runs] } : {}) };
     }
     lines.push(join(parts, labelCell));
-    for (const c of cells) lines.push(...rest(c));
+    for (const c of cells) pushAll(lines, rest(c));
   }
   return labelled > 0 ? lines : undefined;
 }
@@ -326,7 +337,7 @@ function readKey(rows: Cell[][], context: Context): Line[] | undefined {
   if (!/^answers\s*:\s*$/i.test(context.previous.trim())) {
     lines.push(made(context, "Answers:", rows[0]?.[0]));
   }
-  lines.push(...entries);
+  pushAll(lines, entries);
   return lines;
 }
 
@@ -366,15 +377,19 @@ function readNumbered(rows: Cell[][], context: Context): Line[] | undefined {
 
     // Blank lines inside the content are structure and stay. Those before the first
     // words, and after the last, are padding a cell has and are not.
-    const content = [...contentCell.lines];
-    while (content.length > 0 && textOf(content[0] as Line).trim() === "") content.shift();
-    while (content.length > 0 && textOf(content[content.length - 1] as Line).trim() === "") content.pop();
-    const stem = content[0];
+    // Found by index and not by taking lines off the front of a copy: `shift` on a long array moves all that is left, so a cell with
+    // 130,000 empty paragraphs before its words was N squared.
+    const content = contentCell.lines;
+    let from = 0;
+    let to = content.length;
+    while (from < to && textOf(content[from] as Line).trim() === "") from++;
+    while (to > from && textOf(content[to - 1] as Line).trim() === "") to--;
+    const stem = from < to ? content[from] : undefined;
     if (!stem) return undefined;
 
     const number = /\d+/.exec(textOf(label)) as RegExpExecArray;
     lines.push(join([made(context, `${number[0]}.`, numberCell), stem], contentCell));
-    lines.push(...content.slice(1));
+    for (let i = from + 1; i < to; i++) lines.push(content[i] as Line);
 
     const pages: string[] = [];
     const extras: Line[] = [];
@@ -386,7 +401,10 @@ function readNumbered(rows: Cell[][], context: Context): Line[] | undefined {
     if (pages.length > 0) lines.push(made(context, `Page: ${pages.join("; ")}`, numberCell));
     // Whatever else was under the number is not part of the question, and a blank line
     // before it keeps it from being read as more of the stem or the last option.
-    if (extras.length > 0) lines.push(made(context, "", numberCell), ...extras);
+    if (extras.length > 0) {
+      lines.push(made(context, "", numberCell));
+      pushAll(lines, extras);
+    }
     lines.push(made(context, "", numberCell));
   }
   return lines;
