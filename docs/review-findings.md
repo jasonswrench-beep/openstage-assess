@@ -1183,6 +1183,77 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by four readers of alpha 22's fixes (8 November 2026, after alpha 22; not yet released)
+
+Four readers who had not written alpha 22's fixes ran them: the PDF and zip readers, the patterns and list spreads and the small-format
+readers, the Word and Excel readers with the banks and file names, and the app with the release tooling and the documents. None found a
+change in what a real Word, Excel, text, table or QTI file reads as (the fixtures, the private Word, PDF and table files, about 600,000
+generated documents and 60,000 generated style sheets and list documents were compared old against new: no question, option, key or
+finding differed; real Word agreed with the reader on every list number and real Excel on every cell). They found two changes in what
+a damaged or odd PDF reads as, and the same kind of fault again in the fixes. The work was stopped early at the user's request (the
+machine was throttling), so what follows says which of it is verified and which is not.
+
+Fixed and verified (each by a test that fails on the code before it, and passes now):
+
+- **A cell Excel wrote at its own maximum of 32,767 characters was cut to 31,905 and reported as over the limit**, because Excel writes
+  a line break as CR LF and the cut was made before the line ends were made plain. The text is cut at twice the limit, made plain and cut
+  at the limit. A shared string is cut and tidied once however many cells name it (800,000 cells naming a string of 32,767 spaces: 35
+  seconds, now 1). A cut leaves no half of an emoji. A part that is only too big is no longer called invalid XML.
+- **A Word list paragraph with an impossible start** is counted and then given back as unread, so the numbers after it are the ones
+  they always were (they had moved down by one).
+- **PDF, reconstruct:** an object found by searching was cut at the next text shaped like `N G obj` even inside its own string or
+  comment, so a catalog or page holding such text read as "no page tree" or "a scan" (15 of 97 hand-made files, 1,206 of 21,150 mutated
+  ones, none of 811 PDFs from the system folders). An object that runs into its bound is read again from the whole file, paid from a
+  budget of 16 times the file and a million bytes. **PDF, fonts:** the width budget of 1,000,000 for a whole document took the widths
+  off the sixteenth full font, and with them the spaces between runs, so a question became an essay or vanished. Widths are kept as
+  ranges and found by binary search, with no budget. **PDF, valid table:** a file with a right table and 5,000 unterminated
+  dictionaries took 51 seconds (the same in alpha 21); an object a table lists ends at the next listed place. A run of 65 or more `[`
+  keeps the text before it. A pattern in `pdf/reader.ts` that took 14 seconds for 100,000 spaces is a scan.
+  Tests now write `stream` with CR LF, an incremental update (`/Prev`), the same object twice, a stale cache, `/W [1 3 0]`, a prefix
+  before `%PDF-`, `/XRefStm`, and a stored-entry zip bomb: none was tested, and a fault in each read the old revision or lost every
+  stream with all PDF tests green.
+- **Scanner and small formats:** the headings "Answer Key" and "True/False" and the section headings had the fault alpha 22 said it fixed
+  (80,000 spaces: 13 seconds); the Aiken and GIFT capture patterns were quadratic with U+2028; the quality check had a leftover pattern
+  for equations and eight list spreads (a question of 130,000 options ended `assess check` in "Maximum call stack size exceeded").
+  The cap on findings of one kind is now in `createQuestion`, so a Moodle file cannot make 100,000 findings in one question, and its
+  summary is not dismissed while an option still says `(missing)`. The spread guard reads `.apply(` and `Reflect.apply(` and six file
+  extensions, matches an excused call by its callee and argument and not by a line, and fails on a stale `pending` entry.
+- **App:** a bank's name was claimed by an empty file that the save renamed over, and on Windows a rename onto a file that something has
+  open is refused: up to 6 banks in 100 failed to be made while the home screen's list was reading, and the empty file showed as a bank
+  that could not be read. A bank is now written whole under a private name that is never listed and given its name by a hard link
+  (100 of 100 under two listing loops, three times); the same for Deleted, and an unreadable bank can be removed. Eight overlapping
+  saves of one scoring sitting made eight scores files, and a double-clicked import made one bank for each click: both wait for the
+  first. A bank file with a name `checkName` refuses made the whole home screen answer 400: it is listed with a message. A title with
+  a lone half of an emoji, and "Aux. Verbs" being stored as "Untitled", are fixed (`Aux_. Verbs`, as the engine does). `Bank.save`
+  uses a temp name of its own and tries a busy rename again.
+- **Tooling:** `mutate.mjs` kept the originals of every run in one folder for the machine and put a live run's file back into the
+  repository under it; its signal handlers never ran because the loop was synchronous; an empty selection said "every planted fault was
+  caught". It is asynchronous now, keeps a folder for each run, ends on Ctrl-C and Ctrl-Break (tried for real on Windows: exit 130, the
+  file back), says "no fault was planted" and exits 2, has `--check` and `mutate-all.mjs`, and waits for an older run on the same
+  checkout.
+
+Not done, and not verified (the order to take them in):
+
+- The PDF fault list (`mutations-alpha-23-pdf.json`, 46) was run to the 25th; the budget, table-bound, nine font, three content and five
+  scan faults were not. The comparison of 720 PDFs from the system folders was run before the last change to the reread.
+- The scanner, quality-check and findings-cap fixes were run test by test and not as a suite with the old-against-new comparison of
+  the fixtures, the 50,000-document comparisons and the accuracy gates; no planted faults were run for them (no list was written).
+  The engine suite passed (3653 tests) and the app suite (426), and the gates of alpha 22 (61 of 61, 1421 of 1421, the PDF banks,
+  the answer sheet reader, the speed check) and the real-Word checks have not been run again.
+- Seventeen faults the fourth reader of the readers planted still survive every test: `stemSaysMatch` forgetting an instruction in an
+  earlier stem line (a matching question becomes an essay), `resolveKey` not indexing "False", the QTI table of lower-case names, the
+  `(?<!\s)` taken off the QTI 1.2, Common Cartridge and printed-test stems, the Moodle `<img\b`, the blueprint rule parser, the
+  printer PNG's byte count. The timing lines of `hostile-readers.test.ts` and `linear-parity.test.ts` are still 3 to 8 times the idle
+  time. The regex audit of `src` was stopped; `ANSWER_SPACE` (`^_{3,}[_\s]*$`) was flagged and is unchanged.
+- The planted faults: 385 in ten lists in `tools/release`, each applies once (`mutate.mjs --check`); how many of them were run on the
+  merged code is not known to be all.
+- Two copies of the app on one library still lose edits (each holds its own copy of the bank in memory); a lock on the library is a
+  decision for the user. A 600 dpi colour letter page is refused in words by the printer and for Word as well, and a 16-bit colour one
+  by the sheet reader. Text stored in a bank that was never sanitized and holds an unclosed `<oa-media` reads differently from before.
+  The interface's 79 DOM builder spreads were not looked at in a browser.
+- Still as in alpha 22: one huge token in a PDF content stream, the peak memory of a zip, a stem table of `colspan="999"`, and the
+  interface items of alpha 20.
+
 ### Found by three readers of alpha 21's fixes, and by a hunt for the same kind of fault in the other readers (8 November 2026, after alpha 21)
 
 Three readers who had not written the fixes ran them (the engine's, the app's, and the hunt), told to prove everything by running it.

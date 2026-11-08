@@ -320,12 +320,12 @@ packages/assess/        the engine, published as @openstage/assess
   src/harness/          accuracy scoring
   src/report/           the review page: what an import made of a file, as one web page
   src/cli/              the command-line tool
-  test/                 3328 tests, run by Node's own test runner
+  test/                 3653 tests, run by Node's own test runner
   test/tools/           checks that ask Word itself what its lists, its formatting and a printed test show
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question
   ui/                   the screens: plain JavaScript modules, no framework, no build step
-  test/                 115 tests
+  test/                 426 tests
   shell/                the Tauri window (kept out of the npm workspaces; see its README)
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word
