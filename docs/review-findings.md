@@ -1183,6 +1183,93 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by three readers who used a published security method and a published set of interface skills (8 November 2026, after alpha 19)
+
+The question was whether two published review methods (a security audit skill and a set of interface skills) find problems that five
+rounds of review aimed at wrong answer keys had missed. Three independent readers each took one area and read source only, running
+nothing: the local server and the window, the file readers and writers, and the interface. They wrote down 15 interface findings, 14
+reader hardening notes, 13 server hardening notes and 4 proven reader faults. What was checked here (by reading the code, and by
+reproducing where it says so) and fixed in alpha 20, each with a test and planted faults:
+
+- **A PDF of 509 bytes froze the reader, and with it the whole app.** `/Predictor 2` with `/Columns 0` made a loop step by 0 bytes
+  (`import/pdf/document.ts`). Reproduced: with a normal `Columns` the same file read in 3 ms, with 0 it was still running at 10
+  seconds. A width, colour count or bit depth that is not a positive number is now refused for that page in words (the other pages
+  are read), for both predictors and for the PNG kind. No damaged-file run had reached it, because it needs one specific number.
+- **A zip's limit was kept per entry, from the sizes the file declares** (`container/zip.ts`). A central directory may list many names
+  for one stretch of compressed data and each may declare 0, so each was given the whole limit again: a few hundred bytes could ask for
+  the limit once per name (512 MiB each, kept in memory). The room is now what is left of the limit after what the earlier entries
+  really made, and stored entries are counted after they are copied. Read by hand, not run at full size.
+- **The skip link sent the page to "There is nothing here"** (`ui/index.html`, `ui/app.js`). It was a plain `#main` link and the
+  address is the router's; with a change open it also asked whether to save it, and Discard lost the edit. Seen in the browser. It now
+  moves focus and leaves the address alone, and the first screen is no longer given focus, so the link is the first Tab stop (before,
+  the first Tab went past it).
+- **Three fields of the Save dialog had no name** (`ui/review.js`): the title, the list of banks and the folder box, in the dialog every
+  import ends in. They are named with the words beside them. `aria-labelledby` was tried first and the listing of the page used to look
+  at it did not follow it for a text box (it showed the box's contents), so they carry a plain `aria-label` with the same words.
+- **A save that left some questions out told the person in a green line that faded in six seconds** while the screen moved on, without
+  saying which (`ui/review.js`, `src/api.ts:373`). A dialog now lists them by title with the reason and waits to be answered. Not
+  changed: the import still counts as saved, so a second save is refused with a 409 and the questions that were not saved have to be
+  brought in again; how a person is meant to retry is a design question. How often the path is reached is not known, because imported
+  questions are meant always to be storable.
+- **Two copies of the app on one computer took each other's key** (`src/server.ts`). A cookie belongs to a host and not to a port and
+  both used the name `oa_key`, so the second copy's key replaced the first's and the first window's next request was turned away. The
+  cookie is named for the port.
+- **A bank title of 62 characters or more could not be exported or printed** (`src/library.ts`, `exports.ts`, `printing.ts`,
+  `sheets.ts`, `scoring-routes.ts`): the title (up to 80) with the kind of file after it was checked as though a stranger had sent it,
+  and refused with "That name cannot be used as a file name" after the check had passed. At 62 characters Common Cartridge and printing
+  failed, at 75 five more, at 80 every destination (shown by exporting). A name the program makes is now cut to fit, in the middle,
+  with the start of the title and the end of the name kept, and the cut is marked with an ellipsis.
+- **A title whose 80th character was a full stop made a bank that could be neither created nor opened**: the name was cut after its
+  trailing dots were taken off. Cut first now.
+
+Reported by the readers and looked at here, and not fixed:
+
+- The server held. The Host check, the key cookie (random, constant-time compare, HttpOnly, SameSite=Strict), the header and Origin
+  checks on every change, the loopback-only bind, body limits, every name joined to a path, the content headers and the Tauri window
+  having no way into the program were each tried and held. No confirmed security finding. Two leads need a fact that is not in the
+  source: `main.ts:54` puts the address with the key on the command line of the program that opens the browser (whether another
+  Windows user can read it is not known; the window's own start does not), and `shell/src-tauri/src/main.rs:30` looks for the app in
+  the folder named by `OPENASSESS_APP_ROOT` first (the person's own setting), then the installed copy, then eight folders above its own
+  program (matters only for a bare program outside an install, under a folder another user can write).
+- Server hardening notes: the key is a reusable address; no `Cross-Origin-Resource-Policy` header; the address is parsed before the
+  cookie is checked and a bad `%` in an export name gives a 500 (after sign-in, no crash); `explorer`, `rundll32` and `node` are started
+  by bare name; the window's lack of any native command rests on there being no capability file and not on a guard; the download
+  handler checks the host only; check-then-write races where a file is made (`exports.ts:144`, `printing.ts:117`, `sheets.ts:178`,
+  `scoring-routes.ts:156`, `store.ts:527`); the Windows reserved-name list lacks COM0, LPT0 and the superscript forms; the interface
+  builds some API paths from ids it does not encode, safe only because the engine refuses odd ids (`blueprints.js:265,298,317`,
+  `sheets.js:110,122,179`); the test that reads every script for markup sinks lists few; the bundled Node is copied unpinned and the
+  installer is unsigned; absolute paths appear in answers after sign-in.
+- Reader faults proved by reading and not run: decoded PDF streams are never cached and the per-stream limit is never added up, so a
+  file of under 1 MB can ask for hours of work or tens of GB (5000 pages sharing one stream, a repeated `/Contents` array, 5 million
+  `Do` operators on a large form: `pdf/document.ts:365-416,495-510`, `content.ts:238-256`); PDF object recovery without a table has two
+  quadratic scans (`pdf/document.ts:216-223,256-279`); `MAX_DEPTH` in the PDF parser is dead code. Each is a local freeze from a file
+  the person chose to open, and none reaches a file, a path or code.
+- Reader leads needing a measurement: XML limits are per part, not per package (`docx/xml.ts:47-51`, `qti.ts:809-819`); a CSV cell
+  that begins `=` is written as it is, deliberately (`openstage-spreadsheet.ts:229`); stored MathML is written into QTI 2.1 as raw
+  markup, checking only its root (`qti21.ts:92-104`). Also: PNG decoders are bounded by pixels and not bytes; spread-into-push remains
+  at `qti.ts:72,925`, `moodle-xml.ts:560` and `docx/tables.ts`; the command-line export and print path lacks the reserved-name guard the
+  app has (`export/text.ts:220` against `library.ts:37`); `ui/math.js:59` does an inherited-property lookup.
+- Interface findings not looked at here (the readers' ratings): `document.title` is "OpenAssess" on every screen (2.4.2); the message
+  line fades after 6 or 15 seconds with no way to keep it (2.2.1), and file-refusal instructions live only there; the control just used
+  is rebuilt and loses focus in the editor, the review list, the bank, the score review and the sheets (2.4.3: ticking the right
+  answer, reordering, Save, the True/False buttons); search and filter result counts are never announced (4.1.3); some selects act on
+  every arrow key (3.2.2: new question, file N questions, change Kind, which clears the answer parts); several radio and checkbox
+  groups name themselves with a span and not a fieldset and legend (1.3.1); the sticky bar has no scroll padding, so a focused heading
+  may sit under it (2.4.11); body text is fixed at 16px while the rest follows the reader's size, with 13 distinct font sizes; repeated
+  "Dismiss", "Print…" and "Change…" buttons do not name their target (the rule in `CLAUDE.md`, pinned by the test for only 7 lines);
+  and a few low items (silent no-ops on an empty name, five labels for "needs review", straight quotes in chrome, empty table headers,
+  a Picture toggle without `aria-expanded`). Contrast, by arithmetic on the declared colours and not by looking: input borders at
+  `--line` are 1.42:1 (light) and 1.43:1 (dark), under the 3:1 that WCAG 1.4.11 asks of a control's boundary; the tint of a chosen
+  row is about 1.1:1; text in a left-out row (opacity .6) is 2.63:1 and its badge 2.43:1; all solid text pairs are 4.7:1 or better.
+  320 pixels and 200 percent reflow, the focus ring of a row, and a screen reader were not tried.
+
+What the method was worth, said by the readers: the lists of questions to put to a file (compare a total with a per-item limit, find
+the loop's bound, check the comment that says why it is safe, state the attacker, read what is really packaged; on the screens, route
+changes, re-rendering that loses focus, result counts, toasts) led to most of the above; most of the material on web login protocols,
+colour theory, fonts and animation was noise for this program; the evidence bar (a finding needs the person who attacks, the control,
+the boundary and the result; otherwise it is a note) kept three claims out of the confirmed list. About a third of the interface
+findings have a mechanism proved in the source and a rendered effect that nobody has seen.
+
 ### Found by a tester of pictures, equations and fields (8 November 2026, after alpha 18)
 
 A second round-trip tester took the other content of a question (pictures of three kinds, equations, tables, every metadata field,

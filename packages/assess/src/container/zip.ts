@@ -249,6 +249,8 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
   let p = buf.readUInt32LE(eocdAt + 16);
   const limit = opts.maxTotalBytes ?? 512 * 1024 * 1024;
   let total = 0;
+  /** What the entries read so far really came to, as against `total`, which is only what the file says they come to. */
+  let made = 0;
 
   const out = new Map<string, Uint8Array>();
   for (let i = 0; i < entryCount; i++) {
@@ -304,7 +306,13 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
       // above trusts sizes declared by the file, so an entry that lies about
       // its uncompressed size walked straight past it: a 204 KB entry
       // declaring 10 bytes inflated to 200 MB against a 1 KB limit.
-      const room = Math.max(0, limit - (total - uncompressedSize));
+      // The room that is left is worked out from what the earlier entries
+      // really made and not from what they said they would: with the sum of
+      // the declared sizes, every entry that declared 0 was given the whole
+      // limit again, and a few hundred bytes of central directory (entries
+      // pointing at the same compressed data, which a zip allows) asked for
+      // the limit once for each name.
+      const room = Math.max(0, limit - made);
       try {
         data = inflateRawSync(payload, { maxOutputLength: room });
       } catch (error) {
@@ -329,6 +337,10 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
 
     if (out.has(name)) {
       throw new Error(`"${name}" appears twice in this file, so which copy is real cannot be known.`);
+    }
+    made += data.length;
+    if (made > limit) {
+      throw new Error(`This zip expands to more than ${describeLimit(limit)}, so it was not read.`);
     }
     out.set(name, new Uint8Array(data));
   }

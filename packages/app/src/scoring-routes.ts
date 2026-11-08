@@ -32,7 +32,7 @@ import {
 } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
-import { checkName, cleanName, freeFileName, type Library } from "./library.ts";
+import { checkName, cleanName, fitFileName, freeFileName, type Library } from "./library.ts";
 import { dateOf, flag, jsonObject, oneOf, onlyFields, queryWhole, text, whole } from "./request.ts";
 import { addFile, addPicture, addRefused, changed, compute, cropOf, letterOf, sheetView, view, type ScoringSession } from "./scoring.ts";
 import { greyFromRequest, MOST_PIXELS } from "./sheets.ts";
@@ -154,7 +154,7 @@ async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Pr
   if (what.includes("analysis")) files.push([`${cleanName(s.test.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(s.test, c.stats, date), "analysis"]);
   const written = [];
   for (const [wanted, data, kind] of files) {
-    const name = await freeFileName(ctx.library.exports, checkName(wanted));
+    const name = await freeFileName(ctx.library.exports, checkName(fitFileName(wanted)));
     const path = join(ctx.library.exports, name);
     await writeFile(path, data);
     written.push({ name, path, kind });

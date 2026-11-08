@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
 import { Bank, unzipSync } from "../src/engine.ts";
+import { checkName, cleanName, fitFileName } from "../src/library.ts";
 import { revealCommand } from "../src/server.ts";
 import { chunkedPost, liarPost, liarPostReply, rawRequest, withApp, type Client } from "./support/app.ts";
 
@@ -75,6 +76,26 @@ describe("who is let in", () => {
       assert.match(page, /<meta http-equiv="refresh" content="0;url=\/">/);
       assert.ok(!page.includes(client.server.token), "the key does not stay in the page, or in the address it moves on to");
       assert.doesNotMatch(page, /<script/);
+    });
+  });
+
+  // Found by reading the cookie's name: one name for every copy, and a cookie belongs to a host and not to a port, so opening a second
+  // copy of OpenAssess (the shortcut clicked twice, or a window and a browser tab) replaced the first copy's key and turned its
+  // next request away.
+  test("two copies running at once each keep their own key, though a browser holds one cookie jar for both", async () => {
+    await withApp(async (first) => {
+      await withApp(async (second) => {
+        assert.notEqual(first.server.port, second.server.port);
+        assert.notEqual(first.cookie.split("=")[0], second.cookie.split("=")[0], "the two cookies have different names");
+        // What the browser sends to each: every cookie it holds for 127.0.0.1, the first copy's and the second's.
+        const jar = `${first.cookie}; ${second.cookie}`;
+        for (const [copy, other] of [[first, second], [second, first]] as const) {
+          const own = await rawRequest(copy.server.port, "/api/state", { host: `127.0.0.1:${copy.server.port}`, cookie: jar });
+          assert.equal(own.status, 200, "a copy finds its own key among both");
+          const foreign = await rawRequest(copy.server.port, "/api/state", { host: `127.0.0.1:${copy.server.port}`, cookie: other.cookie });
+          assert.equal(foreign.status, 401, "and does not accept the other copy's key");
+        }
+      });
     });
   });
 
@@ -259,6 +280,33 @@ describe("the page", () => {
 });
 
 describe("the library", () => {
+  // Found by an independent reader: the name was cut to 80 characters AFTER its trailing dots and spaces were taken off, so a title
+  // whose 80th character was a full stop gave a name that checkName refuses, and the bank could be neither made nor opened.
+  test("a name made from a long title ends in neither a dot nor a space, wherever the cut falls, and is a name that is accepted", () => {
+    const wherever = [78, 79, 80, 81, 90].flatMap((n) => [".", " ", "-"].map((c) => `${"a".repeat(n - 1)}${c}tail`));
+    for (const title of wherever) {
+      const name = cleanName(title);
+      assert.ok(name.length <= 80, `${JSON.stringify(title)} gave ${name.length} characters`);
+      assert.doesNotMatch(name, /[. ]$/, `${JSON.stringify(title)} gave ${JSON.stringify(name)}`);
+      assert.equal(checkName(name), name, "the name that is made is one that is taken");
+    }
+    assert.equal(cleanName(`${"a".repeat(79)}.b`), "a".repeat(79), "the full stop that the cut left at the end is taken off");
+    assert.equal(cleanName("  ...  "), "Untitled");
+  });
+
+  test("a name the program makes itself is cut to fit, with the start of the title and the end of the name kept, and a short one is left alone", () => {
+    const title = "Introduction to Psychology Chapter Three Test Bank Fall Section 002 more words";
+    assert.equal(fitFileName("Quiz - Brightspace.csv"), "Quiz - Brightspace.csv");
+    const fitted = fitFileName(`${title} - Brightspace.csv`);
+    assert.equal(fitted.length, 80);
+    assert.ok(fitted.startsWith("Introduction to Psychology Chapter"), fitted);
+    assert.match(fitted, /… - Brightspace\.csv$/, "the cut is marked, and the kind of file stays");
+    const printed = fitFileName(`${title} - Version B - Answer key.docx`);
+    assert.match(printed, /… - Version B - Answer key\.docx$/, "a version and the kind of copy are what tell two files apart, and they stay");
+    assert.ok(printed.length <= 80);
+    for (const name of [fitted, printed, fitFileName(`${"x".repeat(120)}.txt`), fitFileName("y".repeat(120))]) assert.equal(checkName(name), name);
+  });
+
   test("starts empty, makes a bank, and lists it", async () => {
     await withApp(async (client, home) => {
       const empty = await client.get("/api/state");
@@ -820,6 +868,30 @@ describe("exporting", () => {
     return `/api/banks/${encodeURIComponent(title)}`;
   }
 
+  // Found by an independent reader and shown by exporting a bank with a long title: the file's name is the bank's title (up to 80
+  // characters) with the kind of file after it, and the name was then checked as though a stranger had sent it, so a title of 62
+  // characters failed Common Cartridge and 75 failed all but three destinations, each with "That name cannot be used as a file name".
+  test("a bank with a long title exports to every destination, under a name cut to fit, and the check and the write agree", async () => {
+    for (const length of [62, 75, 80]) {
+      await withApp(async (client, home) => {
+        const title = "Psychology Chapter Three Test Bank Fall Section 002 ".repeat(3).slice(0, length).replace(/ $/, "x");
+        assert.equal(title.length, length);
+        const bank = await seeded(client, title);
+        for (const destination of ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "qti-2.1", "common-cartridge", "blackboard-upload"]) {
+          const checked = await client.post(`${bank}/export/check`, { destination });
+          assert.equal(checked.status, 200, `${destination} check, title of ${length}: ${checked.text}`);
+          const written = await client.post(`${bank}/export`, { destination });
+          assert.equal(written.status, 200, `${destination}, title of ${length}: ${written.text}`);
+          for (const file of written.json["written"] as Array<{ name: string }>) {
+            assert.ok(file.name.length <= 80, `${destination}: ${file.name}`);
+            assert.ok(readdirSync(join(home, "Exports")).includes(file.name), `${file.name} is in the folder`);
+            assert.match(file.name, /\.[a-z0-9]+$/, "and keeps its extension, so the computer knows what it is");
+          }
+        }
+      });
+    }
+  });
+
   test("lists the places a bank can be exported to", async () => {
     await withApp(async (client) => {
       const reply = await client.get("/api/destinations");
@@ -1071,6 +1143,24 @@ describe("printing", () => {
     return base;
   }
   const both = { kinds: ["student", "key"], formats: ["docx", "pdf"] };
+
+  test("a bank with a long title, or a long title and version on the test, prints under names cut to fit, keeping the kind of copy", async () => {
+    for (const length of [62, 80]) {
+      await withApp(async (client, home) => {
+        const title = "Psychology Chapter Three Test Bank Fall Section 002 ".repeat(3).slice(0, length).replace(/ $/, "x");
+        const base = await seeded(client, title);
+        const written = await client.post(`${base}/print`, { ...both, title, versionLabel: "Version B" });
+        assert.equal(written.status, 200, `title of ${length}: ${written.text}`);
+        const names = (written.json["written"] as Array<{ name: string }>).map((f) => f.name);
+        assert.equal(names.length, 4);
+        for (const name of names) {
+          assert.ok(name.length <= 80, name);
+          assert.match(name, / - (Student copy|Answer key)\.(docx|pdf)$/, "the kind of copy and the format stay");
+          assert.ok(readdirSync(join(home, "Exports")).includes(name));
+        }
+      });
+    }
+  });
 
   test("checks what each copy would hold, and writes nothing", async () => {
     await withApp(async (client, home) => {

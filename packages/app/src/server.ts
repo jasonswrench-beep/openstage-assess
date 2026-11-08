@@ -184,6 +184,10 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
 
   let port = 0;
   const origins = (): string[] => [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
+  // A cookie belongs to a host and not to a port, so two copies of OpenAssess on 127.0.0.1 share one cookie jar. With one name
+  // for both, the second copy's key replaced the first's, and the first window's next request was turned away as having no key.
+  // Each copy names its cookie by its port, and a request carries every cookie of the host, so each finds its own.
+  const cookieName = (): string => `${COOKIE}_${port}`;
 
   function headers(extra: Record<string, string> = {}): Record<string, string> {
     return {
@@ -270,12 +274,12 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     // own move to "/" begins here, on this site, so the cookie goes with it, and the cookie can stay Strict.
     if (method === "GET" && url.pathname === "/" && url.searchParams.has("k")) {
       if (!sameText(url.searchParams.get("k") ?? "", token)) throw new HttpError(403, "That key is not right. Open OpenAssess again.");
-      res.writeHead(200, headers({ "content-type": "text/html; charset=utf-8", "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict` }));
+      res.writeHead(200, headers({ "content-type": "text/html; charset=utf-8", "set-cookie": `${cookieName()}=${token}; Path=/; HttpOnly; SameSite=Strict` }));
       res.end('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><link rel="icon" href="data:,"><title>OpenAssess</title></head><body><p>Opening OpenAssess…</p></body></html>');
       return;
     }
 
-    if (!sameText(cookieOf(req, COOKIE) ?? "", token)) {
+    if (!sameText(cookieOf(req, cookieName()) ?? "", token)) {
       throw new HttpError(401, "Open OpenAssess from its own window or from the shortcut. This address only works there.");
     }
 

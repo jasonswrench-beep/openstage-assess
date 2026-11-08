@@ -99,3 +99,63 @@ describe("reading", () => {
     assert.throws(() => unzipSync(zip), /appears twice/);
   });
 });
+
+/**
+ * Found by reading how the limit is kept: it was kept per entry, from the sizes the file DECLARES. A central directory may list many
+ * names for one stretch of compressed data, and each of them may declare 0 bytes, so each was given the whole limit again: a few
+ * hundred bytes of zip could ask for the limit once per name.
+ */
+describe("a zip that lies about its sizes", () => {
+  /** One compressed run of zeros listed under `count` different names, every one declaring that it is 0 bytes long. */
+  function manyNamesOneStream(count: number, size: number, store = false): Uint8Array {
+    const one = Buffer.from(zipSync([{ name: "e0000.bin", data: new Uint8Array(size), store }]));
+    const eocd = one.length - 22;
+    const centralAt = one.readUInt32LE(eocd + 16);
+    const record = one.subarray(centralAt, eocd);
+    assert.equal(record.length, 46 + "e0000.bin".length, "one central record, to copy");
+    const records: Buffer[] = [];
+    for (let i = 0; i < count; i++) {
+      const copy = Buffer.from(record);
+      copy.writeUInt32LE(0, 24); // the uncompressed size it declares
+      copy.write(`e${String(i).padStart(4, "0")}.bin`, 46, "utf8");
+      records.push(copy);
+    }
+    const end = Buffer.from(one.subarray(eocd));
+    end.writeUInt16LE(count, 8);
+    end.writeUInt16LE(count, 10);
+    end.writeUInt32LE(records.length * record.length, 12);
+    return new Uint8Array(Buffer.concat([one.subarray(0, centralAt), ...records, end]));
+  }
+
+  test("is stopped by what its entries really make, however many names share one stream and whatever each says it is", () => {
+    const bomb = manyNamesOneStream(10, 200_000);
+    assert.ok(bomb.length < 1500, `ten names for 2 MB of zeros come to ${bomb.length} bytes`);
+    // It is stopped while the sixth name is being unpacked (the first five made exactly the limit), and not after that one has been
+    // made whole: the room an entry is given is what is left, so the most that is ever held is the limit and not the limit again.
+    assert.throws(() => unzipSync(bomb, { maxTotalBytes: 1_000_000 }), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /^"e0005\.bin" expands to more than/);
+      return true;
+    });
+  });
+
+  test("is stopped when the entries are stored and not compressed, which no inflate limit would catch", () => {
+    const stored = manyNamesOneStream(10, 200_000, true);
+    assert.ok(stored.length > 200_000 && stored.length < 201_500, "one stored copy and ten central records");
+    assert.throws(() => unzipSync(stored, { maxTotalBytes: 1_000_000 }), /This zip expands to more than/);
+    assert.equal(unzipSync(stored, { maxTotalBytes: 2_000_000 }).size, 10, "and read when the limit allows what they make");
+  });
+
+  test("is read when what its entries really make is within the limit, so an honest total is not turned away", () => {
+    const fine = manyNamesOneStream(4, 200_000);
+    const files = unzipSync(fine, { maxTotalBytes: 1_000_000 });
+    assert.equal(files.size, 4);
+    assert.ok([...files.values()].every((data) => data.length === 200_000));
+  });
+
+  test("an archive of honest entries that add up to more than the limit is stopped the same way", () => {
+    const honest = zipSync(Array.from({ length: 6 }, (_, i) => ({ name: `part${i}.bin`, data: new Uint8Array(200_000) })));
+    assert.throws(() => unzipSync(honest, { maxTotalBytes: 1_000_000 }), /expands to more than/);
+    assert.equal(unzipSync(honest, { maxTotalBytes: 1_300_000 }).size, 6);
+  });
+});

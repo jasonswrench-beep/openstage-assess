@@ -40,7 +40,7 @@ import {
 } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest } from "./errors.ts";
-import { checkName, cleanName, freeFileName } from "./library.ts";
+import { checkName, cleanName, fitFileName, freeFileName } from "./library.ts";
 
 interface Destination {
   id: string;
@@ -141,7 +141,7 @@ export async function exportRoute(ctx: Context, req: ApiRequest, rawName: string
 
   const written: Array<{ name: string; path: string; questions: number }> = [];
   for (const file of result.files) {
-    const fileName = await freeFileName(ctx.library.exports, checkName(file.name));
+    const fileName = await freeFileName(ctx.library.exports, checkName(fitFileName(file.name)));
     const path = join(ctx.library.exports, fileName);
     await writeFile(path, file.bytes ?? file.content, "utf8");
     written.push({ name: fileName, path, questions: file.questions });

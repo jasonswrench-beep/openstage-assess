@@ -43,10 +43,30 @@ export function cleanName(input: string, fallback = "Untitled"): string {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^\.+/, "")
-    .replace(/[. ]+$/, "")
     .slice(0, 80)
-    .trim();
+    .replace(/[. ]+$/, "");
   return cleaned === "" || RESERVED.test(cleaned) ? fallback : cleaned;
+}
+
+/**
+ * A name the program made itself (a bank's title with the kind of file after it, then its extension), fitted to the longest name
+ * `checkName` takes. It is cut and not refused: `checkName` is for names that come from outside, where a name that needs changing is
+ * not the name asked for, and these did not come from anyone. A title of 62 characters already made a Common Cartridge export and a
+ * printed test fail with "That name cannot be used as a file name", after the check had passed; at 80 every destination did.
+ * The start of the title and the end of the name (the kind of file, and a version) are what tell two files apart, so the cut goes
+ * between them and is marked.
+ */
+export function fitFileName(name: string, limit = 80): string {
+  if (name.length <= limit) return name;
+  const ext = extname(name);
+  const stem = name.slice(0, name.length - ext.length);
+  // The end worth keeping starts at the first " - " that leaves it no longer than 40 characters ("Version B - Answer key").
+  let tailAt = stem.indexOf(" - ", Math.max(0, stem.length - 40));
+  if (tailAt === -1) tailAt = stem.length;
+  const tail = stem.slice(tailAt);
+  const room = Math.max(1, limit - ext.length - tail.length - 1);
+  const head = stem.slice(0, room).replace(/[. ]+$/, "");
+  return `${head}…${tail}${ext}`;
 }
 
 /** A name that came from outside, which is used as it is or refused. A name that needed changing is not the name asked for. */

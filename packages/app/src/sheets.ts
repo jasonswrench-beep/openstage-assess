@@ -33,7 +33,7 @@ import {
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { blueprintsRoute } from "./blueprints.ts";
-import { checkName, freeFileName } from "./library.ts";
+import { checkName, fitFileName, freeFileName } from "./library.ts";
 import { flag, jsonObject, oneOf, onlyFields, text, whole } from "./request.ts";
 import { view } from "./scoring.ts";
 
@@ -175,7 +175,7 @@ async function printTestPaperRoute(ctx: Context, req: ApiRequest, record: TestRe
   if (!made.ok) throw badRequest(made.reason);
   const written: Array<{ name: string; path: string; kind: string; version?: string; format: string; pages?: number }> = [];
   for (const file of made.files) {
-    const name = await freeFileName(ctx.library.exports, checkName(file.name));
+    const name = await freeFileName(ctx.library.exports, checkName(fitFileName(file.name)));
     const path = join(ctx.library.exports, name);
     await writeFile(path, file.bytes);
     written.push({ name, path, kind: file.kind, ...(file.version !== undefined ? { version: file.version } : {}), format: file.format, ...(file.pages !== undefined ? { pages: file.pages } : {}) });
