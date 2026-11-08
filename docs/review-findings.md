@@ -1183,6 +1183,37 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by a reader of the fixes for the first (7 November 2026, after alpha 15)
+
+A second independent reader was given the fixes of the entry below and asked to break them. It proved seven faults, two of them wrong
+keys that read as parsed, in code that had just been written to remove the same kind of fault. All seven are fixed, each with a test and
+planted faults (the test for the first had passed with the fault in it, because it looked at the count of rows and not at the key).
+
+- **Wrong key: a type word over 12 characters sent a Blackboard file to the table reader.** The fix for unlisted types allowed 2 to 12
+  capitals, and the page's own JUMBLED_SENTENCE is 16 and CALCULATED_NUMERIC 18; the table reader then marked the word "incorrect" as
+  a right answer in a question that read as parsed. A word of up to 40 capitals is a type. A stray line among the rows (a count at the
+  end, a lone type) also ended the check, with the same result; now a quarter of the rows may be strays when a row has the words where
+  the page puts them, and the reader keeps each as an orphan or a failed essay. A table with a first row that names a Question column
+  (Type, Question, Correct, with true or false rows) is a table. As a last defence the table reader flags a row whose answers
+  alternate with the words correct and incorrect.
+- **Wrong key: a header cut at the first dash.** "Answer - 4 - max 60 characters" was cut to "Answer", the key, because 4 is a word the
+  list holds. Every cut is tried now and the longest name left is used; a cut onto the key needs a description about choosing, since
+  "Answer - max 60 characters" limits a text and is not the key; and a description with a letter, number or symbol outside ASCII is never
+  cut, because splitting on what is not a letter made "错误" and "✗" vanish ("Answer - 错误 max 60" was cut to the key).
+- **`isBlankText` held the wrong set.** It took no notice of the Hangul and Braille fillers, the variation selectors or the combining
+  grapheme joiner, and it called signs that are drawn (the Arabic number signs, the end of ayah) blank, because it used all of the
+  format characters. It now takes the characters that are never drawn. The Ogham space mark (U+1680) is a space by Unicode and is
+  still blank.
+- **The stem check for the note about banks was quadratic** (five stems of thousands of "a." took 20 seconds). The first "a)" decides.
+- **The Blackboard pool message was said of a course export** that held only documents and announcements, and of a manifest that
+  mentioned the company in a comment, and it replaced the advice to import a file beside it. It now needs a resource that is an
+  assessment of Blackboard's kinds, and keeps the advice.
+
+What it checked and found sound: the header rule only turns a name that was not understood into one, so no header that read before
+reads differently; Kahoot, Gimkit and Blooket style headers; `Answer - wrong` and its kin; the registry's order; the home buttons
+(Enter, Space, focus, a dropped file, no stray reference to the old ids); the nine anchored patterns (also compared by this program
+with the old ones on 4,000,000 random strings). Not run by it: the Windows-only Word checks, and the real file dialog.
+
 ### Found by a second reader of the Blackboard reader and the header rule (7 November 2026, before alpha 15)
 
 An independent reader proved six faults in the commits since alpha 14, one of them a wrong key that read as authored. Each was

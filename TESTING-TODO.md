@@ -334,7 +334,9 @@ been tried in Blackboard. Use `Blackboard, Upload questions (text file)` in the 
   met a real one. Look for: a row that begins with a type it does not know (it is kept as an essay and fails, with the words), a field
   that is quoted or holds HTML (read as plain text, with the marks in it), a points or feedback column (not part of the documented
   file, so it would be read as another answer), and a multiple answer question, whose partial credit the file cannot say (read as all
-  or nothing).
+  or nothing). A pool or test exported from Blackboard as a package (a zip with an `imsmanifest.xml` and `.dat` files) is named as
+  Blackboard's own form and not read, since none has been seen here: if you have one, keep it, because its `.dat` files are what a
+  reader would be written from.
 
 ## Answer sheets
 

@@ -109,10 +109,44 @@ describe("choosing the reader", () => {
       }
     });
 
-    test("a first field that is not made like a type still keeps a file from being one", () => {
-      for (const first of ["Q1", "X", "TOO_LONG_FOR_A_TYPE", "Total score", "1", ""]) {
-        assert.ok(!looksLikeBlackboardUpload(bytes(rows(...three, row(first, "something", "else")))), JSON.stringify(first));
+    test("a type of any length that Blackboard's page uses is a type: JUMBLED_SENTENCE and CALCULATED_NUMERIC are 16 and 18 characters", () => {
+      // Found by a second reviewer: 12 was the longest allowed, and a file with either sent to the table reader read the word "incorrect"
+      // as the key of a question that came out as parsed.
+      for (const type of ["JUMBLED_SENTENCE", "CALCULATED_NUMERIC", "ESSAY_QUESTION_TYPE", "A".repeat(40)]) {
+        const r = read(rows(...three, row(type, "Odd one", "a", "b")), "bank.tsv");
+        assert.equal(importerForContent("bank.tsv", bytes(rows(...three, row(type, "Odd one", "a", "b")))), blackboardUploadImporter, type);
+        assert.deepEqual(options(r.questions[0] as Question), [["Ice", true], ["Fire", false], ["Lava", false]], type);
+        assert.equal(verdictFrom((r.questions[3] as Question).findings), "failed", type);
       }
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(...three, row("A".repeat(41), "x", "y"), row("A".repeat(42), "x", "y")))), "past 40 it is not a type word, and two such rows are too many");
+    });
+
+    test("a few stray lines among the rows do not undo a file that has the words where the page puts them, and each is kept and said", () => {
+      for (const stray of [row("Total questions: 3"), "ESS", row("ESS", "", ""), row("Q1", "something", "else"), row("", "something", "else"), row("1", "x")]) {
+        const text = rows(...three, row("ESS", "Explain."), row("FIB", "Capital?", "Paris"), row("ORD", "Order.", "a", "b"), stray);
+        assert.ok(looksLikeBlackboardUpload(bytes(text)), JSON.stringify(stray));
+        const r = read(text, "bank.tsv");
+        assert.deepEqual(options(r.questions[0] as Question), [["Ice", true], ["Fire", false], ["Lava", false]], JSON.stringify(stray));
+        assert.equal(r.questions.length + r.orphans.length, 7, `every row is a question or an orphan: ${JSON.stringify(stray)}`);
+      }
+    });
+
+    test("more than a quarter of the rows being anything else keeps a file from being one", () => {
+      assert.ok(looksLikeBlackboardUpload(bytes(rows(...three, row("Q1", "x", "y")))), "one in four is tolerated");
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(...three, row("Q1", "x", "y"), row("Q2", "x", "y")))), "two in five is not");
+      // Without a row that has the words, every row has to be typed, as before.
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(row("ESS", "a"), row("FIB", "b", "c"), row("ORD", "d", "e", "f"), row("Q1", "x", "y")))));
+    });
+
+    test("the header of a table is not a row: a first row that names a Question column, and a word of capitals only counts when it is written so", () => {
+      const header = row("TYPE", "QUESTION", "CORRECT");
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(header, row("TF", "The earth is round.", "True"), row("TF", "The sun is cold.", "False")))), "capitals do not make a header a row");
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(row("Type", "Question", "Correct"), row("TF", "The earth is round.", "True"), row("TF", "The sun is cold.", "False")))));
+      // And a table of true or false questions read as a table keeps its keys.
+      const r = read(rows(row("Type", "Question", "Correct"), row("TF", "The earth is round.", "True"), row("TF", "The sun is cold.", "False")), "bank.tsv");
+      assert.deepEqual(r.questions.map((q) => (q.body as any).correct), [true, false]);
+      // Lower case is for the listed types only; an unlisted word has to be written in capitals to count as a type.
+      assert.ok(!looksLikeBlackboardUpload(bytes(rows(row("MC", "Which?", "a", "correct", "b", "incorrect"), row("TF", "Ice is cold.", "true"), row("fib_plus", "x", "y")))), "one in three that is not typed is too many");
     });
 
     test("without a row that has the words where the page puts them, odd types are not enough", () => {

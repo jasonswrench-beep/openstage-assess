@@ -152,8 +152,14 @@ export function normalizeCharacters(text: string): string {
 export function isBlankText(text: string): boolean {
   // Nearly every text has a visible ASCII character, and this is asked of every cell of a large file.
   if (/[!-~]/.test(text)) return false;
-  return normalizeCharacters(text).replace(/[\p{White_Space}\p{Cf}\p{Cc}\p{Zs}\p{Zl}\p{Zp}]/gu, "") === "";
+  // Characters that are never drawn (Default_Ignorable_Code_Point: zero width and direction marks, variation selectors, the Hangul and
+  // Braille fillers, the combining grapheme joiner) and not the whole of Cf, which holds signs that are drawn, such as the Arabic number
+  // signs. U+2800 is the empty Braille pattern, a blank that is not in either class.
+  return normalizeCharacters(text).replace(SHOWS_NOTHING, "") === "";
 }
+
+/** The characters `isBlankText` takes away. Built from a string so that the escape for the empty Braille pattern stays visible in the source. */
+const SHOWS_NOTHING = new RegExp("[\\p{White_Space}\\p{Cc}\\p{Zs}\\p{Zl}\\p{Zp}\\p{Default_Ignorable_Code_Point}\\u2800]", "gu");
 
 /**
  * The flat form of typography, for comparing and never for storing: curly quotes to straight, the en dash to a hyphen, the em dash

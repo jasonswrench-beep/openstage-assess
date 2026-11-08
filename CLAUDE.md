@@ -146,9 +146,12 @@ min, up to, at least, choose, select, required, optional, a count of characters 
 least one is a cue that it is an instruction. A description that says what the column holds ("Answer - wrong", "Answer (incorrect)",
 "Feedback - when right", "Answer - hint") is never cut, and neither is one that begins like an instruction and goes on to say it
 ("Answer - choose the wrong answers"): the first rule cut anything, and read the column of wrong answers as the Correct column, so a
-wrong option was marked right in a question that read as parsed. A dash that is part of the name is passed over ("Feedback - if
-right - max 100 characters" is the feedback for a right answer), and at most eight dashes of a cell are tried. A bracket that holds a letter
-or a number is never a description. A cell is matched by plain scans and never a pattern that can backtrack. Answer columns
+wrong option was marked right in a question that read as parsed. Every way of cutting a description off is tried (a dash that is part
+of the name is one more way: "Feedback - if right - max 100 characters" is the feedback for a right answer, and "Answer - 4 - max 60
+characters" is the fourth answer and not the key), the longest name that is left is used, and at most eight dashes of a cell are tried. A
+cut that lands on the key (a bare Answer is also the words of an answer, so "Answer - max 60 characters" limits a text) needs a description
+about choosing (choose, select, pick). A description with a letter, a number or a symbol outside ASCII is never cut: it is a word the list does
+not hold. A bracket that holds a letter or a number is never a description. A cell is matched by plain scans and never a pattern that can backtrack. Answer columns
 may be named by number ("Option 1" to "Option 4"); a number in the Correct cell then names the
 column with that number, and a letter names none, while in a table with lettered columns it is
 the other way about, and a table that mixes the two reads no number as a place (`numbered` in
@@ -195,12 +198,16 @@ word of a multiselect as `AllOrNothing` or `RightMinusWrong`, the tokens a guide
 display names ("All or nothing", "Correct Selections") that people report are not accepted. No file written by Brightspace itself has been read.
 
 **A Blackboard upload file's key is its words, and nothing else.** `import/blackboard-upload.ts` reads the tab-delimited file the exporter
-writes and the page documents (the registry looks at a `.txt` or `.tsv` before the table and text readers: every row begins with a type
-word, one of the listed ones or any made like one (`TYPE_WORD`, the rule the reader itself uses: one unlisted type among the rows sent a
-file to the table reader, which marked the word "incorrect" as a right answer), and a tab, and a multiple choice, multiple answer or true
-or false row has the word correct, incorrect, true or false where the format puts it). A field that shows nothing (only a zero width
-space, a control character, a soft hyphen: `isBlankText`) is an empty field, so a stem, an answer or an item made of it is flagged and not
-stored as an empty paragraph read as parsed. A choice answer is right where the word after it is correct (either case); a word that is neither, or an answer with none, keeps the
+writes and the page documents (the registry looks at a `.txt` or `.tsv` before the table and text readers: the rows begin with a type
+word, one of the listed ones or a word of capitals up to 40 long made like one (`TYPE_WORD`; one row of an unlisted type, or of one past
+12 characters such as JUMBLED_SENTENCE, sent a file to the table reader, which marked the word "incorrect" as a right answer), and a
+tab, and a multiple choice, multiple answer or true or false row has the word correct, incorrect, true or false where the format puts
+it; then a quarter of the rows may be strays, which the reader keeps as orphans or failed essays, and a first row that names a Question
+column is a table's header. The table reader flags a row whose answers alternate with the words correct and incorrect, so that one that
+still reaches it is not read as parsed). A field that shows nothing (only a zero width space, a control character, a soft hyphen, a
+Hangul or Braille filler: `isBlankText`, which takes the characters that are never drawn and not every format character, since some
+are signs that show) is an empty field, so a stem, an answer or an item made of it is flagged and not stored as an empty paragraph
+read as parsed. A choice answer is right where the word after it is correct (either case); a word that is neither, or an answer with none, keeps the
 whole row as an essay that fails; no answer marked correct has no key and says so; two correct on a multiple choice stay as the file has
 them and the question needs fixing. True or false is the word; a fill in the blank row is a short answer with each accepted answer once (the
 file marks no blank); matching is each left and right side, ordering is the order listed, an essay's sample answer is its model answer; a
@@ -437,7 +444,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2912 engine tests and 336 app tests, Node's own runner
+npm test                       # 2922 engine tests and 336 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
