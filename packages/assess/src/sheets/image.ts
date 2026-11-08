@@ -23,6 +23,13 @@ export interface GreyImage {
 /** The most pixels an image may have. A sheet at 300 dpi is about 8.4 million; this is room for a large scanner's page, not for a bomb. */
 export const MAX_PIXELS = 120_000_000;
 
+/**
+ * The most bytes a PNG may need while it is unpacked: the rows as stored, the rows with their filters undone and the grey image. The
+ * pixels are bounded above, but a PNG of 16 bits and four channels needs 17 bytes for each of them, and a file of 93 KB that said it was
+ * 3000 by 4000 took 441 MB (and at the limit above it would take more than 2 GB). A letter page at 300 dots to the inch in colour needs 59 MB.
+ */
+export const MAX_PNG_WORKING_BYTES = 256 * 1048576;
+
 export function newImage(width: number, height: number, value = 255): GreyImage {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) throw new Error("An image needs a whole number of pixels each way.");
   if (width * height > MAX_PIXELS) throw new Error("This image is larger than the reader accepts.");
@@ -212,6 +219,11 @@ export function readPng(bytes: Uint8Array): PngReading {
   const bitsPerPixel = channels * depth;
   const stride = Math.ceil((width * bitsPerPixel) / 8);
   const bpp = Math.max(1, bitsPerPixel >> 3);
+  // Counted in bytes before anything is unpacked, so that a header that claims a great deal is refused in words and not by memory.
+  const working = (stride + 1) * height + stride * height + width * height;
+  if (working > MAX_PNG_WORKING_BYTES) {
+    return { ok: false, reason: `This picture would take ${Math.ceil(working / 1048576)} MB to read, which is more than the reader accepts (${MAX_PNG_WORKING_BYTES / 1048576} MB). Scan at 300 dots to the inch, or save it as a JPG.` };
+  }
   let raw: Buffer;
   try {
     raw = inflateSync(Buffer.concat(parts), { maxOutputLength: (stride + 1) * height + 1024 });

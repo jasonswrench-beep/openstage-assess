@@ -81,7 +81,10 @@ export function planSheet(record: TestRecord, options: PlanOptions = {}): PlanRe
   for (const version of record.versions) uses[version.label] = versionQuestions(record, version.label).map(useOf);
   const all = Object.values(uses) as SlotUse[][];
 
-  const most = all.reduce((m, list) => Math.max(m, ...list.map((u) => u.places)), 0);
+  // A loop and not `Math.max(m, ...)`: a test record of 130,000 questions is more arguments than a call can take, and is to be refused below
+  // in words (too many pages), not by a RangeError.
+  let most = 0;
+  for (const list of all) for (const use of list) most = Math.max(most, use.places);
   const style: SheetStyle = large ? "large" : most > 5 ? "wide" : "standard";
   if (large && most > MOST_PLACES_LARGE) return { ok: false, reason: `a large print sheet has ${MOST_PLACES_LARGE} bubbles to a question, and this test has a question of ${most} answers` };
 

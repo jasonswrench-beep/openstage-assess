@@ -88,7 +88,7 @@ function plan(question: Question, position: number): Planned {
     if (!formatted) return row("QuestionText", stem);
     // Brightspace reads the question text as HTML when the third cell says so. A break inside would end the cell in a
     // spreadsheet program, so the markup is written on one line. A picture or an equation in it is a marker, and counted.
-    const html = htmlText(question.stem, question, losses).replace(/\s*\n\s*/g, " ");
+    const html = htmlText(question.stem, question, losses).replace(/(?<!\s)\s*\n\s*/g, " ");
     return row("QuestionText", html, "HTML");
   };
 
@@ -221,7 +221,8 @@ export function exportD2lCsv(questions: readonly Question[], options: D2lCsvOpti
     const planned = plan(question, i + 1);
     items.push(planned.item);
     if (planned.rows) {
-      rows.push(...planned.rows);
+      // One at a time: a question of 130,000 options has more rows than a call can take as arguments.
+      for (const line of planned.rows) rows.push(line);
       written++;
     }
   });
