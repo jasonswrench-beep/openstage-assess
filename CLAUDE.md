@@ -149,8 +149,8 @@ least one is a cue that it is an instruction. A description that says what the c
 wrong option was marked right in a question that read as parsed. Every way of cutting a description off is tried (a dash that is part
 of the name is one more way: "Feedback - if right - max 100 characters" is the feedback for a right answer, and "Answer - 4 - max 60
 characters" is the fourth answer and not the key), the longest name that is left is used, and at most eight dashes of a cell are tried. A
-cut that lands on the key (a bare Answer is also the words of an answer, so "Answer - max 60 characters" limits a text) needs a description
-about choosing (choose, select, pick). A description with a letter, a number or a symbol outside ASCII is never cut: it is a word the list does
+cut that lands on the key by a bare Answer, Ans or Key (also the words of an answer, so "Answer - max 60 characters" limits a text) needs
+a description about choosing (choose, select, pick); "Correct answer - max 60 characters" is only ever the key and needs nothing. A description with a letter, a number or a symbol outside ASCII is never cut: it is a word the list does
 not hold. A bracket that holds a letter or a number is never a description. A cell is matched by plain scans and never a pattern that can backtrack. Answer columns
 may be named by number ("Option 1" to "Option 4"); a number in the Correct cell then names the
 column with that number, and a letter names none, while in a table with lettered columns it is
@@ -203,8 +203,10 @@ word, one of the listed ones or a word of capitals up to 40 long made like one (
 12 characters such as JUMBLED_SENTENCE, sent a file to the table reader, which marked the word "incorrect" as a right answer), and a
 tab, and a multiple choice, multiple answer or true or false row has the word correct, incorrect, true or false where the format puts
 it; then a quarter of the rows may be strays, which the reader keeps as orphans or failed essays, and a first row that names a Question
-column is a table's header. The table reader flags a row whose answers alternate with the words correct and incorrect, so that one that
-still reaches it is not read as parsed). A field that shows nothing (only a zero width space, a control character, a soft hyphen, a
+column is a table's header unless it begins with one of the file's own types, since an answer may be the word "Stem"). The table reader
+flags a row that has the words correct or incorrect in the cells where Blackboard puts them (the second and fourth answer cell, however
+the answers read: an answer may itself be "Correct"), or a Correct cell that is only the word, so that one that still reaches it is
+not read as parsed). A field that shows nothing (only a zero width space, a control character, a soft hyphen, a
 Hangul or Braille filler: `isBlankText`, which takes the characters that are never drawn and not every format character, since some
 are signs that show) is an empty field, so a stem, an answer or an item made of it is flagged and not stored as an empty paragraph
 read as parsed. A choice answer is right where the word after it is correct (either case); a word that is neither, or an answer with none, keeps the
@@ -444,7 +446,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2922 engine tests and 336 app tests, Node's own runner
+npm test                       # 2927 engine tests and 336 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

@@ -138,6 +138,19 @@ describe("choosing the reader", () => {
       assert.ok(!looksLikeBlackboardUpload(bytes(rows(row("ESS", "a"), row("FIB", "b", "c"), row("ORD", "d", "e", "f"), row("Q1", "x", "y")))));
     });
 
+    test("a first row that is a question is not a header, whatever its answers say: an answer or a sample answer may be the word Stem", () => {
+      // Found by a third reviewer: the guard looked at every field of the first row and sent these files to the table reader.
+      for (const word of ["Stem", "Question", "Questions", "Question text", "stem"]) {
+        for (const first of [row("MC", "Which?", word, "correct", "b", "incorrect"), row("ESS", "Explain.", word), row("TF", word, "true"), row("FIB", "x", word)]) {
+          const text = rows(first, row("TF", "Ice is cold.", "true"), row("MC", "Which is cold?", "Ice", "correct", "Fire", "incorrect"));
+          assert.ok(looksLikeBlackboardUpload(bytes(text)), `${word}: ${first}`);
+          const r = read(text, "bank.tsv");
+          assert.equal(r.questions.length, 3, `${word}: ${first}`);
+          assert.deepEqual(options(r.questions[2] as Question), [["Ice", true], ["Fire", false]]);
+        }
+      }
+    });
+
     test("the header of a table is not a row: a first row that names a Question column, and a word of capitals only counts when it is written so", () => {
       const header = row("TYPE", "QUESTION", "CORRECT");
       assert.ok(!looksLikeBlackboardUpload(bytes(rows(header, row("TF", "The earth is round.", "True"), row("TF", "The sun is cold.", "False")))), "capitals do not make a header a row");

@@ -242,6 +242,20 @@ describe("what a description may and may not cut", () => {
       }
     });
 
+    // Found by a third reviewer: the guard was meant for the bare words and also refused "Correct answer", which cannot be a column of text.
+    test("while a name that is only ever the key is the key with any instruction, and the bare ones are not", () => {
+      for (const header of ["Correct answer - max 60 characters", "Correct answer (max 60 characters)", "Right answer - up to 4", "Correct - at most 4", "Correct answer(s) - required", "Answer key - max 4 characters"]) {
+        const r = csv(`Question,A,B,C,${header}\nWhich?,x,y,z,B`);
+        assert.deepEqual(right(first(r)), ["y"], header);
+        assert.ok(!r.fileFindings.some((f) => /not used/.test(f.message)), header);
+      }
+      for (const header of ["Answer - max 60 characters", "Ans - max 60 characters", "Key - max 60 characters", "Key (up to 4)"]) {
+        const r = base(header);
+        assert.deepEqual(right(first(r)), ["Ice"], header);
+        assert.match(r.fileFindings.map((f) => f.message).join("\n"), /These columns were not used/, header);
+      }
+    });
+
     test("so the longest name that is left is the one used, and a dash that is part of the name is not taken for the start of the description", () => {
       // "Answer - 4" is the fourth answer; the first dash alone would have cut it to "Answer", the key, and marked the wrong option right.
       const headers = [1, 2, 3, 4].map((n) => `Answer - ${n} - max 60 characters`).join(",");
@@ -384,26 +398,57 @@ describe("a cell that shows nothing is an empty cell", () => {
   });
 });
 
-// Found by a second reviewer. A file of Blackboard's upload rows that reaches this reader instead of its own (the check for the kind of
-// file is meant to catch it first) read the word "incorrect" as the key of a question that came out as parsed.
+// Found by two reviewers. A file of Blackboard's upload rows that reaches this reader instead of its own (the check for the kind of file is
+// meant to catch it first) read the word "incorrect" as the key of a question that came out as parsed. The first guard asked for the
+// answers to alternate exactly with the words, and a row whose answer was itself "Correct" or "Incorrect", or that had a gap, got past it.
 describe("a row that looks like one of Blackboard's upload rows, read as a table", () => {
+  const BLACKBOARD_ROW = /looks like one of Blackboard's upload rows/;
+  const flagged = (q: Question): boolean => liveFindings(q.findings).some((f) => BLACKBOARD_ROW.test(f.message) && f.severity === "warn");
+
   test("is flagged for review, because the key is not read from it", () => {
     const r = csv("MC,Which is cold?,Ice,correct,Fire,incorrect,Lava,incorrect\nMC,Which is hot?,Fire,correct,Snow,incorrect");
     for (const q of r.questions) {
-      assert.ok(liveFindings(q.findings).some((f) => /alternate with the word correct or incorrect/.test(f.message) && f.severity === "warn"), said(q));
+      assert.ok(flagged(q), said(q));
       assert.notEqual(verdictFrom(q.findings), "parsed");
     }
   });
 
-  test("is not said of a question whose answers happen to be the words Correct and Incorrect", () => {
+  test("is flagged whatever the answers say, and when an answer is missing", () => {
+    const rows = [
+      // The answers are the words themselves, so they do not alternate with them.
+      "MC,Is the claim that ice is cold correct?,Correct,correct,Incorrect,incorrect,Unsure,incorrect",
+      "MC,Is it so?,Fire,correct,Incorrect,incorrect,No,incorrect",
+      "MC,Right?,Incorrect,incorrect,Correct,correct",
+      // An empty answer shifts every cell after it.
+      "MC,Which is cold?,Ice,correct,,incorrect,Lava,incorrect",
+      "MA,Which are cold?,Ice,correct,Snow,correct,Fire,incorrect",
+    ];
+    for (const row of rows) {
+      const r = csv(row);
+      assert.equal(r.questions.length, 1, row);
+      assert.ok(flagged(first(r)), `${row}: ${said(first(r))}`);
+      assert.notEqual(verdictFrom(first(r).findings), "parsed", row);
+    }
+    // And through a workbook, where a person's Blackboard file ends up when it was opened in Excel and saved.
+    const bytes = writeXlsx([{ name: "Questions", rows: [["MC", "Is the claim that ice is cold correct?", "Correct", "correct", "Incorrect", "incorrect", "Unsure", "incorrect"]] }]);
+    const book = spreadsheetImporter.parseBytes?.(bytes, { file: "bank.xlsx", at: AT, author: "test" }) as ImportResult;
+    assert.ok(flagged(first(book)), said(first(book)));
+  });
+
+  test("is flagged when the Correct cell is only the word", () => {
+    const r = csv("Question,A,B,Correct\nWhich?,Ice,Fire,incorrect");
+    assert.ok(flagged(first(r)), said(first(r)));
+  });
+
+  test("is not said of a question whose answers happen to include the words Correct and Incorrect", () => {
     // Two answers are never enough, even when the second is the word: "Ice" and "Correct" are two answers.
     const two = csv("Question,A,B,Correct\nWhich?,Ice,Correct,A");
-    assert.ok(!liveFindings(first(two).findings).some((f) => /alternate with the word/.test(f.message)));
+    assert.ok(!flagged(first(two)));
     for (const row of ["The claim is...,Correct,Incorrect,A", "The claim is...,Incorrect,Correct,B", "Pick,Correct,Incorrect,Both,Neither,C", "Pick,Yes,Correct,No,Incorrect,A"]) {
       const r = csv(`Question,A,B,C,D,Correct\n${row}`);
-      const bad = r.questions.filter((q) => liveFindings(q.findings).some((f) => /alternate with the word/.test(f.message)));
-      // Only the last row alternates (answers at odd places are exactly the two words), and that shape is Blackboard's.
-      assert.equal(bad.length, row.startsWith("Pick,Yes") ? 1 : 0, row);
+      // Only the last row has the words in the second and fourth place, which is where Blackboard puts them.
+      assert.equal(r.questions.filter(flagged).length, row.startsWith("Pick,Yes") ? 1 : 0, row);
     }
   });
 });
+

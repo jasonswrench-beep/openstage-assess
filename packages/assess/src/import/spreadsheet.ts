@@ -146,14 +146,17 @@ function nameUsed(cell: string): string {
     const column = shorter === "" ? null : columnNamed(shorter);
     if (column === null) continue;
     // A bare "Answer" is the key, and also the words of an answer: "Answer - max 60 characters" limits a text, so it is not the key. A cut
-    // that lands on the key needs a description about choosing.
-    if (column === "correct" && !CHOOSES.test(description)) continue;
+    // that lands on the key by one of those bare words needs a description about choosing. "Correct answer" and "Right answer" are not
+    // ambiguous, and were refused with it ("Correct answer - max 60 characters" read as the key before, and is the key again).
+    if (column === "correct" && BARE_KEY_NAMES.has(squash(shorter.replace(LANGUAGE_SUFFIX, ""))) && !CHOOSES.test(description)) continue;
     if (best === null || shorter.length > best.length) best = shorter;
   }
   return best ?? cell;
 }
 
 const CHOOSES = /\b(?:choose|select|pick)\b/i;
+/** The names of the key column that are also what a column of answer text may be called. */
+const BARE_KEY_NAMES: ReadonlySet<string> = new Set(["answer", "ans", "key"]);
 
 /**
  * The only words a description may be made of: a limit or an instruction for filling a column in, and nothing about what the column holds
@@ -425,8 +428,13 @@ function build(row: TableRow, order: readonly (Column | null)[], line: number, c
   // A row of Blackboard's upload file read as a table: each answer is followed by the word correct or incorrect, and the words land in
   // the answer cells while the key is taken from the wrong place. The check for that file is meant to catch it first; this says so when it
   // did not, because the question would otherwise read as parsed with the word "incorrect" marked right.
-  if (answers.length >= 4 && answers.every((a, i) => (i % 2 === 1) === /^(?:in)?correct$/i.test(a))) {
-    note(FindingCode.UnreadContent, "warn", 'The answers of this row alternate with the word correct or incorrect, which is how Blackboard\'s upload file marks its key. If this is a row of that file read as a table, the key is not read from it: check it.');
+  // Found by two readers: Blackboard puts its word in the second, fourth and sixth cell after the stem, whatever the answers say. Exact
+  // alternation of the answers was missed when an answer was itself the word ("Correct", "Incorrect") or a gap shifted them, and the
+  // option named "Incorrect" was marked right; so the cells are looked at where the file puts them, and so is a Correct cell that is only
+  // the word.
+  const isWord = (cell: string): boolean => /^(?:in)?correct$/i.test(cell.trim());
+  if ((isWord(get("a1")) && isWord(get("a3"))) || isWord(correctCell) || (answers.length >= 4 && answers.every((a, i) => (i % 2 === 1) === isWord(a)))) {
+    note(FindingCode.UnreadContent, "warn", 'This row looks like one of Blackboard\'s upload rows, whose answers are followed by the word correct or incorrect. If it is one of that file\'s rows read as a table, the key is not read from it: check it.');
   }
 
   // The type: as the cell says, or from what the row holds when it says nothing. A type that is stated is believed.
