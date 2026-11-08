@@ -29,7 +29,7 @@
  * uses the full 64 characters and respects a word boundary.
  */
 
-import { capFindings, finding, FindingCode, type Finding, type SourceRef } from "../model/findings.ts";
+import { finding, FindingCode, type Finding, type SourceRef } from "../model/findings.ts";
 import { pushAll } from "../model/lists.ts";
 import { replaceDelimited } from "../model/markup-scan.ts";
 import { unreadObjectFindings } from "../model/unread-objects.ts";
@@ -1356,8 +1356,8 @@ function buildQuestion(
     metadata: meta.metadata,
     media,
     math,
-    // No more than a few of one kind: the rest are counted in one finding, and none is lost without a word (`capFindings`).
-    findings: capFindings(findings),
+    // No more than a few of one kind is kept, whatever the importer: `createQuestion` cuts them (`capFindings`), and counts the rest.
+    findings,
     origin: { kind: "import", source, profile: options.profile, at: options.at },
     by: options.author,
     at: options.at,

@@ -6,7 +6,7 @@
  * true, and goes. Without it the question stayed Failed, and unusable, after it was repaired.
  */
 
-import { FindingCode, type Finding } from "../model/findings.ts";
+import { FindingCode, isCapSummary, type Finding } from "../model/findings.ts";
 import { optionsOf, type Option, type Question } from "../model/question.ts";
 import { collectRefs, richTextToPlain, type RichText } from "../model/richtext.ts";
 
@@ -41,6 +41,11 @@ const PLACEHOLDER_PROBLEMS: ReadonlySet<string> = new Set<string>([FindingCode.E
  * So a question with two placeholders and one of them written over keeps the other's error, and a placeholder typed in again,
  * or left as it was, keeps all of them. It reads the question as it is, not what the edit did, so an error that went stale
  * before this rule existed goes at the next edit too. Nothing else is touched.
+ *
+ * A question with more empty options than a list of findings holds (`capFindings`) has errors for the first of them and one finding
+ * that counts the rest, whose place is only that of the first it counts. That one stands for several options, so it is not settled by
+ * the option it names being written: it goes when every option that still says nothing has an error of its own that is still live, or
+ * when there are none left. (It once went with the option it named, and the three options after it said "(missing)" with no error.)
  */
 export function replacePlaceholderProblems(before: Question, after: Question, by: string, at: string): { question: Question; replaced: Finding[] } {
   const none = { question: after, replaced: [] as Finding[] };
@@ -51,17 +56,32 @@ export function replacePlaceholderProblems(before: Question, after: Question, by
 
   const allWritten = options.length >= 2 && options.every((o) => !isPlaceholderOption(o));
   const earlier = optionsOf(before);
+  /** The option an error names, by the place it had before this edit. */
+  const optionNamedBy = (f: Finding): Option | undefined => {
+    const place = /^body\.options\.(\d+)\.content$/.exec(f.field ?? "")?.[1];
+    return place === undefined ? undefined : earlier[Number(place)];
+  };
+  const counts = (f: Finding): boolean => f.code === FindingCode.EmptyOption && isCapSummary(f);
   const settled = (f: Finding): boolean => {
     if (allWritten) return true;
     if (f.code !== FindingCode.EmptyOption) return false;
-    const place = /^body\.options\.(\d+)\.content$/.exec(f.field ?? "")?.[1];
-    const was = place === undefined ? undefined : earlier[Number(place)];
+    const was = optionNamedBy(f);
     if (!was || !isPlaceholderOption(was)) return false;
     const now = options.find((o) => o.id === was.id);
     return now === undefined || !isPlaceholderOption(now);
   };
 
-  const replaced = live.filter(settled);
+  const replaced = live.filter((f) => !counts(f) && settled(f));
+  if (live.some(counts)) {
+    // The options that still say nothing and that an error of their own still names.
+    const named = new Set<string>();
+    for (const f of live) {
+      const was = counts(f) || replaced.includes(f) ? undefined : optionNamedBy(f);
+      if (f.code === FindingCode.EmptyOption && was) named.add(was.id);
+    }
+    const unsaid = options.some((o) => isPlaceholderOption(o) && !named.has(o.id));
+    if (allWritten || !unsaid) for (const f of live) if (counts(f)) replaced.push(f);
+  }
   if (replaced.length === 0) return none;
   const dismissed = new Set(replaced);
   return {

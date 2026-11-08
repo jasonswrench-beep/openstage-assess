@@ -1,174 +1,36 @@
 /**
  * A list as long as a file is never spread into a call.
  *
- * `target.push(...items)`, `Math.max(...items)`, `String.fromCharCode(...bytes)` and `splice(at, 0, ...items)` pass every item as an argument,
- * and a call takes about 125,000 of them before it throws "Maximum call stack size exceeded" (fewer when the call is already deep, as it is
- * in the server). A question with 130,000 line breaks, options, conditions or key words is a file of 130 to 650 KB, and each of these was a
- * crash with that message in place of a question. The manifest reader had it and was fixed; an independent reader then found it in sixteen
- * more places, and in a dozen more that nothing had asked yet.
+ * `target.push(...items)`, `Math.max(...items)`, `String.fromCharCode(...bytes)`, `Math.max.apply(null, items)` and `splice(at, 0, ...items)`
+ * pass every item as an argument, and a call takes about 125,000 of them before it throws "Maximum call stack size exceeded" (fewer when
+ * the call is already deep, as it is in the server). A question with 130,000 line breaks, options, conditions or key words is a file of 130
+ * to 650 KB, and each of these was a crash with that message in place of a question. The manifest reader had it and was fixed; an
+ * independent reader then found it in sixteen more places, in a dozen more that nothing had asked yet, and in eight in `quality/bank.ts`
+ * that the first sweep did not reach.
  *
- * So this test reads every source file of the engine, finds every spread inside the arguments of a call (`f(...x)`, `new F(...x)`), and
- * fails on any that is not in the list below with a reason. A reason says why the list spread is short: at most four corner marks, at most
+ * So this test reads every source file of the engine (TypeScript and JavaScript, in any module form), finds every spread inside the
+ * arguments of a call (`f(...x)`, `new F(...x)`) and every `apply` that passes a list (`f.apply(this, x)`, `Reflect.apply(f, this, x)`),
+ * and fails on any that is not in the list below with a reason. A reason says why the list is short: at most four corner marks, at most
  * twenty-six versions, a sentence or two of notes. A spread of anything that comes from a file, a bank or a question is a loop (`pushAll`,
- * `largest` and `smallest` are in `model/lists.ts`). Array and object spreads (`[...a, ...b]`, `{ ...o }`) take no stack and are not looked at.
+ * `largest` and `smallest` are in `model/lists.ts`). Array and object spreads (`[...a, ...b]`, `{ ...o }`) take no stack and are not
+ * looked at.
  *
- * Nothing is read but text, so a new source file is covered without anyone remembering to add it here.
+ * An entry in the list excuses a call by what is called and what is passed (`notes.push` and `lossNotes(losses, "Brightspace")`), and
+ * by how many times, and not by a piece of the line: a second spread on an excused line is not excused, and an entry that no longer
+ * matches anything, `pending` or not, fails until it is taken out. Nothing is read but text, so a new source file is covered without
+ * anyone remembering to add it here, and the planted forms at the end show that each way round is seen.
  */
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { callSpreads, findCallSpreads, spreadsOf, type FoundSpread } from "./support/call-spreads.ts";
+
 const SRC = fileURLToPath(new URL("../src/", import.meta.url));
-
-// ---------------------------------------------------------------------------
-// A small reader of TypeScript, enough to tell where a spread stands
-// ---------------------------------------------------------------------------
-
-interface Open {
-  ch: "(" | "[" | "{" | "${";
-  at: number;
-}
-
-type Last = { kind: "start" | "word" | "number" | "text" | "punct"; text: string };
-
-/** Words after which a slash begins a pattern and not a division. */
-const BEFORE_PATTERN = new Set(["return", "typeof", "instanceof", "in", "of", "case", "delete", "void", "throw", "new", "else", "do", "yield", "await"]);
-
-/**
- * Every spread (`...`) in a source text with the bracket that holds it. Comments, strings, template text and patterns are skipped, so that
- * `"f(...a)"` and `// f(...a)` are not spreads; the code inside `${ }` of a template is read.
- */
-export function spreadsOf(source: string): { spreads: Array<{ at: number; top: Open | undefined }>; closeOf: Map<number, number>; unclosed: number } {
-  const spreads: Array<{ at: number; top: Open | undefined }> = [];
-  const closeOf = new Map<number, number>();
-  const stack: Open[] = [];
-  const n = source.length;
-  let i = 0;
-  let last: Last = { kind: "start", text: "" };
-
-  /** Reads template text from `from`, up to the closing backtick or the `${` of an expression. Returns where to go on. */
-  const template = (from: number): number => {
-    let k = from;
-    while (k < n) {
-      const c = source.charAt(k);
-      if (c === "\\") {
-        k += 2;
-        continue;
-      }
-      if (c === "`") {
-        last = { kind: "text", text: "" };
-        return k + 1;
-      }
-      if (c === "$" && source.charAt(k + 1) === "{") {
-        stack.push({ ch: "${", at: k });
-        last = { kind: "punct", text: "{" };
-        return k + 2;
-      }
-      k++;
-    }
-    return n;
-  };
-
-  while (i < n) {
-    const c = source.charAt(i);
-    if (c === " " || c === "\t" || c === "\r" || c === "\n") {
-      i++;
-    } else if (c === "/" && source.charAt(i + 1) === "/") {
-      const end = source.indexOf("\n", i);
-      i = end === -1 ? n : end;
-    } else if (c === "/" && source.charAt(i + 1) === "*") {
-      const end = source.indexOf("*/", i + 2);
-      i = end === -1 ? n : end + 2;
-    } else if (c === '"' || c === "'") {
-      let k = i + 1;
-      while (k < n && source.charAt(k) !== c) k += source.charAt(k) === "\\" ? 2 : 1;
-      i = k + 1;
-      last = { kind: "text", text: "" };
-    } else if (c === "`") {
-      i = template(i + 1);
-    } else if (c === "/") {
-      const pattern = last.kind === "start" || (last.kind === "punct" && last.text !== ")" && last.text !== "]") || (last.kind === "word" && BEFORE_PATTERN.has(last.text));
-      if (!pattern) {
-        i++;
-        last = { kind: "punct", text: "/" };
-        continue;
-      }
-      let k = i + 1;
-      let inClass = false;
-      while (k < n) {
-        const d = source.charAt(k);
-        if (d === "\\") k += 2;
-        else if (d === "\n") break;
-        else {
-          if (d === "[") inClass = true;
-          else if (d === "]") inClass = false;
-          else if (d === "/" && !inClass) break;
-          k++;
-        }
-      }
-      k++;
-      while (/[a-z]/.test(source.charAt(k))) k++;
-      i = k;
-      last = { kind: "text", text: "" };
-    } else if (c === "(" || c === "[" || c === "{") {
-      stack.push({ ch: c, at: i });
-      last = { kind: "punct", text: c };
-      i++;
-    } else if (c === ")" || c === "]") {
-      const open = stack.pop();
-      if (open !== undefined && c === ")") closeOf.set(open.at, i);
-      last = { kind: "punct", text: c };
-      i++;
-    } else if (c === "}") {
-      const open = stack[stack.length - 1];
-      stack.pop();
-      if (open?.ch === "${") {
-        i = template(i + 1);
-      } else {
-        last = { kind: "punct", text: "}" };
-        i++;
-      }
-    } else if (c === "." && source.startsWith("...", i)) {
-      spreads.push({ at: i, top: stack[stack.length - 1] });
-      last = { kind: "punct", text: "." };
-      i += 3;
-    } else if (/[A-Za-z_$]/.test(c)) {
-      let k = i + 1;
-      while (k < n && /[\w$]/.test(source.charAt(k))) k++;
-      last = { kind: "word", text: source.slice(i, k) };
-      i = k;
-    } else if (/[0-9]/.test(c)) {
-      let k = i + 1;
-      while (k < n && /[\w.]/.test(source.charAt(k)) && !source.startsWith("...", k)) k++;
-      last = { kind: "number", text: "" };
-      i = k;
-    } else {
-      last = { kind: "punct", text: c };
-      i++;
-    }
-  }
-  return { spreads, closeOf, unclosed: stack.length };
-}
-
-/** The spreads that stand in the arguments of a call or a `new`: not in an array or an object, and not a rest parameter. */
-export function callSpreads(source: string): Array<{ line: number; text: string }> {
-  const { spreads, closeOf } = spreadsOf(source);
-  const lines = source.split("\n");
-  const found: Array<{ line: number; text: string }> = [];
-  for (const { at, top } of spreads) {
-    if (top?.ch !== "(") continue;
-    // A rest parameter: `(...args) =>`, or `(a, ...rest: string[])`, which has a type, and a call never has one.
-    const close = closeOf.get(top.at);
-    const after = close === undefined ? "" : source.slice(close + 1).trimStart();
-    if (after.startsWith("=>") || /^\.\.\.[A-Za-z_$][\w$]*\s*:/.test(source.slice(at, at + 80))) continue;
-    const line = source.slice(0, at).split("\n").length;
-    found.push({ line, text: (lines[line - 1] as string).trim() });
-  }
-  return found;
-}
 
 // ---------------------------------------------------------------------------
 // The reader reads
@@ -185,6 +47,28 @@ describe("the reader of source text that finds the spreads", () => {
     assert.equal(calls("x ? f(...a) : b;"), 1, "a ternary's colon after the bracket does not make it a parameter list");
     assert.equal(calls("a / b; f(...c);"), 1, "a division is not the start of a pattern");
     assert.equal(calls("f(g(...a), ...b);"), 2);
+    assert.equal(calls("t?.push(...x);"), 1);
+    assert.equal(calls("f?.(...x);"), 1);
+    assert.equal(calls("new Set<string>(...parts);"), 1);
+    assert.equal(calls("super(...args);"), 1);
+    assert.equal(calls("const alias = Math.max; alias(...xs);"), 1);
+    assert.equal(calls("out.push(\n  ...a,\n  ...b,\n);"), 2, "over several lines");
+  });
+
+  test("a list passed to apply is found, whatever it is applied to", () => {
+    assert.equal(calls("Math.max.apply(null, xs);"), 1);
+    assert.equal(calls("String.fromCharCode.apply(null, xs);"), 1);
+    assert.equal(calls("Array.prototype.push.apply(target, items);"), 1);
+    assert.equal(calls("Reflect.apply(Math.max, null, xs);"), 1);
+    assert.equal(calls("Function.prototype.apply.call(Math.max, null, xs);"), 1);
+    assert.equal(calls("Math.max.apply(\n  null,\n  xs,\n);"), 1, "over several lines, with a comma at the end");
+    assert.equal(calls("Math.max.apply(null, f(a, b));"), 1, "the commas inside the list's own brackets do not count");
+    assert.equal(calls("Math.max.apply(null)"), 0, "no list");
+    assert.equal(calls("Math.max.apply(null, undefined)"), 0, "no list");
+    assert.equal(calls("Reflect.apply(Math.max, null)"), 0, "no list");
+    assert.equal(calls("applyRule(null, xs)"), 0, "a name that only starts with apply");
+    assert.equal(calls('const s = "Math.max.apply(null, xs)";'), 0, "text");
+    assert.equal(calls("// Math.max.apply(null, xs)\n"), 0, "a comment");
   });
 
   test("an array, an object, a rest parameter and text are not", () => {
@@ -208,6 +92,16 @@ describe("the reader of source text that finds the spreads", () => {
     assert.equal(calls("const t = `${`${f(...a)}`}`;"), 1);
     assert.equal(spreadsOf("f(a, [b, { c: `${d}` }]);").unclosed, 0);
   });
+
+  test("what is called and what is passed are told apart, so that a second spread on a line is its own", () => {
+    const [one, two] = callSpreads('notes.push(...lossNotes(losses, "Brightspace"), ...items.map(String));');
+    assert.deepEqual([one?.callee, one?.argument], ["notes.push", 'lossNotes(losses, "Brightspace")']);
+    assert.deepEqual([two?.callee, two?.argument], ["notes.push", "items.map(String)"]);
+    assert.deepEqual(callSpreads("Math.max(1, ...record.versions.map(() => n));").map((s) => [s.callee, s.argument]), [["Math.max", "record.versions.map(() => n)"]]);
+    assert.deepEqual(callSpreads("a.b(c).push(...d);").map((s) => s.callee), [".push"]);
+    assert.deepEqual(callSpreads("new Set<string>(...parts);").map((s) => s.callee), ["new Set"]);
+    assert.deepEqual(callSpreads("Math.max.apply(null, [a, b].concat(c));").map((s) => [s.kind, s.callee, s.argument]), [["apply", "Math.max.apply", "[a, b].concat(c)"]]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -217,8 +111,12 @@ describe("the reader of source text that finds the spreads", () => {
 interface Allowed {
   /** The file, under `src`, with forward slashes. */
   file: string;
-  /** Part of the line the spread is on. */
-  text: string;
+  /** What is called, as the reader writes it: `notes.push`, `Math.max`. */
+  callee: string;
+  /** What is passed, as the reader writes it (white space squashed). */
+  argument: string;
+  /** How many calls in the file pass it. A call more than this is not excused. */
+  times?: number;
   reason: string;
   /** Not this implementer's file to change: the spread is a fault that is fixed where it lives, and the entry goes with the fix. */
   pending?: string;
@@ -227,84 +125,189 @@ interface Allowed {
 const LOSS_NOTES = "lossNotes gives at most two sentences, one for pictures and one for equations";
 
 const ALLOWED: Allowed[] = [
-  { file: "bank/blueprint.ts", text: "ids.push(...pick.ids)", reason: "the ids one rule took, at most MOST_PICKED (1,000)" },
-  { file: "export/blackboard-upload.ts", text: "notes.push(...lossNotes(", reason: LOSS_NOTES },
-  { file: "export/common-cartridge.ts", text: "notes.push(...lossNotes(", reason: LOSS_NOTES },
-  { file: "export/d2l-csv.ts", text: "notes.push(...lossNotes(", reason: LOSS_NOTES },
-  { file: "export/gift.ts", text: "notes.push(...lossNotes(", reason: LOSS_NOTES },
-  { file: "export/moodle-xml.ts", text: "notes.push(...lossNotes(", reason: LOSS_NOTES },
-  { file: "export/qti12.ts", text: "notes.push(...lossNotes(", reason: LOSS_NOTES },
-  { file: "sheets/check-print.ts", text: "Math.max(...bubbles)", reason: "the bubbles of one scanned sheet, which has a fixed number of places on it" },
-  { file: "sheets/gate.ts", text: "crop(image, ...cut)", reason: "the four numbers of a rectangle" },
-  { file: "sheets/gate.ts", text: "described.push(...applied)", reason: "the damages put on one drawn sheet, at most a handful" },
-  { file: "sheets/homography.ts", text: "Math.max(...destination.map(", reason: "the four corner marks of a sheet" },
-  { file: "sheets/image.ts", text: "String.fromCharCode(...bytes.subarray(at + 4, at + 8))", reason: "four bytes, the name of a PNG part" },
-  { file: "sheets/locate.ts", text: "Math.min(...sides) < 20", reason: "the four sides of a square of corner marks" },
-  { file: "sheets/locate.ts", text: "Math.max(...sizes) / Math.min(...sizes) > 1.8", reason: "the four sizes of the corner marks" },
-  { file: "sheets/locate.ts", text: "area / (1 + (Math.max(...sizes)", reason: "the four sizes of the corner marks" },
-  { file: "sheets/measure.ts", text: "Math.max(...shifts)", reason: "one shift for each row of questions on one page of a sheet, and a page holds a fixed number" },
-  { file: "sheets/paper.ts", text: "notes.push(...planned.plan.notes)", reason: "the few sentences a sheet plan says about itself" },
-  { file: "sheets/plan.ts", text: "Math.max(...here.map(", reason: "one entry for each version of a test, at most MAX_VERSIONS (26)" },
-  { file: "sheets/results-export.ts", text: "Math.max(1, ...record.versions.map(", reason: "one entry for each version of a test, at most 26" },
-  { file: "sheets/results-export.ts", text: "Math.max(1, ...item.options.map(", reason: "the answers to one question on a sheet, at most eight places" },
+  { file: "bank/blueprint.ts", callee: "ids.push", argument: "pick.ids", reason: "the ids one rule took, at most MOST_PICKED (1,000)" },
+  { file: "export/blackboard-upload.ts", callee: "notes.push", argument: 'lossNotes(losses, "Blackboard")', reason: LOSS_NOTES },
+  { file: "export/common-cartridge.ts", callee: "notes.push", argument: 'lossNotes(losses, "the learning system")', reason: LOSS_NOTES },
+  { file: "export/d2l-csv.ts", callee: "notes.push", argument: 'lossNotes(losses, "Brightspace")', reason: LOSS_NOTES },
+  { file: "export/gift.ts", callee: "notes.push", argument: 'lossNotes(losses, "Moodle")', reason: LOSS_NOTES },
+  { file: "export/moodle-xml.ts", callee: "notes.push", argument: 'lossNotes(losses, "Moodle")', reason: LOSS_NOTES },
+  { file: "export/qti12.ts", callee: "notes.push", argument: 'lossNotes(losses, "the learning system")', reason: LOSS_NOTES },
+  { file: "sheets/check-print.ts", callee: "Math.max", argument: "bubbles", reason: "the bubbles of one scanned sheet, which has a fixed number of places on it" },
+  { file: "sheets/gate.ts", callee: "crop", argument: "cut", reason: "the four numbers of a rectangle" },
+  { file: "sheets/gate.ts", callee: "described.push", argument: "applied", reason: "the damages put on one drawn sheet, at most a handful" },
+  { file: "sheets/homography.ts", callee: "Math.max", argument: "destination.map((p) => Math.hypot(p.x, p.y))", reason: "the four corner marks of a sheet" },
+  { file: "sheets/image.ts", callee: "String.fromCharCode", argument: "bytes.subarray(at + 4, at + 8)", reason: "four bytes, the name of a PNG part" },
+  { file: "sheets/locate.ts", callee: "Math.min", argument: "sides", reason: "the four sides of a square of corner marks" },
+  { file: "sheets/locate.ts", callee: "Math.max", argument: "sizes", times: 2, reason: "the four sizes of the corner marks" },
+  { file: "sheets/locate.ts", callee: "Math.min", argument: "sizes", times: 2, reason: "the four sizes of the corner marks" },
+  { file: "sheets/measure.ts", callee: "Math.max", argument: "shifts", reason: "one shift for each row of questions on one page of a sheet, and a page holds a fixed number" },
+  { file: "sheets/paper.ts", callee: "notes.push", argument: "planned.plan.notes", reason: "the few sentences a sheet plan says about itself" },
+  { file: "sheets/plan.ts", callee: "Math.max", argument: "here.map((u) => u.places)", reason: "one entry for each version of a test, at most MAX_VERSIONS (26)" },
+  { file: "sheets/results-export.ts", callee: "Math.max", argument: "record.versions.map(() => record.questions.length)", reason: "one entry for each version of a test, at most 26" },
+  { file: "sheets/results-export.ts", callee: "Math.max", argument: "item.options.map((o) => o.chosen)", reason: "the answers to one question on a sheet, at most eight places" },
 
-  // Faults in files another part of the work owns. They are fixed where they are, and the entry is removed with the fix.
-  { file: "bank/store.ts", text: "siblings.splice(at, 1, ...folder.children)", reason: "the folders inside a removed folder, as many as a bank file has", pending: "the bank (removeFolder)" },
-  { file: "import/docx/document.ts", text: "Math.max(...cells.map(", reason: "the rows of a grid in a Word file", pending: "the Word reader" },
-  { file: "import/docx/omml.ts", text: "out.push(...this.run(", reason: "the parts of an equation, which are counted", pending: "the Word reader" },
-  { file: "import/docx/tables.ts", text: "push(", reason: "the lines of a table cell, as many as a cell has paragraphs", pending: "the Word reader" },
-  { file: "import/pdf/document.ts", text: "out.push(...bytes.slice(", reason: "the bytes of a string in a PDF", pending: "the PDF reader" },
-  { file: "import/pdf/reader.ts", text: "notes.push(...removeFurniture(pages))", reason: "one note for each line of furniture taken off", pending: "the PDF reader" },
-  { file: "quality/bank.ts", text: "push(...", reason: "the options, blanks and pairs of one question, as many as a bank file gives it", pending: "the bank (findDuplicates)" },
+  // Faults in files another part of the work owns. They are fixed where they are, and the entry is removed with the fix (the test below
+  // fails on an entry that matches nothing, a pending one included, so a fix that leaves its entry behind is caught).
+  { file: "import/docx/document.ts", callee: "Math.max", argument: "cells.map((row) => row.length)", reason: "the rows of a grid in a Word file, behind MAX_GRID_ROWS (100)", pending: "the Word reader" },
+  { file: "import/pdf/reader.ts", callee: "notes.push", argument: "removeFurniture(pages)", reason: "one note for each line of furniture taken off", pending: "the PDF reader" },
 ];
 
-function sourceFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) out.push(...sourceFiles(path));
-    else if (name.endsWith(".ts")) out.push(path);
+const same = (a: Allowed, f: FoundSpread): boolean => a.file === f.file && a.callee === f.callee && a.argument === f.argument;
+
+/** The calls that are not excused: by their file, what they call, what they pass, and how many of them an entry allows. */
+export function unlisted(found: readonly FoundSpread[], allowed: readonly Allowed[] = ALLOWED): FoundSpread[] {
+  const used = new Map<Allowed, number>();
+  const out: FoundSpread[] = [];
+  for (const f of found) {
+    const entry = allowed.find((a) => same(a, f) && (used.get(a) ?? 0) < (a.times ?? 1));
+    if (entry === undefined) out.push(f);
+    else used.set(entry, (used.get(entry) ?? 0) + 1);
   }
   return out;
 }
 
+/** The entries that do not excuse exactly the calls they say they do: out of date, whether they wait for another part of the work or not. */
+export function stale(found: readonly FoundSpread[], allowed: readonly Allowed[] = ALLOWED): Allowed[] {
+  return allowed.filter((a) => found.filter((f) => same(a, f)).length !== (a.times ?? 1));
+}
+
+const describeCall = (f: FoundSpread): string => `${f.file}:${f.line}: ${f.callee}(${f.kind === "spread" ? "..." : "apply "}${f.argument})`;
+const ADVICE =
+  "a spread (or an apply) into a call passes every item as an argument and throws at about 125,000 of them. Use a loop (pushAll, largest, smallest in model/lists.ts), or list it in test/spread-guard.test.ts with the reason that its list is short.";
+
 describe("the engine", () => {
-  const files = sourceFiles(SRC);
-  const found: Array<{ file: string; line: number; text: string }> = [];
-  for (const path of files) {
-    const source = readFileSync(path, "utf8");
-    const file = relative(SRC, path).replaceAll("\\", "/");
-    for (const spread of callSpreads(source)) found.push({ file, line: spread.line, text: spread.text });
-  }
+  const { files, found, unbalanced } = findCallSpreads(SRC);
 
   test("the files were read, and every one has its brackets balanced (so the reader did not lose its place)", () => {
     assert.ok(files.length > 100, `only ${files.length} files`);
-    for (const path of files) assert.equal(spreadsOf(readFileSync(path, "utf8")).unclosed, 0, `${relative(SRC, path)} ends with a bracket open`);
+    assert.deepEqual(unbalanced, [], "these end with a bracket open");
     assert.ok(found.length > 20, "the engine has call spreads that are listed below, and the reader found only " + found.length);
   });
 
   test("no spread into a call is anywhere but in the list, with its reason", () => {
-    const unlisted = found.filter((f) => !ALLOWED.some((a) => a.file === f.file && f.text.includes(a.text)));
-    assert.deepEqual(
-      unlisted.map((f) => `${f.file}:${f.line}: ${f.text}`),
-      [],
-      "a spread into a call passes every item as an argument and throws at about 125,000 of them. Use a loop (pushAll, largest, smallest in model/lists.ts), or list it in test/spread-guard.test.ts with the reason that its list is short.",
-    );
+    assert.deepEqual(unlisted(found).map(describeCall), [], ADVICE);
   });
 
-  test("every entry of the list is still there, so that the list does not outlive what it excuses", () => {
-    const stale = ALLOWED.filter((a) => a.pending === undefined && !found.some((f) => f.file === a.file && f.text.includes(a.text)));
-    assert.deepEqual(stale.map((a) => `${a.file}: ${a.text}`), [], "these no longer exist; take them out of the list");
+  test("every entry of the list excuses exactly what it says, so that the list does not outlive what it excuses", () => {
+    assert.deepEqual(stale(found).map((a) => `${a.file}: ${a.callee}(...${a.argument}) x ${a.times ?? 1}`), [], "these no longer match what they excuse; take them out of the list");
   });
 
   test("the list is short, and each entry gives a reason", () => {
     assert.ok(ALLOWED.length <= 40, `${ALLOWED.length} entries`);
-    for (const a of ALLOWED) assert.ok(a.reason.length >= 20, `${a.file}: ${a.text} has no reason`);
+    for (const a of ALLOWED) assert.ok(a.reason.length >= 20, `${a.file}: ${a.callee}(...${a.argument}) has no reason`);
   });
 
   test("the entries that wait for another part of the work are named", () => {
     const waiting = ALLOWED.filter((a) => a.pending !== undefined);
     if (waiting.length > 0) console.log(`spread-guard: ${waiting.length} entries wait for ${[...new Set(waiting.map((a) => a.pending))].join(", ")}`);
     for (const a of waiting) assert.ok(!(a.pending as string).includes("TODO"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Each way round is seen: a form is planted in a copy of the source, and the guard has to fail on it
+// ---------------------------------------------------------------------------
+
+describe("a spread planted in a copy of the source is seen", () => {
+  // The files that are copied: ones the list excuses a call in, ones it used to, a plain one and a pending one.
+  const COPIED = ["export/d2l-csv.ts", "quality/bank.ts", "model/ids.ts", "import/docx/tables.ts", "import/docx/document.ts", "import/pdf/reader.ts"];
+
+  /** A folder with a copy of each file in `COPIED`, changed by `plant`, and what the guard says is not excused in it. */
+  function guard(plant: (copy: (file: string, change: (text: string) => string) => void, add: (file: string, text: string) => void) => void): string[] {
+    const dir = mkdtempSync(join(tmpdir(), "openassess-guard-"));
+    try {
+      for (const file of COPIED) {
+        mkdirSync(dirname(join(dir, file)), { recursive: true });
+        cpSync(join(SRC, file), join(dir, file));
+      }
+      plant(
+        (file, change) => {
+          const path = join(dir, file);
+          const before = readFileSync(path, "utf8");
+          const after = change(before);
+          assert.notEqual(after, before, `${file} was not changed: the text to plant over is not there`);
+          writeFileSync(path, after);
+        },
+        (file, text) => {
+          mkdirSync(dirname(join(dir, file)), { recursive: true });
+          writeFileSync(join(dir, file), text);
+        },
+      );
+      return unlisted(findCallSpreads(dir).found).map(describeCall);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  const append = (text: string) => (before: string) => `${before}\n${text}\n`;
+
+  test("the copies, as they are, hold nothing that is not excused (so what fails below fails for what was planted)", () => {
+    assert.deepEqual(guard(() => undefined), []);
+  });
+
+  for (const [name, text, callee] of [
+    ["Math.max.apply", "export const planted = Math.max.apply(null, xs);", "Math.max.apply"],
+    ["Reflect.apply", "export const planted = Reflect.apply(Math.max, null, xs);", "Reflect.apply"],
+    ["String.fromCharCode.apply", "export const planted = String.fromCharCode.apply(null, xs);", "String.fromCharCode.apply"],
+    ["Array.prototype.push.apply", "Array.prototype.push.apply(target, xs);", "Array.prototype.push.apply"],
+    ["a spread into push", "t.push(...xs);", "t.push"],
+    ["a spread into Math.max", "export const planted = Math.max(0, ...xs);", "Math.max"],
+    ["a spread into a new", "export const planted = new Set(...xs);", "new Set"],
+    ["a spread in a template", "export const planted = `${f(...xs)}`;", "f"],
+  ] as const) {
+    test(`${name} is seen in a plain source file`, () => {
+      const failures = guard((copy) => copy("model/ids.ts", append(text)));
+      assert.equal(failures.length, 1, failures.join("\n"));
+      assert.match(failures[0] as string, new RegExp(`^model/ids\\.ts:\\d+: ${callee.replaceAll(".", "\\.")}\\(`));
+    });
+  }
+
+  for (const [file, text] of [
+    ["model/planted.mts", "export const planted = f(...xs);\n"],
+    ["model/planted.cts", "export const planted = f(...xs);\n"],
+    ["model/planted.js", "export const planted = f(...xs);\n"],
+    ["model/planted.mjs", "export const planted = f(...xs);\n"],
+    ["model/planted.cjs", "module.exports = f(...xs);\n"],
+    ["model/planted-apply.js", "export const planted = Math.max.apply(null, xs);\n"],
+  ] as const) {
+    test(`a spread in ${file} is seen`, () => {
+      const failures = guard((_copy, add) => add(file, text));
+      assert.equal(failures.length, 1, failures.join("\n"));
+      assert.ok((failures[0] as string).startsWith(`${file}:`), failures[0]);
+    });
+  }
+
+  test("a second spread on a line that the list excuses is not excused with it", () => {
+    const failures = guard((copy) => copy("export/d2l-csv.ts", (text) => text.replace('notes.push(...lossNotes(losses, "Brightspace"));', 'notes.push(...lossNotes(losses, "Brightspace"), ...items.map(String));')));
+    assert.equal(failures.length, 1, failures.join("\n"));
+    assert.match(failures[0] as string, /^export\/d2l-csv\.ts:\d+: notes\.push\(\.\.\.items\.map\(String\)\)$/);
+  });
+
+  test("the excused call, passed another list, is not excused", () => {
+    const failures = guard((copy) => copy("export/d2l-csv.ts", (text) => text.replace('notes.push(...lossNotes(losses, "Brightspace"));', "notes.push(...everyQuestion);")));
+    assert.deepEqual(failures.map((f) => f.replace(/^export\/d2l-csv\.ts:\d+: /, "")), ["notes.push(...everyQuestion)"]);
+  });
+
+  test("an excused call twice is not excused twice", () => {
+    const failures = guard((copy) => copy("export/d2l-csv.ts", (text) => text.replace('notes.push(...lossNotes(losses, "Brightspace"));', 'notes.push(...lossNotes(losses, "Brightspace"));\n  notes.push(...lossNotes(losses, "Brightspace"));')));
+    assert.equal(failures.length, 1, failures.join("\n"));
+  });
+
+  test("an old entry's text does not excuse another call (these were `push(` and `push(...` once)", () => {
+    for (const file of ["import/docx/tables.ts", "quality/bank.ts"]) {
+      const failures = guard((copy) => copy(file, append("t.push(...xs);")));
+      assert.equal(failures.length, 1, `${file}: ${failures.join("\n")}`);
+      assert.ok((failures[0] as string).startsWith(`${file}:`));
+    }
+  });
+
+  test("the list is read for what is stale, and a pending entry is no exception", () => {
+    const found = findCallSpreads(SRC).found;
+    const dead: Allowed = { file: "bank/store.ts", callee: "siblings.splice", argument: "folder.children", reason: "an entry for a spread that was taken out of the file", pending: "the bank" };
+    assert.deepEqual(stale(found, [...ALLOWED, dead]), [dead]);
+    // And one that excuses more calls than there are, or fewer.
+    const twice: Allowed = { file: "bank/blueprint.ts", callee: "ids.push", argument: "pick.ids", times: 2, reason: "an entry that says there are two where there is one" };
+    assert.deepEqual(stale(found, [twice]), [twice]);
+    assert.deepEqual(unlisted(found, [{ ...twice, times: 1 }]).length, found.length - 1);
   });
 });

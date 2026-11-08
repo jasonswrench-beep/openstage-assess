@@ -13,6 +13,8 @@
  * only when a pattern would be a surprise by chance.
  */
 
+import { pushAll } from "../model/lists.ts";
+import { replacePlaceholders } from "../model/markup-scan.ts";
 import { isChoice, optionsOf, type Question } from "../model/question.ts";
 import { richTextToPlain, type RichText } from "../model/richtext.ts";
 import { placeLetter, VERSION_LABELS, versionOf, versionQuestions, type TestRecord } from "../model/test.ts";
@@ -77,10 +79,13 @@ export interface BankQualityReport {
 // Duplicates
 // ---------------------------------------------------------------------------
 
-/** The text of a rich value with each equation written in as its LaTeX, since an equation is not in the text itself. */
-function textWithMath(latex: ReadonlyMap<string, string>, value: RichText): string {
-  const content = value.content;
-  const written = content.replace(/<oa-math\s[^>]*ref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi, (_whole, ref: string) => ` ${latex.get(ref) ?? ref} `);
+/**
+ * The text of a rich value with each equation written in as its LaTeX, since an equation is not in the text itself. The placeholders are
+ * found by `replacePlaceholders`: a pattern of `<oa-math\s[^>]*ref...` read to the end of the text from every `<oa-math ` in it, and a
+ * stored stem of 40,000 of them (a 360 KB text, 1 KB in a bank file, not sanitized on open) took seven seconds to check.
+ */
+export function textWithMath(latex: ReadonlyMap<string, string>, value: RichText): string {
+  const written = replacePlaceholders(value.content, "math", (ref) => ` ${latex.get(ref) ?? ref} `);
   return richTextToPlain(written);
 }
 
@@ -120,33 +125,35 @@ function compared(question: Question): Compared | undefined {
       const raw = options.map((o) => textWithMath(latex, o.content));
       const texts = raw.map(normalForm);
       // Right or wrong, with the words: the same options with a different one marked right are two questions.
-      parts.push(...options.map((o, i) => `${o.correct ? "+" : "-"}${texts[i]}`).sort());
-      wording.push(...raw);
+      pushAll(parts, options.map((o, i) => `${o.correct ? "+" : "-"}${texts[i]}`).sort());
+      pushAll(wording, raw);
       break;
     }
     case "trueFalse":
       parts.push(String(body["correct"] ?? "none"));
       break;
     case "fillInBlank":
-      parts.push(...((body["blanks"] ?? []) as Array<{ accepted: string[] }>).map((b) => b.accepted.map(normalForm).sort().join("/")));
+      pushAll(parts, ((body["blanks"] ?? []) as Array<{ accepted: string[] }>).map((b) => b.accepted.map(normalForm).sort().join("/")));
       break;
     case "shortAnswer":
-      parts.push(...((body["accepted"] ?? []) as string[]).map(normalForm).sort());
+      pushAll(parts, ((body["accepted"] ?? []) as string[]).map(normalForm).sort());
       break;
     case "matching": {
       const rawPairs = ((body["pairs"] ?? []) as Array<{ left: RichText; right: string }>).map((p) => [textWithMath(latex, p.left), p.right] as const);
       const rawExtras = (body["distractors"] ?? []) as string[];
       const pairs = rawPairs.map(([l, r]) => [normalForm(l), normalForm(r)] as const);
       const extras = rawExtras.map(normalForm);
-      parts.push(...pairs.map(([l, r]) => `${l}=${r}`).sort(), ...extras.map((e) => `?${e}`).sort());
-      wording.push(...rawPairs.flat(), ...rawExtras);
+      pushAll(parts, pairs.map(([l, r]) => `${l}=${r}`).sort());
+      pushAll(parts, extras.map((e) => `?${e}`).sort());
+      pushAll(wording, rawPairs.flat());
+      pushAll(wording, rawExtras);
       break;
     }
     case "ordering": {
       // A copy is sorted: sorting the question's own list would reorder it.
       const raw = [...((body["items"] ?? []) as Array<{ content: RichText; position: number }>)].sort((a, b) => a.position - b.position).map((i) => textWithMath(latex, i.content));
-      parts.push(...raw.map(normalForm));
-      wording.push(...raw);
+      pushAll(parts, raw.map(normalForm));
+      pushAll(wording, raw);
       break;
     }
     case "numeric":
