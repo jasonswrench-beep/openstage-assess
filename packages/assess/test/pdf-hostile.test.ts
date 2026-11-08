@@ -322,6 +322,28 @@ describe("a PDF that nests too deeply", () => {
     });
   }
 
+  // An operand nested too deeply was an error out of the whole page, which lost the first question with the rest. The text in front of it is
+  // kept, the page says where its instructions were not read, and what follows is not read (it is not known where the operand ended).
+  for (const depth of [65, 100, 200_000]) {
+    test(`a stream with ${depth.toLocaleString("en-US")} open brackets in the middle of it keeps the text in front of them and says the rest was not read`, () => {
+      const content = `BT /F1 12 Tf 72 700 Td (1. First question?) Tj ET\n${"[".repeat(depth)}\nBT /F1 12 Tf 72 680 Td (A. an option) Tj ET`;
+      const read = readTextInChild(contentPdf(content));
+      assert.equal(read.timedOut, false, `still reading after ${read.ms} ms`);
+      assert.deepEqual(read.lines, [["1. First question?"]]);
+      const notes = (read.notes ?? []).join("\n");
+      assert.match(notes, /Page 1: A part of a page could not be read, and the instructions after it were not read: .*nested too deeply/);
+      assert.doesNotMatch(notes, /call stack/);
+      assert.doesNotMatch(notes, /A page could not be read/, "the page itself is read");
+    });
+  }
+
+  test("and one with 64, which can be read, loses nothing in front of them and nothing is said of a place that could not be read", () => {
+    const content = `BT /F1 12 Tf 72 700 Td (1. First question?) Tj ET\n${"[".repeat(64)}\n`;
+    const read = readTextInChild(contentPdf(content));
+    assert.deepEqual(read.lines, [["1. First question?"]]);
+    assert.doesNotMatch((read.notes ?? []).join("\n"), /could not be read/);
+  });
+
   test("nesting up to the depth that is allowed is read, and one level more is not", () => {
     const nested = (depth: number): string => `${"[".repeat(depth)}${"]".repeat(depth)}`;
     const doc = new PdfDocument(assemble([...helloPieces(), { num: 6, body: nested(65) }, { num: 7, body: nested(66) }, { num: 8, body: `<< /A ${"<< /A ".repeat(65)}${">> ".repeat(65)}>>` }]));
@@ -386,10 +408,12 @@ describe("a PDF whose objects never close", () => {
     assert.deepEqual(wrong.slice(0, 3), []);
   });
 
-  test("an object that never closes ends where the next begins, so that it holds only its own words", () => {
+  // (It ended where the next begins, and so held only its own words; that cut an object at a string that held the words of a start, so it is
+  // read on as it always was while the file's budget lasts, and ends where the next begins when the budget is gone: pdf-object-bounds.test.ts.)
+  test("an object that never closes starts with its own words, and the one that does close is read whole", () => {
     const doc = new PdfDocument(assemble([...helloPieces(), { raw: "100 0 obj [ 1 2\n" }, { raw: "101 0 obj [ 3\n" }, { num: 102, body: "<< /X 1 >>" }], "trailer"));
-    assert.deepEqual(doc.get(100), [1, 2]);
-    assert.deepEqual(doc.get(101), [3]);
+    assert.deepEqual((doc.get(100) as unknown[]).slice(0, 2), [1, 2]);
+    assert.deepEqual((doc.get(101) as unknown[])[0], 3);
     assert.equal(doc.dict(doc.get(102) as never)?.get("X"), 1, "and the one that does close is read whole");
   });
 
@@ -495,7 +519,7 @@ describe("fonts that share one description", () => {
     assert.equal(read.lines?.length, 1);
   });
 
-  test("and a hundred fonts that each have a description of their own are kept to the widths one document may set", () => {
+  test("and a hundred fonts that each have a description of their own, each of 420,000 widths, are read in a heap of 200 MB, since nothing is made for each code", () => {
     const read = readTextInChild(manyFontsPdf(100, true), 20_000, heapOf(200));
     assert.equal(read.timedOut, false, `still reading after ${read.ms} ms`);
     assert.equal(read.status, 0, `the child ended with ${read.status}: ${read.stderr.slice(0, 300)}`);
@@ -503,7 +527,7 @@ describe("fonts that share one description", () => {
   });
 
   // A /W array that lists the same 70,000-entry array again and again: a hundred thousand times seventy thousand widths, if it were all set.
-  test("a /W that lists one array of 70,000 widths a hundred thousand times sets no more than the document's share", () => {
+  test("a /W that lists one array of 70,000 widths a hundred thousand times holds that array once", () => {
     const pieces: Piece[] = [
       { num: 1, body: "<< /Type /Catalog /Pages 2 0 R >>" },
       { num: 2, body: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>" },
@@ -556,28 +580,28 @@ describe("the widths of a font", () => {
     assert.equal(widthOf(long, 65_535), 321, "the codes a font can have are all inside the first 70,000");
   });
 
-  test("are made from a budget that is one for the whole document, which fifteen full fonts do not use up and a sixteenth does", () => {
-    const own = Array.from({ length: 17 }, (_, i) => `0 65535 ${200 + i}`);
+  // A budget that was one for the whole document (a million widths) took the widths from the sixteenth full font on, and the widths decide
+  // whether a gap is a space. There is no budget now: the fonts of a document, however many and however wide, have all their widths.
+  test("are all there for every font of a document, however many fonts have 65,536 widths: the eightieth has them as the first does", () => {
+    const own = Array.from({ length: 80 }, (_, i) => `0 65535 ${200 + i}`);
     const font = fonts(own, own.map((_, i) => i));
-    for (let i = 0; i < 15; i++) assert.equal(widthOf(font[i] as PdfFont, 65_535), 200 + i, `font ${i + 1} of 15 has its widths`);
-    // 15 x 65,536 = 983,040 of the 1,000,000: the sixteenth has room for 16,960 codes and no more, and the seventeenth for none.
-    assert.equal(widthOf(font[15] as PdfFont, 16_959), 215, "the sixteenth has the widths there is room for");
-    assert.equal(widthOf(font[15] as PdfFont, 16_960), 1000, "and the rest are the default width");
-    assert.equal(widthOf(font[16] as PdfFont, 0), 1000, "the seventeenth is the default throughout");
+    for (const i of [0, 1, 14, 15, 16, 17, 40, 79]) {
+      assert.equal(widthOf(font[i] as PdfFont, 0), 200 + i, `font ${i + 1}, at its first code`);
+      assert.equal(widthOf(font[i] as PdfFont, 65_535), 200 + i, `font ${i + 1}, at its last`);
+    }
   });
 
-  test("do not run out in one document because another one used its budget", () => {
+  test("do not depend on what another document has used", () => {
     const greedy = Array.from({ length: 16 }, () => "0 65535 500").join(" ");
     const [first, second] = fonts([greedy, "0 65535 321"], [0, 1]) as [PdfFont, PdfFont];
     assert.equal(widthOf(first, 65_535), 500);
-    assert.equal(widthOf(second, 0), 1000, "in a document where the first font used it up, the second has the default");
+    assert.equal(widthOf(second, 0), 321, "the second font of a document where the first is as wide as a font can be has its widths");
     const [alone] = fonts([greedy, "0 65535 321"], [1]) as [PdfFont];
-    assert.equal(widthOf(alone, 0), 321, "and in a document of its own it has its widths");
+    assert.equal(widthOf(alone, 0), 321);
     assert.equal(widthOf(alone, 65_535), 321);
   });
 
-  test("of a description that two fonts name are set once, and the budget is spent once", () => {
-    // Ten full ranges is 655,360 widths. Made twice, it is 1,310,720 and the third font's own would find nothing left.
+  test("of a description that two fonts name are the same for both", () => {
     const shared = Array.from({ length: 10 }, () => "0 65535 500").join(" ");
     const [a, b, c] = fonts([shared, "0 65535 321"], [0, 0, 1]) as [PdfFont, PdfFont, PdfFont];
     assert.equal(widthOf(a, 65_535), 500);

@@ -12,7 +12,7 @@
 
 import { inflateSync } from "node:zlib";
 
-import { isDict, isName, Lexer, numberOf, parseObject, PdfError, PdfName, PdfRef, PdfStream, type PdfDict, type PdfObject } from "./objects.ts";
+import { isDict, isName, Lexer, numberOf, parseObject, PdfError, PdfName, PdfRef, PdfStream, type PdfDict, type PdfObject, type Token } from "./objects.ts";
 
 /** The largest file read, and the largest any one stream may grow to when it is unpacked. */
 export const MAX_PDF_BYTES = 300 * 1024 * 1024;
@@ -22,12 +22,23 @@ const MAX_ROW_BYTES = 16 * 1024 * 1024;
 const MAX_PAGES = 5000;
 /** The most rows a cross-reference stream may have. A test bank is not a file of two million objects. */
 const MAX_XREF_ROWS = 2_000_000;
+/**
+ * How much of a file objects that ran into the place where the next one begins may be read again for: this many times its length and this
+ * many bytes more. A real file needs none of it, and a file whose objects have the words `9 0 obj` in a string of every one needs the length
+ * of its objects. So that the work is in proportion to the file and no more: 5,000 objects that never close, each read again to the end of
+ * a file of 240 KB, would be 1.2 GB of reading (51 seconds), and the budget lets a file of that size read 5 MB in all, tens of milliseconds.
+ */
+const REREAD_FACTOR = 16;
+const REREAD_FLOOR = 1_000_000;
 
 type XrefEntry =
   | {
       kind: "file";
       offset: number;
-      /** Where the object may be read to: the start of the next object when the objects were found by searching, and the end of the file otherwise. */
+      /**
+       * Where the words of the object are read to: the place where the next object begins, which the table gives or the search for them
+       * found. An object that runs into it is read again from the whole file (`readIndirectAt`), and only while there is budget for that.
+       */
       end?: number;
     }
   | { kind: "stream"; stream: number; index: number };
@@ -51,6 +62,29 @@ export interface PdfPageInfo {
   resources: PdfDict | undefined;
   mediaBox: [number, number, number, number];
   rotate: number;
+}
+
+/** What reading the words of an object comes to: the object, where it ended, and for a dictionary the word after it, which is `stream` for a stream. */
+interface ReadObject {
+  lex: Lexer;
+  object: PdfObject;
+  after: number;
+  next: Token;
+}
+
+function readWords(lex: Lexer): ReadObject {
+  const object = parseObject(lex);
+  const after = lex.pos;
+  return { lex, object, after, next: isDict(object) ? lex.next() : { t: "eof" } };
+}
+
+/** The object at the place the lexer is at: its number, its generation and the word obj, and then its words. */
+function readObject(lex: Lexer, offset: number): ReadObject {
+  const num = lex.next();
+  const gen = lex.next();
+  const obj = lex.next();
+  if (num.t !== "num" || gen.t !== "num" || obj.t !== "kw" || obj.v !== "obj") throw new PdfError(`Expected an object at byte ${offset} of this PDF, and did not find one.`);
+  return readWords(lex);
 }
 
 const find = (buf: Uint8Array, word: string, from: number, backwards = false): number => {
@@ -106,12 +140,19 @@ export class PdfDocument {
   /** Where each stream's data ends, for the streams whose length is not to be believed. */
   private readonly endstreams: WordFinder;
   private base = 0;
+  /**
+   * How many bytes the objects that ran into their end may be read again for, in all (see `readIndirectAt`). The budget is for the file and
+   * not for an object, so that thousands of objects that never close cannot read the rest of the file each, and it is a multiple of the
+   * file's length, so that a file whose every object has a string in it that looks like the start of another is read whole.
+   */
+  private rereadBudget: number;
 
   constructor(bytes: Uint8Array) {
     if (bytes.length === 0) throw new PdfError("This file is empty.");
     if (bytes.length > MAX_PDF_BYTES) throw new PdfError(`This PDF is larger than ${MAX_PDF_BYTES / 1024 / 1024} MB, which is more than a test bank is.`);
     this.bytes = bytes;
     this.endstreams = new WordFinder(bytes, "endstream");
+    this.rereadBudget = REREAD_FACTOR * bytes.length + REREAD_FLOOR;
     const header = find(bytes, "%PDF-", 0);
     if (header === -1 || header > 1024) throw new PdfError("This file is not a PDF: it does not begin with %PDF-.");
     this.base = header;
@@ -171,7 +212,34 @@ export class PdfDocument {
       if (typeof prev === "number") queue.push(prev);
       if (seen.size > 1000) return false;
     }
+    this.boundTableObjects();
     return this.xref.size > 0;
+  }
+
+  /**
+   * Gives each object the table lists, as the end of its words, the place where the next object it lists begins. An object that never
+   * closes (`7 0 obj << /A 1` and nothing after it) was read to the end of the FILE even though the table says where the next begins, and
+   * a page tree that listed 5,000 of them took 51 seconds. The table, unlike a search for the text `N G obj`, cannot be fooled by a string.
+   * Objects the table sends to the same place have the same end, and an offset past the end of the file ends where the file does. An
+   * object whose words really do go on past the next place (a table that is wrong by a few bytes) is read again by `readIndirectAt`.
+   */
+  private boundTableObjects(): void {
+    const length = this.bytes.length;
+    let count = 0;
+    for (const entry of this.xref.values()) if (entry.kind === "file") count++;
+    const places = new Float64Array(count);
+    let n = 0;
+    for (const entry of this.xref.values()) if (entry.kind === "file") places[n++] = entry.offset;
+    places.sort();
+    // The first place after each one, by looking back from the end through the sorted places.
+    const next = new Map<number, number>();
+    let after = length;
+    for (let i = places.length - 1; i >= 0; i--) {
+      const place = places[i] as number;
+      if (place !== after && !next.has(place)) next.set(place, after);
+      if (place < after) after = place;
+    }
+    for (const entry of this.xref.values()) if (entry.kind === "file" && entry.end === undefined) entry.end = Math.min(next.get(entry.offset) ?? length, length);
   }
 
   private setEntry(num: number, entry: XrefEntry): void {
@@ -264,9 +332,11 @@ export class PdfDocument {
     let m: RegExpExecArray | null;
     const found: Array<{ num: number; offset: number }> = [];
     while ((m = re.exec(text))) found.push({ num: Number(m[1]), offset: m.index + m[0].indexOf(m[1] as string) });
-    // Each object is read from where it begins to where the next one begins and no further. An object that never closes (`7 0 obj [` and
-    // nothing after it) was read to the end of the FILE, and 5,000 of them, 64 KB, took 17 seconds. A stream's bytes are still looked
-    // for in the whole file: they are not read by the lexer, and a stream may hold the words "1 0 obj" in its data.
+    // Each object is read from where it begins to where the next one begins, and no further unless it runs into that place (see
+    // `readIndirectAt`: the place is only text that looks like the start of an object, and a string or a comment of this one may hold it).
+    // An object that never closes (`7 0 obj [` and nothing after it) was read to the end of the FILE, and 5,000 of them, 64 KB, took 17
+    // seconds. A stream's bytes are still looked for in the whole file: they are not read by the lexer, and a stream may hold the words
+    // "1 0 obj" in its data.
     found.forEach((f, i) => this.xref.set(f.num, { kind: "file", offset: f.offset, end: i + 1 < found.length ? (found[i + 1] as { offset: number }).offset : b.length }));
 
     for (const num of [...this.xref.keys()]) {
@@ -320,21 +390,55 @@ export class PdfDocument {
   // Objects
   // -------------------------------------------------------------------------
 
+  /**
+   * An object that ran into the place where the next one seems to begin, read again from the whole file. The place is where the table
+   * says the next object is or, with no table, where text that looks like `N G obj` stands, and such text is in a string, a comment or a
+   * piece of junk inside an object as well: a page dictionary with `/Title (see 9 0 obj here)` before its `/Contents` was cut at the
+   * string and lost its contents, and a file that had read was refused as "probably a scan". Reading the object whole is what was done
+   * before there was a bound (and it is what is done here while the budget lasts), and the bound is what keeps 5,000 objects that never
+   * close from being 5,000 reads of the rest of the file. What is charged is the bytes the second reading went over, so that an object
+   * with a short string in it costs the length of the object and only an object that really does run on costs the rest of the file.
+   * A second reading that fails (an object that never closes, with others inside it, nests deeper than is read) leaves the first.
+   */
+  private readUnbounded(offset: number): ReadObject | undefined {
+    const lex = new Lexer(this.bytes, offset);
+    try {
+      return readObject(lex, offset);
+    } catch (error) {
+      if (error instanceof PdfError) return undefined;
+      throw error;
+    } finally {
+      this.rereadBudget -= Math.max(1, lex.pos - offset);
+    }
+  }
+
   /** The object at a place in the file, with its stream if it has one. */
   private readIndirectAt(offset: number, limit?: number): PdfObject {
     const b = this.bytes;
     // The words of the object are read no further than `limit`; where its stream's bytes are is looked for in the whole file.
-    const lex = new Lexer(limit === undefined ? b : b.subarray(0, limit), offset);
-    const num = lex.next();
-    const gen = lex.next();
-    const obj = lex.next();
-    if (num.t !== "num" || gen.t !== "num" || obj.t !== "kw" || obj.v !== "obj") throw new PdfError(`Expected an object at byte ${offset} of this PDF, and did not find one.`);
-    const object = parseObject(lex);
+    let lex = new Lexer(limit === undefined ? b : b.subarray(0, limit), offset);
+    let read: ReadObject | undefined;
+    let refused: PdfError | undefined;
+    try {
+      read = readObject(lex, offset);
+    } catch (error) {
+      if (!(error instanceof PdfError)) throw error;
+      refused = error;
+    }
+    // The reading stopped because the words ended and not because the object did: the bound may be inside the object, between its
+    // dictionary and the word `stream` (a comment there, with the words in it), or inside the number and the word obj that begin it (a
+    // table that is wrong by a few bytes puts the next place there). A bound at the end of the file is the end of the file, and reading
+    // again would find the same.
+    if (limit !== undefined && limit < b.length && lex.pos >= limit && this.rereadBudget > 0) {
+      const again = this.readUnbounded(offset);
+      if (again) read = again;
+    }
+    if (!read) throw refused;
+    const { object, next } = read;
+    lex = read.lex;
     if (!isDict(object)) return object;
-    const after = lex.pos;
-    const next = lex.next();
     if (next.t !== "kw" || next.v !== "stream") {
-      lex.pos = after;
+      lex.pos = read.after;
       return object;
     }
     let start = lex.pos;

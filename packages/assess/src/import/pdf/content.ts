@@ -12,7 +12,7 @@
 
 import type { PdfDocument } from "./document.ts";
 import { loadFont, type PdfFont } from "./fonts.ts";
-import { fromToken, Lexer, PdfName, PdfStream, PdfString, type PdfDict, type PdfObject } from "./objects.ts";
+import { fromToken, Lexer, PdfError, PdfName, PdfStream, PdfString, type PdfDict, type PdfObject } from "./objects.ts";
 
 type Matrix = [number, number, number, number, number, number];
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
@@ -155,7 +155,16 @@ export function readPageRuns(doc: PdfDocument, content: Uint8Array, resources: P
       const token = lex.next();
       if (token.t === "eof") break;
       if (token.t !== "kw") {
-        operands.push(fromToken(lex, token, 0));
+        try {
+          operands.push(fromToken(lex, token, 0));
+        } catch (error) {
+          // An operand nested too deeply to be real (`[` a hundred times in a row before a string) was an error out of the whole page, which
+          // lost the text in front of it as well as what follows. What was read before is kept; what follows is not read, since it is
+          // not known where the operand was meant to end; and the page says so.
+          if (!(error instanceof PdfError)) throw error;
+          notes.push(`A part of a page could not be read, and the instructions after it were not read: ${error.message}`);
+          return;
+        }
         if (operands.length > 4096) operands = operands.slice(-64);
         continue;
       }

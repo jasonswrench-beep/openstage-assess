@@ -31,10 +31,13 @@ export interface PdfFont {
 }
 
 /**
- * The most widths the /W arrays of all the fonts of one document may set, in all; a font has at most 65,536 codes, so this is
- * fifteen fonts that are full. About 40 MB when it is used up.
+ * How many codes after its first a range of one width (`first last width`) is kept for. A font has at most 65,536 codes, so a range that
+ * names more is kept as far as any code goes. (It was the size of the work and of the memory, a Map entry for each code; it is not now,
+ * and it is kept because a range read as it always was is a width that is the same as it always was.)
  */
-const MAX_WIDTHS_SET = 1_000_000;
+const MAX_RANGE_CODES = 70_000;
+/** Codes and the first code of a range are kept to this: past it a number of a PDF is not told from its neighbour (a double has 53 bits). */
+const MAX_CODE = 2 ** 50;
 
 /** The font's own name, without the six capitals and a plus that a subset puts in front. */
 const plainName = (base: string): string => base.replace(/^[A-Z]{6}\+/, "");
@@ -163,50 +166,151 @@ function simpleFont(doc: PdfDocument, font: PdfDict, baseName: string): PdfFont 
   return out;
 }
 
-/** What the widths of a document's fonts have used of the budget, and the widths already made for each descendant font. */
-interface WidthStore {
-  left: number;
-  made: Map<PdfDict, Map<number, number>>;
+/**
+ * The widths of a font by code: pieces of codes that do not overlap, each with where its widths are, found by binary search on the first
+ * code of each piece. A width is a number in `pool`, and the pool holds each array of widths of the file once, however many ranges name it.
+ *
+ * It was a Map with an entry for each code a range named, and a budget on the entries, because a range can name 70,000 codes and 100,000
+ * ranges can be in 3 KB: first for each range, then for each font, and then for the whole document (one million). The budget for the
+ * document took the widths from the sixteenth full font on and left them at the descendant's default, and the width of a gap is what
+ * decides whether a space is written: a question set in the seventeenth font of a file lost the spaces between its words, and became an
+ * essay or went. Nothing here is the size of the codes a range names, so there is nothing to run out of: the memory is the arrays the file
+ * paid for, and the pieces are no more than twice the ranges.
+ */
+class WidthTable {
+  readonly first: number[] = [];
+  readonly last: number[] = [];
+  /** A piece's width is `pool[bias + stride * code]`: a stride of 1 for an array of widths, 0 for the one width of a range. */
+  readonly bias: number[] = [];
+  readonly stride: number[] = [];
+  readonly pool: number[] = [];
+
+  at(code: number): number | undefined {
+    const first = this.first;
+    let lo = 0;
+    let hi = first.length - 1;
+    let found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if ((first[mid] as number) <= code) {
+        found = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    if (found === -1 || code > (this.last[found] as number)) return undefined;
+    return this.pool[(this.bias[found] as number) + (this.stride[found] as number) * code];
+  }
 }
-const widthStores = new WeakMap<PdfDocument, WidthStore>();
+
+const widthTables = new WeakMap<PdfDict, WidthTable>();
 
 /**
- * The widths a composite font's descendant sets in its /W array, by code. Made once for each descendant, and from one budget for the
- * whole document. The budget was one for each font: a Type0 font is a dictionary of its own and any number of them may name the same
- * descendant, so 40 fonts of 145 bytes each, that shared one /W, made 40 maps of 400,000 widths (700 MB), and 100 would have made
- * 1.7 GB. A real document has a few dozen fonts of a few hundred widths each; when the budget is gone the fonts after it have no widths
- * of their own and take the descendant's default, which only changes how wide a gap must be to be a space.
+ * The widths a composite font's descendant sets in its /W array, by code. A later entry wins over an earlier one for a code both name, as
+ * it did when the entries were set one after the other, and the pieces left are found by sweeping the entries from the lowest code up with
+ * the latest of those that cover the place at the top of a heap: the work is the entries times the log of them, and nothing is done for each
+ * code. Made once for each descendant (a Type0 font is a dictionary of its own and any number of them may name the same one).
  */
-function widthsOf(doc: PdfDocument, descendant: PdfDict | undefined): Map<number, number> {
-  if (!descendant) return new Map();
-  let store = widthStores.get(doc);
-  if (!store) {
-    store = { left: MAX_WIDTHS_SET, made: new Map() };
-    widthStores.set(doc, store);
-  }
-  const known = store.made.get(descendant);
+function widthsOf(doc: PdfDocument, descendant: PdfDict | undefined): WidthTable {
+  if (!descendant) return new WidthTable();
+  const known = widthTables.get(descendant);
   if (known) return known;
-  const widths = new Map<number, number>();
-  store.made.set(descendant, widths);
+  const table = new WidthTable();
+  widthTables.set(descendant, table);
   const w = doc.array(descendant.get("W"));
-  if (w) {
-    // Each range was kept to 70,000 codes and the number of ranges was not: 100,000 ranges of 70,000 codes, from a file of 3 KB, took two
-    // minutes. A font has at most 65,536 codes, so a budget for the whole of the widths is more than any real font needs.
-    for (let i = 0; i < w.length && store.left > 0; ) {
-      const start = doc.number(w[i]);
-      const second = doc.resolve(w[i + 1]);
-      if (Array.isArray(second)) {
-        for (let k = 0; k < second.length && store.left > 0; k++, store.left--) widths.set(start + k, doc.number(second[k]));
-        i += 2;
-      } else {
-        const end = doc.number(second);
-        const value = doc.number(w[i + 2]);
-        for (let c = start; c <= end && c - start < 70000 && store.left > 0; c++, store.left--) widths.set(c, value);
-        i += 3;
+  if (!w) return table;
+
+  // The entries, in the order the file has them. A first code that is not a whole number names no code, and one past what a double can tell
+  // apart names none that a font has.
+  const sFirst: number[] = [];
+  const sLast: number[] = [];
+  const sBase: number[] = [];
+  const sStride: number[] = [];
+  const poolOf = new Map<object, number>();
+  const pool = table.pool;
+  for (let i = 0; i < w.length; ) {
+    const start = doc.number(w[i]);
+    const second = doc.resolve(w[i + 1]);
+    const usable = Number.isInteger(start) && Math.abs(start) <= MAX_CODE;
+    if (Array.isArray(second)) {
+      i += 2;
+      if (!usable || second.length === 0) continue;
+      // An array of widths named again and again is in the pool once.
+      let base = poolOf.get(second);
+      if (base === undefined) {
+        base = pool.length;
+        for (const item of second) pool.push(doc.number(item));
+        poolOf.set(second, base);
       }
+      sFirst.push(start);
+      sLast.push(start + second.length - 1);
+      sBase.push(base);
+      sStride.push(1);
+    } else {
+      const end = doc.number(second);
+      const value = doc.number(w[i + 2]);
+      i += 3;
+      const last = Math.min(Math.floor(end), start + MAX_RANGE_CODES - 1);
+      if (!usable || last < start) continue;
+      sFirst.push(start);
+      sLast.push(last);
+      sBase.push(pool.length);
+      sStride.push(0);
+      pool.push(value);
     }
   }
-  return widths;
+
+  // The sweep. `heap` holds the entries that have begun, the latest at the top; an entry that has ended is dropped when it gets to the top.
+  const count = sFirst.length;
+  const byStart = Array.from({ length: count }, (_, k) => k).sort((a, b) => (sFirst[a] as number) - (sFirst[b] as number) || a - b);
+  const heap: number[] = [];
+  const push = (value: number): void => {
+    let at = heap.length;
+    heap.push(value);
+    while (at > 0) {
+      const parent = (at - 1) >> 1;
+      if ((heap[parent] as number) >= value) break;
+      heap[at] = heap[parent] as number;
+      at = parent;
+    }
+    heap[at] = value;
+  };
+  const pop = (): void => {
+    const lastValue = heap.pop() as number;
+    if (heap.length === 0) return;
+    let at = 0;
+    for (;;) {
+      let child = 2 * at + 1;
+      if (child >= heap.length) break;
+      if (child + 1 < heap.length && (heap[child + 1] as number) > (heap[child] as number)) child++;
+      if ((heap[child] as number) <= lastValue) break;
+      heap[at] = heap[child] as number;
+      at = child;
+    }
+    heap[at] = lastValue;
+  };
+  const piece: number[] = [];
+  let next = 0;
+  let here = count > 0 ? (sFirst[byStart[0] as number] as number) : 0;
+  while (next < count || heap.length > 0) {
+    if (heap.length === 0) here = sFirst[byStart[next] as number] as number;
+    while (next < count && (sFirst[byStart[next] as number] as number) <= here) push(byStart[next++] as number);
+    while (heap.length > 0 && (sLast[heap[0] as number] as number) < here) pop();
+    if (heap.length === 0) continue;
+    const winner = heap[0] as number;
+    const after = next < count ? (sFirst[byStart[next] as number] as number) : Number.POSITIVE_INFINITY;
+    const end = Math.min(sLast[winner] as number, after - 1);
+    const n = table.first.length;
+    if (n > 0 && piece[n - 1] === winner && (table.last[n - 1] as number) + 1 === here) table.last[n - 1] = end;
+    else {
+      table.first.push(here);
+      table.last.push(end);
+      table.bias.push((sBase[winner] as number) - (sStride[winner] as number) * (sFirst[winner] as number));
+      table.stride.push(sStride[winner] as number);
+      piece.push(winner);
+    }
+    here = end + 1;
+  }
+  return table;
 }
 
 function compositeFont(doc: PdfDocument, font: PdfDict, baseName: string): PdfFont {
@@ -233,7 +337,7 @@ function compositeFont(doc: PdfDocument, font: PdfDict, baseName: string): PdfFo
           self.unreadable++;
           text = "�";
         }
-        out.push({ text, width: widths.get(code) ?? dw, wordSpace: false });
+        out.push({ text, width: widths.at(code) ?? dw, wordSpace: false });
       }
       return out;
     },
