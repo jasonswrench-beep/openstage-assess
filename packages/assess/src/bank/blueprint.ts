@@ -22,6 +22,7 @@ import { isId, newBlueprintId } from "../model/ids.ts";
 import type { Issue } from "../model/schema.ts";
 import type { Question } from "../model/question.ts";
 import { COVERAGE_AXES, isCoverageAxis, NONE, type CoverageAxis } from "./coverage.ts";
+import { findDuplicates } from "../quality/bank.ts";
 import { MOST_PICKED, pickQuestions, type PickResult } from "./pick.ts";
 
 export const BLUEPRINT_VERSION = 1;
@@ -234,8 +235,12 @@ export function drawBlueprint(questions: readonly Question[], blueprint: Bluepri
   const rules: RuleResult[] = [];
   let wanted = 0;
   let short = 0;
+  // The copies in the bank are the same for every rule, so they are found once. Found again for each rule, a bank with thousands of
+  // questions alike to each other was searched 50 times for a blueprint of 50 rules.
+  const copies = blueprint.rules.length > 1 ? findDuplicates(questions) : undefined;
   for (const rule of blueprint.rules) {
     const pick = pickQuestions(questions, {
+      ...(copies ? { copies } : {}),
       axis: rule.axis,
       value: rule.value,
       ...(rule.and && rule.and.length > 0 ? { also: rule.and } : {}),

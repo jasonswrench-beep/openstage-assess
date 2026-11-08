@@ -35,6 +35,15 @@ describe("the paper for a test", () => {
     assert.ok(made.notes.some((n) => /question 4 has no bubbles/i.test(n)), "says what the sheet cannot carry");
   });
 
+  test("names the files for a test whose name begins with dots or with a device's name in a way the app takes", () => {
+    const dotted = printTestPaper(testOf([mcq(4), mcq(4)], { versions: 1, name: ". Intro to Psych" }), {}, AT);
+    assert.ok(dotted.ok);
+    assert.deepEqual(dotted.files.map((f) => f.name), ["Intro to Psych - Answer sheet.pdf", "Intro to Psych - Student copy.pdf", "Intro to Psych - Answer key.pdf"]);
+    const device = printTestPaper(testOf([mcq(4), mcq(4)], { versions: 1, name: "Aux. Verbs" }), {}, AT);
+    assert.ok(device.ok);
+    assert.deepEqual(device.files.map((f) => f.name), ["Aux_. Verbs - Answer sheet.pdf", "Aux_. Verbs - Student copy.pdf", "Aux_. Verbs - Answer key.pdf"]);
+  });
+
   test("makes a sheet for each version when asked, with the version printed on it, and one for a test of one version either way", () => {
     const each = printTestPaper(several, { sheet: "each", booklets: false, keys: false }, AT);
     assert.ok(each.ok);

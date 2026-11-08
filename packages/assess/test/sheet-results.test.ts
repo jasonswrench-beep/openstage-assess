@@ -112,6 +112,13 @@ describe("the scores file", () => {
     assert.equal(scoresFileName("", "2026-11-04"), `Test - Scores 2026-11-04${SCORES_EXTENSION}`);
   });
 
+  test("is named for a test whose name begins with dots or with a device's name in a way the app takes", () => {
+    // The app wrote ". Intro" with its space and then refused to open the file it had written; "Aux. Verbs" is the device.
+    assert.equal(scoresFileName(". Intro to Psych", "2026-11-04"), `Intro to Psych - Scores 2026-11-04${SCORES_EXTENSION}`);
+    assert.equal(scoresFileName(".. Chapter 3", "2026-11-04"), `Chapter 3 - Scores 2026-11-04${SCORES_EXTENSION}`);
+    assert.equal(scoresFileName("Aux. Verbs", "2026-11-04"), `Aux_. Verbs - Scores 2026-11-04${SCORES_EXTENSION}`);
+  });
+
   test("refuses a file that is not one, with the reason, and never half-reads it", () => {
     const reason = (bytes: Uint8Array): string => {
       const r = readScoresFile(bytes);

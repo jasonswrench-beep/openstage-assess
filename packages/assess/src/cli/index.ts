@@ -460,7 +460,7 @@ async function cmdCheck(args: string[]): Promise<number> {
     for (const f of live) console.log(`    ${f.message}`);
   }
 
-  const { duplicates, keyBalance } = run.report;
+  const { duplicates, keyBalance, limits } = run.report;
   if (duplicates.length > 0) {
     console.log(`\nThe same question more than once:`);
     for (const group of duplicates) console.log(`    ${group.message}`);
@@ -469,7 +469,12 @@ async function cmdCheck(args: string[]): Promise<number> {
     console.log(`\nWhere the right answers sit:`);
     for (const note of keyBalance) console.log(`    ${note.message}`);
   }
-  if (noted.length === 0 && duplicates.length === 0 && keyBalance.length === 0) console.log("Nothing to note.");
+  // Said whether or not anything else was: a check that was held back is not a check that found nothing.
+  if (limits.length > 0) {
+    console.log(`\nWhat the check could not do in full:`);
+    for (const limit of limits) console.log(`    ${limit.message}`);
+  }
+  if (noted.length === 0 && duplicates.length === 0 && keyBalance.length === 0 && limits.length === 0) console.log("Nothing to note.");
 
   if (has(args, "save")) {
     await bank.save();
