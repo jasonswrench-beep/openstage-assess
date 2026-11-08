@@ -1,0 +1,324 @@
+[
+  {
+    "label": "R22-27 streams: after stream and a CR LF the data begins at the LF",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (b[start] === 13 && b[start + 1] === 10) start += 2;",
+    "to": "if (b[start] === 13 && b[start + 1] === 10) start += 1;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-31 streams: a stream that begins after a lone CR begins at the CR",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "else if (b[start] === 10 || b[start] === 13) start += 1;",
+    "to": "else if (b[start] === 10) start += 1;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-32 streams: a CR before the end of a stream whose length is wrong stays in the data",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (b[end - 1] === 13) end--;",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "streams: a LF before the end of a stream whose length is wrong stays in the data",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (b[end - 1] === 10) end--;",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-25 streams: the end of a stream that is not where its length says is the next endobj",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "new WordFinder(bytes, \"endstream\")",
+    "to": "new WordFinder(bytes, \"endobj\")",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-01 reconstruct: the first of two objects with one number wins, not the last",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "found.forEach((f, i) => this.xref.set(f.num, {",
+    "to": "found.forEach((f, i) => this.xref.has(f.num) || this.xref.set(f.num, {",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-07 reconstruct: the cache is not cleared",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "this.cache.clear();",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-08 reconstruct: the object streams are not forgotten",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "this.objectStreams.clear();",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-09 reconstruct: an Encrypt entry alone does not make a trailer",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "dict.has(\"Root\") || dict.has(\"Encrypt\")",
+    "to": "dict.has(\"Root\")",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-22 table stream: the width of every field must be non-zero",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "n >= 0 && n <= 8) || w1 + w2 + w3 === 0",
+    "to": "n >= 1 && n <= 8) || w1 + w2 + w3 === 0",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-02 xref rows: the first number of each pair is counted as rows too",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "rows += index[s + 1] as number;",
+    "to": "rows += (index[s] as number) + (index[s + 1] as number);",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-28 depth: a scalar inside the deepest level is not asked",
+    "file": "packages/assess/src/import/pdf/objects.ts",
+    "from": "if (depth > MAX_DEPTH) throw new PdfError(\"An object in this PDF is nested too deeply to be real.\");",
+    "to": "if (depth > MAX_DEPTH && (token.t === \"punct\")) throw new PdfError(\"An object in this PDF is nested too deeply to be real.\");",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-33 file: offsets in the table are from the start of the file and not from the header",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "this.base = header;",
+    "to": "this.base = 0;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-34 table: the earlier table (Prev) is not followed",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (typeof prev === \"number\") queue.push(prev);",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-35 table: the hybrid stream (XRefStm) is not followed",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (typeof stm === \"number\") queue.unshift(stm);",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-36 table: the oldest entry of an object wins, not the newest",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (!this.xref.has(num)) this.xref.set(num, entry);",
+    "to": "this.xref.set(num, entry);",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-37 table: a free entry with an offset is an object",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (kind.v === \"n\" && off.v > 0)",
+    "to": "if (off.v > 0)",
+    "tests": ["packages/assess/test/pdf-real-files.test.ts"]
+  },
+  {
+    "label": "R22-16 zip: only the compressed entries are added up",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "claimed += compressedSize;",
+    "to": "if (method === 8) claimed += compressedSize;",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "R22-17 zip: only an entry with a size is added up",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "claimed += compressedSize;",
+    "to": "if (uncompressedSize > 0) claimed += compressedSize;",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "R22-18 zip: the claim is measured against the file without its last 100 bytes",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "if (claimed > buf.length) {",
+    "to": "if (claimed > buf.length - 100) {",
+    "tests": ["packages/assess/test/zip-limits.test.ts"]
+  },
+  {
+    "label": "reread: an object that runs into its end is never read again",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "limit < b.length && lex.pos >= limit && this.rereadBudget > 0) {",
+    "to": "limit < b.length && lex.pos >= limit && false) {",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts", "packages/assess/test/pdf-reconstruct-parity.test.ts"]
+  },
+  {
+    "label": "reread: the end is looked at after the dictionary and not after the word that says a stream follows",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "lex.pos >= limit && this.rereadBudget > 0) {",
+    "to": "read.after >= limit && this.rereadBudget > 0) {",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts", "packages/assess/test/pdf-reconstruct-parity.test.ts"]
+  },
+  {
+    "label": "reread: an object whose number and word obj are cut by the end is not read again",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (limit !== undefined && limit < b.length && lex.pos >= limit && this.rereadBudget > 0) {",
+    "to": "if (read && limit !== undefined && limit < b.length && lex.pos >= limit && this.rereadBudget > 0) {",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts"]
+  },
+  {
+    "label": "reread: there is no budget for reading again",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "limit < b.length && lex.pos >= limit && this.rereadBudget > 0) {",
+    "to": "limit < b.length && lex.pos >= limit) {",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts"]
+  },
+  {
+    "label": "reread: reading again costs nothing",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "this.rereadBudget -= Math.max(1, lex.pos - offset);",
+    "to": "this.rereadBudget -= 0;",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts"]
+  },
+  {
+    "label": "reread: a second reading that fails loses the object",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (error instanceof PdfError) return undefined;",
+    "to": "if (error instanceof PdfError) throw error;",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts"]
+  },
+  {
+    "label": "reread: the budget is the whole file for every object",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "this.rereadBudget = REREAD_FACTOR * bytes.length + REREAD_FLOOR;",
+    "to": "this.rereadBudget = Number.POSITIVE_INFINITY;",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts"]
+  },
+  {
+    "label": "table bound: the objects a table lists are not bounded by the next place",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "    this.boundTableObjects();\n    return this.xref.size > 0;",
+    "to": "    return this.xref.size > 0;",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts"]
+  },
+  {
+    "label": "table bound: the bound of an object is the end of the file whatever the next place is",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (place < after) after = place;",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/pdf-object-bounds.test.ts"]
+  },
+  {
+    "label": "widths: a later entry that covers a place does not win over an earlier one",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "if ((heap[parent] as number) >= value) break;",
+    "to": "if ((heap[parent] as number) <= value) break;",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "widths: a range of one width is kept one code too far",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "start + MAX_RANGE_CODES - 1);",
+    "to": "start + MAX_RANGE_CODES);",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "widths: the end of a range is rounded and not cut",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "Math.min(Math.floor(end), start",
+    "to": "Math.min(Math.round(end), start",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "widths: a first code that is not a whole number names codes",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "const usable = Number.isInteger(start) && Math.abs(start) <= MAX_CODE;",
+    "to": "const usable = Math.abs(start) <= MAX_CODE;",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "widths: a first code too big to count is kept, and the sweep does not move on from it",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "const usable = Number.isInteger(start) && Math.abs(start) <= MAX_CODE;",
+    "to": "const usable = Number.isInteger(start);",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "widths: an array of widths that is named again is made again",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "let base = poolOf.get(second);",
+    "to": "let base: number | undefined;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts"]
+  },
+  {
+    "label": "widths: the width of a range is read as an array of widths",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "      sStride.push(0);",
+    "to": "      sStride.push(1);",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "widths: the last code of a piece is not in it",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "code > (this.last[found] as number)",
+    "to": "code >= (this.last[found] as number)",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "widths: the search stops at the piece before the one it wants",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "        found = mid;",
+    "to": "        found = mid - 1;",
+    "tests": ["packages/assess/test/pdf-font-widths.test.ts"]
+  },
+  {
+    "label": "content: the rest of a stream is read after an operand that cannot be read",
+    "file": "packages/assess/src/import/pdf/content.ts",
+    "from": "          notes.push(`A part of a page could not be read, and the instructions after it were not read: ${error.message}`);\n          return;",
+    "to": "          notes.push(`A part of a page could not be read, and the instructions after it were not read: ${error.message}`);\n          continue;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts"]
+  },
+  {
+    "label": "content: an operand that cannot be read is not said",
+    "file": "packages/assess/src/import/pdf/content.ts",
+    "from": "          notes.push(`A part of a page could not be read, and the instructions after it were not read: ${error.message}`);",
+    "to": "          void 0;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts"]
+  },
+  {
+    "label": "content: an operand that cannot be read loses the page again",
+    "file": "packages/assess/src/import/pdf/content.ts",
+    "from": "          if (!(error instanceof PdfError)) throw error;",
+    "to": "          throw error;",
+    "tests": ["packages/assess/test/pdf-hostile.test.ts"]
+  },
+  {
+    "label": "numbered edge: a label may have four digits",
+    "file": "packages/assess/src/import/pdf/reader.ts",
+    "from": "d - i < 3 &&",
+    "to": "d - i < 4 &&",
+    "tests": ["packages/assess/test/numbered-edge.test.ts"]
+  },
+  {
+    "label": "numbered edge: the rest may run over a line end",
+    "file": "packages/assess/src/import/pdf/reader.ts",
+    "from": "    if (isLineEnd(c)) return undefined;\n",
+    "to": "",
+    "tests": ["packages/assess/test/numbered-edge.test.ts"]
+  },
+  {
+    "label": "numbered edge: no space is needed after the label",
+    "file": "packages/assess/src/import/pdf/reader.ts",
+    "from": "if (j === d + 1) return undefined;",
+    "to": "void 0;",
+    "tests": ["packages/assess/test/numbered-edge.test.ts"]
+  },
+  {
+    "label": "numbered edge: the byte order mark is not white space",
+    "file": "packages/assess/src/import/pdf/reader.ts",
+    "from": " || c === 0x3000 || c === 0xfeff;",
+    "to": " || c === 0x3000;",
+    "tests": ["packages/assess/test/numbered-edge.test.ts"]
+  },
+  {
+    "label": "numbered edge: a rest with no digit in it is a rest",
+    "file": "packages/assess/src/import/pdf/reader.ts",
+    "from": "return digit ? { label: text.slice(i, d + 1), rest: text.slice(j) } : undefined;",
+    "to": "return { label: text.slice(i, d + 1), rest: text.slice(j) };",
+    "tests": ["packages/assess/test/numbered-edge.test.ts"]
+  }
+]

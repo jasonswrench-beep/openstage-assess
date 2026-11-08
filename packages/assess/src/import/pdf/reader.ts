@@ -40,13 +40,47 @@ const quote = (text: string): string => `"${text.length > 60 ? `${text.slice(0, 
 /** What a line says with its numbers taken out, so that "479 Instructor's Manual" and "481 Instructor's Manual" are the same line. */
 const shape = (text: string): string => text.replace(/\d+/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
 
-/** A line that starts with a number and a stop and has another number somewhere after it: the shape of "8. AI IN EVERYDAY LIFE | 531". */
-const NUMBERED_EDGE = /^\s*(\d{1,3}[.)])\s+(.*\d.*)$/;
+/** The characters `\s` matches, as codes. */
+const isSpace = (c: number): boolean =>
+  c === 32 || (c >= 9 && c <= 13) || c === 0xa0 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a) || c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff;
+const isDigit = (c: number): boolean => c >= 0x30 && c <= 0x39;
+/** The characters `.` does not match. */
+const isLineEnd = (c: number): boolean => c === 10 || c === 13 || c === 0x2028 || c === 0x2029;
+
+/**
+ * A line that starts with a number and a stop and has another number somewhere after it: the shape of "8. AI IN EVERYDAY LIFE | 531". The
+ * number and the stop are `label`, and what follows the white space after them is `rest`. It was the pattern
+ * `^\s*(\d{1,3}[.)])\s+(.*\d.*)$`, in which the white space after the label and the start of the rest can both take the same spaces, so
+ * that a line of a label and 20,000 spaces and a letter tried the rest from every space of the run and read to the end of it each time:
+ * 447 milliseconds, and the square of the length for a longer line. It is the same match found by a scan: the white space in front, up to
+ * three digits and a stop, the whole of the white space after it, and then a rest that is one line and has a digit in it.
+ * (`numbered-edge.test.ts` holds it to the pattern on tens of thousands of lines.)
+ */
+export function numberedEdge(text: string): { label: string; rest: string } | undefined {
+  const n = text.length;
+  let i = 0;
+  while (i < n && isSpace(text.charCodeAt(i))) i++;
+  let d = i;
+  while (d < n && d - i < 3 && isDigit(text.charCodeAt(d))) d++;
+  const stop = text.charCodeAt(d);
+  if (d === i || (stop !== 0x2e && stop !== 0x29)) return undefined;
+  let j = d + 1;
+  while (j < n && isSpace(text.charCodeAt(j))) j++;
+  // At least one space is needed after the label, and what follows the spaces must be on one line and have a digit in it.
+  if (j === d + 1) return undefined;
+  let digit = false;
+  for (let k = j; k < n; k++) {
+    const c = text.charCodeAt(k);
+    if (isLineEnd(c)) return undefined;
+    if (isDigit(c)) digit = true;
+  }
+  return digit ? { label: text.slice(i, d + 1), rest: text.slice(j) } : undefined;
+}
 
 /** What makes two such lines the same running title: the number it begins with and its words with their numbers taken out. */
 function numberedEdgeKey(text: string): string | undefined {
-  const m = NUMBERED_EDGE.exec(text);
-  return m ? `${m[1]}\u0001${shape(m[2] as string)}` : undefined;
+  const m = numberedEdge(text);
+  return m ? `${m.label}\u0001${shape(m.rest)}` : undefined;
 }
 
 /** A page number on its own: digits, or a Roman numeral, with nothing else but punctuation round it. */
@@ -78,7 +112,7 @@ function removeFurniture(pages: PdfPageText[]): PdfNote[] {
       if (key === undefined || seen.has(key)) continue;
       seen.add(key);
       const rests = numberedEdges.get(key) ?? new Set<string>();
-      rests.add(NUMBERED_EDGE.exec(l.text)?.[2] ?? "");
+      rests.add(numberedEdge(l.text)?.rest ?? "");
       numberedEdges.set(key, rests);
     }
   }
@@ -181,6 +215,7 @@ export function readPdfText(bytes: Uint8Array): PdfText {
     });
   }
   if (turned.length > 0) notes.push({ severity: "warn", message: `Text that is turned or upside down on page${turned.length === 1 ? "" : "s"} ${turned.join(", ")} was not read.` });
-  notes.push(...removeFurniture(pages));
+  // (One note at most, and a loop all the same: a list spread into a call is a RangeError when the list is long.)
+  for (const note of removeFurniture(pages)) notes.push(note);
   return { pages, notes };
 }

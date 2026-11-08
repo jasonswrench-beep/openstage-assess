@@ -60,6 +60,12 @@ export interface PdfSpec {
   /** The text of a /DecodeParms dictionary for the compressed content of one page, given by `parmsPage` (counting from 0). */
   decodeParms?: string;
   parmsPage?: number;
+  /**
+   * Write `stream` and `endstream` with a carriage return and a line feed, as the programs that write the PDFs people are given do (all five
+   * of the real banks do, and none of them writes a bare line feed). Nothing else in the builder wrote one, so the byte after the word
+   * `stream` was always a line feed, and a reader that began the data one byte early on a CR LF was tested by nothing.
+   */
+  crlf?: boolean;
 }
 
 /** A place past the end of any file this builds. */
@@ -144,12 +150,13 @@ export function buildPdf(spec: PdfSpec): Uint8Array {
     chunks.push(buf);
     size += buf.length;
   };
+  const eol = spec.crlf ? "\r\n" : "\n";
   const writeObject = (o: Obj): void => {
     offsets.set(o.num, size);
     if (o.stream) {
-      write(Buffer.from(`${o.num} 0 obj\n<< ${o.stream.dict} /Length ${o.stream.length ?? o.stream.data.length} >>\nstream\n`, "latin1"));
+      write(Buffer.from(`${o.num} 0 obj\n<< ${o.stream.dict} /Length ${o.stream.length ?? o.stream.data.length} >>\nstream${eol}`, "latin1"));
       write(o.stream.data);
-      write(Buffer.from("\nendstream\nendobj\n", "latin1"));
+      write(Buffer.from(`${eol}endstream\nendobj\n`, "latin1"));
     } else write(Buffer.concat([Buffer.from(`${o.num} 0 obj\n`, "latin1"), Buffer.isBuffer(o.body) ? o.body : Buffer.from(o.body, "latin1"), Buffer.from("\nendobj\n", "latin1")]));
   };
 
@@ -175,9 +182,9 @@ export function buildPdf(spec: PdfSpec): Uint8Array {
     const stmNum = objects.length + 1;
     offsets.set(stmNum, size);
     const data = deflateSync(Buffer.from(`${head}\n${bodies}`, "latin1"));
-    write(Buffer.from(`${stmNum} 0 obj\n<< /Type /ObjStm /N ${packed.length} /First ${first} /Filter /FlateDecode /Length ${data.length} >>\nstream\n`, "latin1"));
+    write(Buffer.from(`${stmNum} 0 obj\n<< /Type /ObjStm /N ${packed.length} /First ${first} /Filter /FlateDecode /Length ${data.length} >>\nstream${eol}`, "latin1"));
     write(data);
-    write(Buffer.from("\nendstream\nendobj\n", "latin1"));
+    write(Buffer.from(`${eol}endstream\nendobj\n`, "latin1"));
     const xrefNum = stmNum + 1;
     const xrefAt = size;
     offsets.set(xrefNum, xrefAt);
@@ -196,9 +203,9 @@ export function buildPdf(spec: PdfSpec): Uint8Array {
       raw[i * 6 + 5] = b as number;
     });
     const packedXref = deflateSync(raw);
-    write(Buffer.from(`${xrefNum} 0 obj\n<< /Type /XRef /Size ${xrefNum + 1} /W [1 4 1] /Root ${catalog} 0 R${trailerExtra} /Filter /FlateDecode /Length ${packedXref.length} >>\nstream\n`, "latin1"));
+    write(Buffer.from(`${xrefNum} 0 obj\n<< /Type /XRef /Size ${xrefNum + 1} /W [1 4 1] /Root ${catalog} 0 R${trailerExtra} /Filter /FlateDecode /Length ${packedXref.length} >>\nstream${eol}`, "latin1"));
     write(packedXref);
-    write(Buffer.from(`\nendstream\nendobj\nstartxref\n${spec.brokenStartxref ? BROKEN_STARTXREF : xrefAt}\n%%EOF\n`, "latin1"));
+    write(Buffer.from(`${eol}endstream\nendobj\nstartxref\n${spec.brokenStartxref ? BROKEN_STARTXREF : xrefAt}\n%%EOF\n`, "latin1"));
   }
   return new Uint8Array(Buffer.concat(chunks));
 }

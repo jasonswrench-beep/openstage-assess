@@ -11,15 +11,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 
-const buffer = (s: string | Buffer): Buffer => (Buffer.isBuffer(s) ? s : Buffer.from(s, "latin1"));
+export const buffer = (s: string | Buffer): Buffer => (Buffer.isBuffer(s) ? s : Buffer.from(s, "latin1"));
 
-const CONTENT = "BT /F1 12 Tf 72 700 Td (Hello) Tj ET";
+export const CONTENT ="BT /F1 12 Tf 72 700 Td (Hello) Tj ET";
 
 /** `N 0 obj ... endobj` for a dictionary or any other body. */
-const obj = (num: number, body: string): Buffer => buffer(`${num} 0 obj\n${body}\nendobj\n`);
+export const obj = (num: number, body: string): Buffer => buffer(`${num} 0 obj\n${body}\nendobj\n`);
 
 /** A stream object: its dictionary entries (without /Length) and its bytes. */
-const streamObj = (num: number, dict: string, data: Buffer): Buffer =>
+export const streamObj = (num: number, dict: string, data: Buffer): Buffer =>
   Buffer.concat([buffer(`${num} 0 obj\n<< ${dict} /Length ${data.length} >>\nstream\n`), data, buffer("\nendstream\nendobj\n")]);
 
 /** The pieces of a small PDF with one page that says Hello in Helvetica, ready for a hostile object to be added. */
@@ -149,33 +149,50 @@ export function readTextInChild(bytes: Uint8Array, timeoutMs = 20_000, nodeArgs:
 // ---------------------------------------------------------------------------
 
 /** One piece of a file: an object (a body, or a dictionary and the bytes of a stream), or text that is not an object at all. */
-export type Piece = { num: number; body: string } | { num: number; dict: string; data: Buffer } | { raw: string | Buffer };
+export type Piece = { num: number; body: string } | { num: number; dict: string; data: Buffer } | { raw: string | Buffer; num?: number };
 
 /**
  * A file made of pieces. It ends in a table of objects that is right (`table`), in a trailer and no table (`trailer`, so that the
  * objects are found by searching), or in nothing.
  */
 export function assemble(pieces: readonly Piece[], tail: "table" | "trailer" | "none" = "table"): Buffer {
+  return assembleWith(pieces, tail === "table" ? undefined : tail);
+}
+
+/**
+ * A file made of pieces and a tail the caller writes: `tail(offsets, size)` is given where each numbered piece ended up, counted from the
+ * `%PDF-` header as a table counts them, and where the pieces end, and returns the text after them. `prefix` goes in front of the header,
+ * as the bytes a mail program or a wrapper put there do, and the offsets are still counted from the header. A raw piece with a `num` is
+ * a piece the caller wrote byte for byte (a stream with the separators it wants) and that the table still lists.
+ */
+export function assembleWith(
+  pieces: readonly Piece[],
+  tail?: ((offsets: ReadonlyMap<number, number>, size: number) => string | Buffer) | "trailer" | "none",
+  prefix: string | Buffer = "",
+): Buffer {
   const parts: Buffer[] = [buffer("%PDF-1.5\n")];
   let size = parts[0]!.length;
   const offsets = new Map<number, number>();
   for (const piece of pieces) {
     let chunk: Buffer;
-    if ("raw" in piece) chunk = buffer(piece.raw);
-    else {
+    if ("raw" in piece) {
+      if (piece.num !== undefined) offsets.set(piece.num, size);
+      chunk = buffer(piece.raw);
+    } else {
       offsets.set(piece.num, size);
       chunk = "data" in piece ? streamObj(piece.num, piece.dict, piece.data) : obj(piece.num, piece.body);
     }
     parts.push(chunk);
     size += chunk.length;
   }
-  if (tail === "table") {
+  if (typeof tail === "function") parts.push(buffer(tail(offsets, size)));
+  else if (tail === undefined) {
     const count = Math.max(...offsets.keys()) + 1;
     let table = `xref\n0 ${count}\n0000000000 65535 f \n`;
     for (let n = 1; n < count; n++) table += offsets.has(n) ? `${String(offsets.get(n)).padStart(10, "0")} 00000 n \n` : "0000000000 65535 f \n";
     parts.push(buffer(`${table}trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${size}\n%%EOF\n`));
   } else if (tail === "trailer") parts.push(buffer("trailer\n<< /Root 1 0 R /Size 99 >>\n%%EOF\n"));
-  return Buffer.concat(parts);
+  return Buffer.concat([buffer(prefix), ...parts]);
 }
 
 /** The five objects of a page that says Hello, with the content stream given (by default plain, saying Hello). */
@@ -214,10 +231,26 @@ export function deepNestPdf(where: "trailer" | "catalog" | "pages" | "page", dep
   return assemble(pieces, "trailer");
 }
 
-/** A page that reads, and after its trailer `count` things that never close: objects that are an open array, or `trailer << `. */
-export function unterminatedPdf(kind: "objects" | "trailers", count: number): Buffer {
-  const junk = kind === "objects" ? Array.from({ length: count }, (_, i) => `${100 + i} 0 obj [ `).join("") : "trailer << ".repeat(count);
+/** What an object that never closes begins with: an open array, an open dictionary (which does not nest, its keys flatten), a string, a hex string. */
+const OPEN_OBJECTS = { objects: "[ ", dictionaries: "<< /A 1 ", strings: "(abc ", hexstrings: "<4a6f " } as const;
+
+/** A page that reads, and after its trailer `count` things that never close: objects that are an open array, string or dictionary, or `trailer << `. */
+export function unterminatedPdf(kind: keyof typeof OPEN_OBJECTS | "trailers", count: number): Buffer {
+  const junk = kind === "trailers" ? "trailer << ".repeat(count) : Array.from({ length: count }, (_, i) => `${100 + i} 0 obj ${OPEN_OBJECTS[kind]}`).join("");
   return Buffer.concat([assemble(helloPieces(), "trailer"), buffer(junk)]);
+}
+
+/**
+ * A page that reads, a table of objects that is RIGHT, and in it `count` more objects that never close (an open dictionary, string, hex
+ * string or array), all of them in the page tree so that all of them are asked for. The objects are not found by searching: the table says
+ * where each begins, and for each of them the table also says where the next begins.
+ */
+export function openObjectsWithTablePdf(kind: "dictionary" | "string" | "hex" | "array", count: number): Buffer {
+  const open = { dictionary: "<< /A 1", string: "(abc", hex: "<4a6f", array: "[ 1 2" }[kind];
+  const pieces = helloPieces();
+  pieces[1] = { num: 2, body: `<< /Type /Pages /Kids [3 0 R ${Array.from({ length: count }, (_, i) => `${100 + i} 0 R`).join(" ")}] /Count ${count + 1} >>` };
+  for (let i = 0; i < count; i++) pieces.push({ raw: `${100 + i} 0 obj ${open}\n`, num: 100 + i });
+  return assemble(pieces);
 }
 
 /**
@@ -230,7 +263,7 @@ export function unendedStreamsPdf(count: number, closed: boolean): Buffer {
 }
 
 /** A fixed-size, deterministic row of a cross-reference stream: a type, an offset (or an object stream), and a generation (or an index). */
-function packed(rows: ReadonlyArray<readonly [number, number, number]>, widths: readonly [number, number, number]): Buffer {
+export function packed(rows: ReadonlyArray<readonly [number, number, number]>, widths: readonly [number, number, number]): Buffer {
   const out = Buffer.alloc(rows.length * (widths[0] + widths[1] + widths[2]));
   let at = 0;
   for (const row of rows) {

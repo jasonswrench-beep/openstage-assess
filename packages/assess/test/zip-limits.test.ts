@@ -99,6 +99,24 @@ describe("a zip with several names for one stretch of data, each name with a loc
     assert.ok(Date.now() - started < 3000, `it took ${Date.now() - started} ms`);
   });
 
+  // The same over a STORED stream. What a stored entry makes is the data itself, so the limit on what is made refuses this too, but only
+  // after it has made 512 MB (1.2 seconds, and 600 MB of memory in the process); what the entries claim of the file refuses it at once.
+  test("with 4,000 names over one stored stream of a million bytes is refused by what they claim, at once and before anything is made", () => {
+    const data = new Uint8Array(1_000_000);
+    const bomb = craftOverlapping(Array.from({ length: 4_000 }, (_, i) => named(i)), Buffer.from(data), 0, crc32(data), data.length);
+    assert.ok(bomb.length > 1_000_000 && bomb.length < 1_400_000, `a zip of ${bomb.length} bytes`);
+    const started = Date.now();
+    assert.throws(() => unzipSync(bomb), /The entries of this zip claim more compressed data than the file holds, so they overlap and it is damaged\./);
+    assert.ok(Date.now() - started < 3000, `it took ${Date.now() - started} ms`);
+  });
+
+  test("with a few names over a stored stream is refused as well, and with one name is read", () => {
+    const data = Uint8Array.from({ length: 5000 }, (_, i) => i % 251);
+    const overlapping = (names: string[]): Uint8Array => craftOverlapping(names, Buffer.from(data), 0, crc32(data), data.length);
+    assert.throws(() => unzipSync(overlapping(["a.bin", "b.bin", "c.bin"])), /claim more compressed data than the file holds/);
+    assert.deepEqual(unzipSync(overlapping(["a.bin"])).get("a.bin"), data);
+  });
+
   test("with a few names is refused as well: it is the sizes they claim that give them away, however few they are", () => {
     const bomb = craftOverlapping(["a.bin", "b.bin", "c.bin"], emptyBlocks(1000));
     assert.throws(() => unzipSync(bomb), /claim more compressed data than the file holds/);
