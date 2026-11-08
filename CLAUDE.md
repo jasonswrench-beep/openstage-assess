@@ -106,7 +106,10 @@ two rules with the same values in another order are one rule. A rule of one valu
 a tick box whose label held a paragraph was named by the paragraph, and the Open, Export and Print link of every bank, the Try it
 of every sample and the Look of every sheet were the same words each time. A tick box or round button with an explanation is built
 with `checkRow` in `ui/dom.js` (the words name it, the explanation describes it), and a link or button that repeats down a list names
-what it acts on in an `aria-label` that still begins with its visible words (`accessible-names.test.ts` holds both). What is said
+what it acts on in an `aria-label` that still begins with its visible words (`accessible-names.test.ts` holds both). A file chooser
+that is hidden is opened by a real button and is itself out of the keyboard order and hidden from a screen reader (a label for a
+hidden input is no stop for the keyboard, and the input was an invisible one: found by walking the home screen with the Tab key,
+and held by the same test). What is said
 aloud after an action goes to a region that stays in the page and is written to afterwards (the message line at the bottom,
 `.toast:empty`, and the score review's `announcer`): a region built with its words already in it, or hidden until it has some, is often
 not read, and `display: none` takes a region out of what a screen reader sees. When the last card of a list is settled, focus moves
@@ -421,7 +424,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2875 engine tests and 335 app tests, Node's own runner
+npm test                       # 2875 engine tests and 336 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

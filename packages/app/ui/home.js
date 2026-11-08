@@ -52,15 +52,17 @@ export async function renderHome(host, _params, shell) {
     }
   }
 
-  const fileInput = h("input", { type: "file", id: "import-file", accept: ".docx,.xlsx,.xlsm,.csv,.tsv,.txt,.text,.aiken,.gift,.xml,.zip,.imscc,.doc,.xls,.pdf", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void bringIn(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
-  const bankInput = h("input", { type: "file", id: "bank-file", accept: ".openassess", class: "visually-hidden", on: { change: (/** @type {Event} */ e) => void openBankFile(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
+  const fileInput = h("input", { type: "file", id: "import-file", accept: ".docx,.xlsx,.xlsm,.csv,.tsv,.txt,.text,.aiken,.gift,.xml,.zip,.imscc,.doc,.xls,.pdf", class: "visually-hidden", tabIndex: -1, attrs: { "aria-hidden": "true" }, on: { change: (/** @type {Event} */ e) => void bringIn(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
+  const bankInput = h("input", { type: "file", id: "bank-file", accept: ".openassess", class: "visually-hidden", tabIndex: -1, attrs: { "aria-hidden": "true" }, on: { change: (/** @type {Event} */ e) => void openBankFile(/** @type {HTMLInputElement} */ (e.target).files?.[0]) } });
 
   const zone = h(
     "div",
     { class: "dropzone" },
     h("h2", { text: "Bring in questions from a file" }),
     h("p", { text: "Drop a Word, Excel, CSV, PDF, text, Aiken, GIFT, Moodle XML, QTI or Common Cartridge file here, or choose one. Your file is read and never changed. You see what was found, fix anything that needs it, and then save it into a bank." }),
-    h("label", { class: "button primary", for: "import-file", text: "Choose a file" }),
+    // A button, not a label for the hidden input: a label is not a stop for the keyboard, and the input it points at is hidden, so a person
+    // using Tab landed on a stop that showed nothing. The button has a focus ring and opens the same chooser.
+    h("button", { type: "button", class: "button primary", text: "Choose a file", on: { click: () => fileInput.click() } }),
     h("p", { class: "hint", text: "An older Word (.doc) or Excel (.xls) file has to be saved in the newer form first. A PDF is read from its text alone, so check its answers; a scan, which is a picture of a page, cannot be read." }),
   );
 
@@ -126,7 +128,7 @@ export async function renderHome(host, _params, shell) {
           shell.notify(/** @type {Error} */ (error).message, "error");
         }
       } } }),
-      h("label", { class: "button", for: "bank-file", text: "Open a bank file…" }),
+      h("button", { type: "button", class: "button", text: "Open a bank file…", on: { click: () => bankInput.click() } }),
     )),
     fileInput,
     bankInput,

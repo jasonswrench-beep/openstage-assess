@@ -110,6 +110,11 @@ item says what has been run and what has not. Items are removed when done, with 
   each the system's highlight colours or an outline. It was written from the specification and checked only to parse and to change
   nothing outside the mode (the built-in browser cannot switch the mode on): turn on a contrast theme (Settings, Accessibility,
   Contrast themes) and look at the import review, the bank list, the Review of a scored class and the home screen's drop area.
+  A third pass walked the home screen with real Tab presses in the browser pane. The two hidden file choosers were stops that showed
+  nothing (focus went to an invisible control and no ring appeared), and the "Choose a file" and "Open a bank file" labels that opened
+  them were not stops at all, so a person using only the keyboard could not choose a file. Both are real buttons now with a focus ring,
+  and the hidden inputs are out of the keyboard order and hidden from a screen reader. The other screens were not walked key by key;
+  do that with the keyboard alone, and listen to the file buttons with a screen reader.
 - [ ] **Look at the review page.** `npm run assess -- review <a .docx or .txt file> --out review.html`, then open the page. It is
   the first thing you can see, so it is the first thing to judge: is it the right information in the right order, and what would
   you want to change a question into, by hand, from it? It has no script and cannot change anything yet. Try it on a real bank
