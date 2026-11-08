@@ -354,10 +354,25 @@ function dismiss(question: Question, body: Record<string, unknown>): Question {
   throw badRequest("Say which check to dismiss.");
 }
 
+/**
+ * Saves an import into a bank, once. The button that asks for it can be pressed again before the first answer comes back, and a
+ * request that comes while the first is being done waits for it and is told what it made: it used to make a bank for each (eight
+ * requests, eight banks, each holding the questions). The request in progress is kept on the session before anything is awaited, and
+ * is let go when it is done, so that a save that failed can be asked for again.
+ */
 async function saveSession(ctx: Context, session: ReturnType<Sessions["get"]>, body: Record<string, unknown>): Promise<ApiResponse> {
   if (session.savedTo) {
     throw new HttpError(409, `This import was already saved to "${session.savedTo.bank}". Import the file again to save it somewhere else.`);
   }
+  if (session.saving) return session.saving;
+  const saving = saveSessionOnce(ctx, session, body).finally(() => {
+    if (session.saving === saving) delete session.saving;
+  });
+  session.saving = saving;
+  return saving;
+}
+
+async function saveSessionOnce(ctx: Context, session: ReturnType<Sessions["get"]>, body: Record<string, unknown>): Promise<ApiResponse> {
   const existing = typeof body["bank"] === "string" && body["bank"] !== "" ? checkName(body["bank"]) : undefined;
   const title = typeof body["title"] === "string" ? body["title"].trim() : "";
   if (!existing && title === "") throw badRequest("Say which bank to save into, or give a title for a new one.");

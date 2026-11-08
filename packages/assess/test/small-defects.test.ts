@@ -11,7 +11,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -133,9 +133,52 @@ describe("saving a bank", () => {
       writeFileSync(join(target, "keep.txt"), "kept");
       const bank = Bank.createEmpty("Blocked");
       await assert.rejects(() => bank.save(target));
-      assert.equal(existsSync(`${target}.writing`), false, "the temporary file is gone");
+      // The temporary file has a name of its own that this test cannot know, so what is looked at is the folder: nothing but the folder
+      // that was in the way is left in it.
+      assert.deepEqual(readdirSync(dir), ["blocked.openassess"], "the temporary file is gone");
       assert.deepEqual(readdirSync(target), ["keep.txt"], "what was there is as it was");
       assert.equal(bank.path, undefined, "and the bank does not think it was saved");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Found by a reader who ran two copies of the app on one library: the temporary file was always `<bank>.writing`, so two saves of one
+  // bank took each other's file and one of them failed with ENOENT (1 to 10 of 40 requests answered 500, and the bank held 17 to 20 of
+  // the 40 questions that had been added). Two copies still lose each other's edits, because each holds its own copy of the bank in
+  // memory; what a name of its own for the temporary file fixes is the failure, not that.
+  test("saves at the same moment, to the same bank, do not take each other's temporary file", async () => {
+    const dir = folder();
+    try {
+      const target = join(dir, "shared.openassess");
+      const writers = Array.from({ length: 12 }, (_x, i) => {
+        const bank = Bank.createEmpty(`Writer ${i}`);
+        for (let q = 0; q <= i; q++) bank.add(createQuestion({ type: "essay", stem: plainToRich(`Question ${q} of writer ${i}`), body: {} }));
+        return bank;
+      });
+      // Three rounds, because on Windows two renames onto one file at the same moment can meet, and the second is refused for a moment
+      // (EPERM): the save tries that again, and it is a rare thing to see in one round.
+      for (let round = 0; round < 3; round++) {
+        const settled = await Promise.allSettled(writers.map((bank) => bank.save(target)));
+        assert.deepEqual(settled.filter((s) => s.status === "rejected").map((s) => String((s as PromiseRejectedResult).reason).slice(0, 120)), [], "every save is made");
+      }
+      assert.deepEqual(readdirSync(dir), ["shared.openassess"], "and nothing is left beside the bank");
+      const { bank } = await Bank.open(target);
+      assert.match(bank.manifest.title, /^Writer \d+$/, "and what is there is one of the banks whole");
+      assert.equal(bank.questions.size, Number(bank.manifest.title.slice("Writer ".length)) + 1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a file or a folder at the name the temporary file used to have does not stop a save", async () => {
+    const dir = folder();
+    try {
+      const target = join(dir, "bank.openassess");
+      mkdirSync(`${target}.writing`);
+      await Bank.createEmpty("Not stopped").save(target);
+      assert.equal((await Bank.open(target)).bank.manifest.title, "Not stopped");
+      assert.deepEqual(readdirSync(dir).sort(), ["bank.openassess", "bank.openassess.writing"], "and it was not touched");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

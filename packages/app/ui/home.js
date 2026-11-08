@@ -3,9 +3,10 @@
  * The first screen: the banks a person has, and the way in for a file.
  */
 
-import { api, get, post } from "./api.js";
-import { askText } from "./dialogs.js";
-import { clear, h, plural, when } from "./dom.js";
+import { api, del, get, post } from "./api.js";
+import { bankCard } from "./bank-cards.js";
+import { askText, confirmAction } from "./dialogs.js";
+import { clear, h, plural } from "./dom.js";
 
 /**
  * @param {HTMLElement} host
@@ -93,28 +94,20 @@ export async function renderHome(host, _params, shell) {
     void bringIn(e.dataTransfer?.files?.[0]);
   });
 
+  /** A file in the Banks folder that is no bank, put out of the way after the person has said so: it is moved, as a bank is, and not erased. */
+  async function removeUnreadable(/** @type {any} */ b) {
+    if (!(await confirmAction(`Move "${b.name}" out of your banks?`, `This file could not be read as a bank (${b.error}). It is moved, exactly as it is, to the Deleted folder inside your OpenAssess folder. Nothing is erased.`, { yes: "Move it", no: "Keep it", danger: true }))) return;
+    try {
+      await del(`banks/${encodeURIComponent(b.name)}`);
+      shell.notify(`"${b.name}" was moved to the Deleted folder.`, "ok");
+      await renderHome(host, _params, shell);
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
+
   const banks = /** @type {any[]} */ (state.banks);
-  const cards = banks.map((b) =>
-    h(
-      "article",
-      { class: "card" },
-      // An h2, under the page's h1: a card title that was an h3 skipped a level, which a screen reader's list of headings shows.
-      h("h2", { class: "card-title" }, b.error ? h("span", { text: b.name }) : h("a", { href: `#/bank/${encodeURIComponent(b.name)}`, text: b.title })),
-      b.error
-        ? h("p", { class: "problem", text: `This file could not be read: ${b.error}` })
-        : h("p", { class: "sub", text: `${plural(b.questions, "question", "questions")} · changed ${when(b.modified)}` }),
-      b.error
-        ? null
-        : h(
-            "div",
-            { class: "card-actions" },
-            // Each says which bank it is for: a list of the page's links read out "Open, Export, Print" once for every bank.
-            h("a", { class: "button", href: `#/bank/${encodeURIComponent(b.name)}`, text: "Open", attrs: { "aria-label": `Open ${b.title}` } }),
-            h("a", { class: "button", href: `#/export/${encodeURIComponent(b.name)}`, text: "Export", attrs: { "aria-label": `Export ${b.title}` } }),
-            h("a", { class: "button", href: `#/print/${encodeURIComponent(b.name)}`, text: "Print", attrs: { "aria-label": `Print ${b.title}` } }),
-          ),
-    ),
-  );
+  const cards = banks.map((b) => bankCard(b, { remove: (bank) => void removeUnreadable(bank) }));
 
   host.append(
     h("div", { class: "page-head" }, h("div", null, h("h1", { text: "Your question banks" }), h("p", { class: "sub", text: "A bank is a file of questions you can search, change, print and export." })), h("div", { class: "head-actions" },

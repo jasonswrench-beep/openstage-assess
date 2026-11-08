@@ -119,8 +119,8 @@
   {
     "label": "leading dots only, as before the fix",
     "file": "packages/app/src/library.ts",
-    "from": ".replace(/^[. ]+/, \"\"),",
-    "to": ".replace(/^\\.+/, \"\"),",
+    "from": ".replace(/^[. ]+/, \"\");",
+    "to": ".replace(/^\\.+/, \"\");",
     "tests": [
       "packages/app/test/server.test.ts"
     ]

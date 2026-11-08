@@ -7,12 +7,12 @@
  * on disk since it was read is read again before it is used.
  */
 
-import { rename, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Bank, BANK_EXTENSION, countMismatchMessage, type OpenReport } from "./engine.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
-import { bankFile, bankNames, checkName, claimName, cleanName, releaseName, type Library } from "./library.ts";
+import { bankFile, bankNames, checkName, cleanName, fileOps, placeFile, placeMade, type FileOps, type Library } from "./library.ts";
 
 export interface BankInfo {
   name: string;
@@ -23,6 +23,17 @@ export interface BankInfo {
   bytes: number;
   /** Set when the file could not be read as a bank. It is listed, not hidden. */
   error?: string;
+  /** Set with `error` when the file's name is one that OpenAssess cannot use, so the file cannot be opened or removed here: it is renamed in the Banks folder. */
+  unusableName?: true;
+}
+
+/**
+ * What a `BankStore` does to the disk that a test may want to fail: the file system calls that find a free name, and the save of a
+ * bank. Nothing outside a test gives these.
+ */
+export interface BankStoreIo {
+  files?: FileOps;
+  save?: (bank: Bank, path: string) => Promise<unknown>;
 }
 
 interface Held {
@@ -51,14 +62,41 @@ export class BankStore {
    */
   private readonly queues = new Map<string, Promise<unknown>>();
 
-  constructor(library: Library) {
+  private readonly files: FileOps;
+  private readonly saveBank: (bank: Bank, path: string) => Promise<unknown>;
+
+  constructor(library: Library, io: BankStoreIo = {}) {
     this.library = library;
+    this.files = io.files ?? fileOps;
+    this.saveBank = io.save ?? ((bank, path) => bank.save(path));
   }
 
+  /**
+   * The banks in the folder, each read to say what it holds. One that cannot be listed in the ordinary way is listed in words and not
+   * left out, and never stops the rest: this is the answer the first screen is made from, and one file in the folder (a copy cut
+   * short, a name this program would not have made) must not leave a person with a screen that shows nothing.
+   */
   async list(): Promise<BankInfo[]> {
     const out: BankInfo[] = [];
-    for (const name of await bankNames(this.library)) {
-      const path = bankFile(this.library, name);
+    for (const name of await bankNames(this.library, this.files)) {
+      let path: string;
+      try {
+        path = bankFile(this.library, name);
+      } catch {
+        // A file put in the Banks folder by hand, or synced from another computer, under a name that is too long, begins with a dot, ends
+        // in a dot or a space, or is a Windows device's: it cannot be opened by name here, so it is said what to do.
+        out.push({
+          name,
+          title: name,
+          questions: 0,
+          created: "",
+          modified: "",
+          bytes: 0,
+          error: "its name cannot be used by OpenAssess (a name can be at most 80 characters, cannot begin with a dot, end in a dot or a space, or be the name of a device such as CON or COM1). Rename the file in the Banks folder, and it will be listed here.",
+          unusableName: true,
+        });
+        continue;
+      }
       try {
         const { bank } = await Bank.open(path);
         const info = await stat(path);
@@ -151,17 +189,15 @@ export class BankStore {
     });
   }
 
+  /**
+   * A new empty bank, under its title as a name, or with 2, 3 after it if that is taken. The finished file is made under a private
+   * name and given its own by a link (`placeMade`), so that no one looking in the folder sees an empty or half-written bank, and a bank
+   * that cannot be saved leaves nothing behind.
+   */
   async create(title: string): Promise<string> {
     const clean = title.trim();
     if (clean === "") throw badRequest("A bank needs a title.");
-    const name = await claimName(this.library.banks, clean, BANK_EXTENSION);
-    try {
-      await Bank.createEmpty(clean).save(bankFile(this.library, name));
-    } catch (error) {
-      await releaseName(this.library.banks, name, BANK_EXTENSION);
-      throw error;
-    }
-    return name;
+    return placeMade(this.library.banks, cleanName(clean), BANK_EXTENSION, (temp) => this.saveBank(Bank.createEmpty(clean), temp), this.files);
   }
 
   /** A bank file from somewhere else, kept in the library under a new name. It is read first, and refused if it is not a bank. */
@@ -173,13 +209,7 @@ export class BankStore {
       throw badRequest(`That file is not an OpenAssess bank: ${(error as Error).message}`);
     }
     const wanted = cleanName(fileName.replace(/\.openassess$/i, "") || opened.bank.manifest.title);
-    const name = await claimName(this.library.banks, wanted, BANK_EXTENSION);
-    try {
-      await opened.bank.save(bankFile(this.library, name));
-    } catch (error) {
-      await releaseName(this.library.banks, name, BANK_EXTENSION);
-      throw error;
-    }
+    const name = await placeMade(this.library.banks, wanted, BANK_EXTENSION, (temp) => this.saveBank(opened.bank, temp), this.files);
     return { name, skipped: opened.report.invalid.filter((entry) => !entry.loaded).length };
   }
 
@@ -191,18 +221,34 @@ export class BankStore {
     });
   }
 
-  /** Moves the bank to the Deleted folder, after any change in progress. Nothing is erased. */
+  /**
+   * Moves the bank to the Deleted folder, after any change in progress. Nothing is erased. The bank is given its name in Deleted by a
+   * link and then taken off its name in Banks, so that at no moment is it in neither place, and a bank removed twice under one name
+   * keeps both. If the first name cannot be taken off, the second is given up, and the bank is where it was and not in both. A bank
+   * that cannot be read is removed as well as one that can: it is not opened first, only looked for, because the one thing a person can
+   * do about a file that is no bank is to put it out of the way.
+   */
   remove(name: string): Promise<string> {
     checkName(name);
     return this.exclusive(name, async () => {
-      await this.open(name);
-      // The name in Deleted is claimed first, so that a bank removed twice under one name keeps both, and the rename lands on our own empty file.
-      const kept = await claimName(this.library.deleted, name, BANK_EXTENSION);
+      const source = bankFile(this.library, name);
+      try {
+        await stat(source);
+      } catch {
+        this.held.delete(name);
+        throw notFound(`There is no bank called "${name}".`);
+      }
+      const kept = await placeFile(this.library.deleted, name, BANK_EXTENSION, source, this.files);
       const target = join(this.library.deleted, `${kept}${BANK_EXTENSION}`);
       try {
-        await rename(bankFile(this.library, name), target);
+        await this.files.unlink(source);
       } catch (error) {
-        await releaseName(this.library.deleted, kept, BANK_EXTENSION);
+        await this.files.remove(target).catch(() => undefined);
+        // A name that was taken off by someone else in the meantime (a second copy of the app) is a bank that is not there now.
+        if ((error as { code?: string } | null)?.code === "ENOENT") {
+          this.held.delete(name);
+          throw notFound(`There is no bank called "${name}".`);
+        }
         throw error;
       }
       this.held.delete(name);

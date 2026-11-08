@@ -38,8 +38,12 @@ const { safeName } = names;
 // What the app takes, copied from `packages/app/src/library.ts`
 // ---------------------------------------------------------------------------
 
+// This is a copy, and a copy can fall behind: it was the pattern from before alpha 22 (no COM0 or LPT0, no superscript digits, no CONIN$ or
+// CONOUT$, no spaces before the dot) for a whole round, and nothing noticed. The copy is now the pattern of `RESERVED` in the app's
+// library, and `packages/app/test/library-names.test.ts` holds `safeName` (and the app's own `cleanName`) to the real `checkName`, so a
+// change to the real rule that this copy misses is found there.
 const APP_ILLEGAL = /[\\/:*?"<>|\x00-\x1f]/;
-const APP_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+const APP_RESERVED = /^(con|prn|aux|nul|conin\$|conout\$|com[0-9\xb9\xb2\xb3]|lpt[0-9\xb9\xb2\xb3])( *\..*)?$/i;
 const APP_MAX = 80;
 
 /** Why the app's `checkName` would refuse a name, or undefined when it takes it. `long` leaves out the length, for a name the app cuts to fit. */

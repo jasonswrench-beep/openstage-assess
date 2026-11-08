@@ -10,6 +10,7 @@
 import { randomBytes } from "node:crypto";
 
 import { countVerdicts, liveFindings, richTextToPlain, verdictOf, type Finding, type ImportResult, type Orphan, type Question } from "./engine.ts";
+import type { ApiResponse } from "./api.ts";
 import { notFound } from "./errors.ts";
 
 /** The most lines of a file kept for showing beside a question. A longer file is still read in full. */
@@ -36,6 +37,8 @@ export interface ImportSession {
   media: Map<string, Uint8Array>;
   /** Set once the session has been saved, so that saving twice does not add every question twice. */
   savedTo?: { bank: string; added: number };
+  /** The save in progress, so that a request for the same save that comes while it is being done waits for it and is not a second save. */
+  saving?: Promise<ApiResponse>;
 }
 
 export interface QuestionSummary {
