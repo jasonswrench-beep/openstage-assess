@@ -146,11 +146,28 @@ export function finding(
  */
 export const MOST_FINDINGS_OF_A_KIND = 25;
 
+/** What the finding that counts the rest says after the number, and before the words of the first of them. */
+const CAP_SUMMARY_WORDS = "more findings of this kind were not listed. The first of them was: ";
+
+/**
+ * Whether a finding is the one `capFindings` makes to count the findings of its kind that were not listed. It stands for several, so
+ * the code that settles findings one at a time (a placeholder that has been written over) has to know it from the others: its `field`
+ * is only the place of the first of them.
+ */
+export function isCapSummary(f: Finding): boolean {
+  const space = f.message.indexOf(" ");
+  return space > 0 && /^\d+$/.test(f.message.slice(0, space)) && f.message.startsWith(CAP_SUMMARY_WORDS, space + 1);
+}
+
 /**
  * The findings with no more than `limit` of any one code. The ones past it are not dropped without a word: one finding of the same code
  * and the highest severity of those left out says how many there were and where the first of them was, so a person fixing the question
  * knows that the list is cut. A dismissal of the kind (`replaceFileKeyProblems` dismisses a code at a time) reaches it with the rest.
  * The order is kept, and the list is returned as it is when nothing is over.
+ *
+ * Every question is made by `createQuestion`, which cuts its findings here, so an importer that makes a finding for each entry of a file
+ * (a Moodle short answer with 100,000 answers that earn part credit made 100,000) cannot list more than this however it loops. A list
+ * that has been cut once is not cut again: the finding that counts the rest is not one of the findings it counts.
  */
 export function capFindings(findings: readonly Finding[], limit = MOST_FINDINGS_OF_A_KIND): Finding[] {
   const seen = new Map<string, number>();
@@ -158,6 +175,10 @@ export function capFindings(findings: readonly Finding[], limit = MOST_FINDINGS_
   const over = new Map<string, { count: number; first: Finding; severity: Severity }>();
   const rank: Record<Severity, number> = { info: 0, warn: 1, error: 2 };
   for (const f of findings) {
+    if (isCapSummary(f)) {
+      kept.push(f);
+      continue;
+    }
     const n = (seen.get(f.code) ?? 0) + 1;
     seen.set(f.code, n);
     if (n <= limit) {
@@ -174,7 +195,7 @@ export function capFindings(findings: readonly Finding[], limit = MOST_FINDINGS_
   if (over.size === 0) return findings.slice();
   for (const [code, held] of over) {
     kept.push(
-      finding(code, held.severity, `${held.count} more findings of this kind were not listed. The first of them was: ${held.first.message}`, {
+      finding(code, held.severity, `${held.count} ${CAP_SUMMARY_WORDS}${held.first.message}`, {
         ...(held.first.field !== undefined ? { field: held.first.field } : {}),
         ...(held.first.source !== undefined ? { source: held.first.source } : {}),
       }),

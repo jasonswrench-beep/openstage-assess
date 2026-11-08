@@ -409,9 +409,12 @@ function build(chunk: Chunk, ctx: Context): { question?: Question; orphan?: Orph
 
 /**
  * A category line. The capture is trimmed by its own shape (from the first character that shows to the last) and not by `(.*?)\s*$`,
- * which read the white space after every character of a long line again: 80,000 spaces in a line took four seconds.
+ * which read the white space after every character of a long line again: 80,000 spaces in a line took four seconds. The white space in
+ * front of the capture is inside the optional part with it, since an absent capture left two runs side by side, and a line with a
+ * U+2028 in it (which `.` stops at and `\s` reads) shared the run out in as many ways as it was long. Group 1 is undefined, not "",
+ * when there is nothing after the colon.
  */
-export const CATEGORY_LINE = /^\s*\$CATEGORY:\s*((?:\S(?:.*\S)?)?)\s*$/i;
+export const CATEGORY_LINE = /^\s*\$CATEGORY:(?:\s*(\S(?:.*\S)?))?\s*$/i;
 
 /** Splits the file into blocks: a blank line ends one, unless a brace is still open. Comments and categories are taken out. */
 function chunks(lines: readonly string[]): { chunks: Chunk[]; categories: number } {
@@ -433,7 +436,7 @@ function chunks(lines: readonly string[]): { chunks: Chunk[]; categories: number
     if (/^\s*\/\//.test(line)) return;
     const cat = CATEGORY_LINE.exec(line);
     if (cat && current.length === 0) {
-      category = (cat[1] as string).replace(/^\$course\$\/(?:top\/)?/i, "").trim() || undefined;
+      category = (cat[1] ?? "").replace(/^\$course\$\/(?:top\/)?/i, "").trim() || undefined;
       categories++;
       return;
     }

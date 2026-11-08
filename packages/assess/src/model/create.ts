@@ -21,7 +21,7 @@ import {
   type QuestionBody,
   type QuestionType,
 } from "./question.ts";
-import { FindingCode, finding } from "./findings.ts";
+import { FindingCode, capFindings, finding } from "./findings.ts";
 import { unreadObjects } from "./unread-objects.ts";
 import { titleText } from "./table.ts";
 
@@ -101,7 +101,9 @@ export function createQuestion(input: CreateQuestionInput): Question {
     metadata: { ...emptyMetadata(), ...input.metadata },
     media: input.media ?? [],
     math: input.math ?? [],
-    findings,
+    // No more than a few of one kind, whichever importer made them and however it looped over the entries of its file; the rest are counted
+    // in one finding of the kind, and none is lost without a word (`capFindings`).
+    findings: capFindings(findings),
     history: [{ at, by, change: "created", toVersion: 1 }],
     ...(input.origin ? { origin: input.origin } : {}),
   };

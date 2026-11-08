@@ -24,7 +24,15 @@ export type PngDecoded = { ok: true; pixels: PngPixels } | { ok: false; reason: 
 /** The most pixels a printed picture may have. A PDF page holds no use for more, and a larger one is a memory risk. */
 export const MAX_PRINT_PIXELS = 50_000_000;
 
-/** The most bytes a picture may need while it is unpacked: the rows as stored, the rows as drawn and the pixels. A letter page at 600 dots to the inch in colour needs 236 MB, inside it. */
+/**
+ * The most bytes a picture may need while it is unpacked: the rows as stored (and their filter bytes), the rows as drawn and the 8-bit
+ * pixels, so 9 bytes for each pixel of an 8-bit colour picture and 3 for a grey one. A letter page at 600 dots to the inch in grey
+ * needs 96 MB, inside it. The same page in colour needs 289 MB and is refused, in words, with the figure: the old peaks for such a page
+ * were 370 to 554 MB, which is what the limit is for. The most a colour picture may have is about 29.8 million pixels (a letter page at
+ * 560 dots to the inch); at 300 dots a letter page in colour is 76 MB. The refusal is the same for the Word file, which decodes a PNG to
+ * be sure its data is whole before it is embedded. (An earlier version of this comment said 236 MB, which is 7 bytes a pixel and the
+ * sheet reader's count, not this one.)
+ */
 export const MAX_PRINT_WORKING_BYTES = 256 * 1048576;
 
 const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -96,8 +104,9 @@ export function decodePng(bytes: Uint8Array): PngDecoded {
   // above, but a picture of 16 bits and four channels needs 17 bytes for each of them: a file of 93 KB that said it was 3000 by 4000 took
   // 383 MB, and at the limit above it would take 2 GB. It is counted in bytes, before anything is unpacked.
   const pixelBytes = width * height * (colorType === 0 || colorType === 4 ? 1 : 3);
-  if (expected + rowBytes * height + pixelBytes > MAX_PRINT_WORKING_BYTES) {
-    return { ok: false, reason: `it would take more than ${MAX_PRINT_WORKING_BYTES / 1048576} MB to unpack, which is more than a printed page needs` };
+  const working = expected + rowBytes * height + pixelBytes;
+  if (working > MAX_PRINT_WORKING_BYTES) {
+    return { ok: false, reason: `it would take ${Math.ceil(working / 1048576)} MB to unpack, which is more than the ${MAX_PRINT_WORKING_BYTES / 1048576} MB a printed page is allowed. Save it at 300 dots to the inch, or as a JPEG` };
   }
   let raw: Buffer;
   try {

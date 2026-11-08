@@ -29,7 +29,11 @@ export const AIKEN_PROFILE_ID = "aiken";
 // `\S.*?` followed by `\s*$`: the lazy form tried the end of the capture at every character, and each try read the white space after it, so a
 // line with 80,000 spaces in the middle took four seconds (and one of a megabyte, twelve minutes). The captures are the same.
 export const OPTION = /^\s*([A-Za-z])\s*[.)]\s+(\S(?:.*\S)?)\s*$/;
-export const ANSWER = /^\s*ANSWER\s*:\s*((?:\S(?:.*\S)?)?)\s*$/i;
+// The capture of ANSWER may be absent, and then the white space in front of it and the white space after it were two runs side by side:
+// with a character that `.` stops at and `\s` reads (U+2028) the line failed at its end and the run was shared out in as many ways as it
+// was long. The white space goes inside the optional part, with the capture, so a line with nothing after the colon is one run. Group 1 is
+// then undefined and not "", which is why the use of it says `?? ""`.
+export const ANSWER = /^\s*ANSWER\s*:(?:\s*(\S(?:.*\S)?))?\s*$/i;
 /** A number in front of the question: that is the Standard Format, which has its own reader. */
 const NUMBERED = /^\s*(?:Q(?:uestion)?\s*)?\d{1,4}\s*[.):]\s/i;
 
@@ -135,7 +139,7 @@ function build(block: Line[], ctx: Ctx): { question?: Question; orphan?: Orphan 
   if (answerLines.length > 1) {
     findings.push(finding(FindingCode.KeysDisagree, "error", `The block has ${answerLines.length} ANSWER lines, and there is no telling which is meant. No answer is marked.`));
   } else if (answerLines.length === 1) {
-    const given = ((ANSWER.exec((answerLines[0] as Line).text) as RegExpExecArray)[1] as string).toUpperCase();
+    const given = ((ANSWER.exec((answerLines[0] as Line).text) as RegExpExecArray)[1] ?? "").toUpperCase();
     const named = given.split(/\s*(?:,|&|\/|\band\b|\s)\s*/).filter((s) => s !== "");
     const known = new Set(letters);
     if (named.length === 0 || named.some((n) => !/^[A-Z]$/.test(n))) {

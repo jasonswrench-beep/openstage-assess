@@ -21,13 +21,15 @@ import { OPTION as AIKEN_OPTION, ANSWER as AIKEN_ANSWER } from "../src/import/ai
 import { CATEGORY_LINE } from "../src/import/gift.ts";
 import { tagAttributes } from "../src/import/html-pictures.ts";
 import { LABELLED } from "../src/import/standard-text-relabel.ts";
-import { NO_KEY, TF_CHOICES } from "../src/import/standard-text-scan.ts";
+import { isAnswerKeyHeading, NO_KEY, SECTION_HEADING, TF_CHOICES } from "../src/import/standard-text-scan.ts";
 import { parseDelimited } from "../src/import/table-csv.ts";
 import { findElements, findTags, hasTag, markupTokens, placeholderRefs, replaceBareElements, replaceDelimited, replaceElements, replacePlaceholders, replaceTags, stripTags } from "../src/model/markup-scan.ts";
-import { capFindings, finding, MOST_FINDINGS_OF_A_KIND, type Finding } from "../src/model/findings.ts";
+import { createQuestion } from "../src/model/create.ts";
+import { capFindings, finding, isCapSummary, MOST_FINDINGS_OF_A_KIND, verdictFrom, type Finding } from "../src/model/findings.ts";
 import { largest, pushAll, smallest } from "../src/model/lists.ts";
 import { collectRefs, decodeEntities, foldTypography, richTextToPlain } from "../src/model/richtext.ts";
 import { readTableHtml, replaceTables } from "../src/model/table.ts";
+import { textWithMath } from "../src/quality/bank.ts";
 import { normalForm, wordTokens } from "../src/quality/items.ts";
 
 // ---------------------------------------------------------------------------
@@ -211,6 +213,25 @@ describe("placeholders are found as they were, in text the engine wrote", () => 
     same(texts(10, pieces, 20000, 12), (s) => oldPlain(s), (s) => richTextToPlain(s), "richTextToPlain", 5000);
   });
 
+  test("textWithMath, which the check for copies reads a question with, writes an equation in as the pattern it replaced did", () => {
+    // Verbatim from quality/bank.ts before `replacePlaceholders` took its place (a stored stem of 40,000 `<oa-math ` took seven seconds).
+    const oldTextWithMath = (latex: ReadonlyMap<string, string>, content: string): string =>
+      richTextToPlain(content.replace(/<oa-math\s[^>]*ref\s*=\s*"([^"]*)"[^>]*>\s*<\/oa-math>/gi, (_whole, ref: string) => ` ${latex.get(ref) ?? ref} `));
+    const latex = new Map([["e1", "x^2"], ["e2", "\\frac{a}{b}"], ["e3", "a < b"], ["e4", ""]]);
+    // A placeholder as the engine writes it (a reference, in any case and spacing), the ones it does not know, and text round them. Like
+    // the placeholder tests above, no piece is the start of a tag that is never closed: the sanitizer escapes a stray `<oa-math`, so text
+    // the engine wrote has none, and for a stored text that was written by hand `replacePlaceholders` reads the stray start as text.
+    const pieces = [
+      '<oa-math ref="e1"></oa-math>', '<oa-math ref="e2"> </oa-math>', '<oa-math ref="e3">\n</oa-math>', '<oa-math ref="e4"></oa-math>', '<oa-math ref="zz"></oa-math>',
+      '<oa-math  data-x="1"   ref = "e1" ></oa-math>', '<OA-MATH REF="e2"></OA-MATH>', '<oa-math ref="e1" ref="e2"></oa-math>', "<oa-math ref='e1'></oa-math>",
+      '<oa-math ref="e1">', "</oa-math>", "<oa-math>", '<oa-media ref="m1"></oa-media>', "<p>", "</p>", "word ", " ", "\n", "<br>", "&lt;", "x ", "<b>", "</b>",
+      "<table><tr><td>", "</td></tr></table>", "<oa-math ref=\"e1\"></oa-math >",
+    ];
+    same(texts(51, pieces, 30000, 10), (s) => oldTextWithMath(latex, s), (s) => textWithMath(latex, { format: "rich", content: s }), "textWithMath", 5000);
+    // With an equation in it, and with the reference written in the place of one the question does not carry.
+    assert.equal(textWithMath(latex, { format: "rich", content: '<p>Solve <oa-math ref="e1"></oa-math> and <oa-math ref="zz"></oa-math>.</p>' }), "Solve x^2 and zz .");
+  });
+
   test("replaceBareElements is the replace of <oa-media[^>]*>\\s*</oa-media>", () => {
     same(
       texts(11, PLACEHOLDER_PIECES, 20000, 8),
@@ -362,18 +383,23 @@ describe("a pattern that begins with white space or ends in a run starts once fo
     const oldOption = /^\s*([A-Za-z])\s*[.)]\s+(\S.*?)\s*$/;
     const oldAnswer = /^\s*ANSWER\s*:\s*(.*?)\s*$/i;
     const oldCategory = /^\s*\$CATEGORY:\s*(.*?)\s*$/i;
-    const pieces = ["A", "b", ".", ")", " ", "\t", "x", "ANSWER", "answer", ":", "$CATEGORY", "\u2028", "\u00a0", "yes", "\r", "  ", "a b", "(", "-", "A. ", "b) ", "ANSWER: ", "$CATEGORY: ", " Answer:"];
-    const inputs = texts(18, pieces, 30000, 10);
+    const pieces = ["A", "b", ".", ")", " ", "\t", "x", "ANSWER", "answer", ":", "$CATEGORY", "\u2028", "\u2029", "\u00a0", "\v", "\f", "\ufeff", "yes", "\r", "\n", "  ", "a b", "(", "-", "A. ", "b) ", "ANSWER: ", "$CATEGORY: ", " Answer:", "ANSWER:", "$CATEGORY:", "ANSWER:  ", "$CATEGORY:\t"];
+    // The two that have a capture that may be absent say undefined for it where the lazy ones said "": the same capture, nothing in it.
+    const groups = (m: RegExpExecArray | null): Array<string | null> | null => (m === null ? null : [...m].map((g) => g ?? ""));
+    const inputs = texts(18, pieces, 60000, 10);
     let matched = 0;
+    let emptyCaptures = 0;
     for (const input of inputs) {
       for (const [old, now] of [[oldOption, AIKEN_OPTION], [oldAnswer, AIKEN_ANSWER], [oldCategory, CATEGORY_LINE]] as const) {
         const expected = old.exec(input);
         const got = now.exec(input);
-        assert.deepEqual(got === null ? null : [...got], expected === null ? null : [...expected], `${String(now)} for ${JSON.stringify(input)}`);
+        assert.deepEqual(groups(got), groups(expected), `${String(now)} for ${JSON.stringify(input)}`);
         if (expected !== null) matched++;
+        if (expected !== null && expected[1] === "") emptyCaptures++;
       }
     }
     assert.ok(matched > 3000, `only ${matched} lines matched`);
+    assert.ok(emptyCaptures > 200, `only ${emptyCaptures} lines had an empty capture, which is the case that changed`);
   });
 
   test("the patterns of the text scanner that shared a run of white space between several runs match the same lines", () => {
@@ -398,6 +424,35 @@ describe("a pattern that begins with white space or ends in a run starts once fo
       }
       assert.ok(matched > (name === "true or false" ? 60 : 300), `${name}: only ${matched} matched`);
     }
+  });
+
+  test("the section heading and the answer key heading match the lines they matched, with every tail a person could type", () => {
+    // Verbatim from the source before the optional colon was taken with the white space in front of it.
+    const oldSection =
+      /^\s*(?:chapter\s+\w+(?:-\w+)?\s+)?(?:in[\s-]*depth\s+)?(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or|and)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?(?:\s*\/\s*essays?)?|essays?|matching)(?:\s+(?:questions?|items?))?\s*:?\s*$/i;
+    const oldKeyHeading = (text: string): boolean => /\banswer\s+key\s*[:.]?\s*$/i.test(text) && text.split(/\s+/).length <= 8 && !text.includes("?");
+
+    const sectionHeads = ["Fill in the Blank", "fill-in-the-blanks", "Fill  In  Blank", "True/False", "True / False", "true or false", "TRUE-FALSE", "True and False", "True False", "Multiple Choice", "multiple-choice", "Multiple Response", "Multiple Answers", "Multiple answer", "Short Answer", "Short Answers/Essays", "short-answer / essay", "Essay", "ESSAYS", "Matching", "Chapter 7 Essay", "Chapter 3-2 Matching", "In-Depth Essay", "Chapter 1 In Depth Multiple Choice", "Indepth Matching", "Essay Questions"];
+    const keyHeads = ["Answer Key", "answer key", "ANSWER  KEY", "Answer\tKey", "Answer\u00a0Key", "Chapter 7 Answer Key", "Chapter 7: Answer Key", "The Answer Key", "answer keys", "Answers Key", "Answer Key Answer Key", "A B C D E F G Answer Key", "Answer Key?"];
+    const tails = ["", " ", "  ", "\t", "\u00a0", ":", " :", ": ", " : ", "  :  ", "\t:\t", "\u00a0:\u00a0", ".", " .", ". ", "..", ":.", ".:", "::", ": :", " ?", "?", "x", " x", ":x", " :x", "s", " questions", " Questions", " question:", " Questions :", " ITEMS ", " item  :  ", " questionss", "\n", "\u2028", "\u2028:"];
+    const structured: string[] = [];
+    for (const head of [...sectionHeads, ...keyHeads]) for (const lead of ["", " ", "\t"]) for (const tail of tails) structured.push(lead + head + tail);
+    const pieces = ["Answer", " Key", "answer key", "Essay", "essays", "True/False", "True", " or ", "False", "Multiple", " Choice", "Multiple Choice", " Questions", " items", " ", "  ", "\t", "\u00a0", ":", " :", ".", "?", "x", "Chapter 3 ", "In-Depth ", "Fill in the Blank", "Short Answer", "/", "Matching", "-"];
+    const inputs = [...structured, ...texts(41, pieces, 40000, 9)];
+
+    let sectionMatched = 0;
+    let keyMatched = 0;
+    for (const input of inputs) {
+      const expected = oldSection.exec(input);
+      const got = SECTION_HEADING.exec(input);
+      assert.deepEqual(got === null ? null : [...got], expected === null ? null : [...expected], `section heading for ${JSON.stringify(input)}`);
+      if (expected !== null) sectionMatched++;
+      assert.equal(isAnswerKeyHeading(input), oldKeyHeading(input), `answer key heading for ${JSON.stringify(input)}`);
+      if (oldKeyHeading(input)) keyMatched++;
+    }
+    assert.ok(inputs.length > 40000);
+    assert.ok(sectionMatched > 400, `only ${sectionMatched} section headings matched`);
+    assert.ok(keyMatched > 100, `only ${keyMatched} answer key headings matched`);
   });
 
   test("the attributes of a tag are the same ones, by name and value", () => {
@@ -524,5 +579,38 @@ describe("the findings of one kind that a question lists", () => {
     const list = Array.from({ length: 130000 }, (_, i) => f("many", i));
     const capped = capFindings(list);
     assert.equal(capped.length, MOST_FINDINGS_OF_A_KIND + 1);
+  });
+
+  test("the finding that counts the rest says where in the file the first of them was, and where in the question", () => {
+    const list = Array.from({ length: 30 }, (_, i) => finding("many", "warn", `finding ${i}`, { field: `body.options.${i}.content`, source: { file: "q.txt", firstBlock: 100 + i, lastBlock: 100 + i } }));
+    const more = capFindings(list, 10).find((x) => isCapSummary(x)) as Finding;
+    assert.ok(more, "there is a finding that counts the rest");
+    assert.equal(more.field, "body.options.10.content");
+    assert.deepEqual(more.source, list[10]?.source, "the source of the first one left out");
+    const plain = capFindings([finding("a", "info", "one"), finding("a", "info", "two")], 1).find((x) => isCapSummary(x)) as Finding;
+    assert.equal("source" in plain, false, "and none where the first had none");
+    assert.equal("field" in plain, false);
+  });
+
+  test("a list that has been cut is not cut again: the finding that counts the rest is not one of the findings it counts", () => {
+    const list: Finding[] = [];
+    for (let i = 0; i < 60; i++) list.push(f("many", i, i === 40 ? "error" : "warn"));
+    for (let i = 0; i < 5; i++) list.push(f("few", i));
+    const once = capFindings(list, 10);
+    const twice = capFindings(once, 10);
+    assert.deepEqual(twice, once);
+    assert.equal(once.filter((x) => x.code === "many").length, 11);
+    assert.equal(isCapSummary(once.find((x) => x.code === "few") as Finding), false, "a finding that happens to be a kind that was not cut");
+    assert.equal(isCapSummary(f("many", 1)), false);
+  });
+
+  test("a question made from 100,000 findings of three kinds lists no more than the limit of each and one that counts the rest, and is as bad as it was", () => {
+    const findings: Finding[] = [];
+    for (let i = 0; i < 100000; i++) findings.push(finding(["import.unread-content", "import.type-inferred", "import.empty-option"][i % 3] as string, i === 99999 ? "error" : "warn", `finding ${i}`));
+    const q = createQuestion({ type: "essay", stem: "Q?", body: {}, findings });
+    assert.ok(q.findings.length <= 3 * (MOST_FINDINGS_OF_A_KIND + 1), `${q.findings.length} findings`);
+    assert.equal(q.findings.filter(isCapSummary).length, 3, "one for each kind that was cut");
+    assert.equal(verdictFrom(q.findings), "failed", "the one error among the findings left out still makes it failed");
+    assert.equal(createQuestion({ type: "essay", stem: "Q?", body: {}, findings: q.findings }).findings.length, q.findings.length, "and making a question from a question's findings cuts nothing more");
   });
 });

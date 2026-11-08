@@ -197,9 +197,14 @@ export const METADATA_LABELS: Record<string, keyof Metadata | "bloom" | "difficu
  * The whole line has to be the heading, so a stem that mentions the words is not one,
  * and "True    False" with spaces between, which is how a true or false question lists
  * its two choices, is not either.
+ *
+ * The end is `(?:\s*:)?\s*$` and not `\s*:?\s*$`: with the colon optional, the two runs of white space met, and a line that did not end
+ * there ("Multiple Choice" and 80,000 tabs and a letter) shared the run between them in as many ways as it was long, 13 seconds. A colon
+ * with the white space before it is one option, so the run is read once. The language is the same (`linear-parity.test.ts` holds it to
+ * the old pattern on generated headings).
  */
-const SECTION_HEADING =
-  /^\s*(?:chapter\s+\w+(?:-\w+)?\s+)?(?:in[\s-]*depth\s+)?(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or|and)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?(?:\s*\/\s*essays?)?|essays?|matching)(?:\s+(?:questions?|items?))?\s*:?\s*$/i;
+export const SECTION_HEADING =
+  /^\s*(?:chapter\s+\w+(?:-\w+)?\s+)?(?:in[\s-]*depth\s+)?(fill[\s-]+in[\s-]+(?:the[\s-]+)?blanks?|true\s*(?:\/|-|or|and)\s*false|multiple[\s-]+choice|multiple[\s-]+(?:response|answer)s?|short[\s-]+answers?(?:\s*\/\s*essays?)?|essays?|matching)(?:\s+(?:questions?|items?))?(?:\s*:)?\s*$/i;
 
 function sectionType(name: string): string {
   const n = name.toLowerCase();
@@ -214,10 +219,11 @@ function sectionType(name: string): string {
 /**
  * The line that says the questions after it are the copy with the answers: "Answer
  * Key", or "Chapter 7 Answer Key". A short line, so that a sentence that mentions an
- * answer key is not one.
+ * answer key is not one. The mark after the words is taken with the white space in front of it (`(?:\s*[:.])?`) for the reason
+ * `SECTION_HEADING` gives: "Answer Key" and 80,000 spaces and a letter took 13 seconds with a bare optional mark between two runs.
  */
-function isAnswerKeyHeading(text: string): boolean {
-  return /\banswer\s+key\s*[:.]?\s*$/i.test(text) && text.split(/\s+/).length <= 8 && !text.includes("?");
+export function isAnswerKeyHeading(text: string): boolean {
+  return /\banswer\s+key(?:\s*[:.])?\s*$/i.test(text) && text.split(/\s+/).length <= 8 && !text.includes("?");
 }
 
 /** The two words of a true or false question's choices on one line, apart from each other. */

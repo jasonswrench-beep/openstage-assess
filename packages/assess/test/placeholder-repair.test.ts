@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 import { standardTextImporter } from "../src/import/standard-text.ts";
 import { editQuestion } from "../src/model/create.ts";
-import { finding, FindingCode, liveFindings, verdictFrom } from "../src/model/findings.ts";
+import { finding, FindingCode, isCapSummary, liveFindings, verdictFrom } from "../src/model/findings.ts";
 import { plainToRich } from "../src/model/richtext.ts";
 import type { Option, Question, QuestionBody } from "../src/model/question.ts";
 import { hasUsableKey } from "../src/quality/answer-key.ts";
@@ -118,6 +118,68 @@ describe("a placeholder that has been written over", () => {
     const after = editQuestion(stale, { stem: plainToRich("Which of these can you sit on?") }, { by: "you", at: LATER });
     assert.equal(live(after, FindingCode.EmptyOption), false);
     assert.equal(verdictFrom(after.findings), "parsed");
+  });
+
+  describe("a question with more empty options than the list of errors holds", () => {
+    // 30 option lines, the first with words: 29 empty options, and the importer lists 25 of the errors and counts the other 4 in one.
+    // (The letters repeat, so the key is broken as well; this is about the placeholders only.)
+    const letters = "abcdefghijklmnopqrst";
+    const MANY = ["1. Which is right?", ...Array.from({ length: 30 }, (_, i) => `${letters[i % 20]}) ${i === 0 ? "right" : ""}`), "Answer: a"].join("\n") + "\n";
+    const emptyErrors = (q: Question) => liveFindings(q.findings).filter((f) => f.code === FindingCode.EmptyOption);
+    const left = (q: Question): number[] => optionsOf(q).flatMap((o, i) => (isPlaceholderOption(o) ? [i] : []));
+
+    /** Whatever is left to write must still be said: a placeholder that no live error names has to be under the live error that counts the rest. */
+    function assertEveryPlaceholderIsStillSaid(q: Question, step: string): void {
+      const remaining = left(q);
+      const live = emptyErrors(q);
+      if (remaining.length === 0) return assert.equal(live.length, 0, `${step}: everything is written and an error is still live`);
+      const named = new Set(live.filter((f) => !isCapSummary(f)).map((f) => Number(/^body\.options\.(\d+)\./.exec(f.field ?? "")?.[1])));
+      const unnamed = remaining.filter((i) => !named.has(i));
+      if (unnamed.length > 0) assert.ok(live.some(isCapSummary), `${step}: options ${unnamed.join(", ")} still say (missing) and no live error stands for them`);
+      assert.ok(live.length > 0, `${step}: options ${remaining.join(", ")} still say (missing) and no error is live`);
+    }
+
+    test("the error that counts the rest stays while an option it counts still says (missing), and goes with the last", () => {
+      let q = read(MANY);
+      assert.equal(left(q).length, 29);
+      assert.equal(emptyErrors(q).length, 26, "25 listed and one that counts the other 4");
+      assert.equal(emptyErrors(q).filter(isCapSummary).length, 1);
+      assertEveryPlaceholderIsStillSaid(q, "as imported");
+      for (let i = 1; i < 30; i++) {
+        q = write(q, [i, `written ${i}`]);
+        assertEveryPlaceholderIsStillSaid(q, `after writing option ${i}`);
+      }
+      assert.equal(left(q).length, 0);
+      assert.equal(emptyErrors(q).length, 0, "all of them are dismissed, and kept in the list");
+      assert.equal(q.findings.filter((f) => f.code === FindingCode.EmptyOption && f.dismissed === true).length, 26);
+    });
+
+    test("whatever order they are written in", () => {
+      let seed = 7;
+      const next = (): number => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+      for (let round = 0; round < 12; round++) {
+        let q = read(MANY);
+        const order = Array.from({ length: 29 }, (_, i) => i + 1);
+        for (let i = order.length - 1; i > 0; i--) {
+          const k = Math.floor(next() * (i + 1));
+          [order[i], order[k]] = [order[k] as number, order[i] as number];
+        }
+        for (const i of order) {
+          q = write(q, [i, `written ${i}`]);
+          assertEveryPlaceholderIsStillSaid(q, `round ${round} after option ${i}`);
+        }
+        assert.equal(emptyErrors(q).length, 0);
+      }
+    });
+
+    test("the error that counts the rest goes when the options it counts are written and others, which have errors of their own, are not", () => {
+      let q = read(MANY);
+      const counted = optionsOf(q).flatMap((_, i) => (i >= 26 ? [i] : []));
+      for (const i of counted) q = write(q, [i, `written ${i}`]);
+      assert.equal(left(q).length, 25, "options 1 to 25 are untouched");
+      assert.equal(emptyErrors(q).length, 25, "and each still has its own error");
+      assert.equal(emptyErrors(q).filter(isCapSummary).length, 0);
+    });
   });
 
   test("tells a placeholder from words, a picture or an equation", () => {
