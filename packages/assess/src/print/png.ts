@@ -24,6 +24,9 @@ export type PngDecoded = { ok: true; pixels: PngPixels } | { ok: false; reason: 
 /** The most pixels a printed picture may have. A PDF page holds no use for more, and a larger one is a memory risk. */
 export const MAX_PRINT_PIXELS = 50_000_000;
 
+/** The most bytes a picture may need while it is unpacked: the rows as stored, the rows as drawn and the pixels. A letter page at 600 dots to the inch in colour needs 236 MB, inside it. */
+export const MAX_PRINT_WORKING_BYTES = 256 * 1048576;
+
 const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
 
@@ -89,6 +92,13 @@ export function decodePng(bytes: Uint8Array): PngDecoded {
   const bitsPerPixel = channelsIn * bitDepth;
   const rowBytes = Math.ceil((width * bitsPerPixel) / 8);
   const expected = (rowBytes + 1) * height;
+  // What is held at once is the unpacked rows, the rows with their filters undone and the pixels to draw. The pixels alone are bounded
+  // above, but a picture of 16 bits and four channels needs 17 bytes for each of them: a file of 93 KB that said it was 3000 by 4000 took
+  // 383 MB, and at the limit above it would take 2 GB. It is counted in bytes, before anything is unpacked.
+  const pixelBytes = width * height * (colorType === 0 || colorType === 4 ? 1 : 3);
+  if (expected + rowBytes * height + pixelBytes > MAX_PRINT_WORKING_BYTES) {
+    return { ok: false, reason: `it would take more than ${MAX_PRINT_WORKING_BYTES / 1048576} MB to unpack, which is more than a printed page needs` };
+  }
   let raw: Buffer;
   try {
     raw = inflateSync(Buffer.concat(parts), { maxOutputLength: expected + 1024 });

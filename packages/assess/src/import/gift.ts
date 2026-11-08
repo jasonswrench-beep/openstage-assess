@@ -139,7 +139,8 @@ function parseInside(inner: string): Parsed {
   }
   if (hash !== -1) {
     leadText = lead.slice(0, hash).trim();
-    leadParts.push(...lead.slice(hash + 1).split("#").map((s) => s.trim()).filter((s) => s !== ""));
+    // One at a time: `TRUE#f` followed by 130,000 `#a` is more arguments than a call can take.
+    for (const part of lead.slice(hash + 1).split("#")) if (part.trim() !== "") leadParts.push(part.trim());
   }
   return { lead: leadText, entries, general: general.trim(), leadFeedback: leadParts };
 }
@@ -406,6 +407,12 @@ function build(chunk: Chunk, ctx: Context): { question?: Question; orphan?: Orph
 // Reading the file
 // ---------------------------------------------------------------------------
 
+/**
+ * A category line. The capture is trimmed by its own shape (from the first character that shows to the last) and not by `(.*?)\s*$`,
+ * which read the white space after every character of a long line again: 80,000 spaces in a line took four seconds.
+ */
+export const CATEGORY_LINE = /^\s*\$CATEGORY:\s*((?:\S(?:.*\S)?)?)\s*$/i;
+
 /** Splits the file into blocks: a blank line ends one, unless a brace is still open. Comments and categories are taken out. */
 function chunks(lines: readonly string[]): { chunks: Chunk[]; categories: number } {
   const out: Chunk[] = [];
@@ -424,7 +431,7 @@ function chunks(lines: readonly string[]): { chunks: Chunk[]; categories: number
   lines.forEach((raw, i) => {
     const line = raw.replace(/^﻿/, "");
     if (/^\s*\/\//.test(line)) return;
-    const cat = /^\s*\$CATEGORY:\s*(.*?)\s*$/i.exec(line);
+    const cat = CATEGORY_LINE.exec(line);
     if (cat && current.length === 0) {
       category = (cat[1] as string).replace(/^\$course\$\/(?:top\/)?/i, "").trim() || undefined;
       categories++;

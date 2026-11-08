@@ -21,6 +21,7 @@
  */
 
 import { finding, FindingCode, type Finding } from "../model/findings.ts";
+import { replaceElements } from "../model/markup-scan.ts";
 import { isChoice, isMatching, isMultipleResponse, isOrdering, type Option, type Question } from "../model/question.ts";
 import { collectRefs, foldTypography, richTextToPlain, type RichText } from "../model/richtext.ts";
 import { dependsOnPlace, placeLetter } from "../model/test.ts";
@@ -71,7 +72,9 @@ function tidy(text: string, lower: boolean): string {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^["'“”‘’(\[]+/u, "")
-    .replace(/["'“”‘’)\].!?;:,]+$/u, "")
+    // The lookbehind makes each run of these marks one place to start and not as many as it has characters: `[...]+$` alone read to the end
+    // of a run from every character in it, and a stem of 200,000 semicolons and one letter took half a minute to check.
+    .replace(/(?<!["'“”‘’)\].!?;:,])["'“”‘’)\].!?;:,]+$/u, "")
     .trim();
 }
 
@@ -99,7 +102,7 @@ export function wordTokens(text: string): string[] {
     .normalize("NFC")
     .toLowerCase()
     .split(/\s+/)
-    .map((token) => token.replace(/^[^\p{L}\p{M}\p{N}\p{S}-]+/u, "").replace(/[^\p{L}\p{M}\p{N}\p{S}+#]+$/u, ""))
+    .map((token) => token.replace(/^[^\p{L}\p{M}\p{N}\p{S}-]+/u, "").replace(/(?<![^\p{L}\p{M}\p{N}\p{S}+#])[^\p{L}\p{M}\p{N}\p{S}+#]+$/u, ""))
     .filter((token) => token !== "");
 }
 
@@ -149,7 +152,9 @@ function longestIsRight(question: Question, options: Option[]): Finding | undefi
   const right = said.filter((o) => o.correct);
   if (right.length !== 1) return undefined;
   const rightLength = plain((right[0] as Option).content).length;
-  const wrongest = Math.max(...said.filter((o) => !o.correct).map((o) => plain(o.content).length));
+  // A loop and not `Math.max(...)`: a question of 130,000 options is more arguments than a call can take, and was a crash on saving it.
+  let wrongest = 0;
+  for (const option of said) if (!option.correct) wrongest = Math.max(wrongest, plain(option.content).length);
   if (rightLength < wrongest * LONGEST_RATIO || rightLength - wrongest < LONGEST_MARGIN) return undefined;
   return note(
     FindingCode.LongestOptionCorrect,
@@ -167,7 +172,9 @@ function negativeStem(question: Question): Finding | undefined {
   const html = question.stem.content;
   // What is bold, underlined or in italics is set apart, so it is taken out before looking. These are the three tags the rich
   // text subset has for it (richtext.ts); a <b> or an <i> is unwrapped on the way in and never reaches a stored stem.
-  const unemphasised = question.stem.format === "rich" ? html.replace(/<(strong|em|u)\b[^>]*>[\s\S]*?<\/\1>/gi, " ") : html;
+  // `replaceElements` and not `html.replace(/<(strong|em|u)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")`, which read to the end of the text from every
+  // `<strong>` that was never closed (a stem of 40,000 took 1.3 seconds to check, and 400,000 about two minutes).
+  const unemphasised = question.stem.format === "rich" ? replaceElements(html, ["strong", "em", "u"], " ") : html;
   // Phrases that use these words without asking for the opposite are taken out first: "at least two", "whether or not", "not only",
   // "least common multiple".
   const text = richTextToPlain(unemphasised)
@@ -234,7 +241,7 @@ function soundOf(words: string): "vowel" | "consonant" | undefined {
 
 /** A stem that ends in "a" or "an" tells which options can follow, so the grammar picks the answer. */
 function grammaticalCue(question: Question, options: Option[]): Finding | undefined {
-  const stem = plain(question.stem).replace(/[\s_.:…-]+$/u, "");
+  const stem = plain(question.stem).replace(/(?<![\s_.:…-])[\s_.:…-]+$/u, "");
   // In lower case only: a capital A at the end of a stem is a grade or a vitamin as often as it is an article.
   const article = /(?:^|\s)(an?)$/.exec(stem)?.[1];
   if (!article) return undefined;

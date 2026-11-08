@@ -497,7 +497,7 @@ async function cmdCoverage(args: string[]): Promise<number> {
   const body = grid.rowLabels.map((label, r) => [label, ...(grid.cells[r] as number[]).map(String), String(grid.rowTotals[r])]);
   const foot = ["Total", ...grid.colTotals.map(String), String(grid.total)];
   const table = [head, ...body, foot];
-  const widths = head.map((_, c) => Math.max(...table.map((row) => (row[c] as string).length)));
+  const widths = head.map((_, c) => table.reduce((most, row) => Math.max(most, (row[c] as string).length), 0));
   const line = (row: string[]) => row.map((cell, c) => (c === 0 ? cell.padEnd(widths[c] as number) : cell.padStart(widths[c] as number))).join("  ");
   console.log(`${grid.total} question(s), ${rows} down and ${cols} across.\n`);
   for (const row of table) console.log(line(row));
@@ -527,7 +527,8 @@ function parseRule(text: string): { axis: string; value: string; count: number; 
     if (value === "") return `The rule "${text}" has no value. A blank value would match every question. (The blank one is the value for ${axis}.)`;
     // "and" splits only before a known axis name, so a mistyped one (colour=red) would stay inside the value and match nothing, and
     // read as a bank that was short. It is refused instead, by the word that was not an axis.
-    const odd = /\s+and\s+([A-Za-z]+)\s*=/.exec(value);
+    // (?<!\s): the match begins at the start of a run of white space and not at every character of it, which read the run again each time.
+    const odd = /(?<!\s)\s+and\s+([A-Za-z]+)\s*=/.exec(value);
     if (odd) return `The rule "${text}" joins values with "and", and "${odd[1]}" is not something a rule can be by. Choose from ${COVERAGE_AXES.join(", ")}.`;
     pairs.push({ axis, value });
   }
