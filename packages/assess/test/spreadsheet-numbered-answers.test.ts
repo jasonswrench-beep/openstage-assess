@@ -452,6 +452,40 @@ describe("a row that looks like one of Blackboard's upload rows, read as a table
   });
 });
 
+// Found by a round-trip tester: the exporter writes "A, B" in the Correct cell of a question with two right answers, and a question whose
+// options are "A", "A, B" and "B" has an option with those very words. The reader took the cell as the words of the second option and the
+// first right answer was lost in a question that read as parsed. A cell that is both is not guessed at, as a number that is both is not.
+describe("a Correct cell that is the words of an answer and also a list of answers", () => {
+  test("marks nothing and says why, instead of marking only the answer with those words", () => {
+    const r = csv('Type,Question,A,B,C,D,Correct\nMR,Select all the valid answers.,A,"A, B",B,Neither,"A, B"');
+    const q = first(r);
+    assert.deepEqual(right(q), []);
+    assert.equal(verdictFrom(q.findings), "failed");
+    assert.match(said(q), /"A, B" in the Correct cell is the words of one of the answers and is also a list of answers, and the file does not say which is meant\. No answer is marked\./);
+    // The same with three options that are letter pairs.
+    const pairs = csv('Type,Question,A,B,C,Correct\nMR,Select all.,"A, B","A, C","B, C","A, B"');
+    assert.deepEqual(right(first(pairs)), []);
+    assert.equal(verdictFrom(first(pairs).findings), "failed");
+  });
+
+  test("also when the list names one answer and the words are another's", () => {
+    // "A, A" is the first answer by its letters (twice) and the third by its words.
+    const r = csv('Type,Question,A,B,C,Correct\nMC,Which?,x,y,"A, A","A, A"');
+    assert.deepEqual(right(first(r)), []);
+    assert.match(said(first(r)), /is the words of one of the answers and is also a list of answers/);
+  });
+
+  test("leaves every other cell as it was read: a list of letters, the words of an answer, and an answer of several words", () => {
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMR,Select all.,x,y,z,\"A, C\""))), ["x", "z"]);
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,New York,Paris,Rome,Paris"))), ["Paris"]);
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,New York,Paris,Rome,New York"))), ["New York"]);
+    // An option written as a pair of letters, with a list of letters that names others: the letters are the key, as before.
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,\"A, B\",y,z,B"))), ["y"]);
+    // The words of one answer that read as one letter's position and no other are not ambiguous.
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,Paris,Rome,Oslo,Rome"))), ["Rome"]);
+  });
+});
+
 // Found by a fourth reviewer, outside the code it was asked about: text in cells past the last column that has a name was dropped without a
 // word, because the note about columns that were not used can only name a column that has a header.
 describe("text in cells past the last named column", () => {

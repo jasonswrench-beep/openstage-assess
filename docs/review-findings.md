@@ -1183,6 +1183,34 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by a round-trip tester (7 November 2026, after alpha 17)
+
+A tester wrote random questions of every type with hostile text (tag-like and entity-like text, GIFT's marks, colons, a first character
+that looks like a question number or a format tag, the words correct and true as options) through every exporter and read each file back
+through its importer: 20,000 questions a destination and seed, three seeds, and about 17,500 probes of one odd text in each place of a
+question. Nothing threw or hung, no question without a key was ever written, and D2L CSV, QTI 1.2, QTI 2.1 and Common Cartridge came back
+with no key wrong and no text lost beyond what they report. Found, and fixed with a test (`export-gift-round-trip.test.ts`) and planted
+faults:
+
+- **Wrong key, spreadsheet:** a multiple response whose Correct cell ("A, B") was the words of one option ("A, B") lost the other right
+  answer, read as parsed (57 of 720 such questions in an exhaustive run). A cell that is both is not guessed at now.
+- **Wrong pairing, GIFT:** a matching side with `->` in it was re-paired ("p -> q" with "Implication" came back as "p" with "q ->
+  Implication"). An option with `->` made the whole question a failed essay, an option that began `%50%` was read as a weight and the
+  wrong option came back right, and numbers in exponent form were unreadable. GIFT has no escape for the first two, so a question with
+  either in an answer is left out and said; numbers are written in plain digits and an exponent in a file is read.
+- **Questions or text lost silently, GIFT:** a stem that began `//` was a comment (nine of ten questions came back, with the exporter
+  saying ten), a stem that began `[html]`, `[plain]` or `[moodle]` lost that text, a title ending in a colon put ": " at the start of
+  the stem and changed the title (93 of 6,000 hostile titles), and a newline inside a formatted stem was deleted ("followingis").
+- **Text altered silently, Moodle XML:** a matching answer that looked like a tag was run through the HTML reader ("<br> inserts a line
+  break" came back "inserts a line break", a bare "<br>" came back "(missing)"; 250 per 20,000 questions).
+
+Not changed, and said by the tester: a GIFT file of one question (and a third of the files of two) is not recognised by its content
+and needs the name .gift; a multiple choice with options True and False comes back as a true or false question in QTI 1.2, QTI 2.1 and
+Common Cartridge without a note; a fill in the blank comes back as a short answer from Blackboard and Common Cartridge without a note;
+GIFT and Moodle XML do not say that an essay's rubric and expected length are not carried; Moodle XML writes an entry for the feedback of
+a wrong short answer that its own reader warns about and drops. Not checked by it: real Moodle, pictures, equations, hotspot and
+calculated questions, and any workbook but a CSV.
+
 ### Found by a fourth reader, of the third round of fixes (7 November 2026, after alpha 17)
 
 A fourth independent reader ran the previous reader's random generators again against the new code (about 100,000 rounds of valid

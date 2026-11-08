@@ -163,6 +163,12 @@ interface Context {
 
 const BLANK = "_____";
 
+// A number in a numeric answer: digits with an optional fraction and an optional exponent ("42", "-0.5", "6.67e-11", "1E+21"). The exponent
+// was not read, so a numeric question that held one came back as a failed essay.
+const NUMBER = String.raw`-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`;
+const NUMERIC_RANGE = new RegExp(String.raw`^(${NUMBER})\s*\.\.\s*(${NUMBER})$`);
+const NUMERIC_EXACT = new RegExp(String.raw`^(${NUMBER})(?:\s*:\s*(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))?$`);
+
 /** The tags the model calls bold and italic are strong and em. GIFT's HTML is written by hand and says b and i. */
 const modelTags = (html: string): string => html.replace(/<(\/?)b(?=[\s>/])/gi, "<$1strong").replace(/<(\/?)i(?=[\s>/])/gi, "<$1em");
 
@@ -273,8 +279,8 @@ function build(chunk: Chunk, ctx: Context): { question?: Question; orphan?: Orph
       if (p.leadFeedback.length > 0) dropped("Feedback written after TRUE or FALSE", p.leadFeedback.map(giftUnescape).join(" | "));
     } else if (p.lead.startsWith("#") && entries.length === 0) {
       const spec = giftUnescape(p.lead.slice(1)).trim();
-      const range = /^(-?\d+(?:\.\d+)?)\s*\.\.\s*(-?\d+(?:\.\d+)?)$/.exec(spec);
-      const exact = /^(-?\d+(?:\.\d+)?)(?:\s*:\s*(\d+(?:\.\d+)?))?$/.exec(spec);
+      const range = NUMERIC_RANGE.exec(spec);
+      const exact = NUMERIC_EXACT.exec(spec);
       if (range) {
         type = "numeric";
         body = { mode: "range", min: Number(range[1]), max: Number(range[2]) };
