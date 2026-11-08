@@ -1,0 +1,14 @@
+[
+  { "label": "T1 runner: no handler for a signal", "file": "tools/release/mutate.mjs", "from": "process.on(signal, () => stop(signal));", "to": "void signal;", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T2 runner: a signal ends with 1 and not 130", "file": "tools/release/mutate.mjs", "from": "process.exit(130);", "to": "process.exit(1);", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T3 runner: an empty list is not noticed", "file": "tools/release/mutate.mjs", "from": "if (parsed.length === 0) {", "to": "if (false) {", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T4 runner: a filter that matches nothing is not noticed", "file": "tools/release/mutate.mjs", "from": "if (entries.length === 0) {", "to": "if (false) {", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T5 runner: a from found twice replaces the first and says nothing", "file": "tools/release/mutate.mjs", "from": "if (count > 1) return", "to": "if (false) return", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T6 runner: an empty from is put in front of the file", "file": "tools/release/mutate.mjs", "from": "if (m.from === \"\") return", "to": "if (false) return", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T7 runner: a fault that changes nothing is planted", "file": "tools/release/mutate.mjs", "from": "if (m.from === m.to) return", "to": "if (false) return", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T8 runner: a fault skipped for a failed baseline is not counted", "file": "tools/release/mutate.mjs", "from": "so it was not planted`));\n      problems++;", "to": "so it was not planted`));", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T9 runner: a file that is not there is a raw error", "file": "tools/release/mutate.mjs", "from": "error.code === \"ENOENT\" ? line(\"NO SUCH FILE\"", "to": "false ? line(\"NO SUCH FILE\"", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T10 runner: a hang is not told from a test run that broke", "file": "tools/release/mutate.mjs", "from": "if (result.timedOut) {", "to": "if (false) {", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T11 runner: a different number of tests is called a kill", "file": "tools/release/mutate.mjs", "from": "} else if (result.tests !== base.tests) {", "to": "} else if (false) {", "tests": ["packages/assess/test/mutate-runner.test.ts"] },
+  { "label": "T12 runner: a run does not wait for an older run of its checkout", "file": "tools/release/mutate.mjs", "from": "if (ahead.length === 0) return true;", "to": "return true;", "tests": ["packages/assess/test/mutate-runner.test.ts"] }
+]
