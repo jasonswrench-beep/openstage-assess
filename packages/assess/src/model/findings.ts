@@ -140,6 +140,49 @@ export function finding(
   return { code, severity, message, ...extra };
 }
 
+/**
+ * The most findings of one kind (one code) a question lists. A line of answers with 130,000 words that name no option made one finding
+ * for each, and a list that long is of no use to the person who has to read it (and was 650 KB of text from a 650 KB file).
+ */
+export const MOST_FINDINGS_OF_A_KIND = 25;
+
+/**
+ * The findings with no more than `limit` of any one code. The ones past it are not dropped without a word: one finding of the same code
+ * and the highest severity of those left out says how many there were and where the first of them was, so a person fixing the question
+ * knows that the list is cut. A dismissal of the kind (`replaceFileKeyProblems` dismisses a code at a time) reaches it with the rest.
+ * The order is kept, and the list is returned as it is when nothing is over.
+ */
+export function capFindings(findings: readonly Finding[], limit = MOST_FINDINGS_OF_A_KIND): Finding[] {
+  const seen = new Map<string, number>();
+  const kept: Finding[] = [];
+  const over = new Map<string, { count: number; first: Finding; severity: Severity }>();
+  const rank: Record<Severity, number> = { info: 0, warn: 1, error: 2 };
+  for (const f of findings) {
+    const n = (seen.get(f.code) ?? 0) + 1;
+    seen.set(f.code, n);
+    if (n <= limit) {
+      kept.push(f);
+      continue;
+    }
+    const held = over.get(f.code);
+    if (held === undefined) over.set(f.code, { count: 1, first: f, severity: f.severity });
+    else {
+      held.count++;
+      if (rank[f.severity] > rank[held.severity]) held.severity = f.severity;
+    }
+  }
+  if (over.size === 0) return findings.slice();
+  for (const [code, held] of over) {
+    kept.push(
+      finding(code, held.severity, `${held.count} more findings of this kind were not listed. The first of them was: ${held.first.message}`, {
+        ...(held.first.field !== undefined ? { field: held.first.field } : {}),
+        ...(held.first.source !== undefined ? { source: held.first.source } : {}),
+      }),
+    );
+  }
+  return kept;
+}
+
 /** Findings an author has not dismissed. */
 export function liveFindings(findings: readonly Finding[]): Finding[] {
   return findings.filter((f) => !f.dismissed);

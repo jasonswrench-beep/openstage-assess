@@ -69,7 +69,7 @@ function serialize(el: XmlElement, depth = 0): string[] {
   for (const k of kids) {
     if (typeof k === "string") {
       if (k.trim() !== "") lines.push(`${pad}  ${k.trim().replace(/&/g, "&amp;").replace(/</g, "&lt;")}`);
-    } else lines.push(...serialize(k, depth + 1));
+    } else for (const line of serialize(k, depth + 1)) lines.push(line);
   }
   lines.push(`${pad}</${el.name}>`);
   return lines;
@@ -98,11 +98,20 @@ function normalize(path: string): string | undefined {
   return out.join("/");
 }
 
-/** Where a picture a question points at is, in the package: beside the file that holds the question, or as the cartridge's file base says. */
-function resolver(docPath: string, files: ReadonlyMap<string, Uint8Array>): (src: string) => FoundPicture {
-  const dir = parts(docPath).slice(0, -1).join("/");
+/** The names of a package's files by their lower case form, for finding a picture whose address differs from its name in case only. */
+function lowerNames(files: ReadonlyMap<string, Uint8Array>): Map<string, string> {
   const lower = new Map<string, string>();
   for (const name of files.keys()) lower.set(name.toLowerCase(), name);
+  return lower;
+}
+
+/**
+ * Where a picture a question points at is, in the package: beside the file that holds the question, or as the cartridge's file base says.
+ * The table of names is made once for a package and handed in: it was made again for every item, so a package of 12,000 items and as many
+ * files spent most of its eleven seconds on it.
+ */
+function resolver(docPath: string, files: ReadonlyMap<string, Uint8Array>, lower: ReadonlyMap<string, string>): (src: string) => FoundPicture {
+  const dir = parts(docPath).slice(0, -1).join("/");
   return (src) => {
     if (src.trim() === "") return { label: "", why: "it has no address" };
     if (/^data:/i.test(src)) return { label: "an inline picture", why: "it is written into the page and not stored as a file" };
@@ -134,6 +143,8 @@ interface Context {
   media: Map<string, Uint8Array>;
   defaultPoints: number;
   files: ReadonlyMap<string, Uint8Array>;
+  /** `lowerNames(files)`, made once for the package. Made on the spot when a context does not carry it. */
+  lower?: ReadonlyMap<string, string>;
 }
 
 /** The state of one question while it is read: its pictures, what it says about itself, the markup taken out. */
@@ -145,7 +156,7 @@ class ItemReader {
 
   constructor(ctx: Context, docPath: string) {
     this.pictures = new PictureKeeper(ctx.media);
-    this.find = resolver(docPath, ctx.files);
+    this.find = resolver(docPath, ctx.files, ctx.lower ?? lowerNames(ctx.files));
   }
 
   get media(): MediaRef[] {
@@ -273,7 +284,9 @@ function conditions12(item: XmlElement): { list: Condition12[]; max: number; unr
   }
   const decvar = all(processing ?? NONE, "decvar")[0];
   const declared = Number(attr(decvar, "maxvalue"));
-  const biggest = Math.max(0, ...list.map((c) => c.amount));
+  // A loop and not `Math.max(0, ...)`: a question with 130,000 conditions is more arguments than a call can take.
+  let biggest = 0;
+  for (const c of list) biggest = Math.max(biggest, c.amount);
   // A file that declares no scale (Brightspace's does not): scores of 100 or more are on the usual 0 to 100 scale, and a biggest of
   // exactly 1 is on a 0 to 1 scale. Any other biggest (50, 5) might be part of a whole that is not written down, so the whole is
   // taken to be 100 and nothing smaller reads as the key, rather than the biggest being called whole because it is the biggest.
@@ -664,7 +677,8 @@ function item21(root: XmlElement, tag: string | undefined, source: { file: strin
     const d = decls.get(id);
     if (!d) return [];
     if (d.mapping) {
-      const top = Math.max(0, ...d.mapping.entries.map((e) => e.value));
+      let top = 0;
+      for (const e of d.mapping.entries) top = Math.max(top, e.value);
       const whole = d.mapping.entries.filter((e) => top > 0 && e.value >= top * 0.9999);
       for (const e of d.mapping.entries) {
         if (e.value > 0 && e.value < top * 0.9999) r.note(FindingCode.UnreadContent, "warn", `The answer "${quoted(e.key)}" is worth part of the points, which is partial credit. It was not read as an accepted answer, and nothing was guessed about it.`);
@@ -870,7 +884,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
 
   const found = gather(bytes, file);
   if ("refusal" in found) return refuse(found.refusal);
-  const readCtx: Context = { ...ctx, files: found.files };
+  const readCtx: Context = { ...ctx, files: found.files, lower: lowerNames(found.files) };
   const fileFindings: Finding[] = found.problems.map((p) => finding(FindingCode.UnreadContent, "warn", p));
 
   // The items, in the order a test lists them; those no test lists follow, in file order.
@@ -922,7 +936,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
   entries.forEach((e) => {
     const own = [`<!-- ${e.doc.path} -->`, ...serialize(e.el)];
     const source = { file, firstBlock: lines.length, lastBlock: lines.length + own.length - 1 };
-    lines.push(...own);
+    for (const line of own) lines.push(line);
     let built: Built;
     try {
       built = e.version === "1.2" ? item12(e.el, e.tag, source, readCtx, e.doc.path) : item21(e.el, e.tag, source, readCtx, e.doc.path);

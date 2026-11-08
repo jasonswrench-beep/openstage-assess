@@ -15,6 +15,7 @@
 
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, titleFromStem, type Question } from "../model/question.ts";
+import { dropAfterTags } from "../model/markup-scan.ts";
 import { escapeHtml } from "../model/richtext.ts";
 import { titleText } from "../model/table.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
@@ -38,10 +39,13 @@ export function giftEscape(text: string): string {
  * Each pattern starts at a tag or at the newline itself, so a long run of white space is not scanned again for every place in it.
  */
 const BLOCK = "(?:p|div|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|pre|blockquote|h[1-6]|hr|br)";
-const AFTER_BLOCK_TAG = new RegExp(`(</?${BLOCK}\\b[^>]*>)[ \\t]*\\n`, "gi");
+const BLOCK_TAG_START = new RegExp(`</?${BLOCK}\\b`, "gi");
+const BREAK_AFTER_TAG = /[ \t]*\n/y;
 const BEFORE_BLOCK_TAG = new RegExp(`\\n[ \\t]*(?=</?${BLOCK}\\b)`, "gi");
 export function withoutBlockBreaks(html: string): string {
-  return html.replace(AFTER_BLOCK_TAG, "$1").replace(BEFORE_BLOCK_TAG, "");
+  // The tags are found by `dropAfterTags` and not by the pattern `(</?BLOCK\b[^>]*>)[ \t]*\n`, which read to the end of the text from every
+  // `<p` that had no `>` after it (a stem of 40,000 of them took each exporter seconds).
+  return dropAfterTags(html, BLOCK_TAG_START, BREAK_AFTER_TAG).replace(BEFORE_BLOCK_TAG, "");
 }
 
 /** The weight of one right answer out of several, in the form Moodle reads. */
@@ -113,7 +117,7 @@ function plan(question: Question, position: number): Planned {
   // closes or opens it (a title ending in a colon put ": " at the start of the stem and changed the title).
   const wantedTitle = automatic ? "" : question.title.replace(/\s+/g, " ").trim();
   // Colons and spaces together at either end: "Part 2: :" is "Part 2", and stripping the colons alone left "Part 2:" to run into the pair that closes.
-  const title = wantedTitle.replace(/:+/g, ":").replace(/^[\s:]+|[\s:]+$/g, "");
+  const title = wantedTitle.replace(/:+/g, ":").replace(/^[\s:]+|(?<![\s:])[\s:]+$/g, "");
   if (title !== wantedTitle && wantedTitle !== "") {
     notes.push(`The title had colons in it that GIFT cannot hold next to its own marks. ${title === "" ? "It is left out" : `It is written as "${title}"`}.`);
   }

@@ -11,6 +11,7 @@
 import { createHash } from "node:crypto";
 
 import { MAX_PICTURE_BYTES, sniffImage } from "../model/image.ts";
+import { replaceTags } from "../model/markup-scan.ts";
 import type { MediaRef } from "../model/question.ts";
 import { decodeEntities } from "../model/richtext.ts";
 
@@ -30,7 +31,10 @@ const quoted = (s: string): string => (s.length > SHORT ? `${s.slice(0, SHORT - 
 /** The attributes of a tag, by lower case name, with their character references undone. */
 export function tagAttributes(tag: string): Map<string, string> {
   const attrs = new Map<string, string>();
-  for (const m of tag.matchAll(/([a-zA-Z][-a-zA-Z0-9:]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs.set((m[1] as string).toLowerCase(), decodeEntities(m[2] ?? m[3] ?? ""));
+  // A name is looked for from the start of a run of name characters and not from every letter in it (`(?<!...)`, then the characters before
+  // its first letter): the name is the same, the first letter of the run, but a run of 100,000 letters was 100,000 places to start and each
+  // read the rest of the run before it failed.
+  for (const m of tag.matchAll(/(?<![-a-zA-Z0-9:])[-0-9:]*([a-zA-Z][-a-zA-Z0-9:]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs.set((m[1] as string).toLowerCase(), decodeEntities(m[2] ?? m[3] ?? ""));
   return attrs;
 }
 
@@ -47,7 +51,9 @@ export class PictureKeeper {
 
   /** Every `<img>` in the HTML, kept or left as `[picture]`. */
   replaceImages(html: string, find: (src: string) => FoundPicture): string {
-    return html.replace(/<img\b[^>]*>/gi, (tag) => this.one(tag, find));
+    // The tags are found by `replaceTags`, which reads an `<img` with no `>` after it once; the pattern `<img\b[^>]*>` read to the end of
+    // the text from every one of them (100,000 of them, written as text, took twenty-two seconds).
+    return replaceTags(html, /<img\b/gi, (tag) => this.one(tag, find));
   }
 
   private one(tag: string, find: (src: string) => FoundPicture): string {

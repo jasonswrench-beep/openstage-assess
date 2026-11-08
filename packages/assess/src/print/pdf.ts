@@ -302,7 +302,7 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
       for (const part of atom.parts ?? [{ codes: atom.codes, face: atom.font, width: atom.width }]) {
         const head = groups[groups.length - 1];
         if (head && head.face === part.face && head.underline === atom.underline) {
-          head.codes.push(...part.codes);
+          for (const code of part.codes) head.codes.push(code);
           head.width += part.width;
         } else groups.push({ face: part.face, underline: atom.underline, codes: [...part.codes], width: part.width });
       }
@@ -338,11 +338,14 @@ export function writePdf(doc: PrintDocument, at: Date = new Date()): PdfResult {
 
     // A question and what has to stay with it go on one page, if they fit on one.
     if (item.keepNext) {
+      // The group is only moved to a new page when it fits on one, so the walk ends as soon as it is longer than a page: a sum of
+      // heights never shrinks, and the rest could not change the answer. A question of 130,000 options walked to the end of its run from every one of them.
+      const room = bottom - top;
       let j = i;
       let group = 0;
-      while (j < items.length && (items[j] as Item).keepNext) group += (items[j++] as Item).height;
-      if (j < items.length) group += (items[j] as Item).height;
-      if (y + group > bottom && y > top && group <= bottom - top) newPage();
+      while (j < items.length && (items[j] as Item).keepNext && group <= room) group += (items[j++] as Item).height;
+      if (group <= room && j < items.length) group += (items[j] as Item).height;
+      if (y + group > bottom && y > top && group <= room) newPage();
     }
 
     if (block.kind === "lines") {

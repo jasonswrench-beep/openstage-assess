@@ -44,7 +44,8 @@ const MAX_PREAMBLE = 3;
 /** A statement that ends with its own answer, "(T)" or "(False)": a true or false question on one line. */
 const STATEMENT_ANSWERED = /\(\s*(?:true|false|t|f)\s*\)\s*$/i;
 /** A line that already carries an option's label: "A.", "b)", "(C)", "D:" with a star or none in front. */
-const LABELLED = /^\s*\*?\s*\(?[a-tA-T]\s*[.):]\s/;
+// `(?:\*\s*)?` and not `\*?\s*` after the first run of white space: the same lines, but a run of white space is not shared out between two `\s*`.
+export const LABELLED = /^\s*(?:\*\s*)?\(?[a-tA-T]\s*[.):]\s/;
 /** The lines of instructions that come before the first question and share its run of lines. */
 const INSTRUCTION = /^\s*(?:instructions?|directions?|note|read|choose|answer|select|circle|name|date)\b/i;
 /** A line that is not an option because it says something else about the question above it. */
@@ -119,7 +120,9 @@ export function relabelUnlabelledGroups(blocks: readonly SourceBlock[]): Relabel
     const g = groupOf(run, block);
     if (g) read.push(g);
   }
-  const longest = Math.max(0, ...read.map((g) => 1 + g.options.length));
+  // A loop and not `Math.max(0, ...)`: a file of 130,000 groups is more arguments than a call can take.
+  let longest = 0;
+  for (const g of read) longest = Math.max(longest, 1 + g.options.length);
 
   // The first run may hold a title and instructions before its first question: only when it is longer than any other, by
   // lines that look like those. Otherwise it is a first question with a long stem, and is read and flagged for a check.
@@ -222,6 +225,8 @@ function groupOf(run: readonly number[], block: (index: number) => SourceBlock):
   const lengths = lettered.map((index) => block(index).text.trim().length).sort((a, b) => a - b);
   const median = lengths[Math.floor(lengths.length / 2)] ?? 0;
   const long = lettered.length >= 3 && lengths.some((n) => n >= LONG_LINE && n >= LONG_RATIO * median);
-  const promised = /:\s*$/.test(stem.text) && /[.?!]\s*$/.test(block(lettered[0] as number).text);
+  // A stem with no options (a statement and its Answer line) promises none: "The following are true:" and "Answer: b" were two lines that
+  // ended the whole import in "Cannot read properties of undefined", found by a run of generated texts through the old and new reader.
+  const promised = lettered.length > 0 && /:\s*$/.test(stem.text) && /[.?!]\s*$/.test(block(lettered[0] as number).text);
   return { stem: run[0] as number, options: lettered, numbered, run, suspect: long || promised };
 }

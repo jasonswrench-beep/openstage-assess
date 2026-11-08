@@ -58,12 +58,21 @@ export function parseDelimited(raw: string, limit: number = MAX_ROWS, separator?
   const rows: TableRow[] = [];
   let row: string[] = [];
   let cell = "";
+  // Whether the cell holds nothing but white space so far, which is where a quotation mark opens a quoted part. It was asked of the cell
+  // itself (`cell.trim() === ""`) at every quotation mark, and that copies the whole cell each time: a cell of 200,000 quotation marks took
+  // ten seconds, and every .txt file is read once as a table to see whether it is one.
+  let blank = true;
   let quoted = false;
   let number = 1;
   let truncated = false;
+  const add = (text: string): void => {
+    cell += text;
+    if (blank && !/^\s*$/.test(text)) blank = false;
+  };
   const endCell = (): void => {
     row.push(cell.trim());
     cell = "";
+    blank = true;
   };
   const endRow = (): void => {
     endCell();
@@ -79,17 +88,17 @@ export function parseDelimited(raw: string, limit: number = MAX_ROWS, separator?
     if (quoted) {
       if (ch === '"') {
         if (text[i + 1] === '"') {
-          cell += '"';
+          add('"');
           i++;
         } else quoted = false;
-      } else cell += ch;
-    } else if (ch === '"' && cell.trim() === "") quoted = true;
+      } else add(ch);
+    } else if (ch === '"' && blank) quoted = true;
     else if (ch === sep) endCell();
     else if (ch === "\n") endRow();
     else if (ch === "\r") {
       if (text[i + 1] === "\n") i++;
       endRow();
-    } else cell += ch;
+    } else add(ch);
   }
   if (cell !== "" || row.length > 0) endRow();
   return { rows, truncated };

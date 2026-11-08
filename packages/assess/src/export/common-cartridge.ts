@@ -87,13 +87,13 @@ function plan(question: Question, position: number): Planned {
   let asType: string | undefined;
 
   const mat = (text: RichText): string => {
-    if (needsMarkup(text)) return `<material><mattext texttype="text/html">${escapeXml(htmlText(text, question, losses).replace(/\s*\n\s*/g, " "))}</mattext></material>`;
+    if (needsMarkup(text)) return `<material><mattext texttype="text/html">${escapeXml(htmlText(text, question, losses).replace(/(?<!\s)\s*\n\s*/g, " "))}</mattext></material>`;
     return `<material><mattext texttype="text/plain">${escapeXml(flat(plainText(text, question, losses, false)))}</mattext></material>`;
   };
   const words = (text: RichText): boolean => (needsMarkup(text) ? hasText(text) : flat(plainText(text, question, newLosses(), false)) !== "");
 
   if (plainText(question.stem, question, newLosses(), true) === "") return leftOut("It has no question text once it is written as plain text.");
-  const stem = `<material><mattext texttype="text/html">${escapeXml(htmlText(question.stem, question, losses).replace(/\s*\n\s*/g, " "))}</mattext></material>`;
+  const stem = `<material><mattext texttype="text/html">${escapeXml(htmlText(question.stem, question, losses).replace(/(?<!\s)\s*\n\s*/g, " "))}</mattext></material>`;
 
   const n = position;
   const respident = `q${n}_resp`;

@@ -29,7 +29,9 @@
  * uses the full 64 characters and respects a word boundary.
  */
 
-import { finding, FindingCode, type Finding, type SourceRef } from "../model/findings.ts";
+import { capFindings, finding, FindingCode, type Finding, type SourceRef } from "../model/findings.ts";
+import { pushAll } from "../model/lists.ts";
+import { replaceDelimited } from "../model/markup-scan.ts";
 import { unreadObjectFindings } from "../model/unread-objects.ts";
 import { titleText } from "../model/table.ts";
 import { localId } from "../model/ids.ts";
@@ -97,7 +99,10 @@ const PLACEHOLDER = PLACEHOLDER_TEXT;
 /** How the note for a question whose kind the file never gave begins. The note for a file that may not be a bank looks for it. */
 const TYPE_NOT_SAID = "The file did not say what kind of question this is, so it was read as";
 const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?(?:\s+(decorative))?\s*\]/gi;
-const HTML_BLOCK = /\[HTML\]([\s\S]*?)\[\/HTML\]/gi;
+// A raw HTML block is found by `replaceDelimited` and not by one pattern for the whole of it (`\[HTML\]([\s\S]*?)\[\/HTML\]`), which read to
+// the end of the text from every `[HTML]` that was never closed (40,000 of them in a stem took more than a second).
+const HTML_OPEN = /\[HTML\]/gi;
+const HTML_CLOSE = /\[\/HTML\]/gi;
 
 // ---------------------------------------------------------------------------
 // Pass two: raw questions to the model
@@ -162,7 +167,7 @@ function toRichText(lines: string[], source: SourceRef, idPrefix: string): TextC
   let text = normalizeCharacters(lines.join("\n")).trim();
 
   const htmlBlocks: string[] = [];
-  text = text.replace(HTML_BLOCK, (_whole, inner: string) => {
+  text = replaceDelimited(text, HTML_OPEN, HTML_CLOSE, (inner) => {
     const cleaned = sanitizeRichText(inner);
     if (cleaned.removedTags.length > 0) {
       findings.push(
@@ -659,8 +664,33 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
     const unresolved: string[] = [];
     const shared: string[] = [];
     const mismatched: ResolvedKey["mismatched"] = [];
-    const where = (matches: (o: RawOption) => boolean): number[] =>
-      raw.options.flatMap((o, i) => (matches(o) ? [i] : []));
+    // Which options carry a letter, and which say True or False, are worked out once for the question and not again for every value of the
+    // key: 40,000 options and 40,000 Answer lines took seventy seconds when each value looked at every option.
+    let byLetter: Map<string, number[]> | undefined;
+    let byWord: Map<string, number[]> | undefined;
+    const indexesBy = (map: Map<string, number[]>, name: string | undefined, i: number): void => {
+      if (name === undefined) return;
+      const held = map.get(name);
+      if (held === undefined) map.set(name, [i]);
+      else held.push(i);
+    };
+    const withLetter = (letter: string): number[] => {
+      if (byLetter === undefined) {
+        byLetter = new Map();
+        raw.options.forEach((o, i) => indexesBy(byLetter as Map<string, number[]>, o.letter, i));
+      }
+      return byLetter.get(letter) ?? [];
+    };
+    const saying = (word: string): number[] => {
+      if (byWord === undefined) {
+        byWord = new Map();
+        raw.options.forEach((o, i) => {
+          const said = o.lines.join(" ").trim().toLowerCase().replace(/\.$/, "");
+          if (said === "true" || said === "false") indexesBy(byWord as Map<string, number[]>, said, i);
+        });
+      }
+      return byWord.get(word) ?? [];
+    };
     const settle = (hits: number[], name: string): void => {
       if (hits.length === 0) unresolved.push(name);
       else if (hits.length === 1) correct.add(hits[0] as number);
@@ -683,9 +713,9 @@ function resolveKey(raw: RawQuestion): ResolvedKey {
         if (value.length === 0) continue;
         tokens.push(value);
         if (/^[a-t]$/.test(value)) {
-          settle(where((o) => o.letter === value), value);
+          settle(withLetter(value), value);
         } else if (value === "true" || value === "false") {
-          settle(where((o) => o.lines.join(" ").trim().toLowerCase().replace(/\.$/, "") === value), value);
+          settle(saying(value), value);
         }
       }
     }
@@ -753,9 +783,9 @@ function buildOptions(
   raw.options.forEach((option, i) => {
     const source: SourceRef = { file, firstBlock: option.firstBlock, lastBlock: option.lastBlock };
     const converted = toRichText(option.lines, source, `${idPrefix}o${i}`);
-    media.push(...converted.media);
-    math.push(...converted.math);
-    findings.push(...converted.findings);
+    pushAll(media, converted.media);
+    pushAll(math, converted.math);
+    pushAll(findings, converted.findings);
 
     // An option with a letter and no text, or only an empty block of HTML. It is
     // kept in its place, so that the key's letters still point at the right
@@ -993,8 +1023,8 @@ function buildBody(
       }
 
       const built = buildOptions(raw, key.correct, file, idPrefix, math);
-      media.push(...built.media);
-      findings.push(...built.findings);
+      pushAll(media, built.media);
+      pushAll(findings, built.findings);
 
       // The schema wants two options at least, and one is not a question. The
       // real option stays as it was; a placeholder takes the second place and the
@@ -1282,7 +1312,9 @@ function buildQuestion(
   const body = buildBody(raw, type, key, file, idPrefix, bodyMath);
   const meta = applyMetadata(raw, file);
 
-  findings.push(...stem.findings, ...body.findings, ...meta.findings, ...layoutFindings(raw, type, source));
+  // One list at a time: a line of 130,000 key words that name no option makes a finding for each, and all of them in one call is more
+  // arguments than a call can take.
+  for (const list of [stem.findings, body.findings, meta.findings, layoutFindings(raw, type, source)]) pushAll(findings, list);
   for (const disagreement of key.conflicts) {
     findings.push(finding(FindingCode.KeysDisagree, "warn", disagreement, { source, field: "body.options" }));
   }
@@ -1324,7 +1356,8 @@ function buildQuestion(
     metadata: meta.metadata,
     media,
     math,
-    findings,
+    // No more than a few of one kind: the rest are counted in one finding, and none is lost without a word (`capFindings`).
+    findings: capFindings(findings),
     origin: { kind: "import", source, profile: options.profile, at: options.at },
     by: options.author,
     at: options.at,
