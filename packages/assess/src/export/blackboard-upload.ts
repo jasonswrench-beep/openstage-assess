@@ -121,6 +121,8 @@ function plan(question: Question, position: number): Planned {
     fields = ["ORD", stem, ...texts];
     notes.push("Blackboard's help lists an ordering question for the Original course view and does not list it for Ultra, so an Ultra course may refuse this row. The other rows still upload.");
   } else if (question.type === "matching") {
+    // Found by a tester of fields: a matching question that keeps its answers in a fixed order came back mixed up, and nothing said so.
+    if ((question.body as { shuffle?: boolean }).shuffle === false) notes.push("This matching question keeps its answers in a fixed order, and Blackboard cannot say so. Its own setting for mixing the answers applies.");
     const body = question.body as { pairs: Array<{ left: Parameters<typeof plainText>[0]; right: string }>; distractors?: string[] };
     if (body.pairs.length < 2) return leftOut(`It has ${body.pairs.length} pair${body.pairs.length === 1 ? "" : "s"}, and a matching question needs at least two.`);
     if (body.pairs.length > MAX_ANSWERS) return leftOut(`It has ${body.pairs.length} pairs, and Blackboard takes at most ${MAX_ANSWERS}.`);

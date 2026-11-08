@@ -170,13 +170,14 @@ function plan(question: Question, position: number, media?: ReadonlyMap<string, 
     if (matching.pairs.some((p) => !hasText(p.left) || p.right.trim() === "")) return leftOut("One of its pairs has nothing on one side, and nothing is guessed to fill it.");
     type = "matching";
     body =
-      `<shuffleanswers>true</shuffleanswers>` +
+      // Its own setting is carried: the reader reads this element, and a literal true turned a question that keeps its order into one that mixes.
+      `<shuffleanswers>${matching.shuffle === false ? "false" : "true"}</shuffleanswers>` +
       text(question.feedback.correct, "correctfeedback") +
       text(undefined, "partiallycorrectfeedback") +
       text(question.feedback.incorrect, "incorrectfeedback") +
-      matching.pairs.map((p) => `<subquestion format="html"><text>${cdata(html(p.left))}</text><answer><text>${escapeXml(p.right.trim())}</text></answer></subquestion>`).join("") +
+      matching.pairs.map((p) => `<subquestion format="html"><text>${cdata(html(p.left))}</text><answer format="plain_text"><text>${escapeXml(p.right.trim())}</text></answer></subquestion>`).join("") +
       // A spare answer is a right-hand side with no left-hand side.
-      (matching.distractors ?? []).filter((d) => d.trim() !== "").map((d) => `<subquestion format="html"><text></text><answer><text>${escapeXml(d.trim())}</text></answer></subquestion>`).join("");
+      (matching.distractors ?? []).filter((d) => d.trim() !== "").map((d) => `<subquestion format="html"><text></text><answer format="plain_text"><text>${escapeXml(d.trim())}</text></answer></subquestion>`).join("");
   } else if (question.type === "numeric") {
     const numeric = question.body as { mode: string; value?: number; min?: number; max?: number; tolerance?: number; units?: string };
     let value: number;
@@ -209,12 +210,15 @@ function plan(question: Question, position: number, media?: ReadonlyMap<string, 
   const hasOutcomeFeedback = (question.feedback.correct && hasText(question.feedback.correct)) || (question.feedback.incorrect && hasText(question.feedback.incorrect));
   if (type === "essay" && hasOutcomeFeedback) notes.push("Feedback for a right answer and for a wrong one is not carried to an essay, which is marked by a person.");
   if (type === "numerical" && question.feedback.incorrect && hasText(question.feedback.incorrect)) notes.push("Feedback for a wrong answer is not carried to a numeric question.");
+  // The general feedback is written before the losses are counted: a picture or an equation in it became words, and the question was
+  // reported as exported with no note, because the notes had been made before this text was rendered.
+  const generalFeedback = text(question.feedback.general, "generalfeedback");
   notes.push(...lossNotes(losses, "Moodle"));
 
   const xml =
     `<question type="${type}"><name><text>${escapeXml(question.title)}</text></name>` +
     `<questiontext format="html"><text>${cdata(stem)}</text>${carried.files.map((f) => `<file name="${escapeXml(f.name)}" path="/" encoding="base64">${Buffer.from(f.bytes).toString("base64")}</file>`).join("")}</questiontext>` +
-    text(question.feedback.general, "generalfeedback") +
+    generalFeedback +
     `<defaultgrade>${question.points}</defaultgrade><hidden>0</hidden>${body}</question>`;
   return { item: { ...base, outcome: notes.length > 0 ? "exportedWithLosses" : "exported", ...(asType ? { asType } : {}), notes }, xml, equations: equations.count };
 }

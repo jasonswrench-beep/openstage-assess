@@ -166,6 +166,16 @@ const BLANK = "_____";
 // A number in a numeric answer: digits with an optional fraction and an optional exponent ("42", "-0.5", "6.67e-11", "1E+21"). The exponent
 // was not read, so a numeric question that held one came back as a failed essay.
 const NUMBER = String.raw`-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`;
+/**
+ * A number as the model can hold it: finite, and not zero because it was too small to tell from zero. "1e999" is infinite (a value the bank
+ * refuses, read as parsed) and "1e-999" is exactly 0, which is a different answer.
+ */
+function held(text: string): number | null {
+  const n = Number(text);
+  if (!Number.isFinite(n)) return null;
+  if (n === 0 && /[1-9]/.test(text.replace(/[eE].*$/, ""))) return null;
+  return n;
+}
 const NUMERIC_RANGE = new RegExp(String.raw`^(${NUMBER})\s*\.\.\s*(${NUMBER})$`);
 const NUMERIC_EXACT = new RegExp(String.raw`^(${NUMBER})(?:\s*:\s*(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))?$`);
 
@@ -281,12 +291,16 @@ function build(chunk: Chunk, ctx: Context): { question?: Question; orphan?: Orph
       const spec = giftUnescape(p.lead.slice(1)).trim();
       const range = NUMERIC_RANGE.exec(spec);
       const exact = NUMERIC_EXACT.exec(spec);
+      const parts = (range ?? exact)?.slice(1).filter((p): p is string => p !== undefined) ?? [];
+      if (parts.some((p) => held(p) === null)) {
+        return unsupported(`The numeric answer "${spec}" has a number too large or too small to hold, and nothing is guessed about it.`);
+      }
       if (range) {
         type = "numeric";
-        body = { mode: "range", min: Number(range[1]), max: Number(range[2]) };
+        body = { mode: "range", min: held(range[1] as string) as number, max: held(range[2] as string) as number };
       } else if (exact) {
         type = "numeric";
-        body = exact[2] !== undefined ? { mode: "tolerance", value: Number(exact[1]), tolerance: Number(exact[2]) } : { mode: "exact", value: Number(exact[1]) };
+        body = exact[2] !== undefined ? { mode: "tolerance", value: held(exact[1] as string) as number, tolerance: held(exact[2]) as number } : { mode: "exact", value: held(exact[1] as string) as number };
       } else return unsupported(`The numeric answer "${spec}" is not one OpenAssess can read: it takes a number, a number and a tolerance (42:0.5) or a range (1..5).`);
     } else if (p.lead.startsWith("#") && entries.length > 0) {
       return unsupported("A numeric question with several answers, or with partial credit, is not read.");

@@ -86,7 +86,39 @@ function rawQuestions(source: string): string[] {
       } else i = lt + 1;
     }
   }
-  return out.map((q) => q.replace(/(<file\b[^>]*>)([^<]{200,})(<\/file>)/g, (_m, a: string, b: string, c: string) => `${a}[${b.length} characters of picture data]${c}`));
+  return out.map(shortenPictureData);
+}
+
+/**
+ * A question's XML with the data of each picture (`<file ...>` and a long run of text with no tag in it) replaced by its length, for showing
+ * beside the question. A scan and not a pattern: `[^<]{200,}` over one picture of 4.3 MB overflowed the stack, and the import threw out of
+ * `runImporter` on a file this program wrote (a picture may be 25 MB).
+ */
+export function shortenPictureData(text: string): string {
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf("<file", at);
+    if (open < 0) break;
+    // `<filename>` and the like are other elements.
+    if (/[A-Za-z0-9_]/.test(text[open + 5] ?? "")) {
+      out += text.slice(at, open + 5);
+      at = open + 5;
+      continue;
+    }
+    const tagEnd = text.indexOf(">", open);
+    if (tagEnd < 0) break;
+    const closeAt = text.indexOf("</file>", tagEnd + 1);
+    const data = closeAt < 0 ? "" : text.slice(tagEnd + 1, closeAt);
+    if (closeAt >= 0 && data.length >= 200 && !data.includes("<")) {
+      out += `${text.slice(at, tagEnd + 1)}[${data.length} characters of picture data]`;
+      at = closeAt;
+    } else {
+      out += text.slice(at, tagEnd + 1);
+      at = tagEnd + 1;
+    }
+  }
+  return out + text.slice(at);
 }
 
 /** The sentences Moodle writes into the combined feedback of a question when nothing else is typed, in English, lower case. */
@@ -173,7 +205,7 @@ class Reader {
   }
 
   /** An element's text as words, for the places that hold no markup (the right side of a pair, a unit). */
-  plain(container: XmlElement | undefined): string {
+  plain(container: XmlElement | undefined, unwrap = true): string {
     if (!container) return "";
     // Moodle keeps these as plain text, and the exporter escapes what it writes, so text that looks like a tag ("<br> inserts a line break",
     // "<p>") is the words of the answer. It was run through the HTML reader, which took the tag out: three answers that began with a tag
@@ -184,6 +216,9 @@ class Reader {
       return text ? richTextToPlain(text).replace(/\s+/g, " ").trim() : "";
     }
     const raw = allText(first(container, "text") ?? { name: "", attrs: {}, children: [] }).replace(/\s+/g, " ").trim();
+    // An element that says it is plain text is plain text: the exporter writes an accepted answer of "<p>Hello</p>" so, and it came back as
+    // "Hello" (a different key, read as parsed). The lone paragraph is taken off only where nothing says what the text is.
+    if (!unwrap || attr(container, "format") === "plain_text") return raw;
     const wrapped = /^<p>([\s\S]*)<\/p>$/i.exec(raw);
     return wrapped && !/<p[\s>]/i.test(wrapped[1] as string) ? (wrapped[1] as string).trim() : raw;
   }
@@ -228,13 +263,17 @@ interface Built {
 function build(q: XmlElement, source: { file: string; firstBlock: number; lastBlock: number }, category: string | undefined, ctx: Context): Built {
   const r = new Reader(ctx);
   const type = attr(q, "type");
-  const name = r.plain(first(q, "name"));
+  // A question's name is plain text in Moodle and is never unwrapped: a name of "<p>Task</p>" is that.
+  const name = r.plain(first(q, "name"), false);
   const tags = [...(category ? [category] : []), ...elements(first(q, "tags") ?? { name: "", attrs: {}, children: [] }, "tag").map((t) => textOf(first(t, "text") ?? t)).filter((t) => t !== "")];
   const tagList = [...new Set(tags)];
   const stemText = r.rich(first(q, "questiontext"));
   const points = (() => {
-    const grade = Number(sub(q, "defaultgrade"));
-    return Number.isFinite(grade) && grade > 0 ? grade : ctx.defaultPoints;
+    // A question worth nothing is a Moodle question worth 0 (an ungraded one): read as written, and not as the default when the element is
+    // there. It is the default only when the element is missing or is not a number.
+    const written = sub(q, "defaultgrade").trim();
+    const grade = Number(written);
+    return written !== "" && Number.isFinite(grade) && grade >= 0 ? grade : ctx.defaultPoints;
   })();
 
   if (type === "description") {
@@ -392,7 +431,12 @@ function build(q: XmlElement, source: { file: string; firstBlock: number; lastBl
         kept = true;
       } else if (a.fraction > 0) {
         r.note(FindingCode.UnreadContent, "warn", `The answer "${quoted(value)}" is worth ${Math.round(a.fraction * 100) / 100} percent, which is partial credit. It was not read as an accepted answer, and nothing was guessed about it.`);
-      } else if (fb) r.dropped("Feedback on an answer that is not accepted", richTextToPlain(fb));
+      } else if (fb) {
+        // Moodle's "*" is any other answer, and the feedback on it is the feedback for a wrong answer. The exporter writes it so, and the
+        // reader warned about its own file and dropped it.
+        if (value === "*" && !feedback.incorrect) feedback.incorrect = fb;
+        else r.dropped("Feedback on an answer that is not accepted", richTextToPlain(fb));
+      }
     }
     if (accepted.some((a) => a.includes("*"))) r.note(FindingCode.UnreadContent, "warn", "An accepted answer has an asterisk in it. Moodle reads that as any characters; here it is kept as typed, so the answer is read only as those exact characters.");
     return make("shortAnswer", { caseSensitive: truthy(sub(q, "usecase")), accepted });

@@ -15,6 +15,7 @@
 
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, titleFromStem, type Question } from "../model/question.ts";
+import { escapeHtml } from "../model/richtext.ts";
 import { titleText } from "../model/table.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, plural, safeName, TYPE_NAMES } from "./text.ts";
@@ -28,6 +29,19 @@ const MIN_PAIRS = 3;
 /** Escapes what GIFT gives a meaning to. Line breaks become \n so that a question stays in one block. */
 export function giftEscape(text: string): string {
   return text.replace(/\r\n?/g, "\n").replace(/[\\~=#{}:]/g, (c) => `\\${c}`).replace(/\n/g, "\\n");
+}
+
+/**
+ * A newline next to a block tag is nothing, and is taken out so that the block tags stay together; a newline anywhere else is whitespace in
+ * HTML, or a line of a code block, and stays (giftEscape writes it as \n). Every newline between two tags was deleted before, and between
+ * two inline tags it was the space between two words: `<strong>following</strong>\n<code>code</code>` was written with no gap.
+ * Each pattern starts at a tag or at the newline itself, so a long run of white space is not scanned again for every place in it.
+ */
+const BLOCK = "(?:p|div|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|pre|blockquote|h[1-6]|hr|br)";
+const AFTER_BLOCK_TAG = new RegExp(`(</?${BLOCK}\\b[^>]*>)[ \\t]*\\n`, "gi");
+const BEFORE_BLOCK_TAG = new RegExp(`\\n[ \\t]*(?=</?${BLOCK}\\b)`, "gi");
+export function withoutBlockBreaks(html: string): string {
+  return html.replace(AFTER_BLOCK_TAG, "$1").replace(BEFORE_BLOCK_TAG, "");
 }
 
 /** The weight of one right answer out of several, in the form Moodle reads. */
@@ -86,7 +100,7 @@ function plan(question: Question, position: number): Planned {
   const formatted = question.stem.format === "rich" && FORMATTING.test(question.stem.content);
   // A newline between two blocks is nothing, and a newline inside a block is a space (or a line of a code block): giftEscape writes it as \n,
   // which Moodle reads back as a newline in HTML. It was deleted, so "following\nis" was written "followingis".
-  const stemText = formatted ? `[html]${giftEscape(htmlText(question.stem, question, newLosses()).replace(/>\s*\n\s*</g, "><"))}` : giftEscape(stem);
+  const stemText = formatted ? `[html]${giftEscape(withoutBlockBreaks(htmlText(question.stem, question, newLosses())))}` : giftEscape(stem);
   // Text that GIFT would read as something else at the start of a block: a line that begins // is a comment, so a question with that stem
   // vanished from the file and its answers were left as a block with no question; and a text that begins [html], [plain], [moodle] or
   // [markdown] has the tag taken for the format and lost. A [plain] tag in front is read as the format, and the text keeps what it had.
@@ -98,7 +112,8 @@ function plan(question: Question, position: number): Planned {
   // The title sits between two pairs of colons, so it holds none: a run of them is one, and one at either end would run into the pair that
   // closes or opens it (a title ending in a colon put ": " at the start of the stem and changed the title).
   const wantedTitle = automatic ? "" : question.title.replace(/\s+/g, " ").trim();
-  const title = wantedTitle.replace(/:+/g, ":").replace(/^:+|:+$/g, "").trim();
+  // Colons and spaces together at either end: "Part 2: :" is "Part 2", and stripping the colons alone left "Part 2:" to run into the pair that closes.
+  const title = wantedTitle.replace(/:+/g, ":").replace(/^[\s:]+|[\s:]+$/g, "");
   if (title !== wantedTitle && wantedTitle !== "") {
     notes.push(`The title had colons in it that GIFT cannot hold next to its own marks. ${title === "" ? "It is left out" : `It is written as "${title}"`}.`);
   }
@@ -157,6 +172,8 @@ function plan(question: Question, position: number): Planned {
     for (const a of cleaned) lines.push(answer("=", a));
     if (caseSensitive) notes.push("Upper and lower case count in this question, and GIFT cannot say so.");
   } else if (question.type === "matching") {
+    // Found by a tester of fields: a matching question that keeps its answers in a fixed order came back mixed up, and nothing said so.
+    if ((question.body as { shuffle?: boolean }).shuffle === false) notes.push("This matching question keeps its answers in a fixed order, and GIFT cannot say so. Its own setting for mixing the answers applies.");
     const body = question.body as { pairs: Array<{ left: Parameters<typeof plainText>[0]; right: string }>; distractors?: string[] };
     if (body.pairs.length < MIN_PAIRS) return leftOut(`It has ${body.pairs.length} pairs and Moodle needs at least ${MIN_PAIRS} in a matching question.`);
     const pairs = body.pairs.map((p) => ({ left: plainText(p.left, question, losses, false), right: p.right.replace(/\s+/g, " ").trim() }));
@@ -184,7 +201,10 @@ function plan(question: Question, position: number): Planned {
   const wantsOutcomeFeedback = !isTrueFalse(question) && ((question.feedback.correct && hasText(question.feedback.correct)) || (question.feedback.incorrect && hasText(question.feedback.incorrect)));
   if (wantsOutcomeFeedback) notes.push("Feedback for a right answer and for a wrong one is not carried: GIFT keeps feedback with each answer, and a general note.");
   if (question.feedback.general && hasText(question.feedback.general)) {
-    lines.push(`####${giftEscape(plainText(question.feedback.general, question, losses, true))}`);
+    // The format tag of the question text applies to its feedback too, and the importer reads it so: a plain note written beside an HTML stem
+    // was read as HTML ("Use the <script> tag" came back "Use the"). It is escaped as the HTML it will be read as.
+    const general = plainText(question.feedback.general, question, losses, true);
+    lines.push(`####${giftEscape(formatted ? escapeHtml(general) : general)}`);
   }
 
   if (formatted) notes.push("The question text keeps its formatting. The answers and the feedback become plain text.");

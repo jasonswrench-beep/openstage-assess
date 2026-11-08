@@ -24,7 +24,7 @@ import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse
 import type { RichText } from "../model/richtext.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { escapeXml } from "./moodle-xml.ts";
-import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
+import { buildReport, exportable, FORMATTING, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, scorable, TYPE_NAMES } from "./text.ts";
 
 export const QTI12_ID = "qti-1.2";
 export const QTI12_LABEL = "QTI 1.2 package (Brightspace and Canvas)";
@@ -154,6 +154,8 @@ function plan(question: Question, position: number): Planned {
       .map((a) => `<respcondition continue="No"><conditionvar><varequal respident="${respident}" case="${caseSensitive ? "Yes" : "No"}">${escapeXml(a)}</varequal></conditionvar>${win}</respcondition>`)
       .join("");
   } else if (question.type === "matching") {
+    // Found by a tester of fields: a matching question that keeps its answers in a fixed order came back mixed up, and nothing said so.
+    if ((question.body as { shuffle?: boolean }).shuffle === false) notes.push("This matching question keeps its answers in a fixed order, and QTI 1.2 cannot say so. Its own setting for mixing the answers applies.");
     const body = question.body as { pairs: Array<{ left: RichText; right: string }>; distractors?: string[] };
     if (body.pairs.length < 2) return leftOut(`It has ${body.pairs.length} pair${body.pairs.length === 1 ? "" : "s"}, and a matching question needs at least two.`);
     if (body.pairs.some((p) => !words(p.left) || flat(p.right) === "")) return leftOut("One of its pairs has nothing on one side, and nothing is guessed to fill it.");
@@ -224,12 +226,23 @@ export function checkQti12(questions: readonly Question[], options: Qti12Options
 }
 
 /** The destination check, and the package to write. */
+/**
+ * Plans a question as QTI can score it (see `scorable`): a question worth no points is written worth 1, and the planner's report says so. Done here and
+ * not inside the planner, which narrows its question by its type.
+ */
+function planScored(question: Question, planIt: (q: Question) => Planned): Planned {
+  const extra: string[] = [];
+  const planned = planIt(scorable(question, extra));
+  if (extra.length === 0 || planned.item.outcome === "leftOut") return planned;
+  return { ...planned, item: { ...planned.item, outcome: "exportedWithLosses", notes: [...extra, ...planned.item.notes] } };
+}
+
 export function exportQti12(questions: readonly Question[], options: Qti12Options = {}): ExportResult {
   questions = exportable(questions);
   const items: ReportItem[] = [];
   const written: string[] = [];
   questions.forEach((question, i) => {
-    const planned = plan(question, i + 1);
+    const planned = planScored(question, (q) => plan(q, i + 1));
     items.push(planned.item);
     if (planned.xml) written.push(planned.xml);
   });

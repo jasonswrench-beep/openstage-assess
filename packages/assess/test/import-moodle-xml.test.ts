@@ -214,7 +214,9 @@ describe("a key is read only where the file gives one", () => {
     assert.deepEqual(q.body, { caseSensitive: true, accepted: ["Paris"] });
     const said = q.findings.map((f) => f.message).join(" ");
     assert.match(said, /"Lyon" is worth 50 percent/);
-    assert.match(said, /Feedback on an answer that is not accepted was not read: "No\."/);
+    // Moodle's "*" is any other answer, and the feedback on it is the feedback for a wrong answer: it is read as that and is not a thing dropped.
+    assert.doesNotMatch(said, /Feedback on an answer that is not accepted/);
+    assert.equal(richTextToPlain(q.feedback.incorrect as never), "No.");
   });
 
   test("a short answer with nothing worth the whole of the points has no accepted answer, and is flagged", () => {

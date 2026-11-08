@@ -185,6 +185,21 @@ export function hasText(text: RichText): boolean {
   return richTextToPlain(text).length > 0 || collectRefs(text).math.length > 0;
 }
 
+/**
+ * The question as a QTI file can score it. QTI states the right answer by its score, so a question worth no points has no right answer to
+ * state: it was written with a score of 0, and its key was lost on the way back (QTI 1.2 read it as a question with no answer, and QTI 2.1
+ * read a short answer's accepted answers as empty). It is written worth 1 and says so. Points are written to five decimal places, and a
+ * question whose points need more is said to have been rounded.
+ */
+export function scorable(question: Question, notes: string[]): Question {
+  if (!(question.points > 0)) {
+    notes.push("A question worth no points is written worth 1 point, because QTI states the right answer by its score and a score of 0 states nothing. Set its points in the learning system.");
+    return { ...question, points: 1 } as Question;
+  }
+  if (Math.round(question.points * 100000) / 100000 !== question.points) notes.push("The points are written to five decimal places.");
+  return question;
+}
+
 export function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }

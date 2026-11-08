@@ -359,14 +359,25 @@ function positionsNamed(
   // number is only ever the words of an answer.
   const single = numbered ? /^\d{1,2}$/.test(whole) : /^[A-Ha-h]$/.test(whole);
   const listed = positionsListed(whole, letterOf, answers, numbered, emptyColumns);
+  if (single && !numbered) {
+    // A letter names the column with that letter, and it may be the words of another answer: with the answers D, A, C and B, "A" is the
+    // second answer by its words and the first by its letter. The letter always won, and column A, "D", was marked without a word.
+    const wordsAt = answers.findIndex((a) => a.toLowerCase() === whole.toLowerCase());
+    const letterAt = letterOf.indexOf(whole.toUpperCase().charCodeAt(0) - 65);
+    if (wordsAt !== -1 && letterAt !== -1 && wordsAt !== letterAt) return { bad: whole, ambiguous: true };
+  }
   if (!single) {
     // The whole cell may be the words of one answer, which may have spaces and commas in it.
     const exact = answers.findIndex((a) => a.toLowerCase() === whole.toLowerCase());
     if (exact !== -1) {
-      // And it may also read as a list of answers: "A, B" is the words of the second answer in a question whose options are "A", "A, B" and
-      // "B", and is also the first and the third. Either could be meant, and nothing in the file says which, so no answer is marked. It
-      // was read as the words, and the exporter wrote exactly this cell for a question with two right answers, so one of them was lost.
-      if ("positions" in listed && (listed.positions.length !== 1 || listed.positions[0] !== exact)) return { bad: whole, ambiguous: true, list: true };
+      // And it may also read as a list of answers by their letters or numbers: "A, B" is the words of the second answer in a question
+      // whose options are "A", "A, B" and "B", and is also the first and the third. Either could be meant, and nothing in the file says
+      // which, so no answer is marked. It was read as the words, and the exporter wrote exactly this cell for a question with two right
+      // answers, so one of them was lost. A list of words ("Sodium Chloride" as "Sodium" and "Chloride") is not a second reading: the
+      // cell is the whole of an answer, and that is the plain one. A list that cannot be read at all because a number in it is itself
+      // both a column and words, or names an empty column, is a list too, and the more ambiguous the cell the less it may be guessed.
+      const listAmbiguous = "positions" in listed ? listed.positional === true && (listed.positions.length !== 1 || listed.positions[0] !== exact) : listed.ambiguous === true || listed.empty === true;
+      if (listAmbiguous) return { bad: whole, ambiguous: true, list: true };
       return { positions: [exact] };
     }
   }
@@ -380,8 +391,10 @@ function positionsListed(
   answers: readonly string[],
   numbered: boolean,
   emptyColumns: ReadonlySet<number>,
-): { positions: number[] } | { bad: string; ambiguous?: true; empty?: true } {
+): { positions: number[]; positional?: true } | { bad: string; ambiguous?: true; empty?: true } {
   const positions: number[] = [];
+  /** Whether any token named an answer by a letter or a column number, and not by its words. */
+  let positional = false;
   for (const token of whole.split(/[,;|/]|\s+and\s+|\s+/i).map((t) => t.trim()).filter((t) => t !== "")) {
     const byText = /^[A-Ha-h]$/.test(token) && !numbered ? -1 : answers.findIndex((a) => a.toLowerCase() === token.toLowerCase());
     let at = byText;
@@ -394,11 +407,15 @@ function positionsListed(
       // nothing in the file says which: it is not guessed.
       if (byNumber !== -1 && byText !== -1 && byNumber !== byText) return { bad: token, ambiguous: true };
       at = byNumber !== -1 ? byNumber : byText;
-    } else if (!numbered && /^[A-Ha-h]$/.test(token)) at = letterOf.indexOf(token.toUpperCase().charCodeAt(0) - 65);
+      if (byNumber !== -1) positional = true;
+    } else if (!numbered && /^[A-Ha-h]$/.test(token)) {
+      at = letterOf.indexOf(token.toUpperCase().charCodeAt(0) - 65);
+      positional = true;
+    }
     if (at === -1) return { bad: token };
     if (!positions.includes(at)) positions.push(at);
   }
-  return { positions: positions.sort((x, y) => x - y) };
+  return { positions: positions.sort((x, y) => x - y), ...(positional ? { positional: true as const } : {}) };
 }
 
 function build(row: TableRow, order: readonly (Column | null)[], line: number, ctx: Ctx, numbered = false): { question?: Question; orphan?: Orphan } {

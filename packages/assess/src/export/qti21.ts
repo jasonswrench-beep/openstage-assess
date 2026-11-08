@@ -36,7 +36,7 @@ import { decodeEntities, plainToRich, tokenize, type RichText } from "../model/r
 import { parseXml } from "../import/docx/xml.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { escapeXml } from "./moodle-xml.ts";
-import { buildReport, exportable, hasText, keyProblem, plural, plainText, safeName, TYPE_NAMES, newLosses, type Losses } from "./text.ts";
+import { buildReport, exportable, hasText, keyProblem, plural, plainText, safeName, scorable, TYPE_NAMES, newLosses, type Losses } from "./text.ts";
 import { flat, num } from "./qti12.ts";
 
 export const QTI21_ID = "qti-2.1";
@@ -376,13 +376,24 @@ export function checkQti21(questions: readonly Question[], options: Qti21Options
 }
 
 /** The destination check, and the package to write. */
+/**
+ * Plans a question as QTI can score it (see `scorable`): a question worth no points is written worth 1, and the planner's report says so. Done here and
+ * not inside the planner, which narrows its question by its type.
+ */
+function planScored(question: Question, planIt: (q: Question) => Planned): Planned {
+  const extra: string[] = [];
+  const planned = planIt(scorable(question, extra));
+  if (extra.length === 0 || planned.item.outcome === "leftOut") return planned;
+  return { ...planned, item: { ...planned.item, outcome: "exportedWithLosses", notes: [...extra, ...planned.item.notes] } };
+}
+
 export function exportQti21(questions: readonly Question[], options: Qti21Options = {}): ExportResult {
   questions = exportable(questions);
   const items: ReportItem[] = [];
   const written: Array<{ id: string; xml: string; files: Set<string> }> = [];
   const pictures: Pictures = { ...(options.media ? { media: options.media } : {}), written: new Map() };
   questions.forEach((question, i) => {
-    const planned = plan(question, i + 1, pictures);
+    const planned = planScored(question, (q) => plan(q, i + 1, pictures));
     items.push(planned.item);
     if (planned.xml) written.push({ id: `q${i + 1}`, xml: planned.xml, files: planned.files ?? new Set() });
   });
