@@ -269,7 +269,7 @@ describe("what a description may and may not cut", () => {
       assert.deepEqual(right(first(chosen)), ["y"]);
       assert.equal(verdictFrom(first(chosen).findings), "parsed");
       // The same with letters, and with the last answer's number the same as the words of another answer.
-      const lettered = csv("Question,Answer - A - max 60 characters,Answer - B - max 60 characters,Answer - C - max 60 characters,Answer - D - max 60 characters,Correct answer(s) - choose at least one\nWhich is a vowel?,b,c,a,d,C");
+      const lettered = csv("Question,Answer - A - max 60 characters,Answer - B - max 60 characters,Answer - C - max 60 characters,Answer - D - max 60 characters,Correct answer(s) - choose at least one\nWhich is a vowel?,b,x,a,d,C");
       assert.deepEqual(right(first(lettered)), ["a"]);
       const same = csv("Question,Answer - 1 - max 60 characters,Answer - 2 - max 60 characters,Answer - 3 - max 60 characters,Answer - 4 - max 60 characters,Correct answer(s) - choose at least one\nWhat is 1+1?,5,4,3,2,4");
       assert.equal(verdictFrom(first(same).findings), "failed", "a 4 that is both a column's number and the words of another answer is not guessed at");
@@ -466,6 +466,31 @@ describe("a Correct cell that is the words of an answer and also a list of answe
     const pairs = csv('Type,Question,A,B,C,Correct\nMR,Select all.,"A, B","A, C","B, C","A, B"');
     assert.deepEqual(right(first(pairs)), []);
     assert.equal(verdictFrom(first(pairs).findings), "failed");
+  });
+
+  // Found by a reviewer of that fix.
+  test("a list of words is not a second reading: the cell that is the whole of an answer is that answer, as it was", () => {
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,Sodium,Chloride,Sodium Chloride,Sodium Chloride"))), ["Sodium Chloride"]);
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,I,II,I and II,I and II"))), ["I and II"]);
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,Red,Blue,Red Blue,Red Blue"))), ["Red Blue"]);
+  });
+
+  test("a numbered table whose cell is the words of an answer and a list in which a number is both a column and words is refused too", () => {
+    for (const fourth of ["2", "9"]) {
+      const r = csv(`Type,Question,Option 1,Option 2,Option 3,Option 4,Correct\nMR,Pick.,"2, 3","3, 5","5, 7",${fourth},"2, 3"`);
+      assert.deepEqual(right(first(r)), [], `option 4 is ${fourth}`);
+      assert.equal(verdictFrom(first(r).findings), "failed");
+    }
+  });
+
+  test("a single letter that is also the words of another answer is refused: the letter names a column and so may the words", () => {
+    const r = csv("Type,Question,A,B,C,D,Correct\nMC,Which?,D,A,C,B,A");
+    assert.deepEqual(right(first(r)), []);
+    assert.match(said(first(r)), /"A" in the Correct cell could be the answer in column A or the answer whose words are "A"/);
+    // The letter and the words that agree are no problem: the answers A, B and C in their own places, and a letter beside answers that are not letters.
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,A,B,C,B"))), ["B"]);
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,Correct\nMC,Which?,Ice,Fire,Lava,B"))), ["Fire"]);
+    assert.deepEqual(right(first(csv("Type,Question,A,B,C,D,Correct\nMC,Which?,x,A,y,z,B"))), ["A"], "the second answer is the words A, but the cell is B, which names the second column");
   });
 
   test("also when the list names one answer and the words are another's", () => {

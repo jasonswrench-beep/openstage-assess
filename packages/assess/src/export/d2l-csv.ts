@@ -163,6 +163,8 @@ function plan(question: Question, position: number): Planned {
     // The items are written in the right order. The text of an item goes in the second cell, as Brightspace's guide says.
     for (const t of texts) rows.push(row("Item", t));
   } else if (question.type === "matching") {
+    // Found by a tester of fields: a matching question that keeps its answers in a fixed order came back mixed up, and nothing said so.
+    if ((question.body as { shuffle?: boolean }).shuffle === false) notes.push("This matching question keeps its answers in a fixed order, and Brightspace cannot say so. Its own setting for mixing the answers applies.");
     const body = question.body as { pairs: Array<{ left: Parameters<typeof plainText>[0]; right: string }>; distractors?: string[] };
     if (body.pairs.length < 2) return leftOut(`It has ${body.pairs.length} pair${body.pairs.length === 1 ? "" : "s"}, and a matching question needs at least two.`);
     const pairs = body.pairs.map((p) => ({ left: plainText(p.left, question, losses, false), right: flat(p.right) }));

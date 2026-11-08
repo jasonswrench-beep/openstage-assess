@@ -117,6 +117,13 @@ function plan(question: Question, position: number): Planned {
     }
     type = multiple ? "MR" : "MC";
     correct = right.map((i) => LETTERS.charAt(i)).join(", ");
+    // The cell must not also be the words of another answer. A reader cannot tell "A, B" for the first two answers from the third answer
+    // when that answer's words are "A, B", and this program's own reader refuses to guess: the question came back with no key. A single
+    // letter is the words of the answer in its own place without harm ("B" for an answer "B" that is the second).
+    const clash = answers.findIndex((answer, i) => answer.trim().toLowerCase() === correct.toLowerCase() && !(right.length === 1 && right[0] === i));
+    if (clash !== -1) {
+      return leftOut(`Its Correct cell would read "${correct}", which is also the words of another answer, and a reader cannot tell which is meant.`);
+    }
 
     const withFeedback = options.filter((option) => option.feedback && hasText(option.feedback)).length;
     if (withFeedback > 0) {

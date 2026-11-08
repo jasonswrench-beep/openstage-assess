@@ -14,14 +14,21 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { exportGift, plainNumber } from "../src/export/gift.ts";
+import { exportBlackboardUpload } from "../src/export/blackboard-upload.ts";
+import { exportD2lCsv } from "../src/export/d2l-csv.ts";
+import { exportGift, plainNumber, withoutBlockBreaks } from "../src/export/gift.ts";
+import { exportCommonCartridge } from "../src/export/common-cartridge.ts";
 import { exportMoodleXml } from "../src/export/moodle-xml.ts";
+import { exportQti12 } from "../src/export/qti12.ts";
+import { exportQti21 } from "../src/export/qti21.ts";
+import { importerForContent, runImporter } from "../src/import/registry.ts";
 import { giftImporter } from "../src/import/gift.ts";
-import { moodleXmlImporter } from "../src/import/moodle-xml.ts";
+import { moodleXmlImporter, shortenPictureData } from "../src/import/moodle-xml.ts";
 import { createQuestion } from "../src/model/create.ts";
 import { verdictFrom } from "../src/model/findings.ts";
 import type { Question, QuestionBody, QuestionType } from "../src/model/question.ts";
-import { plainToRich, rich, richTextToPlain } from "../src/model/richtext.ts";
+import { mediaPlaceholder, plainToRich, rich, richTextToPlain } from "../src/model/richtext.ts";
+import { png } from "./support/images.ts";
 
 const AT = "2026-11-07T00:00:00.000Z";
 const make = (type: QuestionType, body: QuestionBody, stem = "What is the capital of France?", extra: Partial<Parameters<typeof createQuestion>[0]> = {}): Question =>
@@ -194,6 +201,85 @@ describe("a number in GIFT", () => {
   });
 });
 
+// Found by a reviewer of the fixes above, each in code that had just been written for the faults before.
+describe("the second reading of the fixes", () => {
+  test("a title of colons and spaces at its end is written without them, whatever order they come in", () => {
+    for (const [title, written] of [["Part 2: :", "Part 2"], ["T:: :", "T"], [": : Title : :", "Title"], ["a : b", "a : b"]] as const) {
+      const back = fromGift(toGift(mc("Is the sky blue?", [["Yes", true], ["No", false]], { title })).text)[0] as Question;
+      assert.equal(back.title, written, title);
+      assert.equal(plain(back), "Is the sky blue?", `${title}: the stem is untouched`);
+    }
+  });
+
+  test("a newline between two inline tags stays a space, and one next to a block tag is nothing", () => {
+    const q = createQuestion({ type: "multipleChoice", stem: rich("<p>Read the <strong>following</strong>\n<code>code</code> carefully.</p>"), body: { shuffle: true, options: [opt("a", "x", true), opt("b", "y")] }, by: "test", at: AT });
+    assert.match(plain(fromGift(toGift(q).text)[0] as Question), /following\s+code/);
+    assert.equal(withoutBlockBreaks("<p>a</p>\n<p>b</p>"), "<p>a</p><p>b</p>");
+    // The indentation after a newline is left: spaces between block tags are nothing in HTML, and no newline is left to run words together.
+    assert.equal(withoutBlockBreaks("<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>"), "<ul>  <li>a</li>  <li>b</li></ul>");
+    assert.equal(withoutBlockBreaks("<strong>a</strong>\n<em>b</em>"), "<strong>a</strong>\n<em>b</em>");
+    assert.equal(withoutBlockBreaks("<pre>x\ny</pre>"), "<pre>x\ny</pre>");
+    assert.equal(withoutBlockBreaks("<p>a</p>\n\n<p>b</p>"), "<p>a</p><p>b</p>", "each of two newlines touches a block tag, one on each side");
+    assert.equal(withoutBlockBreaks("<p>a</p>\n\n\n<p>b</p>"), "<p>a</p>\n<p>b</p>", "of three, the one in the middle touches neither and is whitespace");
+    const started = performance.now();
+    withoutBlockBreaks(`<p>${" ".repeat(200000)}</p>${"\n".repeat(50000)}<p>x</p>`);
+    assert.ok(performance.now() - started < 1000, "a long run of white space is not scanned again for every place in it");
+  });
+
+  test("a plain general feedback beside a formatted stem comes back as written, with its angle brackets and ampersands", () => {
+    for (const note of ["Use the <script> tag and the <em>em</em> tag.", "Remember that a <b and c> d.", "Write &amp; for an ampersand.", "Plain words."]) {
+      const q = createQuestion({
+        type: "multipleChoice",
+        stem: rich("<p>Which is <strong>true</strong>?</p>"),
+        body: { shuffle: true, options: [opt("a", "x", true), opt("b", "y")] },
+        feedback: { general: plainToRich(note) },
+        by: "test",
+        at: AT,
+      });
+      const back = fromGift(toGift(q).text)[0] as Question;
+      assert.equal(richTextToPlain(back.feedback.general as never), note, note);
+    }
+    // And beside a plain stem it is written as it always was.
+    const q = createQuestion({ type: "multipleChoice", stem: plainToRich("Which?"), body: { shuffle: true, options: [opt("a", "x", true), opt("b", "y")] }, feedback: { general: plainToRich("A <b> tag.") }, by: "test", at: AT });
+    assert.equal(richTextToPlain((fromGift(toGift(q).text)[0] as Question).feedback.general as never), "A <b> tag.");
+  });
+
+  test("a GIFT number too large or too small to hold fails in the open and is never a value of nothing or infinity", () => {
+    for (const spec of ["1e999", "-1e999", "5:1e999", "1e999..2e999", "1..2e999", "1e-999", "5:1e-999", "-1e-999..1"]) {
+      const back = fromGift(`What is the value? {#${spec}}`)[0] as Question;
+      assert.equal(back.type, "essay", spec);
+      assert.equal(verdictFrom(back.findings), "failed", spec);
+      assert.match(back.findings.map((f) => f.message).join(" "), /too large or too small to hold/, spec);
+    }
+    // A zero that is written as zero, and the smallest and largest that a number can hold, are read.
+    for (const spec of ["0", "0.0", "0e5", "5e-324", "1.7976931348623157e308"]) assert.equal((fromGift(`Value? {#${spec}}`)[0] as Question).type, "numeric", spec);
+  });
+
+  test("an accepted answer, a matching answer and a name that are written as plain text come back as written, with a paragraph tag in them", () => {
+    const short = make("shortAnswer", { caseSensitive: false, accepted: ["<p>Hello</p>", "<P>Hi</P>"] }, "Greet.");
+    const xml = exportMoodleXml([short], { name: "T" }).files[0]?.content ?? "";
+    const back = moodleXmlImporter.parse(xml, { file: "t.xml", at: AT, author: "test" }).questions[0] as Question;
+    assert.deepEqual((back.body as unknown as { accepted: string[] }).accepted, ["<p>Hello</p>", "<P>Hi</P>"]);
+    const pairs = pairsOf(["a", "<p>text</p>"], ["b", "<p>more</p>"], ["c", "plain"]);
+    const matchedXml = exportMoodleXml([pairs], { name: "T" }).files[0]?.content ?? "";
+    assert.match(matchedXml, /<answer format="plain_text"><text>&lt;p&gt;text&lt;\/p&gt;<\/text>/);
+    const matched = moodleXmlImporter.parse(matchedXml, { file: "t.xml", at: AT, author: "test" }).questions[0] as Question;
+    assert.deepEqual((matched.body as unknown as { pairs: Array<{ right: string }> }).pairs.map((p) => p.right), ["<p>text</p>", "<p>more</p>", "plain"]);
+    const named = mc("Which?", [["a", true], ["b", false]], { title: "<p>Task</p>" });
+    const namedBack = moodleXmlImporter.parse(exportMoodleXml([named], { name: "T" }).files[0]?.content ?? "", { file: "t.xml", at: AT, author: "test" }).questions[0] as Question;
+    assert.equal(namedBack.title, "<p>Task</p>");
+  });
+
+  test("where nothing says what the text is, a lone paragraph around it is taken off, and only that", () => {
+    const xml = (answerAttr: string, text: string): string =>
+      `<?xml version="1.0"?><quiz><question type="shortanswer"><name><text>S</text></name><questiontext format="html"><text>Say.</text></questiontext><usecase>0</usecase><answer fraction="100"${answerAttr}><text>${text}</text></answer></question></quiz>`;
+    const accepted = (answerAttr: string, text: string): string[] => ((moodleXmlImporter.parse(xml(answerAttr, text), { file: "t.xml", at: AT, author: "test" }).questions[0] as Question).body as unknown as { accepted: string[] }).accepted;
+    assert.deepEqual(accepted("", "&lt;p&gt;Paris&lt;/p&gt;"), ["Paris"]);
+    assert.deepEqual(accepted(' format="moodle_auto_format"', "&lt;p&gt;Paris&lt;/p&gt;"), ["Paris"]);
+    assert.deepEqual(accepted(' format="plain_text"', "&lt;p&gt;Paris&lt;/p&gt;"), ["<p>Paris</p>"]);
+  });
+});
+
 describe("an essay with a rubric and an expected length", () => {
   test("is written by GIFT and Moodle XML with a note for each thing they cannot carry, as the other exporters give", () => {
     const essay = make("essay", { rubric: [{ id: "r1", criterion: "Clarity", levels: [{ points: 2, description: "Clear" }] }], expectedWords: 300 } as unknown as QuestionBody, "Discuss the idea.");
@@ -205,6 +291,189 @@ describe("an essay with a rubric and an expected length", () => {
     }
     const plainEssay = make("essay", {}, "Discuss the idea.");
     assert.ok(!(toGift(plainEssay).items[0]?.notes ?? []).some((n) => /rubric|expected length/.test(n)));
+  });
+});
+
+// Found by a tester of pictures, equations and fields: a Moodle file this program wrote with one picture of about 4.3 MB or more could not
+// be read back. A pattern over the picture's text overflowed the stack and the import threw, where the limit on a picture is 25 MB.
+// Found by a tester of fields: QTI states the right answer by its score, so a question worth 0 points came back with no key (QTI 1.2 as a
+// question with no answer, QTI 2.1 with the accepted answers of a short answer empty), the exporter saying it was exported.
+describe("a question worth no points in QTI", () => {
+  const worth = (points: number): Question[] => [
+    mc("Which is cold?", [["Ice", true], ["Fire", false], ["Lava", false]], { points }),
+    make("multipleResponse", { shuffle: true, partialCredit: false, options: [opt("a", "Ice", true), opt("b", "Snow", true), opt("c", "Fire")] }, "Pick the cold ones.", { points }),
+    make("trueFalse", { correct: true }, "Ice is cold.", { points }),
+    make("shortAnswer", { caseSensitive: false, accepted: ["Paris", "Lutetia"] }, "Capital of France?", { points }),
+    make("matching", { shuffle: true, distractors: [], pairs: [["a", "1"], ["b", "2"], ["c", "3"]].map(([l, r], i) => ({ id: `p${i}`, left: plainToRich(l as string), right: r as string })) }, "Match.", { points }),
+  ];
+  const destinations = [["QTI 1.2", exportQti12], ["QTI 2.1", exportQti21], ["Common Cartridge", exportCommonCartridge]] as const;
+  const back = (exporter: typeof exportQti12, questions: Question[]) => {
+    const out = exporter(questions, { name: "Bank" });
+    const zip = out.files[0]?.bytes as Uint8Array;
+    return { items: out.report.items, questions: runImporter(importerForContent(out.files[0]?.name ?? "", zip), zip, { file: "Bank.zip", at: AT, author: "test" }).questions };
+  };
+
+  test("is written worth 1, said so, and keeps its key", () => {
+    for (const [name, exporter] of destinations) {
+      const { items, questions } = back(exporter, worth(0));
+      // Common Cartridge has no matching question and leaves it out, as it always did.
+      const written = items.filter((item) => item.outcome !== "leftOut");
+      assert.equal(questions.length, written.length, name);
+      assert.ok(written.length >= 4, name);
+      for (const item of written) assert.match(item.notes.join(" "), /worth no points is written worth 1 point/, name);
+      const [choice, multiple, truth, short] = questions as [Question, Question, Question, Question];
+      assert.deepEqual(rightOf(choice), ["Ice"], name);
+      assert.deepEqual(rightOf(multiple), ["Ice", "Snow"], name);
+      assert.equal((truth.body as unknown as { correct: boolean }).correct, true, name);
+      assert.deepEqual((short.body as unknown as { accepted: string[] }).accepted, ["Paris", "Lutetia"], name);
+      if (name !== "Common Cartridge") assert.equal((questions[4] as Question).type, "matching", name);
+      for (const q of questions) assert.ok(!q.findings.some((f) => f.code === "import.no-answer-key"), `${name} ${q.type}`);
+    }
+  });
+
+  test("is still left out when it cannot be written for another reason, and the reason is not the points", () => {
+    for (const [name, exporter] of destinations) {
+      const items = exporter([mc("Which?", [["a", false], ["b", false]], { points: 0 })], { name: "Bank" }).report.items;
+      assert.equal(items[0]?.outcome, "leftOut", name);
+      assert.doesNotMatch(items[0]?.notes.join(" ") ?? "", /worth no points/, name);
+    }
+  });
+
+  test("says nothing about points for a question worth one or more, and says when points are rounded", () => {
+    for (const [name, exporter] of destinations) {
+      const plain = back(exporter, worth(2.5));
+      assert.ok(plain.items.every((item) => !/worth no points|five decimal places/.test(item.notes.join(" "))), name);
+      const rounded = back(exporter, worth(12.345678));
+      assert.ok(rounded.items.filter((item) => item.outcome !== "leftOut").every((item) => /written to five decimal places/.test(item.notes.join(" "))), name);
+    }
+  });
+});
+
+// Found by a tester of fields: a matching question that keeps its answers in a fixed order came back mixed up from five formats, and
+// nothing said so (Moodle wrote a literal true). Moodle and QTI 2.1 carry it; the others say they cannot.
+describe("a matching question that keeps its answers in a fixed order", () => {
+  const fixed = (shuffle: boolean): Question => make("matching", { shuffle, distractors: [], pairs: [["a", "1"], ["b", "2"], ["c", "3"]].map(([l, r], i) => ({ id: `p${i}`, left: plainToRich(l as string), right: r as string })) }, "Match.");
+  const said = (questions: Question[], exporter: (q: Question[], o: { name: string }) => { report: { items: Array<{ notes: string[] }> } }): string => exporter(questions, { name: "T" }).report.items[0]?.notes.join(" ") ?? "";
+
+  test("is written by Moodle as it is, and read back as it is", () => {
+    for (const shuffle of [true, false]) {
+      const xml = exportMoodleXml([fixed(shuffle)], { name: "T" }).files[0]?.content ?? "";
+      assert.match(xml, new RegExp(`<shuffleanswers>${shuffle}</shuffleanswers>`));
+      const back = moodleXmlImporter.parse(xml, { file: "t.xml", at: AT, author: "test" }).questions[0] as Question;
+      assert.equal((back.body as unknown as { shuffle: boolean }).shuffle, shuffle);
+    }
+  });
+
+  test("is said to be unsaid by the formats that cannot carry it, and by them only when it matters", () => {
+    for (const [name, exporter] of [["GIFT", exportGift], ["QTI 1.2", exportQti12], ["Brightspace", exportD2lCsv], ["Blackboard", exportBlackboardUpload]] as const) {
+      assert.match(said([fixed(false)], exporter as never), /matching question keeps its answers in a fixed order/, name);
+      assert.doesNotMatch(said([fixed(true)], exporter as never), /fixed order/, name);
+    }
+  });
+});
+
+describe("feedback for a wrong short answer in Moodle", () => {
+  test("is written as the any-other-answer entry and read back as the feedback for a wrong answer, with no warning about its own file", () => {
+    const q = createQuestion({ type: "shortAnswer", stem: plainToRich("Capital of France?"), body: { caseSensitive: false, accepted: ["Paris"] }, feedback: { correct: plainToRich("Yes."), incorrect: plainToRich("No, think of the Seine.") }, by: "test", at: AT });
+    const xml = exportMoodleXml([q], { name: "T" }).files[0]?.content ?? "";
+    const result = moodleXmlImporter.parse(xml, { file: "t.xml", at: AT, author: "test" });
+    const back = result.questions[0] as Question;
+    assert.equal(richTextToPlain(back.feedback.incorrect as never), "No, think of the Seine.");
+    assert.equal(richTextToPlain(back.feedback.correct as never), "Yes.");
+    assert.deepEqual((back.body as unknown as { accepted: string[] }).accepted, ["Paris"]);
+    assert.ok(!back.findings.some((f) => /not accepted/.test(f.message)), "no warning about feedback that was dropped");
+    assert.equal(verdictFrom(back.findings), "parsed");
+  });
+
+  test("an answer that is not the any-other-answer entry, with feedback, is still reported as not read", () => {
+    const xml = `<?xml version="1.0"?><quiz><question type="shortanswer"><name><text>S</text></name><questiontext format="html"><text>Say.</text></questiontext><answer fraction="100"><text>Paris</text></answer><answer fraction="0"><text>London</text><feedback format="html"><text>Not London.</text></feedback></answer></question></quiz>`;
+    const back = moodleXmlImporter.parse(xml, { file: "t.xml", at: AT, author: "test" }).questions[0] as Question;
+    assert.match(back.findings.map((f) => f.message).join(" "), /Feedback on an answer that is not accepted was not read: "Not London\."/);
+    assert.equal(back.feedback.incorrect, undefined);
+  });
+});
+
+describe("a Moodle question's points", () => {
+  const read = (grade: string) => {
+    const xml = `<?xml version="1.0"?><quiz><question type="truefalse"><name><text>T</text></name><questiontext format="html"><text>Ice is cold.</text></questiontext>${grade}<answer fraction="100"><text>true</text></answer><answer fraction="0"><text>false</text></answer></question></quiz>`;
+    return (moodleXmlImporter.parse(xml, { file: "t.xml", at: AT, author: "test" }).questions[0] as Question).points;
+  };
+
+  test("are read as written, including nothing, and are the default only when missing or not a number", () => {
+    assert.equal(read("<defaultgrade>0</defaultgrade>"), 0);
+    assert.equal(read("<defaultgrade>0.0000000</defaultgrade>"), 0);
+    assert.equal(read("<defaultgrade>2.5</defaultgrade>"), 2.5);
+    assert.equal(read(""), 1);
+    assert.equal(read("<defaultgrade></defaultgrade>"), 1);
+    assert.equal(read("<defaultgrade>lots</defaultgrade>"), 1);
+    assert.equal(read("<defaultgrade>-1</defaultgrade>"), 1);
+  });
+});
+
+describe("a picture or an equation in the feedback of a Moodle question", () => {
+  const withFeedback = (feedback: Record<string, unknown>): Question =>
+    createQuestion({
+      type: "multipleChoice",
+      stem: plainToRich("Which colour?"),
+      body: { shuffle: true, options: [opt("o0", "Blue", true), opt("o1", "Red")] } as never,
+      feedback: feedback as never,
+      media: [{ id: "m1", file: "media/p-aaaaaaaaaaaaaaaa.png", mime: "image/png", alt: "A blue box" }],
+      math: [{ id: "e1", latex: "$$x$$", mathml: "", source: "latex" }] as never,
+      by: "test",
+      at: AT,
+    });
+
+  test("is reported in the notes, in general feedback as in feedback for a right answer", () => {
+    for (const where of ["general", "correct", "incorrect"]) {
+      const q = withFeedback({ [where]: rich(`<p>See ${mediaPlaceholder("m1")}</p>`) });
+      const item = exportMoodleXml([q], { name: "t" }).report.items[0];
+      assert.equal(item?.outcome, "exportedWithLosses", `a picture in ${where} feedback`);
+      assert.match((item?.notes ?? []).join(" "), /picture/i, where);
+    }
+    const clean = exportMoodleXml([withFeedback({ general: plainToRich("Blue is right.") })], { name: "t" }).report.items[0];
+    assert.equal(clean?.outcome, "exported");
+  });
+});
+
+describe("a Moodle file with a large picture", () => {
+  test("is read back whole, with the picture's bytes", () => {
+    const file = "media/p-0123456789abcdef.png";
+    const base = png(20, 20);
+    for (const extra of [10_000, 5_000_000, 20_000_000]) {
+      const picture = new Uint8Array(base.length + extra);
+      picture.set(base, 0);
+      picture.fill(7, base.length);
+      const q = createQuestion({
+        type: "multipleChoice",
+        stem: rich(`<p>What does the photograph show? ${mediaPlaceholder("m1")}</p>`),
+        body: { shuffle: false, options: [opt("o0", "A bridge", true), opt("o1", "A tower")] } as never,
+        media: [{ id: "m1", file, mime: "image/png", alt: "A photograph" }],
+        by: "test",
+        at: AT,
+      });
+      const xml = exportMoodleXml([q], { name: "Photos", media: new Map([[file, picture]]) }).files[0]?.content ?? "";
+      const result = moodleXmlImporter.parse(xml, { file: "t.xml", at: AT, author: "test" });
+      assert.equal(result.questions.length, 1, `${extra} bytes of picture`);
+      assert.equal(result.media?.size, 1, `${extra} bytes of picture`);
+      const kept = [...(result.media?.values() ?? [])][0] as Uint8Array;
+      assert.equal(kept.length, picture.length);
+      assert.ok(Buffer.compare(Buffer.from(kept), Buffer.from(picture)) === 0, "the bytes are the same");
+    }
+  });
+
+  test("shows the question's XML with the picture's data replaced by its length, and only a long run of text with no tag in it", () => {
+    const data = "A".repeat(300);
+    assert.equal(shortenPictureData(`<file name="a.png" encoding="base64">${data}</file>`), `<file name="a.png" encoding="base64">[300 characters of picture data]</file>`);
+    assert.equal(shortenPictureData(`<file name="a.png">${"A".repeat(199)}</file>`), `<file name="a.png">${"A".repeat(199)}</file>`, "199 is not long enough");
+    assert.equal(shortenPictureData(`<file name="a.png">${data}<b/></file>`), `<file name="a.png">${data}<b/></file>`, "text with a tag in it is not picture data");
+    assert.equal(shortenPictureData(`<filename>${data}</filename>`), `<filename>${data}</filename>`, "another element");
+    assert.equal(shortenPictureData(`<filename>${data}</file>`), `<filename>${data}</file>`, "another element is not a file even when a file is closed after it");
+    assert.equal(shortenPictureData(`<file a="1">${data}</file><x/><file b="2">${data}${data}</file>`), `<file a="1">[300 characters of picture data]</file><x/><file b="2">[600 characters of picture data]</file>`);
+    assert.equal(shortenPictureData(`<file>${data}`), `<file>${data}`, "never closed");
+    assert.equal(shortenPictureData("no files here"), "no files here");
+    const started = performance.now();
+    shortenPictureData(`<file>${"B".repeat(30_000_000)}</file>`);
+    assert.ok(performance.now() - started < 3000);
   });
 });
 

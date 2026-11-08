@@ -1183,6 +1183,62 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by a tester of pictures, equations and fields (8 November 2026, after alpha 18)
+
+A second round-trip tester took the other content of a question (pictures of three kinds, equations, tables, every metadata field,
+feedback in all places, and each type's settings) through all eight exporters in twelve variants, 5,000 random questions for each of seven
+presets in each variant (420,000 in all, twice) and directed cases for points, shuffle, pictures, equations, tables, 98 numeric values and
+73 spreadsheet questions. Picture bytes came back identical wherever they are carried, tables and equations were never lost, the
+spreadsheet agreed in CSV, xlsx and Excel-style typed cells, and nothing was unstorable. Found, and fixed with a test and planted
+faults (21):
+
+- **The Moodle reader threw on this program's own file**: a picture of about 4.3 MB or more overflowed the stack in a pattern over its
+  text (the limit on a picture is 25 MB). A scan replaces the pattern.
+- **A question worth 0 points lost its key in QTI**: the right answer is stated by its score, so QTI 1.2 read it as a question with no
+  answer and QTI 2.1 read a short answer's accepted answers as empty, with the exporter saying "exported". It is written worth 1 and said
+  so, and rounding of points past five places is said. A Moodle `defaultgrade` of 0 came back as 1; it is read as 0.
+- **A picture or equation in the general feedback of a Moodle question became words with no note**, because the notes were made before
+  that text was rendered (450 of 35,000 questions).
+- **A matching question that keeps its answers in a fixed order came back mixed up** from five formats, unreported (Moodle wrote a
+  literal true). Moodle carries it; GIFT, QTI 1.2, Brightspace and Blackboard say they cannot.
+- **The any-other-answer entry of a Moodle short answer** (the feedback for a wrong answer, which the exporter writes) was warned about
+  and dropped by its own reader; it is read as the feedback for a wrong answer.
+
+Not changed, and said by the tester: a decorative picture loses its mark in Moodle and QTI 2.1 (it comes back with no description, and a
+warning); Moodle drops an author's own feedback that equals one of its stock sentences, and says so in a note that blames Moodle; no
+exporter names chapter, section, page, Bloom level, author, status or custom fields as not carried, and Blackboard drops titles unsaid;
+Moodle and GIFT say titles are not part of the file yet write them; a small file of this program's own export (one GIFT question, a
+Blackboard file of fewer than three essay, blank, matching or ordering rows) is not recognised by its content and needs its name.
+Not checked: any real LMS, whether Moodle scores weights of -100 as all or nothing, and real Excel.
+
+### Found by a fifth reader, of the round-trip fixes (8 November 2026, after alpha 18)
+
+The fixes for the round-trip tester were read by a fifth reader, with 128,000 random GIFT questions across eight seeds, a structural fuzz
+of GIFT's marks, 600,000 random numbers through `plainNumber`, and 12,000 questions through each of the five other exporters. Those found
+nothing beyond the faults below. Nine faults, two of them wrong keys, again in code written to prevent exactly that. Fixed, each with a
+test and planted faults (20):
+
+- **Wrong key, Moodle XML:** the lone paragraph taken off a plain answer was also taken off an answer the exporter wrote as
+  `format="plain_text"`, so an accepted answer `<p>Hello</p>` came back `Hello` (41 in 23,906 structural questions), and the same for a
+  matching right side and a name. An element marked plain text is exactly its text now, the matching exporter marks its answers so, and
+  a name is never unwrapped.
+- **Text changed, GIFT:** a title `Part 2: :` lost only its last colon and ran into the pair that closes it, so the title came back
+  `Part 2\` and the stem began `: ` (colons and spaces are stripped together now); a newline between two inline tags was deleted (the
+  `following`/`code` glued again, now only a newline next to a block tag goes); a plain general feedback beside a formatted stem was read
+  as HTML ("Use the <script> tag" came back "Use the"), and is escaped as the HTML it will be read as.
+- **The spreadsheet exporter wrote a cell its own reader refuses** (16 in 31,953 questions): the cell "A, B" for a question with an option
+  of those words. It is left out and said.
+- **An ambiguous cell still marked an answer** in a numbered table when a number in the list was itself both a column and words, and a
+  single letter that was also the words of another answer ("A" with the answers D, A, C, B, an older fault) always meant the column,
+  silently. Both refuse now. The first fix had made "Sodium Chloride" (as "Sodium" and "Chloride") a refusal; a list of words is no
+  second reading, only a list of letters or numbers is.
+- **A GIFT number of `1e999` was an infinite value, parsed and refused by the bank, and `1e-999` was exactly 0.** They fail in the open.
+
+What it found sound: 128,000 GIFT questions with 0 unreported differences, 600,000 doubles through `plainNumber` (subnormals, 1.8e308,
+-0, 1e21) all exactly, every hand probe of the marks (`//`, `[plain]`, `$CATEGORY:`, `-&gt;`, `%` forms, options `=`, `~`, `#`, `####`),
+and the other five exporters. It could not check real Moodle: from memory Moodle's weight parser takes anything between the first two
+percent signs, which is wider than the `%NN%` guard.
+
 ### Found by a round-trip tester (7 November 2026, after alpha 17)
 
 A tester wrote random questions of every type with hostile text (tag-like and entity-like text, GIFT's marks, colons, a first character

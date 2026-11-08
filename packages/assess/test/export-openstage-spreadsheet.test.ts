@@ -645,3 +645,35 @@ Answers:
     assert.deepEqual(problemsAuthorWouldFind(result.files[0]?.content ?? ""), []);
   });
 });
+
+// Found by a reviewer: the exporter wrote a Correct cell its own reader refuses (it is also the words of another answer), and said only an
+// unrelated note, so the question came back with no key. It is left out and said, as the rule for every exporter is.
+describe("a Correct cell that is also the words of another answer", () => {
+  const withOptions = (type: "multipleChoice" | "multipleResponse", options: Array<[string, boolean]>) =>
+    createQuestion({
+      type,
+      stem: plainToRich("Select all the valid answers."),
+      body: (type === "multipleResponse"
+        ? { shuffle: true, partialCredit: true, options: options.map(([t, c], i) => ({ id: `o${i}`, content: plainToRich(t), correct: c })) }
+        : { shuffle: true, options: options.map(([t, c], i) => ({ id: `o${i}`, content: plainToRich(t), correct: c })) }) as never,
+      by: "test",
+      at: "2026-11-07T00:00:00.000Z",
+    });
+  const outcome = (q: Question) => exportOpenStageSpreadsheet([q], { name: "t" }).report.items[0];
+
+  test("is left out with the reason, for a list and for a single letter", () => {
+    const list = outcome(withOptions("multipleResponse", [["A", true], ["A, B", true], ["B", false], ["Neither", false]]));
+    assert.equal(list?.outcome, "leftOut");
+    assert.match((list?.notes ?? []).join(" "), /Its Correct cell would read "A, B", which is also the words of another answer/);
+    const single = outcome(withOptions("multipleChoice", [["D", false], ["A", true], ["C", false], ["B", false]]));
+    assert.equal(single?.outcome, "leftOut", "the cell is B for the second answer, and the fourth answer is the words B");
+    assert.equal(outcome(withOptions("multipleChoice", [["D", false], ["A", true], ["C", false], ["E", false]]))?.outcome, "exported", "no answer is the words B");
+    const letterClash = outcome(withOptions("multipleChoice", [["x", true], ["y", false], ["z", false], ["A", false]]));
+    assert.equal(letterClash?.outcome, "leftOut", "the cell is A, and the fourth answer is the words A");
+  });
+
+  test("is written when the cell is a letter that is the words of the answer it names, or is no one's words", () => {
+    assert.notEqual(outcome(withOptions("multipleChoice", [["A", false], ["B", true], ["C", false]]))?.outcome, "leftOut");
+    assert.notEqual(outcome(withOptions("multipleResponse", [["Ice", true], ["Snow", true], ["Fire", false]]))?.outcome, "leftOut");
+  });
+});

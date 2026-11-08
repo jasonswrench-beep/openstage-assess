@@ -27,7 +27,7 @@ import type { RichText } from "../model/richtext.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { escapeXml } from "./moodle-xml.ts";
 import { flat, needsMarkup, num } from "./qti12.ts";
-import { buildReport, exportable, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, TYPE_NAMES } from "./text.ts";
+import { buildReport, exportable, hasText, htmlText, keyProblem, lossNotes, newLosses, plainText, safeName, scorable, TYPE_NAMES } from "./text.ts";
 
 export const COMMON_CARTRIDGE_ID = "common-cartridge";
 export const COMMON_CARTRIDGE_LABEL = "Common Cartridge 1.3 package (Brightspace)";
@@ -201,12 +201,23 @@ export function checkCommonCartridge(questions: readonly Question[], options: Co
 }
 
 /** The destination check, and the package to write. */
+/**
+ * Plans a question as QTI can score it (see `scorable`): a question worth no points is written worth 1, and the planner's report says so. Done here and
+ * not inside the planner, which narrows its question by its type.
+ */
+function planScored(question: Question, planIt: (q: Question) => Planned): Planned {
+  const extra: string[] = [];
+  const planned = planIt(scorable(question, extra));
+  if (extra.length === 0 || planned.item.outcome === "leftOut") return planned;
+  return { ...planned, item: { ...planned.item, outcome: "exportedWithLosses", notes: [...extra, ...planned.item.notes] } };
+}
+
 export function exportCommonCartridge(questions: readonly Question[], options: CommonCartridgeOptions = {}): ExportResult {
   questions = exportable(questions);
   const items: ReportItem[] = [];
   const written: string[] = [];
   questions.forEach((question, i) => {
-    const planned = plan(question, i + 1);
+    const planned = planScored(question, (q) => plan(q, i + 1));
     items.push(planned.item);
     if (planned.xml) written.push(planned.xml);
   });
