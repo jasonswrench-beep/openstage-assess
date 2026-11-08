@@ -490,7 +490,9 @@ back as "No questions were found" and 66 pieces of text no question used): the k
 false, the order of the items, and nothing else; a fill in the blank is a short answer since the file marks no blank; the rest is as
 in `CLAUDE.md`. Everything it reads was written by this program's own exporter or by hand from Blackboard's page; no file written by
 Blackboard has been read, and a file from a tool that writes more than this page documents (a quoted field, HTML, a points column)
-is not read as that.
+is not read as that. A zip that is Blackboard's own pool export (an `imsmanifest.xml` that names `x-bb-` resources and questions in
+`.dat` files) is named as what it is when it is imported, with what this program does read from Blackboard, and its `.dat` files are
+not read: none has been seen here, and a guess at their shape would be a guess at a key.
 
 ## Ideas taken from the wider discussion
 

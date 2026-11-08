@@ -397,7 +397,7 @@ function readNumbered(rows: Cell[][], context: Context): Line[] | undefined {
 // ---------------------------------------------------------------------------
 
 /** The page a cell of words ends with, in brackets: "... context. (Page 4)". */
-const PAGE_AT_END = /\s*\(\s*(?:pp?|pages?)\.?\s*(\d+(?:\s*[-–—,&]\s*\d+)*)\s*\)\s*$/i;
+const PAGE_AT_END = /(?<!\s)\s*\(\s*(?:pp?|pages?)\.?\s*(\d+(?:\s*[-–—,&]\s*\d+)*)\s*\)\s*$/i;
 
 /**
  * A matching exercise: a number, a term and its definition in each row, the cells between

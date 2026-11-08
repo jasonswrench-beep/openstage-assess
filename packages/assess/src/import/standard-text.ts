@@ -94,6 +94,8 @@ const PLACEHOLDER = PLACEHOLDER_TEXT;
 
 // The word `decorative` after the description marks a picture that carries no meaning, so that it needs no description: the Word
 // reader writes it when Word's own "mark as decorative" is set on the picture.
+/** How the note for a question whose kind the file never gave begins. The note for a file that may not be a bank looks for it. */
+const TYPE_NOT_SAID = "The file did not say what kind of question this is, so it was read as";
 const IMAGE_TAG = /\[\s*img\s*:\s*"([^"]*)"(?:\s*"([^"]*)")?(?:\s+(decorative))?\s*\]/gi;
 const HTML_BLOCK = /\[HTML\]([\s\S]*?)\[\/HTML\]/gi;
 
@@ -1268,7 +1270,7 @@ function buildQuestion(
           ? `The Type line said "${unknownHint}", which this profile does not know, so the type was worked out from the question and read as ${type}. Check it.`
           : keyNames
             ? `The file did not say what kind of question this is, and its answer marks ${keyNames} options as right, so it was read as ${type}. If only one was meant, it is a single-answer question: check it.`
-            : `The file did not say what kind of question this is, so it was read as ${type}. Check it.`,
+            : `${TYPE_NOT_SAID} ${type}. Check it.`,
         { source, field: "type" },
       ),
     );
@@ -1487,7 +1489,18 @@ function parseWithMath(input: string | SourceBlock[], options: ImportOptions): I
   // them an essay the file never said it was: 82 and 129 "questions needing review" on two real documents, with nothing at the top to
   // say the file may not be a bank. Every question a guess at an essay, and five or more of them, is said once for the file. A list of
   // essay prompts reads the same, so the words leave room for that.
-  const allGuessedEssays = questions.length >= 5 && questions.every((q) => q.type === "essay" && q.findings.some((f) => f.code === FindingCode.TypeInferred && !f.dismissed));
+  //
+  // Only where the file never named a kind (not `Type: SA`, which it did, or an answer that marked several options), where no question was
+  // given an answer (an `Answer:` line is what a bank has and an outline does not: it was kept as the essay's model answer), and where
+  // no stem holds its own options ("a) Ice b) Fire"), which a bank written on one line looks like. Each of those was a real bank that
+  // was told it might not be one.
+  const hasModelAnswer = (q: Question): boolean => (q.body as { modelAnswer?: unknown }).modelAnswer !== undefined;
+  const optionsInStem = (q: Question): boolean => /(?:^|\s)\(?[aA][.)]\s+\S[\s\S]*?\s\(?[bB][.)]\s+\S/.test(richTextToPlain(q.stem));
+  const allGuessedEssays =
+    questions.length >= 5 &&
+    questions.every(
+      (q) => q.type === "essay" && q.findings.some((f) => f.code === FindingCode.TypeInferred && !f.dismissed && f.message.startsWith(TYPE_NOT_SAID)) && !hasModelAnswer(q) && !optionsInStem(q),
+    );
   const notABankFindings = allGuessedEssays
     ? [
         finding(

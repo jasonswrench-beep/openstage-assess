@@ -18,6 +18,7 @@ import {
   mediaPlaceholder,
   normalizeCharacters,
   foldTypography,
+  isBlankText,
 } from "../src/model/richtext.ts";
 import { verdictFrom, finding } from "../src/model/findings.ts";
 import { checkAnswerKey, hasUsableKey } from "../src/quality/answer-key.ts";
@@ -103,6 +104,18 @@ describe("rich text", () => {
   test("a no-break space between the words of a line with typography becomes a space and nothing else changes", () => {
     const messy = "“Smart” – quotes… and spaces";
     assert.equal(normalizeCharacters(messy), "“Smart” – quotes… and spaces");
+  });
+
+  test("text that shows nothing is blank, and text with one visible character is never blank", () => {
+    const c = (code: number): string => String.fromCharCode(code);
+    // Written as code points, because a zero width space written out is invisible in a source file and cannot be told from nothing.
+    const invisible = [0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2060, 0xfeff, 0x00ad, 0x0000, 0x0001, 0x001f, 0x007f, 0x0080, 0x0090, 0x009f, 0x00a0, 0x2003, 0x3000, 0x2028, 0xfffe, 0xffff, 0x202a];
+    for (const code of invisible) assert.equal(isBlankText(c(code)), true, `U+${code.toString(16).padStart(4, "0")} alone`);
+    assert.equal(isBlankText(""), true);
+    assert.equal(isBlankText(" \t\n "), true);
+    assert.equal(isBlankText(invisible.map(c).join("")), true, "all of them together");
+    assert.equal(isBlankText(c(0xd800)), true, "a lone half of a surrogate pair is dropped by the cleaning, and so nothing is left");
+    for (const text of ["a", "0", ".", "-", c(0x200b) + "x" + c(0x200b), "é", "é", "字", "😀", "–", "…", "°", c(0x2122)]) assert.equal(isBlankText(text), false, JSON.stringify(text));
   });
 
   test("placeholders are found by collectRefs and ignored by the plain text", () => {

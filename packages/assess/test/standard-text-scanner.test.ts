@@ -640,4 +640,35 @@ describe("a file whose every question is a guess at an essay may not be a test b
     const bank = Array.from({ length: 8 }, (_, i) => `${i + 1}) Question ${i + 1}?\n*a. yes\nb. no`).join("\n");
     assert.equal(said(bank), undefined);
   });
+
+  // Found by an independent reviewer: each was a real bank told it might not be one, and "not worth repairing here" is the wrong thing to
+  // say to a person whose file is a bank.
+  describe("is not said of a bank the importer could not follow", () => {
+    const five = (make: (n: number) => string): string => Array.from({ length: 5 }, (_, i) => make(i + 1)).join("\n\n");
+    const guessed = (text: string): boolean => parse(text).questions.every((q) => q.type === "essay" && q.findings.some((f) => f.code === FindingCode.TypeInferred));
+
+    test("when the file did name a kind that is not known (Type: SA), because the file did say", () => {
+      const text = five((n) => `Type: SA\n${n}. What is the capital of country ${n}?`);
+      assert.equal(guessed(text), true, "the setup: every question is still a guessed essay");
+      assert.equal(said(text), undefined);
+    });
+
+    test("when the questions carry answers, which an outline does not have", () => {
+      const text = five((n) => `${n}. What is the capital of country ${n}?\nAnswer: City${n}`);
+      assert.equal(guessed(text), true);
+      assert.equal(said(text), undefined);
+      // The same prompts with no answers are said, so it is the answers that decide.
+      assert.ok(said(five((n) => `${n}. What is the capital of country ${n}?`)));
+    });
+
+    test("when the options are written inside the stem, on one line", () => {
+      const withAnswers = five((n) => `${n}. Which is cold?  a) Ice  b) Fire  c) Lava\nAnswer: a`);
+      assert.equal(guessed(withAnswers), true);
+      assert.equal(said(withAnswers), undefined);
+      const without = five((n) => `${n}. Which is cold?  a) Ice  b) Fire  c) Lava`);
+      assert.equal(guessed(without), true);
+      assert.equal(said(without), undefined, "no answer line, but the options are there");
+      assert.ok(said(five((n) => `${n}. Compare plan A with plan B in two paragraphs.`)), "a prompt that only mentions A and B, with no closing mark after them, is still a prompt");
+    });
+  });
 });
