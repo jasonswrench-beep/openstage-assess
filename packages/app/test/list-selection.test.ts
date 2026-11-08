@@ -150,7 +150,7 @@ describe("fillRows", () => {
 describe("the screens that use it", () => {
   const UI = join(import.meta.dirname, "..", "ui");
   for (const file of ["review.js", "bank.js"]) {
-    const source = readFileSync(join(UI, file), "utf8");
+    const source = readFileSync(join(UI, file), "utf8").replace(/\r\n/g, "\n"); // a Windows checkout is CRLF
     test(`${file} marks the chosen row in place when a question is chosen, and names each row for it`, () => {
       const select = /async function select\([^)]*\) \{[\s\S]*?\n  \}\n/.exec(source)?.[0] ?? "";
       assert.match(select, /markSelected\(list, /, "choosing a question marks the row");
@@ -166,7 +166,7 @@ describe("the screens that use it", () => {
     });
   }
   test("the bank starts again from the first thousand only when the search or filters change, and keeps how far it was shown after an edit", () => {
-    const source = readFileSync(join(UI, "bank.js"), "utf8");
+    const source = readFileSync(join(UI, "bank.js"), "utf8").replace(/\r\n/g, "\n"); // a Windows checkout is CRLF
     assert.match(source, /if \(suffix !== listedFor\) \{[\s\S]*?rowLimit = ROWS_AT_FIRST;/);
   });
 });

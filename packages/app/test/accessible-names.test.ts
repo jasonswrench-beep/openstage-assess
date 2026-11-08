@@ -26,7 +26,9 @@ type Node_ = FakeNode;
 
 const UI = join(import.meta.dirname, "..", "ui");
 const scripts = readdirSync(UI).filter((f) => f.endsWith(".js"));
-const source = (file: string): string => readFileSync(join(UI, file), "utf8");
+// Read with the line ends made plain: a checkout on Windows turns every file into CRLF, and a test that matches text across lines
+// (a "\n" in a pattern) failed there for anyone who cloned the repository.
+const source = (file: string): string => readFileSync(join(UI, file), "utf8").replace(/\r\n/g, "\n");
 
 describe("a tick box with an explanation", () => {
   test("is named by its words alone and described by the explanation, which sits under the words in the label", () => {
