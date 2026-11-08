@@ -9,7 +9,7 @@ import { ask } from "./dialogs.js";
 import { clear, h, plural, SEVERITY_NAMES } from "./dom.js";
 import { createEditor } from "./editor.js";
 import { arrowKeys, fillRows, markSelected, questionRow, ROWS_AT_FIRST } from "./list.js";
-import { notSavedBody, saveFields } from "./save-fields.js";
+import { notSavedBody, saveChoice, saveFields } from "./save-fields.js";
 
 /**
  * @param {HTMLElement} host
@@ -312,7 +312,7 @@ export async function renderReview(host, params, shell) {
       return;
     }
     const banks = /** @type {any[]} */ (state.banks).filter((b) => !b.error);
-    const { body: fields, modeNew, folderOn, titleInput, bankSelect, folderInput } = saveFields({ file: session.file, banks });
+    const fields = saveFields({ file: session.file, banks });
     const notes = [`${plural(kept, "question", "questions")} will be saved.`];
     if (c.skipped > 0) notes.push(`${plural(c.skipped, "question", "questions")} you left out will not be.`);
     if (c.failed > 0) notes.push(`${plural(c.failed, "question has", "questions have")} no usable answer yet. They are saved, marked as failed, so you can fix them in the bank.`);
@@ -321,13 +321,13 @@ export async function renderReview(host, params, shell) {
       title: "Save into a bank",
       body: [
         ...notes,
-        ...fields,
+        ...fields.body,
       ],
       actions: [
         { label: "Cancel", value: false },
         { label: "Save", value: true, primary: true },
       ],
-      collect: () => ({ isNew: modeNew.checked, title: titleInput.value.trim(), bank: bankSelect.value, folder: folderOn.checked ? folderInput.value.trim() : "" }),
+      collect: () => saveChoice(fields),
     });
     if (!answer || answer.value !== true) return;
     const choice = answer.collected;

@@ -200,8 +200,16 @@ describe("a PDF that is not in order", () => {
     "<< /Predictor 2 /Columns 4 /BitsPerComponent 0 >>",
     "<< /Predictor 12 /Columns 0 >>",
     "<< /Predictor 15 /Columns -1 >>",
+    // Found by a second reader: each number is above 0 and their product is not. Both are written as a decimal with 200 zeros.
+    `<< /Predictor 2 /Columns 0.${"0".repeat(200)}1 /Colors 0.${"0".repeat(200)}1 >>`,
+    // And values that passed the first check and lost the page without a word: not whole, too wide for a page, a depth there is not.
+    "<< /Predictor 2 /Columns 3.7 >>",
+    "<< /Predictor 12 /Columns 2147483648 >>",
+    `<< /Predictor 12 /Columns 1${"0".repeat(308)} >>`,
+    "<< /Predictor 12 /Columns 4 /BitsPerComponent 3 >>",
+    "<< /Predictor 15 /Columns 0.5 >>",
   ]) {
-    test(`a stream whose rows have no width (${parms}) is refused for that page in words, and does not hold the program`, () => {
+    test(`a stream whose rows have no width (${parms.length > 60 ? `${parms.slice(0, 45)}…` : parms}) is refused for that page in words, and does not hold the program`, () => {
       const bytes = pdf({ pages: [page(["page one is fine"]), page(["page two is not"]), page(["page three is fine"])], compress: true, parmsPage: 1, decodeParms: parms });
       const dir = mkdtempSync(join(tmpdir(), "openassess-pdf-"));
       try {
@@ -220,6 +228,14 @@ describe("a PDF that is not in order", () => {
       }
     });
   }
+
+  test("a stream that uses no predictor is left alone whatever its other parameters say, since they mean nothing to it", () => {
+    for (const parms of ["<< /Predictor 1 /Columns 0 /Colors 0 /BitsPerComponent 3 >>", "<< /Columns 0 >>", "<< /Predictor 3 /Columns -2 >>"]) {
+      const bytes = pdf({ pages: [page(["page one is fine"]), page(["page two is fine too"])], compress: true, parmsPage: 1, decodeParms: parms });
+      assert.deepEqual(linesOf(bytes), [["page one is fine"], ["page two is fine too"]], parms);
+      assert.doesNotMatch(notes(bytes), /cannot be right/, parms);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

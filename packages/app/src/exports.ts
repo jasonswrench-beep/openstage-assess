@@ -40,7 +40,7 @@ import {
 } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest } from "./errors.ts";
-import { checkName, cleanName, fitFileName, freeFileName } from "./library.ts";
+import { checkName, cleanName, fitFileName, fitNames, freeFileName } from "./library.ts";
 
 interface Destination {
   id: string;
@@ -137,7 +137,7 @@ export async function exportRoute(ctx: Context, req: ApiRequest, rawName: string
   // The file is named for the bank's title, made safe: a title such as CON is a name Windows will not give a file.
   const result = destination.run(questions, { name: cleanName(bank.manifest.title, "Questions"), media: bank.media });
 
-  if (action === "check") return { status: 200, json: { report: result.report, questions: questions.length } };
+  if (action === "check") return { status: 200, json: { report: fitNames(result.report), questions: questions.length } };
 
   const written: Array<{ name: string; path: string; questions: number }> = [];
   for (const file of result.files) {
@@ -146,5 +146,5 @@ export async function exportRoute(ctx: Context, req: ApiRequest, rawName: string
     await writeFile(path, file.bytes ?? file.content, "utf8");
     written.push({ name: fileName, path, questions: file.questions });
   }
-  return { status: 200, json: { report: result.report, written } };
+  return { status: 200, json: { report: fitNames(result.report), written } };
 }

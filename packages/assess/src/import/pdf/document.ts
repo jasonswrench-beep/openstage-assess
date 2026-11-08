@@ -17,9 +17,23 @@ import { isDict, isName, Lexer, numberOf, parseObject, PdfError, PdfName, PdfRef
 /** The largest file read, and the largest any one stream may grow to when it is unpacked. */
 export const MAX_PDF_BYTES = 300 * 1024 * 1024;
 const MAX_STREAM_BYTES = 256 * 1024 * 1024;
+/** The widest row of a predicted stream that is believed: 16 MiB is far more than a page of any picture holds. */
+const MAX_ROW_BYTES = 16 * 1024 * 1024;
 const MAX_PAGES = 5000;
 
 type XrefEntry = { kind: "file"; offset: number } | { kind: "stream"; stream: number; index: number };
+
+/** An object stream, with its objects still unread: each is read when it is asked for, and from its own start to the next one's. */
+interface ObjectStream {
+  data: Uint8Array;
+  first: number;
+  /** Where each object begins, from the start of the objects, by its number. */
+  offsets: Map<number, number>;
+  /** Where the object that begins at each of those places ends: where the next begins, or the end of the data. */
+  ends: Map<number, number>;
+  /** What has been read, by where it begins. */
+  read: Map<number, PdfObject>;
+}
 
 export interface PdfPageInfo {
   /** Counting from 1. */
@@ -44,7 +58,7 @@ export class PdfDocument {
   private readonly xref = new Map<number, XrefEntry>();
   private readonly cache = new Map<number, PdfObject>();
   private readonly resolving = new Set<number>();
-  private readonly objectStreams = new Map<number, Map<number, PdfObject>>();
+  private readonly objectStreams = new Map<number, ObjectStream>();
   private base = 0;
 
   constructor(bytes: Uint8Array) {
@@ -151,8 +165,15 @@ export class PdfDocument {
       const w = object.dict.get("W");
       if (!Array.isArray(w) || w.length < 3) return undefined;
       const [w1, w2, w3] = w.map((n) => numberOf(n)) as [number, number, number];
+      // Each field is 0 to 8 bytes wide and an entry is at least one byte. The loop below counts entries by a number the file gives
+      // and takes each from the data, so a width of 0 made it count to 1e9 without taking anything (5 seconds and 1.2 GB from 244
+      // bytes), a negative one counted to 1e20, and a width of 1e12 for one field was a loop of its own in `read`. A table that cannot
+      // be right is no table: the objects are found by searching, which says so.
+      if (![w1, w2, w3].every((n) => Number.isInteger(n) && n >= 0 && n <= 8) || w1 + w2 + w3 === 0) return undefined;
       const size = numberOf(object.dict.get("Size"));
-      const index = Array.isArray(object.dict.get("Index")) ? (object.dict.get("Index") as number[]) : [0, size];
+      const rawIndex = object.dict.get("Index");
+      const index = Array.isArray(rawIndex) ? rawIndex.map((n) => numberOf(n, Number.NaN)) : [0, size];
+      if (!index.every((n) => Number.isInteger(n) && n >= 0)) return undefined;
       const width = w1 + w2 + w3;
       let p = 0;
       const read = (n: number): number => {
@@ -200,7 +221,7 @@ export class PdfDocument {
         try {
           const contents = this.loadObjectStream(num);
           let i = 0;
-          for (const inner of contents.keys()) {
+          for (const inner of contents.offsets.keys()) {
             if (!this.xref.has(inner)) this.xref.set(inner, { kind: "stream", stream: num, index: i });
             i++;
           }
@@ -280,7 +301,7 @@ export class PdfDocument {
     return new PdfStream(object, b.subarray(start, end));
   }
 
-  private loadObjectStream(num: number): Map<number, PdfObject> {
+  private loadObjectStream(num: number): ObjectStream {
     const cached = this.objectStreams.get(num);
     if (cached) return cached;
     const stream = this.get(num);
@@ -290,19 +311,34 @@ export class PdfDocument {
     const first = numberOf(stream.dict.get("First"));
     if (n < 0 || n > 1_000_000 || first < 0 || first > data.length) throw new PdfError(`An object stream (${num}) in this PDF is not well formed.`);
     const head = new Lexer(data, 0);
-    const pairs: Array<[number, number]> = [];
+    const offsets = new Map<number, number>();
     for (let i = 0; i < n; i++) {
       const id = head.next();
       const off = head.next();
       if (id.t !== "num" || off.t !== "num") break;
-      pairs.push([id.v, off.v]);
+      if (!offsets.has(id.v) && Number.isInteger(off.v) && off.v >= 0) offsets.set(id.v, off.v);
     }
-    const out = new Map<number, PdfObject>();
-    for (const [id, off] of pairs) {
-      if (!out.has(id)) out.set(id, parseObject(new Lexer(data, first + off)));
-    }
-    this.objectStreams.set(num, out);
-    return out;
+    // Every object used to be read as soon as the stream was opened, each from its start to the end of the data. An offset that
+    // pointed at a bracket that never closed made each of 2000 objects run to the end of 50,000 numbers: 90 seconds from 5 KB. An
+    // object is now read when it is asked for, and no further than the start of the next one, so that however many are asked for the
+    // reading of all of them is no more than the length of the data.
+    const starts = [...new Set(offsets.values())].sort((a, b) => a - b);
+    const ends = new Map<number, number>();
+    starts.forEach((start, i) => ends.set(start, i + 1 < starts.length ? (starts[i + 1] as number) : Math.max(0, data.length - first)));
+    const opened: ObjectStream = { data, first, offsets, ends, read: new Map() };
+    this.objectStreams.set(num, opened);
+    return opened;
+  }
+
+  /** One object of an object stream, read the first time it is asked for. */
+  private innerObject(stream: ObjectStream, id: number): PdfObject {
+    const start = stream.offsets.get(id);
+    if (start === undefined) return null;
+    if (stream.read.has(start)) return stream.read.get(start) as PdfObject;
+    const end = stream.first + (stream.ends.get(start) as number);
+    const value = parseObject(new Lexer(stream.data.subarray(0, Math.min(end, stream.data.length)), stream.first + start));
+    stream.read.set(start, value);
+    return value;
   }
 
   /** An object by number. A number that is not in the file is null, as the format says. */
@@ -317,7 +353,7 @@ export class PdfDocument {
       if (entry.kind === "file") object = this.readIndirectAt(entry.offset);
       else {
         // An object stream holds its objects under the numbers its own header gives, and the table gives the same number.
-        object = this.loadObjectStream(entry.stream).get(num) ?? null;
+        object = this.innerObject(this.loadObjectStream(entry.stream), num);
       }
       this.cache.set(num, object);
       return object;
@@ -423,13 +459,17 @@ export class PdfDocument {
     const bits = this.number(parms.get("BitsPerComponent"), 8);
     // A stream that says it has no columns, no colours or no bits has rows of no width. The loop below steps a row at a time, so a
     // row of 0 bytes never got anywhere: a PDF of 509 bytes with /Predictor 2 and /Columns 0 kept the whole program busy for as long
-    // as it was left (found by reading the loop's bound, which no damaged-file run had reached). A negative or odd number is the same
-    // fault by another road, so every one that is not a plain positive number is refused in words and not guessed at.
-    if (![columns, colors, bits].every((n) => Number.isFinite(n) && n > 0)) {
+    // as it was left (found by reading the loop's bound, which no damaged-file run had reached). The first fix checked each number
+    // for being above 0, and /Columns and /Colors written as 0.(200 zeros)1 passed it and multiplied to 0 again. So what is checked
+    // is what the loop uses: whole numbers of columns and colours, a depth the format has, and a row that is at least one byte and
+    // not larger than anything a page could hold. Every other value is refused in words and not guessed at (a row of 2147483648
+    // bytes read as no rows, and the page was lost without a word).
+    const whole = (n: number): boolean => Number.isInteger(n) && n >= 1;
+    const rowBytes = Math.ceil((columns * colors * bits) / 8);
+    if (!whole(columns) || !whole(colors) || ![1, 2, 4, 8, 16].includes(bits) || !(rowBytes >= 1 && rowBytes <= MAX_ROW_BYTES)) {
       throw new PdfError("A stream in this PDF describes its rows with a width, colour count or bit depth that cannot be right, so it was not read.");
     }
     const bpp = Math.max(1, Math.ceil((colors * bits) / 8));
-    const rowBytes = Math.ceil((columns * colors * bits) / 8);
     if (predictor === 2) {
       if (bits !== 8) return data;
       const out = Uint8Array.from(data);
@@ -546,18 +586,36 @@ function ascii85(data: Uint8Array): Uint8Array {
   return Uint8Array.from(out);
 }
 
-function runLength(data: Uint8Array): Uint8Array {
-  const out: number[] = [];
+export function runLength(data: Uint8Array, cap = MAX_STREAM_BYTES): Uint8Array {
+  // The output is bytes in a growing typed array and the limit is looked at before a run is written. It was a plain array of numbers,
+  // 8 bytes for each byte of output, checked after each run: 2 KB of runs of 128 made 2 GB of memory before the limit was reached, and
+  // at 2.2 million runs it ended in "Invalid array length", words that mean nothing to the person who opened the file.
+  let out = new Uint8Array(Math.min(Math.max(1024, data.length * 2), cap));
+  let length = 0;
+  const room = (extra: number): void => {
+    if (length + extra > cap) throw new PdfError("A stream in this PDF unpacks to more than a test bank could hold.");
+    if (length + extra > out.length) {
+      const bigger = new Uint8Array(Math.min(cap, Math.max(out.length * 2, length + extra)));
+      bigger.set(out.subarray(0, length));
+      out = bigger;
+    }
+  };
   for (let i = 0; i < data.length; ) {
     const n = data[i++] as number;
     if (n === 128) break;
     if (n < 128) {
-      for (let k = 0; k <= n && i < data.length; k++) out.push(data[i++] as number);
+      const count = Math.min(n + 1, data.length - i);
+      room(count);
+      out.set(data.subarray(i, i + count), length);
+      length += count;
+      i += count;
     } else {
       const v = data[i++] as number;
-      for (let k = 0; k < 257 - n; k++) out.push(v);
+      const count = 257 - n;
+      room(count);
+      out.fill(v, length, length + count);
+      length += count;
     }
-    if (out.length > MAX_STREAM_BYTES) throw new PdfError("A stream in this PDF unpacks to more than a test bank could hold.");
   }
-  return Uint8Array.from(out);
+  return out.slice(0, length);
 }

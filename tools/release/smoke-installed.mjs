@@ -532,6 +532,31 @@ try {
   const longPrint = await send("POST", `${longBank}/print`, { kinds: ["student", "key"], formats: ["docx"] });
   const longPrinted = await longPrint.json();
   check("and prints under names cut to fit", longPrint.status === 200 && (longPrinted.written ?? []).length === 2 && longPrinted.written.every((w) => w.name.length <= 80), `${longPrint.status} ${JSON.stringify(longPrinted).slice(0, 120)}`);
+  // New in alpha 21, after two readers of those fixes: the PDF guard is not passed by numbers whose product underflows, a zip with two
+  // names for one stretch of data is refused in words, and the second export of a long title can be downloaded.
+  const tinyNumber = `0.${"0".repeat(200)}1`;
+  const underflowPdf = buildPdf14({ pages: [at14(36, 700, 12, "Page one is fine."), at14(36, 700, 12, "Page two is the bad one.")], compress: true, parmsPage: 1, decodeParms: `<< /Predictor 2 /Columns ${tinyNumber} /Colors ${tinyNumber} >>`, fonts: { F1: { kind: "simple", base: "Helvetica", widths: widths14 } } });
+  let underflowStatus = 0;
+  let underflowText = "";
+  try {
+    const reply = await fetch(base + "/api/import?name=underflow.pdf", { method: "POST", headers: { cookie, "x-openassess": "1" }, body: new Uint8Array(underflowPdf), signal: AbortSignal.timeout(20000) });
+    underflowStatus = reply.status;
+    underflowText = await reply.text();
+  } catch (error) {
+    underflowText = String(error);
+  }
+  check("a PDF whose row width underflows to 0 is answered within 20 seconds and the app keeps answering", underflowStatus === 200 && (await send("GET", "/api/state")).status === 200, `${underflowStatus} ${underflowText.slice(0, 80)}`);
+  const { craft: craftZip, deflated: deflatedEntry } = await import(pathToFileURL(join(repo, "packages/assess/test/support/zip-craft.ts")).href);
+  const sharedFirst = deflatedEntry("a.xml", new Uint8Array(1000));
+  const shared = craftZip([sharedFirst, { ...sharedFirst, name: "b.xml", shareWith: 0 }]);
+  const sharedReply = await send("POST", "/api/import?name=shared.zip", new Uint8Array(shared));
+  const sharedText = await sharedReply.text();
+  check("a zip with two names for one stretch of data is refused in words, as a finding on the file and not as a hang or a crash", /same place as another file/.test(sharedText) && /"severity":"error"/.test(sharedText), `${sharedReply.status} ${sharedText.slice(0, 100)}`);
+  const secondExport = await send("POST", `${longBank}/export`, { destination: "common-cartridge" });
+  const secondExported = await secondExport.json();
+  const secondName = secondExported.written?.[0]?.name ?? "";
+  const downloaded = await send("GET", `/files/${encodeURIComponent(secondName)}`);
+  check("the second export of a 70-character title is a file that can be downloaded", secondExport.status === 200 && secondName.length <= 80 && downloaded.status === 200, `${secondExport.status} ${secondName.length} chars, download ${downloaded.status}`);
   const appJs = await text("/app.js");
   const saveFieldsJs = await text("/save-fields.js");
   check("the skip link is wired to move focus, and not left to the address", /skipTo\(/.test(appJs) && domJs.includes("export function skipTo") && /event\.preventDefault\(\)/.test(domJs));

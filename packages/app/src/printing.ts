@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { printOptions, printTest, STATUSES, type DestinationReport, type PrintFormat, type PrintOptions, type Question } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest } from "./errors.ts";
-import { checkName, fitFileName, freeFileName } from "./library.ts";
+import { checkName, fitFileName, fitNames, freeFileName } from "./library.ts";
 
 const KINDS = ["student", "key"] as const;
 const FORMATS = ["docx", "pdf"] as const;
@@ -110,9 +110,10 @@ export async function printRoute(ctx: Context, req: ApiRequest, rawName: string,
       const result = printTest(questions, options, format, at);
       // The report of a copy covers every format it is made in: the files of each, and the notes that are true of any.
       const before = reports[kind];
+      const shown = fitNames(result.report); // the names the check lists are the ones that will be written
       reports[kind] = before
-        ? { ...before, files: [...before.files, ...result.report.files], general: [...new Set([...before.general, ...result.report.general])] }
-        : result.report;
+        ? { ...before, files: [...before.files, ...shown.files], general: [...new Set([...before.general, ...shown.general])] }
+        : shown;
       if (action === "write" && result.file.bytes.length > 0) {
         const fileName = await freeFileName(ctx.library.exports, checkName(fitFileName(result.file.name)));
         const path = join(ctx.library.exports, fileName);
