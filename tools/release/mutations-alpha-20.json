@@ -1,0 +1,299 @@
+[
+  {
+    "label": "first screen starts focused again",
+    "file": "packages/app/ui/app.js",
+    "from": "let firstScreen = true;",
+    "to": "let firstScreen = false;",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "first screen flag never cleared where a screen is shown",
+    "file": "packages/app/ui/app.js",
+    "from": "    firstScreen = false;\n    return;",
+    "to": "    return;",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "save choice: new/old inverted",
+    "file": "packages/app/ui/save-fields.js",
+    "from": "isNew: fields.modeNew.checked,",
+    "to": "isNew: !fields.modeNew.checked,",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "save choice: bank taken from the title box",
+    "file": "packages/app/ui/save-fields.js",
+    "from": "bank: fields.bankSelect.value,",
+    "to": "bank: fields.titleInput.value,",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "save choice: folder ignores its tick box",
+    "file": "packages/app/ui/save-fields.js",
+    "from": "folder: fields.folderOn.checked ? fields.folderInput.value.trim() : \"\",",
+    "to": "folder: fields.folderInput.value.trim(),",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "not-saved list truncated",
+    "file": "packages/app/ui/save-fields.js",
+    "from": "...failed.map(",
+    "to": "...failed.slice(0, 1).map(",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "not-saved dialog only when two or more",
+    "file": "packages/app/ui/review.js",
+    "from": "const failed = result.notSaved.length > 0;",
+    "to": "const failed = result.notSaved.length > 1;",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "folder box loses maxlength",
+    "file": "packages/app/ui/save-fields.js",
+    "from": "attrs: { maxlength: \"80\", \"aria-label\": FOLDER }",
+    "to": "attrs: { \"aria-label\": FOLDER }",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "navigation after the dialog not encoded",
+    "file": "packages/app/ui/review.js",
+    "from": "shell.go(`#/bank/${encodeURIComponent(result.bank)}`);",
+    "to": "shell.go(`#/bank/${result.bank}`);",
+    "tests": [
+      "packages/app/test/accessible-names.test.ts"
+    ]
+  },
+  {
+    "label": "cookie matched by prefix",
+    "file": "packages/app/src/server.ts",
+    "from": "part.slice(0, at).trim() === name",
+    "to": "part.slice(0, at).trim().startsWith(name)",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "sheets paper not fitted",
+    "file": "packages/app/src/sheets.ts",
+    "from": "checkName(fitFileName(file.name))",
+    "to": "checkName(file.name)",
+    "tests": [
+      "packages/app/test/sheets.test.ts"
+    ]
+  },
+  {
+    "label": "results export not fitted",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "checkName(fitFileName(wanted))",
+    "to": "checkName(wanted)",
+    "tests": [
+      "packages/app/test/sheets.test.ts"
+    ]
+  },
+  {
+    "label": "fitFileName boundary < for <=",
+    "file": "packages/app/src/library.ts",
+    "from": "if (name.length <= limit) return name;",
+    "to": "if (name.length < limit) return name;",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "uniqueName number not counted",
+    "file": "packages/app/src/library.ts",
+    "from": "cutAt(base, MAX_NAME - number.length)",
+    "to": "cutAt(base, MAX_NAME)",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "freeFileName number not counted",
+    "file": "packages/app/src/library.ts",
+    "from": "fitFileName(name, MAX_NAME - number.length)",
+    "to": "fitFileName(name, MAX_NAME)",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "cut may split an emoji",
+    "file": "packages/app/src/library.ts",
+    "from": "? cut.slice(0, -1) : cut;",
+    "to": "? cut : cut;",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "leading dots only, as before the fix",
+    "file": "packages/app/src/library.ts",
+    "from": ".replace(/^[. ]+/, \"\"),",
+    "to": ".replace(/^\\.+/, \"\"),",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "check lists the uncut names",
+    "file": "packages/app/src/exports.ts",
+    "from": "json: { report: fitNames(result.report), questions: questions.length }",
+    "to": "json: { report: result.report, questions: questions.length }",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "print check lists the uncut names",
+    "file": "packages/app/src/printing.ts",
+    "from": "const shown = fitNames(result.report);",
+    "to": "const shown = result.report;",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "export write not fitted",
+    "file": "packages/app/src/exports.ts",
+    "from": "checkName(fitFileName(file.name))",
+    "to": "checkName(file.name)",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "print write not fitted",
+    "file": "packages/app/src/printing.ts",
+    "from": "checkName(fitFileName(result.file.name))",
+    "to": "checkName(result.file.name)",
+    "tests": [
+      "packages/app/test/server.test.ts"
+    ]
+  },
+  {
+    "label": "predictor guard throws a plain Error",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "throw new PdfError(\"A stream in this PDF describes its rows",
+    "to": "throw new Error(\"A stream in this PDF describes its rows",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "predictor guard moved above the early return",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "    const predictor = this.number(parms.get(\"Predictor\"), 1);\n    if (predictor < 10 && predictor !== 2) return data;",
+    "to": "    const predictor = this.number(parms.get(\"Predictor\"), 1);\n    if (predictor === 99) return data;",
+    "tests": [
+      "packages/assess/test/pdf.test.ts"
+    ]
+  },
+  {
+    "label": "predictor guard: columns may be fractional",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const whole = (n: number): boolean => Number.isInteger(n) && n >= 1;",
+    "to": "const whole = (n: number): boolean => n >= 1;",
+    "tests": [
+      "packages/assess/test/pdf.test.ts"
+    ]
+  },
+  {
+    "label": "predictor guard: any bit depth",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "![1, 2, 4, 8, 16].includes(bits)",
+    "to": "!(bits >= 1)",
+    "tests": [
+      "packages/assess/test/pdf.test.ts"
+    ]
+  },
+  {
+    "label": "predictor guard: no row limit",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "rowBytes >= 1 && rowBytes <= MAX_ROW_BYTES",
+    "to": "rowBytes >= 1",
+    "tests": [
+      "packages/assess/test/pdf.test.ts"
+    ]
+  },
+  {
+    "label": "xref widths: sum may be zero",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "|| w1 + w2 + w3 === 0) return undefined;",
+    "to": ") return undefined;",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "font widths: no budget",
+    "file": "packages/assess/src/import/pdf/fonts.ts",
+    "from": "let budget = MAX_WIDTHS_SET;",
+    "to": "let budget = Infinity;",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "ToUnicode: unterminated block rescanned",
+    "file": "packages/assess/src/import/pdf/cmap.ts",
+    "from": "if (to === -1) return;",
+    "to": "if (to === -1) { at = bodyAt; continue; }",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "object stream read to the end of the data",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const end = stream.first + (stream.ends.get(start) as number);",
+    "to": "const end = stream.data.length;",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "run length limit looked at after",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "if (length + extra > cap) throw",
+    "to": "if (length > cap) throw",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "zip: two names for one data allowed",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "if (placed.has(localOffset)) {",
+    "to": "if (false) {",
+    "tests": [
+      "packages/assess/test/zip-limits.test.ts"
+    ]
+  },
+  {
+    "label": "zip: room may be 0 again",
+    "file": "packages/assess/src/container/zip.ts",
+    "from": "const room = Math.max(1, limit - made);",
+    "to": "const room = Math.max(0, limit - made);",
+    "tests": [
+      "packages/assess/test/zip-limits.test.ts"
+    ]
+  }
+]

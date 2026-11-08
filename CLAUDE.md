@@ -77,11 +77,20 @@ the engine in `OpenReport`, the app in the amber box on the bank screen. A branc
 keep it is a bug (two were found). Do not add a path that drops a file the reader could not understand. A reader is also not slow on a damaged file: a pattern that
 begins with white space and is not anchored with `^` took N squared steps on a run of N spaces (a line of 100,000 spaces took 8 seconds,
 a table's first rows with cells of 32,767 spaces took 27), so such a pattern starts with `(?<!\s)` and the option patterns skip the space
-after a star only when there is a star; `long-lines.test.ts` puts runs in every place a line can have one. A loop that steps by a number the file
-supplies must refuse a step that is not positive: a PDF stream with `/Predictor 2` and `/Columns 0` made the PDF reader step by 0 and never
-end (509 bytes froze the app), and no damaged-file run had hit it because it needs one number, so `pdf.test.ts` runs the cases in a process of
-its own with a time limit. A limit on what a zip expands to is kept on what its entries really made and not on the sizes they declare (many
-names may point at one stretch of data, each declaring 0), `zip-names.test.ts`.
+after a star only when there is a star; `long-lines.test.ts` puts runs in every place a line can have one. A small file must not be able to ask for
+minutes or gigabytes, and the way it did was always a count or a step that came from the file: a PDF stream with `/Predictor 2` and `/Columns 0`
+made the reader step by 0 and never end (509 bytes froze the app), and the first fix, which checked that each number is above 0, was
+passed by `/Columns` and `/Colors` written as 0.(200 zeros)1 whose product is 0, so what is checked is what the loop uses (the step, a
+whole number of columns and colours, a depth the format has, a row that fits a page). The same class was found in the cross-reference stream
+(entry widths of 0, a negative width, a count of 1e20), a font's width ranges (100,000 ranges of 70,000 codes), a character map never
+closed (a lazy pattern from every `begin`), an object stream (every object read to the end of the data), and run-length data (a number
+array, 8 bytes for each byte out). None of these is reached by a damaged-file run, because each needs one number or one repeated word to
+be exactly wrong, so `pdf-hostile.test.ts` reads each in a process of its own with a time limit. A limit on what a zip expands to is
+kept on what its entries really made and not on the sizes they declare, two names for one stretch of data are refused (10,000 of them
+cost 20 seconds and made nothing), and an empty entry is not turned away for holding too much (`zip-limits.test.ts`). Not bounded yet, and
+listed in `docs/review-findings.md`: a character map's lookup over every range, one line of very many text runs, deeply nested arrays in
+a content stream (a RangeError's words reach the person), and the peak memory of a zip, which is the limit plus an entry and is not pinned
+by a test.
 
 **A folder is a way of finding questions and never a place one can be lost.** Taking a folder away (`Bank.removeFolder`) leaves its
 questions in the bank, in no folder, and moves the folders inside it up (a name that would clash is numbered, never merged); a folder
@@ -141,7 +150,12 @@ interface sets all text with `textContent`, never as markup (`server.test.ts`
 reads every script for `innerHTML`). The key cookie is named for the port (a cookie belongs to a host and not a port, so two copies on
 127.0.0.1 shared one and the second took the first's key), and a file name the program makes itself (a bank's title with the kind of file
 after it) is cut to fit with `fitFileName` and never refused as though a stranger had sent it, while a name that comes from outside is
-still checked with `checkName` and refused. Do not loosen any of it to make something
+still checked with `checkName` and refused. A name that is made is checked against what will be asked of it later: `freeFileName` and
+`uniqueName` count the number they add (" 2") in the length, because the second export of a title that fitted exactly was written 82
+characters long and then could not be downloaded; the list a check shows is the list of names that will be written (`fitNames`); a cut
+never splits an emoji (a lone half makes `encodeURIComponent` throw, and "URI malformed" is what the person saw in place of a finished
+export); and `cleanName` takes the dots and spaces at the start together, because a space left behind by dots made a name `checkName`
+refuses (`server.test.ts`, `sheets.test.ts`). Do not loosen any of it to make something
 easier to test.
 
 **A table's columns are never assumed.** A spreadsheet or CSV is read by the names in its
@@ -490,7 +504,7 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 2998 engine tests and 349 app tests, Node's own runner
+npm test                       # 3020 engine tests and 357 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
@@ -509,7 +523,7 @@ npm run assess -- check <bank> [--save]   # notes on the writing of each questio
 npm run assess -- coverage <bank> [--rows objective] [--cols bloom]   # what the bank covers: questions by objective, chapter, tag, Bloom level and so on
 npm run assess -- blueprint <bank> list|add|draw|remove   # a stored recipe for a test; draw writes nothing and says how short each rule came out and why
 npm run assess -- contract     # the read contract and consumer capabilities
-node tools/release/compare-installer-files.mjs   # after a build: every file the installer carries against the committed tree
+node tools/release/compare-installer-files.mjs   # after a build: every file in the folder the installer is built from against the committed tree
 node tools/release/smoke-installed.mjs           # after a build: the app as the installer carries it, through import, save, print and export (tools/release/README.md)
 npm run check:word --workspace packages/assess   # asks Word itself what its lists show (Windows with Word)
 npm run check:word-formatting --workspace packages/assess   # asks Word itself how text looks

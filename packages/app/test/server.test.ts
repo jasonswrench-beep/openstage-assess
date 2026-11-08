@@ -6,13 +6,14 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { docx, paragraph, run } from "../../assess/test/support/docx-writer.ts";
 import { Bank, unzipSync } from "../src/engine.ts";
-import { checkName, cleanName, fitFileName } from "../src/library.ts";
+import { checkName, cleanName, fitFileName, freeFileName, uniqueName } from "../src/library.ts";
 import { revealCommand } from "../src/server.ts";
 import { chunkedPost, liarPost, liarPostReply, rawRequest, withApp, type Client } from "./support/app.ts";
 
@@ -94,6 +95,12 @@ describe("who is let in", () => {
           assert.equal(own.status, 200, "a copy finds its own key among both");
           const foreign = await rawRequest(copy.server.port, "/api/state", { host: `127.0.0.1:${copy.server.port}`, cookie: other.cookie });
           assert.equal(foreign.status, 401, "and does not accept the other copy's key");
+        }
+        // The name is matched whole: the same key under a name that merely starts or ends like it, or a different port, is not a key.
+        const [name, token] = first.cookie.split("=") as [string, string];
+        for (const cookie of [`${name}x=${token}`, `x${name}=${token}`, `${name.slice(0, -1)}=${token}`, `${name}0=${token}`, `${name.toUpperCase()}=${token}`]) {
+          const reply = await rawRequest(first.server.port, "/api/state", { host: `127.0.0.1:${first.server.port}`, cookie });
+          assert.equal(reply.status, 401, cookie.replace(token, "<key>"));
         }
       });
     });
@@ -292,6 +299,69 @@ describe("the library", () => {
     }
     assert.equal(cleanName(`${"a".repeat(79)}.b`), "a".repeat(79), "the full stop that the cut left at the end is taken off");
     assert.equal(cleanName("  ...  "), "Untitled");
+  });
+
+  // Found by a reader of the first fix: dropping the final trim left the space that follows leading dots, and a name that is not its own
+  // trim is one checkName refuses. These titles made a bank before the fix and did not after it.
+  test("a title that begins with dots and a space still makes a name that is accepted, as it did before", () => {
+    for (const [title, expected] of [[". Intro to Psych", "Intro to Psych"], [".. Chapter 3", "Chapter 3"], ["... and then", "and then"], [" . a", "a"], [". . .x", "x"]] as const) {
+      const name = cleanName(title);
+      assert.equal(name, expected, JSON.stringify(title));
+      assert.equal(checkName(name), name);
+    }
+  });
+
+  // Found by a reader who cut names at every length: a cut between the two halves of an emoji left half of one, which the file system
+  // keeps as a replacement character and `encodeURIComponent` refuses, so a finished export or a new bank ended in "URI malformed".
+  test("a name is never cut in the middle of an emoji, by either cut", () => {
+    const whole = (name: string): void => {
+      assert.doesNotThrow(() => encodeURIComponent(name), JSON.stringify(name));
+      assert.ok(name.length <= 80);
+    };
+    for (let n = 70; n <= 82; n++) whole(cleanName(`${"a".repeat(n)}${"😀".repeat(5)}`));
+    for (let n = 30; n <= 60; n++) whole(fitFileName(`${"😀".repeat(n)} - Brightspace.csv`));
+    for (let n = 30; n <= 70; n++) whole(fitFileName(`${"b".repeat(n)}${"😀".repeat(20)}.txt`));
+  });
+
+  test("a name of exactly the longest length is left alone, and one more is cut", () => {
+    assert.equal(fitFileName("a".repeat(80)), "a".repeat(80));
+    assert.equal(fitFileName(`${"a".repeat(76)}.csv`), `${"a".repeat(76)}.csv`);
+    const cut = fitFileName("a".repeat(81));
+    assert.ok(cut.length <= 80 && cut.endsWith("…"), cut);
+    assert.ok(fitFileName(`${"a".repeat(77)}.csv`).length <= 80);
+  });
+
+  // Found by a reader: " 2" was added after the check, so the second file of a name that fitted exactly was 82 long. It was written
+  // and listed and then could not be downloaded, because the download checks the name again.
+  test("the number that keeps a new file from replacing an old one is counted in the length, for a file and for a bank", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openassess-names-"));
+    try {
+      for (const wanted of [`${"x".repeat(60)} - Brightspace.csv`, `${"y".repeat(100)}.txt`, `${"😀".repeat(45)} - Common Cartridge.imscc`, `${"z".repeat(80)}`, "short.csv"]) {
+        const seen = new Set<string>();
+        for (let i = 0; i < 14; i++) {
+          const name = await freeFileName(dir, wanted);
+          assert.ok(name.length <= 80, `${name.length} characters: ${name}`);
+          assert.equal(checkName(name), name, "and it is a name that can be downloaded");
+          assert.doesNotThrow(() => encodeURIComponent(name));
+          assert.ok(!seen.has(name), `${name} came twice, so a file would have been written over`);
+          seen.add(name);
+          writeFileSync(join(dir, name), "x");
+        }
+        if (wanted === "short.csv") assert.ok(seen.has("short 2.csv") && seen.has("short 3.csv"), "a short name is numbered as it always was");
+      }
+      for (const title of ["a".repeat(79), "b".repeat(90), `${"c".repeat(78)} d`]) {
+        const seen = new Set<string>();
+        for (let i = 0; i < 12; i++) {
+          const name = await uniqueName(dir, title, ".openassess");
+          assert.ok(name.length <= 80 && checkName(name) === name, name);
+          assert.ok(!seen.has(name), `${name} came twice`);
+          seen.add(name);
+          writeFileSync(join(dir, `${name}.openassess`), "x");
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("a name the program makes itself is cut to fit, with the start of the title and the end of the name kept, and a short one is left alone", () => {
@@ -878,15 +948,25 @@ describe("exporting", () => {
         assert.equal(title.length, length);
         const bank = await seeded(client, title);
         for (const destination of ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "qti-2.1", "common-cartridge", "blackboard-upload"]) {
-          const checked = await client.post(`${bank}/export/check`, { destination });
+          const checked = await client.post<{ report: { files: string[] } }>(`${bank}/export/check`, { destination });
           assert.equal(checked.status, 200, `${destination} check, title of ${length}: ${checked.text}`);
-          const written = await client.post(`${bank}/export`, { destination });
-          assert.equal(written.status, 200, `${destination}, title of ${length}: ${written.text}`);
-          for (const file of written.json["written"] as Array<{ name: string }>) {
-            assert.ok(file.name.length <= 80, `${destination}: ${file.name}`);
-            assert.ok(readdirSync(join(home, "Exports")).includes(file.name), `${file.name} is in the folder`);
-            assert.match(file.name, /\.[a-z0-9]+$/, "and keeps its extension, so the computer knows what it is");
+          // Writing three times: the second and third files are numbered, and every one must be a name that can be downloaded again.
+          const everyName: string[] = [];
+          for (let round = 1; round <= 3; round++) {
+            const written = await client.post(`${bank}/export`, { destination });
+            assert.equal(written.status, 200, `${destination}, title of ${length}, write ${round}: ${written.text}`);
+            const names = (written.json["written"] as Array<{ name: string }>).map((f) => f.name);
+            if (round === 1) assert.deepEqual([...names].sort(), [...checked.json.report.files].sort(), `${destination}: what the check lists is what is written`);
+            for (const name of names) {
+              assert.ok(name.length <= 80, `${destination}: ${name}`);
+              assert.ok(readdirSync(join(home, "Exports")).includes(name), `${name} is in the folder`);
+              assert.match(name, /\.[a-z0-9]+$/, "and keeps its extension, so the computer knows what it is");
+              const download = await client.get(`/files/${encodeURIComponent(name)}`);
+              assert.equal(download.status, 200, `${destination}, write ${round}: ${name} (${name.length}) cannot be downloaded: ${download.text}`);
+              everyName.push(name);
+            }
           }
+          assert.equal(new Set(everyName).size, everyName.length, `${destination}: three writes make three different files`);
         }
       });
     }
@@ -1149,14 +1229,22 @@ describe("printing", () => {
       await withApp(async (client, home) => {
         const title = "Psychology Chapter Three Test Bank Fall Section 002 ".repeat(3).slice(0, length).replace(/ $/, "x");
         const base = await seeded(client, title);
-        const written = await client.post(`${base}/print`, { ...both, title, versionLabel: "Version B" });
-        assert.equal(written.status, 200, `title of ${length}: ${written.text}`);
-        const names = (written.json["written"] as Array<{ name: string }>).map((f) => f.name);
-        assert.equal(names.length, 4);
-        for (const name of names) {
-          assert.ok(name.length <= 80, name);
-          assert.match(name, / - (Student copy|Answer key)\.(docx|pdf)$/, "the kind of copy and the format stay");
-          assert.ok(readdirSync(join(home, "Exports")).includes(name));
+        const request = { ...both, title, versionLabel: "Version B" };
+        const checked = await client.post<{ reports: Record<string, { files: string[] }> }>(`${base}/print/check`, request);
+        assert.equal(checked.status, 200, checked.text);
+        const listed = Object.values(checked.json.reports).flatMap((r) => r.files);
+        for (let round = 1; round <= 2; round++) {
+          const written = await client.post(`${base}/print`, request);
+          assert.equal(written.status, 200, `title of ${length}, write ${round}: ${written.text}`);
+          const names = (written.json["written"] as Array<{ name: string }>).map((f) => f.name);
+          assert.equal(names.length, 4);
+          if (round === 1) assert.deepEqual([...names].sort(), [...listed].sort(), "what the check lists is what is written");
+          for (const name of names) {
+            assert.ok(name.length <= 80, name);
+            assert.match(name, / - (Student copy|Answer key)( 2)?\.(docx|pdf)$/, "the kind of copy and the format stay");
+            assert.ok(readdirSync(join(home, "Exports")).includes(name));
+            assert.equal((await client.get(`/files/${encodeURIComponent(name)}`)).status, 200, `${name} (${name.length}) can be downloaded, write ${round}`);
+          }
         }
       });
     }

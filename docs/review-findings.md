@@ -1183,13 +1183,73 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### Found by two readers of the fixes made for the three readers below (8 November 2026, after alpha 20)
+
+Two readers who had not written the fixes read them, one the engine's and one the app's, and were told to prove what they claimed by
+running it. Between them they found that the fixes were incomplete, that one introduced a regression, and that the search for the same
+kind of fault turned up five more. All of it is fixed in alpha 21, each with a test, and the faults they planted that the tests missed
+(more than a dozen) are caught now, apart from the peak memory of a zip, which is described below and not held;
+`tools/release/mutations-alpha-20.json` is the list and `tools/release/mutate.mjs` runs it.
+
+The app's fixes:
+
+- **The number added to keep a new file from replacing an old one came after the length check** (`freeFileName`, `uniqueName`). A name
+  that fitted exactly was 80 long; the second export of it was 82, was written, was listed, and could not be downloaded (400), for
+  every destination and for printing. The number is counted in the length now. The same fault made a second bank of a title of 79 or
+  80 characters, or a second import of a long-named file, impossible.
+- **A scores file for a test whose name is about 43 characters or more could be saved and not opened again**: the name the engine
+  makes (up to 80, then the date and `.openassess-scores`) is up to 118 long and the open route checks it. It is fitted with the rest.
+- **Regression in `cleanName`: a title that begins with dots and a space ("`. Intro`", "`.. Chapter 3`") made a name that was refused.**
+  The final trim was dropped and the dots were taken off after it, so a space was left in front. This was introduced by the fix for the
+  full stop at the 80th character, and it is the kind of title that fix was about.
+- **The check listed one file name and the write made another** (the cut was applied where a file is written and not where the check
+  lists it). Both show the cut name now, and the test compares them.
+- **Cutting a name in the middle of an emoji left half of one**, which `encodeURIComponent` refuses: a finished export showed "URI
+  malformed", and a new bank was made and reported as failed. Both cuts are made on whole characters. The 80-character cut in
+  `cleanName` had this fault before alpha 20.
+
+The engine's fixes:
+
+- **The PDF guard was passed by a positive number whose product underflows to 0**: `/Columns` and `/Colors` each written as
+  0.(200 zeros)1 passed "is above 0" and `rowBytes` was 0 again, so the original hang came back (1097 bytes, also through the scanned
+  sheet reader). The guard now checks what the loop uses: whole columns and colours, a depth of 1, 2, 4, 8 or 16, and a row of at least
+  1 byte and at most 16 MiB. That also refuses 3.7, 2147483648, 1e308 and a depth of 3, which had lost the page without a word.
+- **The cross-reference stream loop**: `/W [0 0 0]` with a count of a billion took 5 seconds and 1.2 GB, a negative width counted to 1e20,
+  and a width of 1e12 for one field was a loop of its own. Each width must be 0 to 8 and they must add up to at least 1, and the counts
+  must be whole numbers; otherwise there is no table and the objects are found by searching, which the file says.
+- **A font's width array** was bounded for each range and not for the font: 100,000 ranges of 70,000 codes took 122 seconds from 3 KB.
+  One budget for the whole font.
+- **A character map that is never closed** was read to the end of the text from every `begin`: 2 MB of one word took 58 seconds from
+  5955 bytes. Each block is found with `indexOf`.
+- **An object stream read every object when it was opened, each to the end of the data**: 2000 objects over 50,000 numbers took 90
+  seconds from 5 KB. An object is read when it is asked for and no further than where the next begins, so the reading of all of them
+  is the length of the stream.
+- **Run-length data was a plain array of numbers**: 2 KB made 2 GB, and 2.2 million runs ended in "Invalid array length". It writes
+  into a growing typed array and the limit is looked at before a run.
+- **Many names for one stretch of data in a zip** cost work and made nothing (10,000 names over 1 MB: 20 seconds). Two entries in one
+  place are refused in words.
+- **An empty entry after the one that reached the limit exactly** was refused for holding too much, because Node refuses a limit of
+  0; the room is at least 1. The test of the first fix passed because of this quirk, and now tests what it says.
+
+Not changed, and said by the readers: a character map's lookup scans every range for every glyph; one line made of very many text
+runs is slower than linear (25,000 runs 96 ms, 100,000 597 ms); a content stream with 200,000 stray parentheses or open brackets ends
+in the page note "Maximum call stack size exceeded", a RangeError's words; `/Predictor 2` at a depth other than 8 returns the data
+undecoded; the peak memory of a zip is the limit plus an entry (327 MB and 519 MB were measured against a limit of 200 MB), and no
+test pins that, so the bound that the first fix was for is described and not held; the cookie jar gains one `oa_key_<port>` cookie per
+launch where it had one (a browser caps about 180 for a host, and nothing was seen to fail); a reason in the partial-save dialog is the
+engine's own exception text. The readers could not run `tools/release/smoke-installed.mjs` (it takes a fixed port).
+
+A thing to tell the next reader: restore a planted file by writing its bytes back, not with `git checkout`. This checkout has
+`core.autocrlf=true` and its files are LF, and `git checkout` rewrote ten of them as CRLF, which broke a test that matches `\n  }\n`
+and made the first runs of that reader unreliable. The reader found and repaired it.
+
 ### Found by three readers who used a published security method and a published set of interface skills (8 November 2026, after alpha 19)
 
 The question was whether two published review methods (a security audit skill and a set of interface skills) find problems that five
 rounds of review aimed at wrong answer keys had missed. Three independent readers each took one area and read source only, running
 nothing: the local server and the window, the file readers and writers, and the interface. They wrote down 15 interface findings, 14
 reader hardening notes, 13 server hardening notes and 4 proven reader faults. What was checked here (by reading the code, and by
-reproducing where it says so) and fixed in alpha 20, each with a test and planted faults:
+reproducing where it says so) and fixed in alpha 20, each with a test (the readers of those fixes, in the section above, found that the fixes themselves had faults and that more than a dozen planted faults got past the tests):
 
 - **A PDF of 509 bytes froze the reader, and with it the whole app.** `/Predictor 2` with `/Columns 0` made a loop step by 0 bytes
   (`import/pdf/document.ts`). Reproduced: with a normal `Columns` the same file read in 3 ms, with 0 it was still running at 10
@@ -1217,7 +1277,7 @@ reproducing where it says so) and fixed in alpha 20, each with a test and plante
 - **A bank title of 62 characters or more could not be exported or printed** (`src/library.ts`, `exports.ts`, `printing.ts`,
   `sheets.ts`, `scoring-routes.ts`): the title (up to 80) with the kind of file after it was checked as though a stranger had sent it,
   and refused with "That name cannot be used as a file name" after the check had passed. At 62 characters Common Cartridge and printing
-  failed, at 75 five more, at 80 every destination (shown by exporting). A name the program makes is now cut to fit, in the middle,
+  failed, at 75 five of the eight destinations as well, at 80 every one (shown by exporting). A name the program makes is now cut to fit, in the middle,
   with the start of the title and the end of the name kept, and the cut is marked with an ellipsis.
 - **A title whose 80th character was a full stop made a bank that could be neither created nor opened**: the name was cut after its
   trailing dots were taken off. Cut first now.

@@ -17,7 +17,7 @@ import { join } from "node:path";
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
 import { checkRow, h, skipTo } from "../ui/dom.js";
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
-import { notSavedBody, saveFields } from "../ui/save-fields.js";
+import { notSavedBody, saveChoice, saveFields } from "../ui/save-fields.js";
 import { FakeNode, findById, installFakeDocument } from "./support/fake-dom.ts";
 
 installFakeDocument();
@@ -145,6 +145,10 @@ describe("the skip link", () => {
     assert.match(readFileSync(join(UI, "index.html"), "utf8"), /<a class="skip" href="#main">/, "and the link is still the page's first element");
     assert.match(app, /if \(!firstScreen\) main\.focus\(/, "a screen the person moves to is given focus; the first one is not");
     assert.doesNotMatch(app, /\[\/\^#main/, "and #main is not a route");
+    // The flag starts true, and is cleared once a screen has been shown (by either way a screen can end: a route found, or none);
+    // left true every screen was without focus, and started false the first one was given it again.
+    assert.match(app, /^let firstScreen = true;$/m);
+    assert.equal(app.match(/^\s*firstScreen = false;$/gm)?.length, 2, "cleared where a screen is shown, and where there is none");
   });
 });
 
@@ -172,6 +176,26 @@ describe("the Save into a bank dialog", () => {
     }
     const ids = [fields.modeNew, fields.modeOld, fields.folderOn, fields.titleInput, fields.bankSelect, fields.folderInput].map((c) => c.id);
     assert.equal(new Set(ids).size, ids.length, "no two controls share an id");
+  });
+
+  // Found by a reader who broke each of these on purpose and saw nothing fail.
+  test("reads what the person chose: the new bank's name or the bank picked, and a folder only when its box is ticked", () => {
+    const fields = saveFields({ file: "Chapter 3.docx", banks });
+    fields.titleInput.value = "  My new bank  ";
+    fields.bankSelect.value = "Biology";
+    fields.folderInput.value = " Week 1 ";
+    assert.deepEqual(saveChoice(fields), { isNew: true, title: "My new bank", bank: "Biology", folder: "" }, "an unticked folder box is no folder, whatever is typed in it");
+    fields.folderOn.checked = true;
+    fields.modeNew.checked = false;
+    fields.modeOld.checked = true;
+    assert.deepEqual(saveChoice(fields), { isNew: false, title: "My new bank", bank: "Biology", folder: "Week 1" });
+  });
+
+  test("keeps a folder name to 80 characters and asks the browser to remember neither name", () => {
+    const fields = saveFields({ file: "x.txt", banks });
+    assert.equal(fields.folderInput.getAttribute("maxlength"), "80");
+    assert.equal(fields.folderInput.autocomplete, "off");
+    assert.equal(fields.titleInput.autocomplete, "off");
   });
 
   test("starts the new bank's name and the folder's name from the file's name, without its extension", () => {
@@ -202,6 +226,16 @@ describe("when some questions could not be saved", () => {
     assert.equal(list.children.length, 2, "one line for each");
   });
 
+  test("every question that was not saved is listed, however many there are, and the reasons keep their line breaks", () => {
+    const notSaved = Array.from({ length: 12 }, (_, i) => ({ index: i, title: `Question about topic ${i}`, reason: `Not stored.\n  title: too long (${i})` }));
+    const body = notSavedBody({ bank: "B", added: 30, notSaved });
+    assert.equal(body[0], '30 questions were saved into "B". 12 questions were not:');
+    const list = body.find((part: string | FakeNode) => typeof part !== "string") as FakeNode;
+    assert.equal(list.children.length, 12);
+    assert.match((list.children[11] as FakeNode).words, /^Question about topic 11: Not stored\.\n  title: too long \(11\)$/);
+    assert.match(readFileSync(join(UI, "style.css"), "utf8"), /\.dialog-body li \{ white-space: pre-line; \}/, "and the line breaks are drawn");
+  });
+
   test("a single question is said in the singular", () => {
     const text = notSavedBody({ bank: "B", added: 1, notSaved: [{ index: 0, title: "Only", reason: "No." }] })[0];
     assert.equal(text, '1 question was saved into "B". 1 question was not:');
@@ -214,5 +248,9 @@ describe("when some questions could not be saved", () => {
     assert.ok(asked > 0, "the dialog is shown");
     assert.ok(moved > asked, "and the move to the bank comes after it has been answered");
     assert.match(review, /failed \? "error" : "ok"/, "and the line is an error when something was not saved, which stays longer");
+    assert.match(review, /const failed = result\.notSaved\.length > 0;/, "whatever was not saved, one or many, is a reason to say so");
+    assert.match(review, /if \(failed\) await ask\(\{ title: "Some questions were not saved", body: notSavedBody\(result\)/, "and the whole of the result is what is shown");
+    assert.match(review, /collect: \(\) => saveChoice\(fields\)/, "and what the save dialog returns is read by the one function that is tested");
+    assert.match(review, /shell\.go\(`#\/bank\/\$\{encodeURIComponent\(result\.bank\)\}`\)/, "and the bank it moves on to is named in the address with its name encoded");
   });
 });

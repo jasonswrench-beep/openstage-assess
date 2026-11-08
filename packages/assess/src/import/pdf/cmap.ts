@@ -19,23 +19,40 @@ function utf16(hex: string): string {
   return out;
 }
 
+/**
+ * The text between each `begin` and the `end` after it. It was a lazy pattern (`begin([\s\S]*?)end`), which from every `begin` that had
+ * no `end` after it read to the end of the text: the same word repeated for 2 MB, in a file of 5955 bytes, took 58 seconds. A block that
+ * is not closed has nothing after it that closes it, so the search stops there.
+ */
+function* blocks(text: string, begin: string, end: string): Generator<string> {
+  let at = 0;
+  for (;;) {
+    const from = text.indexOf(begin, at);
+    if (from === -1) return;
+    const bodyAt = from + begin.length;
+    const to = text.indexOf(end, bodyAt);
+    if (to === -1) return;
+    yield text.slice(bodyAt, to);
+    at = to + end.length;
+  }
+}
+
 export function parseToUnicode(data: Uint8Array): ToUnicode {
   const text = Buffer.from(data).toString("latin1");
   const singles = new Map<number, string>();
   const ranges: Array<{ lo: number; hi: number; to: string | string[] }> = [];
   let codeBytes = 0;
 
-  for (const block of text.matchAll(/begincodespacerange([\s\S]*?)endcodespacerange/g)) {
-    for (const m of (block[1] as string).matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) codeBytes = Math.max(codeBytes, Math.ceil((m[1] as string).length / 2));
+  for (const block of blocks(text, "begincodespacerange", "endcodespacerange")) {
+    for (const m of block.matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) codeBytes = Math.max(codeBytes, Math.ceil((m[1] as string).length / 2));
   }
-  for (const block of text.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
-    for (const m of (block[1] as string).matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]*)>/g)) {
+  for (const block of blocks(text, "beginbfchar", "endbfchar")) {
+    for (const m of block.matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]*)>/g)) {
       singles.set(parseInt(m[1] as string, 16), utf16(m[2] as string));
       codeBytes = Math.max(codeBytes, codeBytes === 0 ? Math.ceil((m[1] as string).length / 2) : 0);
     }
   }
-  for (const block of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
-    const body = block[1] as string;
+  for (const body of blocks(text, "beginbfrange", "endbfrange")) {
     const re = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(?:<([0-9a-fA-F]*)>|\[((?:\s*<[0-9a-fA-F]*>)*)\s*\])/g;
     for (const m of body.matchAll(re)) {
       const lo = parseInt(m[1] as string, 16);

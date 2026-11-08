@@ -251,6 +251,7 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
   let total = 0;
   /** What the entries read so far really came to, as against `total`, which is only what the file says they come to. */
   let made = 0;
+  const placed = new Set<number>();
 
   const out = new Map<string, Uint8Array>();
   for (let i = 0; i < entryCount; i++) {
@@ -282,6 +283,13 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
     if (buf.readUInt32LE(localOffset) !== LOCAL_SIG) {
       throw new Error(`The local header for "${name}" is damaged.`);
     }
+    // Two names for one stretch of data are how a small file is made to cost a great deal: 10,000 names over a 1 MB stream that made
+    // nothing took 20 seconds, and the limit on what comes out never grew. A zip written by a program has each entry's data in a place
+    // of its own.
+    if (placed.has(localOffset)) {
+      throw new Error(`"${name}" is stored in the same place as another file of this zip, so the zip is damaged and was not read.`);
+    }
+    placed.add(localOffset);
     const localNameLength = buf.readUInt16LE(localOffset + 26);
     const localExtraLength = buf.readUInt16LE(localOffset + 28);
     const dataAt = localOffset + 30 + localNameLength + localExtraLength;
@@ -312,7 +320,9 @@ export function unzipSync(input: Uint8Array, opts: UnzipOptions = {}): Map<strin
       // limit again, and a few hundred bytes of central directory (entries
       // pointing at the same compressed data, which a zip allows) asked for
       // the limit once for each name.
-      const room = Math.max(0, limit - made);
+      // At least 1: Node refuses a limit of 0 outright, and an empty entry that came after the one that reached the limit exactly was
+      // turned away with the words for too much, though it holds nothing. One byte of room still stops anything that holds more.
+      const room = Math.max(1, limit - made);
       try {
         data = inflateRawSync(payload, { maxOutputLength: room });
       } catch (error) {

@@ -197,6 +197,7 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.5); }
 .dialog-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .dialog-body ul { margin: 4px 0; padding-left: 20px; overflow-wrap: anywhere; }
+.dialog-body li { white-space: pre-line; }
 
 .export { max-width: 860px; }
 .export .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }

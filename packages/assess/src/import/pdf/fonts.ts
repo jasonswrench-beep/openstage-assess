@@ -30,6 +30,9 @@ export interface PdfFont {
   decode(bytes: Uint8Array): Glyph[];
 }
 
+/** The most widths one font's /W array may set in all; a font has at most 65,536 codes. */
+const MAX_WIDTHS_SET = 400_000;
+
 /** The font's own name, without the six capitals and a plus that a subset puts in front. */
 const plainName = (base: string): string => base.replace(/^[A-Z]{6}\+/, "");
 
@@ -165,16 +168,19 @@ function compositeFont(doc: PdfDocument, font: PdfDict, baseName: string): PdfFo
   const widths = new Map<number, number>();
   const w = descendant ? doc.array(descendant.get("W")) : undefined;
   if (w) {
-    for (let i = 0; i < w.length; ) {
+    // Each range was kept to 70,000 codes and the number of ranges was not: 100,000 ranges of 70,000 codes, from a file of 3 KB, took two
+    // minutes. A font has at most 65,536 codes, so one budget for the whole of the widths is more than any real font needs.
+    let budget = MAX_WIDTHS_SET;
+    for (let i = 0; i < w.length && budget > 0; ) {
       const start = doc.number(w[i]);
       const second = doc.resolve(w[i + 1]);
       if (Array.isArray(second)) {
-        second.forEach((v, k) => widths.set(start + k, doc.number(v)));
+        for (let k = 0; k < second.length && budget > 0; k++, budget--) widths.set(start + k, doc.number(second[k]));
         i += 2;
       } else {
         const end = doc.number(second);
         const value = doc.number(w[i + 2]);
-        for (let c = start; c <= end && c - start < 70000; c++) widths.set(c, value);
+        for (let c = start; c <= end && c - start < 70000 && budget > 0; c++, budget--) widths.set(c, value);
         i += 3;
       }
     }

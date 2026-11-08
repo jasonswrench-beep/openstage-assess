@@ -1,4 +1,5 @@
-// Compares every file the installer gathered (resources/app) with the committed tree at HEAD, line endings aside.
+// Compares every file in the folder the installer is built from (src-tauri/resources/app, which the build gathers) with the committed tree at HEAD, line endings aside.
+// It reads that staging folder, not the finished installer, and does not look at the Node program that is bundled beside it.
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";

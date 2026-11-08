@@ -49,6 +49,21 @@ export function saveFields({ file, banks }) {
 }
 
 /**
+ * What the person chose in that dialog, as the save route is asked for it. It is read here and not in the screen so that the wiring
+ * (which box is the new bank's name, which is the existing bank, that the folder counts only when its tick box is ticked) can be held
+ * by a test: a reader who broke each of those on purpose found nothing failing.
+ * @param {ReturnType<typeof saveFields>} fields
+ */
+export function saveChoice(fields) {
+  return {
+    isNew: fields.modeNew.checked,
+    title: fields.titleInput.value.trim(),
+    bank: fields.bankSelect.value,
+    folder: fields.folderOn.checked ? fields.folderInput.value.trim() : "",
+  };
+}
+
+/**
  * What the person is told when a save put some of the questions into the bank and could not put others. A green line that fades in
  * six seconds, with the screen already moving on, was all they were told, and it left out which questions, so the ones that were not
  * saved were found, if at all, by counting.

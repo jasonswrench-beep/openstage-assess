@@ -828,3 +828,49 @@ describe("who may ask, and how much", () => {
     });
   });
 });
+
+// Found by a reader of the file-name fix: the paper, the saved scores and the results of a test were named for the test, and a test
+// whose name is longer than about 40 characters made names that were refused when the person came to download or open them.
+describe("a test with a long name", () => {
+  const LONG = "Introduction to Psychology Chapter Three Midterm Examination Fall Section 002 more words here";
+
+  test("prints its paper twice, saves its scores and opens them again, and writes its results twice, under names that can all be used", async () => {
+    await withApp(async (client) => {
+      const { bank, ids } = await seeded(client);
+      const test = await assemble(client, bank, ids, { name: LONG });
+      const url = `/api/sheets/${encodeURIComponent(bank)}/tests/${test["id"]}`;
+
+      for (let round = 1; round <= 2; round++) {
+        const printed = await client.post<Json>(`${url}/print`, { paper: "letter", sheet: "shared", booklets: true, keys: true, formats: ["pdf", "docx"] });
+        assert.equal(printed.status, 200, printed.text);
+        const names = (printed.json["written"] as Json[]).map((f) => f["name"] as string);
+        assert.ok(names.length >= 4, "a booklet and a key in two formats, and the sheet");
+        for (const name of names) {
+          assert.ok(name.length <= 80, name);
+          assert.equal((await client.get(`/files/${encodeURIComponent(name)}`)).status, 200, `${name} (${name.length}) downloads, round ${round}`);
+        }
+      }
+
+      const record = await recordOf(client, bank, test["id"]);
+      const opened = await client.post<Json>(`${url}/score`);
+      const sid = opened.json["id"] as string;
+      assert.equal((await post(client, `/api/scoring/${sid}/files?name=a.png`, writePng(drawn(record).render(marksFor(rightPlaces(record, "A"), 1))))).status, 200);
+
+      const saved = await client.post<Json>(`/api/scoring/${sid}/save`);
+      assert.equal(saved.status, 200, saved.text);
+      const scoresName = saved.json["name"] as string;
+      assert.ok(scoresName.length <= 80 && scoresName.endsWith(".openassess-scores"), scoresName);
+      const reopened = await client.post<Json>("/api/scoring/open", { name: scoresName });
+      assert.equal(reopened.status, 200, `${scoresName} (${scoresName.length}) opens again: ${reopened.text}`);
+
+      for (let round = 1; round <= 2; round++) {
+        const results = await client.post<Json>(`/api/scoring/${sid}/export`, {});
+        assert.equal(results.status, 200, results.text);
+        for (const file of results.json["written"] as Json[]) {
+          assert.ok((file["name"] as string).length <= 80, file["name"]);
+          assert.equal((await client.get(`/files/${encodeURIComponent(file["name"] as string)}`)).status, 200, `${file["name"]} downloads, round ${round}`);
+        }
+      }
+    });
+  });
+});
