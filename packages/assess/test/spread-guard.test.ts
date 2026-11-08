@@ -149,7 +149,6 @@ const ALLOWED: Allowed[] = [
   // Faults in files another part of the work owns. They are fixed where they are, and the entry is removed with the fix (the test below
   // fails on an entry that matches nothing, a pending one included, so a fix that leaves its entry behind is caught).
   { file: "import/docx/document.ts", callee: "Math.max", argument: "cells.map((row) => row.length)", reason: "the rows of a grid in a Word file, behind MAX_GRID_ROWS (100)", pending: "the Word reader" },
-  { file: "import/pdf/reader.ts", callee: "notes.push", argument: "removeFurniture(pages)", reason: "one note for each line of furniture taken off", pending: "the PDF reader" },
 ];
 
 const same = (a: Allowed, f: FoundSpread): boolean => a.file === f.file && a.callee === f.callee && a.argument === f.argument;
