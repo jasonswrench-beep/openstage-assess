@@ -1183,7 +1183,7 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
-### Found by four readers of alpha 22's fixes (8 November 2026, after alpha 22; not yet released)
+### Found by four readers of alpha 22's fixes (8 November 2026, after alpha 22; fixed in alpha 23)
 
 Four readers who had not written alpha 22's fixes ran them: the PDF and zip readers, the patterns and list spreads and the small-format
 readers, the Word and Excel readers with the banks and file names, and the app with the release tooling and the documents. None found a
