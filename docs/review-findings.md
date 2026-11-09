@@ -1232,21 +1232,29 @@ Fixed and verified (each by a test that fails on the code before it, and passes 
   file back), says "no fault was planted" and exits 2, has `--check` and `mutate-all.mjs`, and waits for an older run on the same
   checkout.
 
+Checked before alpha 23 was built (after the work had been stopped once and was taken up again): the gates of alpha 22 read the same
+(61 of 61, 1421 of 1421, the five PDF banks 129 of 157, the answer sheet gate, the speed check, a 6,000-round damaged-file run with no
+crash); real Word agreed with the reader on all 157 list documents (2,502 paragraphs) and real Excel on all 246 comparisons; both
+suites passed on a fresh clone with Windows line ends (3,654 engine tests, 17 of them skipped for want of the private files, and 426
+app tests); the PDF fault list (46) was run to the end and every fault was caught; eleven faults were planted in the scanner,
+small-format, quality-check and cap fixes (`mutations-alpha-23-readers.json`), and one survived, a second pass of the cap that cut a
+list again, which a test now holds. The real-file sweeps are compared with alpha 22's in the release notes.
+
 Not done, and not verified (the order to take them in):
 
-- The PDF fault list (`mutations-alpha-23-pdf.json`, 46) was run to the 25th; the budget, table-bound, nine font, three content and five
-  scan faults were not. The comparison of 720 PDFs from the system folders was run before the last change to the reread.
-- The scanner, quality-check and findings-cap fixes were run test by test and not as a suite with the old-against-new comparison of
-  the fixtures, the 50,000-document comparisons and the accuracy gates; no planted faults were run for them (no list was written).
-  The engine suite passed (3653 tests) and the app suite (426), and the gates of alpha 22 (61 of 61, 1421 of 1421, the PDF banks,
-  the answer sheet reader, the speed check) and the real-Word checks have not been run again.
+- The comparison of 720 PDFs from the system folders was run before the last change to the reread and was not repeated; the sweep of
+  real files named in the notes was.
+- The old-against-new comparison of the fixtures and the 50,000-document comparisons were not repeated for the scanner, small-format
+  and quality-check fixes (the gates, the fresh clone and the tests that hold each pattern to a copy of the old one were).
 - Seventeen faults the fourth reader of the readers planted still survive every test: `stemSaysMatch` forgetting an instruction in an
   earlier stem line (a matching question becomes an essay), `resolveKey` not indexing "False", the QTI table of lower-case names, the
   `(?<!\s)` taken off the QTI 1.2, Common Cartridge and printed-test stems, the Moodle `<img\b`, the blueprint rule parser, the
   printer PNG's byte count. The timing lines of `hostile-readers.test.ts` and `linear-parity.test.ts` are still 3 to 8 times the idle
   time. The regex audit of `src` was stopped; `ANSWER_SPACE` (`^_{3,}[_\s]*$`) was flagged and is unchanged.
-- The planted faults: 385 in ten lists in `tools/release`, each applies once (`mutate.mjs --check`); how many of them were run on the
-  merged code is not known to be all.
+- The planted faults: 396 in eleven lists in `tools/release`, each applies once (`mutate.mjs --check`). The lists for the PDF (46),
+  the scanner and cap (11) and the Word and Excel fixes (12) were run on the merged code; the app's (65) and the runner's (12) were
+  run by their implementers before the merge; the six lists of alpha 20 to 22 were last run before these changes and were only checked
+  to apply.
 - Two copies of the app on one library still lose edits (each holds its own copy of the bank in memory); a lock on the library is a
   decision for the user. A 600 dpi colour letter page is refused in words by the printer and for Word as well, and a 16-bit colour one
   by the sheet reader. Text stored in a bank that was never sanitized and holds an unclosed `<oa-media` reads differently from before.

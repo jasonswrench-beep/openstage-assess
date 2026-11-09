@@ -1,7 +1,7 @@
 // Runs the app exactly as the installer carries it (its own node.exe, its own copy of the files) and takes a Word file with a picture and
 // curly quotes through import, save, the bank's picture route, print and export, as the window would.
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -579,6 +579,38 @@ try {
   await answeredQuickly("a PDF with a run of 200,000 digits in its content is read at once", "digits.pdf", buildPdf14({ pages: [`${"1".repeat(200000)}x\nBT /F1 12 Tf 72 700 Td (Hello) Tj ET`], compress: true, fonts: smokeFonts }));
   await answeredQuickly("a PDF with a text string of 200,000 spaces is read at once", "spaces.pdf", buildPdf14({ pages: [`BT /F1 12 Tf 72 700 Td (${" ".repeat(200000)}x) Tj ET`], compress: true, fonts: smokeFonts }));
   await answeredQuickly("a Word file with 80,000 text elements in one run is read at once", "run80k.docx", docx({ body: `<w:p><w:r>${"<w:t>a</w:t>".repeat(80000)}</w:r></w:p>` }));
+  // New in alpha 23, after a fourth reading of alpha 22's fixes.
+  // A bank is made thirty times while the home screen's list is read in a loop. A name claimed with an empty file failed up to six times
+  // in a hundred on Windows (a rename onto a file that is open is refused), and showed the empty file as a bank that could not be read.
+  let reading = true;
+  let unreadable = 0;
+  const poll = (async () => {
+    while (reading) {
+      const listed = await send("GET", "/api/state");
+      const banks = (await listed.json()).banks ?? [];
+      if (listed.status !== 200 || banks.some((b) => b.error)) unreadable++;
+    }
+  })();
+  let madeCount = 0;
+  for (let i = 0; i < 30; i++) if ((await send("POST", "/api/banks", { title: "Made under a reader" })).status === 200) madeCount++;
+  reading = false;
+  await poll;
+  check("a bank is made thirty times while the list is being read, and none fails or shows as unreadable", madeCount === 30 && unreadable === 0, `${madeCount} made, ${unreadable} bad listings`);
+  // A bank file put in by hand under a name the app would not make (a hundred characters) is listed with a message, and the list still answers.
+  const placedFrom = readdirSync(join(home, "Banks")).find((f) => f.endsWith(".openassess"));
+  const placedName = `${"p".repeat(100)}.openassess`;
+  copyFileSync(join(home, "Banks", placedFrom), join(home, "Banks", placedName));
+  const placedList = await send("GET", "/api/state");
+  const placedBanks = (await placedList.json()).banks ?? [];
+  check("a bank file with a name the app refuses is listed with a message, and the home screen still answers", placedList.status === 200 && placedBanks.some((b) => b.error && b.unusableName === true), `${placedList.status}, ${placedBanks.length} listed`);
+  rmSync(join(home, "Banks", placedName), { force: true });
+  // A cell Excel wrote at its own maximum of 32,767 characters, with its line breaks as CR LF, is read whole and is not said to be cut.
+  const { writeXlsx } = await import(pathToFileURL(join(fromSource ? repo : join(res, "app"), "packages/assess/src/container/xlsx.ts")).href);
+  const longCell = ("w".repeat(36) + "\n").repeat(885) + "w".repeat(22);
+  const longSheet = writeXlsx([{ name: "Questions", rows: [["Type", "Question", "A", "B", "Correct"], ["MC", longCell.replace(/\n/g, "\r\n"), "x", "y", "A"]] }]);
+  const longReply = await send("POST", "/api/import?name=long-cell.xlsx", new Uint8Array(longSheet));
+  const longText = await longReply.text();
+  check("a cell of exactly 32,767 characters with CR LF line breaks is read whole and not said to be cut", longReply.status === 200 && !/was cut to that/.test(longText) && /"total":1/.test(longText), `${longReply.status} ${longText.slice(0, 80)}`);
   const appJs = await text("/app.js");
   const saveFieldsJs = await text("/save-fields.js");
   check("the skip link is wired to move focus, and not left to the address", /skipTo\(/.test(appJs) && domJs.includes("export function skipTo") && /event\.preventDefault\(\)/.test(domJs));
