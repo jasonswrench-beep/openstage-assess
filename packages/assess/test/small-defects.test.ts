@@ -22,7 +22,7 @@ import { importerForContent, runImporter } from "../src/import/registry.ts";
 import { standardTextImporter } from "../src/import/standard-text.ts";
 import { wordImporter } from "../src/import/word.ts";
 import { checkReferences, createQuestion } from "../src/model/create.ts";
-import { FindingCode } from "../src/model/findings.ts";
+import { FindingCode, MOST_FINDINGS_OF_A_KIND, capFindings, finding } from "../src/model/findings.ts";
 import { isEmptyRichText, plainToRich, rich, richTextFields, richTextToPlain } from "../src/model/richtext.ts";
 
 describe("an equation is not nothing", () => {
@@ -467,5 +467,19 @@ describe("a Rich Text file", () => {
     assert.equal(importerForContent("a.txt", Buffer.from("1. What is rtf?\na. A format\n*b. Rich Text Format\n")), standardTextImporter);
     assert.equal(importerForContent("a.txt", Buffer.from("{rtf is not it")), standardTextImporter);
     assert.deepEqual(standardTextImporter.extensions, [".txt", ".md"]);
+  });
+});
+
+describe("the cap on the findings of one kind", () => {
+  // A list that was cut once and is cut again must come out as it was: the finding that counts the rest is not one of the findings it
+  // counts, or each cut would make a summary of the last one and the list would grow by a finding each time a question was made again.
+  test("a list that has been cut is not cut again, and not changed", () => {
+    const many = Array.from({ length: MOST_FINDINGS_OF_A_KIND + 15 }, (_, i) => finding(FindingCode.EmptyOption, i === 30 ? "error" : "warn", `option ${i} is empty`, { field: `body.options.${i}.content` }));
+    const once = capFindings(many);
+    assert.equal(once.length, MOST_FINDINGS_OF_A_KIND + 1, "the first 25 and one that counts the 15 left out");
+    assert.match(once[once.length - 1]?.message ?? "", /^15 more findings of this kind were not listed/);
+    assert.equal(once[once.length - 1]?.severity, "error", "and it has the highest severity of those left out");
+    assert.deepEqual(capFindings(once), once);
+    assert.deepEqual(capFindings(capFindings(once)), once);
   });
 });
