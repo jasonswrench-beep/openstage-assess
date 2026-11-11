@@ -235,9 +235,10 @@ describe("the page", () => {
       for (const file of readdirSync(UI).filter((f) => f.endsWith(".js"))) {
         const source = (await import("node:fs")).readFileSync(join(UI, file), "utf8");
         for (const match of source.matchAll(/(?:from\s+|import\()\s*["']\.\/([A-Za-z0-9_-]+\.js)["']/g)) wanted.add(`/${match[1]}`);
-        // The one address a script may name is the MathML namespace, which math.js needs to build an equation's elements. It is a
-        // name that identifies the kind of element and is never asked for, so it is not an address the page reaches.
-        assert.doesNotMatch(source, /https?:\/\/(?!127\.0\.0\.1|www\.w3\.org\/1998\/Math\/MathML")/, `${file} reaches for no other address`);
+        // The two addresses a script may name are the MathML namespace, which math.js needs to build an equation's elements, and the
+        // SVG namespace, which ui-icons.js needs to build an icon's (the suite's look, 2026-11-11). Each is a name that identifies the
+        // kind of element and is never asked for, so it is not an address the page reaches.
+        assert.doesNotMatch(source, /https?:\/\/(?!127\.0\.0\.1|www\.w3\.org\/1998\/Math\/MathML"|www\.w3\.org\/2000\/svg")/, `${file} reaches for no other address`);
         assert.doesNotMatch(source, /\binnerHTML\b|\binsertAdjacentHTML\b|\bdocument\.write\b|\beval\(|new Function\(/, `${file} never writes markup or runs text as code`);
         // A panel that is not there is null, and the browser's own append writes the word "null" for it: the editor showed "nullnull"
         // above the model answer of every essay from the day it got panels for equations and tables. They go in with put.

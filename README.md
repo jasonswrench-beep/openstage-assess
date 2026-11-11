@@ -16,6 +16,37 @@ and export or print them. The Word importer's acceptance target (95 percent on t
 chapters it was not fitted to) is not yet met, because no such chapters exist yet; see
 `docs/word-import-plan.md` and `TESTING-TODO.md`.
 
+## The look (the OpenStage suite's, 2026-11-11)
+
+OpenAssess now looks like the other OpenStage tools (OpenStage Author, OpenStage Recorder, OpenExplainer and OpenStage Capture
+Express): the same navy bar, pale page, white panels, icons and way of finding commands, with OpenAssess's own colour, the orange
+of its icon (`#FFA861` on the navy bar, a deeper `#A04B0D` for filled buttons, links and the chosen row, white words on it 6.0 to
+1; in dark colours the light orange, under navy words). Nothing it does changed, and every command keeps its words. What moved:
+
+- **The navy bar** along the top: the icon and the name (a link back to your banks), the bank that is open, **Search** (Ctrl+K),
+  and on a bank's screen **Print…**, **Answer sheets…** and **Export…** (filled).
+- **The menus** under it hold every command, each with its icon: **File** (New bank, Open a bank file, Bring in questions from a
+  file, Your banks, Show the OpenAssess folder), **Bank** (Rename, Folders, Coverage, Check quality, Remove), **Question** (a new
+  question of each kind, Search the questions, Clear filters), **Test** (Print, Answer sheets, Export) and **Help** (Search for a
+  command, Keyboard keys). A command that cannot be used on the screen showing stays in its menu, dimmed. **F10** (or Alt pressed
+  and let go on its own) goes to the menus; the arrows move along them and in them, a letter jumps to an item, Escape goes back,
+  and after a command the keyboard goes back where it was. New bank and the two ways to open a file, chosen on another screen, go
+  to your banks first and are done there.
+- **A bank's screen** had eight buttons along its top. Print, Answer sheets and Export are on the navy bar; Rename, Folders,
+  Coverage, Check quality and Remove are in the Bank menu and in one **...** beside the bank's name.
+- **Ctrl+K** (or Search) finds any command by its name, its menu or what it is for, with Up, Down and Enter. **Ctrl+/** (Help >
+  Keyboard keys) lists every key in tables. Both close with Escape and give the keyboard back.
+- **Every dialog** has a **Close** button in its corner that does what Escape does, and its row of buttons stays in sight at the
+  foot while the rest scrolls.
+
+The parts: `packages/app/ui/frame.js` (the navy bar, the menus and every command in them), `menubar.js`, `popupmenu.js` and
+`commandsearch.js` (the suite's, see `NOTICE`), `keys.js`, `openstage-ui.css` (the suite's colours and sizes, version 1) and
+`ui-icons.js` (the Lucide icons, made by OpenStage Author's `tools/make_ui_icons.py --assess`). A screen says what it can do by
+returning `actions` from its render function. Checked by `packages/app/test/suite-look.test.ts` and, in a real browser, by a script
+that walks the menus and dialogs by keyboard and pointer at desktop, 375 and 320 pixels wide, in dark colours and in a high-contrast
+theme, with OpenStage Author's accessibility audit on what this change made. **Not yet tried by a person, in the window, or with a
+screen reader** (`TESTING-TODO.md`).
+
 ## Running it
 
 **In a window.** The installer for the desktop window is built from `packages/app/shell`

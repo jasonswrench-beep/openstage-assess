@@ -5,6 +5,7 @@
  */
 
 import { clear, h } from "./dom.js";
+import { uiIcon } from "./ui-icons.js";
 
 /** @returns {HTMLDialogElement} */
 function dialog() {
@@ -54,6 +55,13 @@ export function ask(options) {
       ),
     );
     box.append(form);
+    // The suite's Close button in the top corner. It does what Escape does: it asks the dialog to close the way Escape asks (a cancel
+    // event) and closes it, so the answer is the same as Escape's, none. It comes after the form, so focus still starts in the form.
+    const close = h("button", { type: "button", class: "dlg-close", title: "Close (Escape)", attrs: { "aria-label": "Close" }, on: { click: () => {
+      if (box.dispatchEvent(new Event("cancel", { cancelable: true })) && box.open) box.close();
+    } } });
+    close.append(uiIcon(document, "x"));
+    box.append(close);
     // The heading is the dialog's name, so a screen reader says what is being asked when the dialog opens and not only "dialog".
     box.setAttribute("aria-labelledby", "dialog-title");
     box.addEventListener("close", settle, { once: true });
