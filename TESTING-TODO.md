@@ -487,10 +487,11 @@ built-in browser at desktop and phone width. What is left needs a real bank and 
 
 ## The suite's look (2026-11-11)
 
-Built and checked by tests (`packages/app/test/suite-look.test.ts`) and in a real browser by a script (62 checks: the menus by
-keyboard and pointer, the bank's "...", the command search, the keys list, the dialogs' Close button, 375 and 320 pixels wide, dark
-colours, a high-contrast theme, and OpenStage Author's accessibility audit on the navy bar, the menus and every open dialog and menu,
-which found nothing there). Pictures as it was are in `D:\Claude Audio Test\revamp-screens\assess-before`, and after in
+Built and checked by tests (`packages/app/test/suite-look.test.ts`) and in a real browser by a script (83 checks: the menus by
+keyboard and pointer, the bank's "..." and New question, the command search, the keys list, the dialogs' Close button, 375 and 320
+pixels wide, dark colours, a high-contrast theme, and OpenStage Author's accessibility audit on every screen it reaches, with a
+question open, Folders, Coverage, Check quality and every open dialog and menu, which found nothing). The screen that reviews scanned
+answer sheets was not reached, because the script has no scans. Pictures as it was are in `D:\Claude Audio Test\revamp-screens\assess-before`, and after in
 `assess-a1`. Not tried by a person.
 
 - [ ] Open the app and use it for a while: is every command where you would look for it? Write down anything you would move.
@@ -504,10 +505,11 @@ which found nothing there). Pictures as it was are in `D:\Claude Audio Test\reva
       menu item, collapsed" or similar), an item that cannot be used now ("Rename…, unavailable"), the command search (the chosen
       command should be read as Up and Down move while the keyboard stays in the box), and a dialog's Close button.
 - [ ] Windows' high-contrast themes in the window: an open menu's item and the chosen command are filled in the system's highlight colour.
-- [ ] The accessibility audit also listed older things on the screens' own parts, which this change did not touch and did not fix:
-      tick boxes and round buttons are 18 pixels (a target should be 24, unless the words beside them count as part of it, as they do
-      here), a link in a sentence (Show this folder), the select boxes of a bank's tools, and on the import review a heading that
-      skips a level (Pictures). Say whether to work on them.
+- [ ] The audit's older findings on the screens themselves were fixed the same day, at Jason's "fix any problems you saw": tick boxes and
+      round buttons are 24 pixels (they were 18), Show this folder and a bank's name are at least 24 pixels high, the editor's Pictures,
+      Equations and Tables headings are h2 (they skipped a level), and Write a new question is a New question menu. Look at a screen with
+      many tick boxes (Print, Export, Answer sheets): do the bigger boxes look right? The select boxes it flagged were the audit's own
+      mistake (it read the choices of a select as its label), corrected in OpenStage Author's `editor/audit/a11y-audit.js`.
 
 ## The app and its window
 

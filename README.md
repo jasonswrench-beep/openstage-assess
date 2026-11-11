@@ -44,7 +44,10 @@ The parts: `packages/app/ui/frame.js` (the navy bar, the menus and every command
 `ui-icons.js` (the Lucide icons, made by OpenStage Author's `tools/make_ui_icons.py --assess`). A screen says what it can do by
 returning `actions` from its render function. Checked by `packages/app/test/suite-look.test.ts` and, in a real browser, by a script
 that walks the menus and dialogs by keyboard and pointer at desktop, 375 and 320 pixels wide, in dark colours and in a high-contrast
-theme, with OpenStage Author's accessibility audit on what this change made. **Not yet tried by a person, in the window, or with a
+theme, with OpenStage Author's accessibility audit on every screen it reaches (it finds nothing). The same day, what that audit had
+found on the screens themselves was fixed: tick boxes and round buttons are 24 pixels (they were 18), a link button and a bank's
+name are at least 24 pixels high, the editor's Pictures, Equations and Tables headings no longer skip a level, and "Write a new
+question…", a select that started a question as soon as its choice changed, is a **New question** menu of the kinds. **Not yet tried by a person, in the window, or with a
 screen reader** (`TESTING-TODO.md`).
 
 ## Running it
@@ -356,7 +359,7 @@ packages/assess/        the engine, published as @openstage/assess
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question
   ui/                   the screens: plain JavaScript modules, no framework, no build step
-  test/                 426 tests
+  test/                 442 tests
   shell/                the Tauri window (kept out of the npm workspaces; see its README)
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word
