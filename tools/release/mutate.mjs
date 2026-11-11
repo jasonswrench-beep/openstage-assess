@@ -245,7 +245,13 @@ function runTests(tests) {
     // Inside a test run of the program's own the variable that makes a test process report to its parent is set, and this run would then print nothing to count.
     const env = { ...process.env };
     delete env["NODE_TEST_CONTEXT"];
-    const child = spawn(process.execPath, ["--experimental-strip-types", "--no-warnings", "--test", ...tests.map((t) => join(repo, t))], {
+    // A reporter named in NODE_OPTIONS and another on the command line make node refuse to start ("--test-reporter must match the number of
+    // --test-reporter-destination"), so the one asked for below is the only one: any other is taken out of what the test run inherits.
+    if (env["NODE_OPTIONS"]) env["NODE_OPTIONS"] = env["NODE_OPTIONS"].replace(/--test-reporter(?:-destination)?(?:=|\s+)\S+/g, " ").trim();
+    // The reporter is asked for, never left to be chosen: with the output piped, Node 22 prints TAP ("# tests 3") and Node 24 prints the
+    // spec form ("ℹ tests 3"), so a run that read only one of them counted nothing on the other, called every baseline failed, and planted
+    // no fault (nine of this runner's own tests failed in GitHub's check, on Node 22, while they passed on the Node 24 they were written on).
+    const child = spawn(process.execPath, ["--experimental-strip-types", "--no-warnings", "--test", "--test-reporter=tap", ...tests.map((t) => join(repo, t))], {
       cwd: repo,
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -271,7 +277,7 @@ function runTests(tests) {
       clearTimeout(timer);
       clearInterval(watch);
       inFlight = null;
-      const number = (word) => Number((stdout.match(new RegExp(`^ℹ ${word} (\\d+)`, "m")) ?? [])[1] ?? Number.NaN);
+      const number = (word) => Number((stdout.match(new RegExp(`^# ${word} (\\d+)`, "m")) ?? [])[1] ?? Number.NaN);
       const result = { tests: number("tests"), fail: number("fail"), status, timedOut, spawnError };
       // A key pressed at the console reaches the test run as well as this process, and the run can end first: its failure would be
       // printed as a fault that was killed. Wait a moment, so that a signal on its way is looked at before the result is (a real
