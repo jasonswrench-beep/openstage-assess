@@ -65,6 +65,15 @@ export async function renderBank(host, params, shell) {
   // The bank's own commands (Rename, Folders, Coverage, Check quality, Remove) are in the Bank menu, and in this "..." beside its name;
   // Print, Answer sheets and Export are on the navy bar and in the Test menu. They were eight buttons along the top of the screen.
   const more = menuButton(document, { id: "bank-more", name: "More for this bank", icon: "ellipsis", entries: () => shell.menuEntries?.("bank") ?? [] });
+  // A new question of each kind, as the Question menu has them. It was a select that wrote a new question when its choice changed,
+  // which a screen reader announced as a list of kinds to pick one of, with no word that picking one would start writing.
+  const newQuestion = menuButton(document, {
+    id: "bank-new-question",
+    text: "New question",
+    name: "New question",
+    icon: "plus",
+    entries: () => (shell.menuEntries?.("question") ?? []).filter((e) => e !== "-" && e.label.startsWith("New ")),
+  });
   const problemsHost = h("div", { attrs: { "aria-live": "polite" } });
   const tools = h("div", { class: "tools" });
   const facetBar = h("div", { class: "facets" });
@@ -153,15 +162,9 @@ export async function renderBank(host, params, shell) {
       check = checks.value;
       await reload();
     });
-    const add = h("select", { attrs: { "aria-label": "Write a new question" } }, h("option", { value: "", text: "Write a new question…" }), ...EDITABLE_TYPES.map((t) => h("option", { value: t, text: /** @type {any} */ (TYPE_NAMES)[t] })));
-    add.addEventListener("change", async () => {
-      const chosen = add.value;
-      add.value = "";
-      if (chosen && (await canLeave())) await startNew(chosen);
-    });
     facetsKey = "";
     renderFacets();
-    tools.append(search, kinds, facetBar, checks, clearButton, filingHost, add);
+    tools.append(search, kinds, facetBar, checks, clearButton, filingHost, newQuestion.button);
     renderFiling();
   }
 
@@ -802,7 +805,10 @@ export async function renderBank(host, params, shell) {
     canLeave,
     dirty: () => Boolean(editor?.isDirty()),
     title: () => bank.title,
-    leave: () => more.menu.destroy(),
+    leave: () => {
+      more.menu.destroy();
+      newQuestion.menu.destroy();
+    },
     // What the menus, the "..." and the command search do on this screen.
     actions: {
       rename: { run: () => void rename() },

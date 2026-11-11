@@ -555,7 +555,7 @@ export function createEditor(options) {
     return h(
       "section",
       { class: "pictures", attrs: { "aria-label": "Pictures in this question" } },
-      h("h3", { text: shown.length === 1 ? "Picture" : "Pictures" }),
+      h("h2", { text: shown.length === 1 ? "Picture" : "Pictures" }),
       shown.length > 0 ? h("p", { class: "hint", text: "A picture stands where its number is written in the text, like [picture 1]. Move the words in brackets to move the picture; take them out and the picture is kept but not shown." }) : null,
       ...shown.map((p, i) => {
         const entry = entries[i];
@@ -614,7 +614,7 @@ export function createEditor(options) {
     return h(
       "section",
       { class: "equations", attrs: { "aria-label": "Equations in this question" } },
-      h("h3", { text: equations.length === 1 ? "Equation" : "Equations" }),
+      h("h2", { text: equations.length === 1 ? "Equation" : "Equations" }),
       h("p", { class: "hint", text: "An equation stands where its number is written in the text, like [equation 1]. Move the words in brackets to move the equation; take them out and the equation is kept but not shown. An equation cannot be changed here yet." }),
       ...equations.map((e) => {
         const drawn = drawMath(e.mathml);
@@ -643,7 +643,7 @@ export function createEditor(options) {
     return h(
       "section",
       { class: "tables", attrs: { "aria-label": "Tables in this question" } },
-      h("h3", { text: tables.length === 1 ? "Table" : "Tables" }),
+      h("h2", { text: tables.length === 1 ? "Table" : "Tables" }),
       h("p", { class: "hint", text: "A table stands where its number is written in the text, like [table 1]. Move the words in brackets to move the table; take them out and the table is taken out of the question. A table cannot be changed here: change it in your Word file and import again, or write its words into the text." }),
       ...tables.map((t) => {
         const rows = t.rows ?? [];

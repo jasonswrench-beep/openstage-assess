@@ -200,3 +200,29 @@ describe("the list of keys", () => {
     assert.match(scoring, /key === "0"/);
   });
 });
+
+describe("what the accessibility audit found on the screens (fixed 2026-11-11)", () => {
+  const UI = join(import.meta.dirname, "..", "ui");
+  const read = (file: string): string => readFileSync(join(UI, file), "utf8").replace(/\r\n/g, "\n");
+
+  test("tick boxes and round buttons are 24 pixels, the smallest a target should be, and so is a link button and a bank's name", () => {
+    const css = read("style.css");
+    assert.match(css, /input\[type="checkbox"\], input\[type="radio"\] \{ width: 24px; height: 24px;/);
+    assert.match(css, /button\.link \{[^}]*min-height: 24px;/);
+    assert.match(css, /\.card-title a \{[^}]*min-height: 24px;/);
+  });
+
+  test("the editor's Pictures, Equations and Tables are headings of the level after the screen's own, as Checks is", () => {
+    const editor = read("editor.js");
+    for (const words of ["Pictures", "Equations", "Tables"]) {
+      assert.match(editor, new RegExp(String.raw`h\("h2", \{ text: [^}]*"${words}"`), `${words} is an h2`);
+      assert.doesNotMatch(editor, new RegExp(String.raw`h\("h3", \{ text: [^}]*"${words}"`), `${words} is no longer an h3 under the h1`);
+    }
+  });
+
+  test("a new question is begun from a menu of the kinds, not from a select that acted as soon as its choice changed", () => {
+    const bank = read("bank.js");
+    assert.doesNotMatch(bank, /"aria-label": "Write a new question"/);
+    assert.match(bank, /id: "bank-new-question",\s*text: "New question",\s*name: "New question",/);
+  });
+});
