@@ -1,46 +1,67 @@
+/* The OpenStage suite's look (2026-11-11). The suite's colours, sizes and icons are in openstage-ui.css (version 1, the copy of
+   OpenStage Author's design/openstage-ui.css, loaded first); here the names this interface always used are pointed at them, with
+   OpenAssess's own colour, the orange of its icon: its light end #FFA861 on the navy bar (9.1 to 1), and a deeper orange #A04B0D for
+   filled buttons, links and the chosen row (white words on it 6.0 to 1). Every pairing was measured; design/DESIGN-GUIDE.md in
+   OpenStage Author lists them. The dark scheme is OpenAssess's own (Author has none): the suite's navy, with the light orange for
+   links and the orange of the icon, under navy words, for filled buttons. */
 :root {
-  --bg: #f4f6f9;
-  --card: #ffffff;
-  --text: #1c2128;
-  --muted: #566170;
-  --line: #d3d9e1;
-  --accent: #1f5fb4;
+  --assess-action: #a04b0d;
+  --assess-action-hover: #8e420b;
+  --assess-tint: #fdefe5;
+  --assess-on-shell: #ffa861;
+  --assess-logo: #ffa861;
+
+  --bg: var(--os-page);
+  --card: var(--os-surface);
+  --subtle: var(--os-subtle);
+  --text: var(--os-text);
+  --muted: var(--os-muted);
+  --line: var(--os-divider);
+  /* The edge of a control (a button, a box): 3 to 1 against the page and a panel, where a line between parts need not be. */
+  --edge: var(--os-control-edge);
+  --accent: var(--assess-action);
+  --accent-hover: var(--assess-action-hover);
   --accent-text: #ffffff;
-  --ok: #1f7a3f;
-  --ok-bg: #e4f4ea;
-  --warn: #8a5a00;
-  --warn-bg: #fdf1d6;
-  --bad: #b3261e;
-  --bad-bg: #fbe4e2;
+  --tint: var(--assess-tint);
+  --ok: var(--os-success);
+  --ok-bg: var(--os-success-tint);
+  --warn: var(--os-warning);
+  --warn-bg: var(--os-warning-tint);
+  --bad: var(--os-danger);
+  --bad-bg: var(--os-danger-tint);
   --note: #2a5a99;
   --note-bg: #e6eefa;
-  --focus: #1f5fb4;
-  --shadow: 0 1px 2px rgba(20, 30, 45, 0.08);
+  --focus: var(--os-focus);
+  --shadow: 0 1px 2px rgba(13, 27, 48, 0.08);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14171c;
-    --card: #1d2127;
-    --text: #e6e9ee;
-    --muted: #a0aab8;
-    --line: #343b47;
-    --accent: #6ea6ee;
-    --accent-text: #0e1620;
+    --bg: #0b172a;
+    --card: #102037;
+    --subtle: #14274a;
+    --text: #e8ecff;
+    --muted: #b4bcdb;
+    --line: #2a3b5c;
+    --edge: #8590b8;
+    --accent: #ffa861;
+    --accent-hover: #ffc08f;
+    --accent-text: #0b172a;
+    --tint: #3a2414;
     --ok: #6fcf8f;
-    --ok-bg: #1b3325;
+    --ok-bg: #16332a;
     --warn: #f0c46a;
     --warn-bg: #3a2f12;
     --bad: #ff8b82;
     --bad-bg: #40201e;
     --note: #8db6ee;
     --note-bg: #1c2a40;
-    --focus: #8db6ee;
+    --focus: #ffb454;
     --shadow: none;
   }
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
 h1 { font-size: 1.45rem; margin: 0 0 2px; }
 h2 { font-size: 1.1rem; margin: 0 0 8px; }
 h3 { font-size: 1rem; margin: 0 0 6px; }
@@ -52,14 +73,99 @@ code { font: 0.9em ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
 .skip { position: absolute; left: -9999px; top: 0; background: var(--card); padding: 8px 12px; z-index: 30; }
 .skip:focus { left: 8px; top: 8px; }
 
-.bar { display: flex; align-items: center; gap: 24px; padding: 8px 20px; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; color: var(--text); text-decoration: none; }
-.bar nav a { color: var(--muted); text-decoration: none; padding: 6px 4px; }
-.bar nav a:hover { color: var(--text); text-decoration: underline; }
+/* The navy bar and the menus under it stay at the top while the page scrolls. frame.js keeps --top-height at their height, which the
+   sticky list of questions sits under. */
+.top { position: sticky; top: 0; z-index: 30; }
+.shell { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; min-height: var(--os-shell-height); padding: 8px 16px; background: var(--os-shell); color: var(--os-on-shell); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; color: var(--assess-on-shell); text-decoration: none; }
+.brand img { display: block; border-radius: 6px; }
+.brand:hover .brand-name { text-decoration: underline; }
+.bar-context { flex: 1 1 12em; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.bar-context-label { color: var(--os-on-shell-muted); font-size: 0.82rem; }
+.bar-context-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.bar-search, .bar-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.shell .bar-button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-weight: 600; color: var(--os-on-shell); background: transparent; border: 1px solid var(--os-on-shell-muted); border-radius: var(--os-radius-sm); }
+.shell .bar-button:hover:not(:disabled) { background: var(--os-shell-hover); border-color: var(--os-on-shell); }
+.shell .bar-button.primary { color: #ffffff; background: var(--assess-action); border-color: var(--assess-action); }
+.shell .bar-button.primary:hover:not(:disabled) { background: var(--assess-action-hover); border-color: var(--assess-action-hover); }
+/* On the navy bar the ring round what has the keyboard is white: the suite's blue would not show on navy. */
+.shell :focus-visible { outline-color: #ffffff; }
+.ui-icon { width: var(--os-icon-size); height: var(--os-icon-size); flex: none; }
+.ui-icon-space { display: inline-block; width: var(--os-icon-size); height: var(--os-icon-size); }
+
+.menu-row { background: var(--card); border-bottom: 1px solid var(--line); padding: 0 12px; }
+.menubar { display: flex; flex-wrap: wrap; gap: 2px; }
+.menubar-slot { position: relative; }
+button.menubar-item { display: inline-flex; align-items: center; gap: 4px; height: 38px; padding: 0 10px; font-weight: 600; color: var(--text); background: transparent; border: 0; border-radius: var(--os-radius-sm); }
+.menubar-item .ui-icon { width: 14px; height: 14px; color: var(--muted); }
+button.menubar-item:hover, button.menubar-item[aria-expanded="true"] { color: var(--accent); background: var(--tint); }
+.menubar-item[aria-expanded="true"] .ui-icon { color: var(--accent); }
+.menu { position: absolute; top: calc(100% + 2px); left: 0; z-index: 1000; min-width: 290px; max-width: calc(100vw - 16px); padding: 6px; background: var(--card); border: 1px solid var(--line); border-radius: var(--os-radius); box-shadow: var(--os-shadow-pop); }
+.menu-item { display: grid; grid-template-columns: var(--os-icon-size) minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 10px; color: var(--text); border-radius: var(--os-radius-sm); cursor: pointer; white-space: nowrap; }
+.menu-item:hover, .menu-item:focus { background: var(--tint); }
+.menu-item:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.menu-item .ui-icon { color: var(--accent); }
+.menu-keys { display: inline-flex; align-items: center; justify-content: flex-end; min-width: 3em; color: var(--muted); font-size: 0.85rem; }
+.menu-item[aria-disabled="true"] { color: var(--muted); cursor: default; }
+.menu-item[aria-disabled="true"] .ui-icon { color: var(--muted); }
+.menu-separator { height: 1px; margin: 6px 4px; background: var(--line); }
+/* A menu from a button on a screen (the "..." beside a bank's name) sits over everything, where popupmenu.js puts it. */
+.popup-menu { position: fixed; top: 0; left: 0; max-height: calc(100vh - 16px); overflow-y: auto; }
+button.panel-menu-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+button.panel-menu-button.icon-only { padding: 7px 10px; }
+.panel-menu-button .ui-icon { width: 18px; height: 18px; color: var(--accent); }
+button.panel-menu-button[aria-expanded="true"] { background: var(--tint); border-color: var(--accent); }
+/* In a narrow window an open menu spans the row under the navy bar, so a menu near the right edge is not cut off (as in Author). */
+/* In a narrow or a short window the navy bar and the menus scroll away with the page: kept at the top they took a third of a phone's
+   height. */
+@media (max-width: 700px), (max-height: 560px) {
+  .top { position: static; }
+}
+@media (max-width: 700px) {
+  .menu-row { position: relative; }
+  .menubar-slot { position: static; }
+  .menubar .menu { left: 8px; right: 8px; min-width: 0; }
+  .menu-item { white-space: normal; }
+}
+
+/* The command search (Ctrl+K) and the Keyboard keys window (Ctrl+/). */
+dialog.command-search { width: min(656px, calc(100vw - 16px)); max-width: none; margin: 10vh auto auto; padding: 14px 16px 10px; }
+.cs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cs-head h2 { margin: 0; }
+button.cs-close, button.dlg-close { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; background: transparent; border: 1px solid transparent; }
+button.cs-close:hover, button.dlg-close:hover:not(:disabled) { background: var(--subtle); border-color: var(--line); }
+.command-search .hint { margin: 4px 0 10px; }
+.cs-box { display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--card); border: 2px solid var(--edge); border-radius: var(--os-radius); }
+.cs-box:focus-within { border-color: var(--accent); outline: 3px solid var(--focus); outline-offset: 2px; }
+.cs-box .ui-icon { color: var(--muted); }
+input.cs-input { flex: 1; min-width: 0; height: 40px; padding: 0; background: transparent; border: 0; }
+input.cs-input:focus-visible { outline: none; }
+.cs-status { margin: 8px 2px 4px; color: var(--muted); font-size: 0.88rem; }
+.cs-list { list-style: none; margin: 0; padding: 0; max-height: min(52vh, 440px); overflow-y: auto; }
+.cs-option { display: grid; grid-template-columns: var(--os-icon-size) minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 10px; border-left: 3px solid transparent; border-radius: var(--os-radius-sm); cursor: pointer; }
+.cs-option .ui-icon { color: var(--accent); }
+.cs-option[aria-selected="true"] { background: var(--tint); border-left-color: var(--accent); }
+.cs-option[aria-disabled="true"] { color: var(--muted); }
+.cs-option[aria-disabled="true"] .ui-icon { color: var(--muted); }
+.cs-where { margin-left: 4px; color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+dialog.keys-dialog { max-width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 48px); }
+.keys-dialog h3 { margin: 16px 0 6px; font-size: 1rem; }
+.keys-table { width: 100%; border-collapse: collapse; }
+.keys-table th, .keys-table td { padding: 6px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.keys-table thead th { color: var(--muted); font-size: 0.85rem; border-bottom-width: 2px; }
+.keys-table tbody th { width: 36%; font-weight: 600; }
+/* A dialog's own Close button, in its top corner (dialogs.js): it does what Escape does. */
+dialog { position: relative; }
+button.dlg-close { position: absolute; top: 10px; right: 10px; }
+dialog:has(.dlg-close) .dialog-body > h2:first-child { padding-right: 40px; }
+/* The row of buttons stays in sight at the foot of a dialog that is taller than the window, and the rest scrolls. */
+dialog .dialog-body { max-height: calc(100vh - 48px); overflow-y: auto; }
+dialog .dialog-actions { position: sticky; bottom: -18px; margin: 8px -20px -18px; padding: 12px 20px; background: var(--card); border-top: 1px solid var(--line); }
 
 /* The app moves focus to the content when a screen changes, for a screen reader. That focus is not drawn: the keyboard's own
    focus on the controls inside is. The second selector is needed because :focus-visible is more specific than main. */
 main, main:focus, main:focus-visible { padding: 18px 20px 60px; max-width: 1400px; margin: 0 auto; outline: none; }
+.page-head h1 { font-size: 1.45rem; }
 .screen { min-width: 0; }
 .page-head { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
 .head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -71,16 +177,17 @@ main, main:focus, main:focus-visible { padding: 18px 20px 60px; max-width: 1400p
 /* Anything marked hidden is hidden, whatever display its other styles give it: a button's own display used to override the mark. */
 [hidden] { display: none !important; }
 button, .button, select, input, textarea { font: inherit; color: inherit; }
-button, .button { display: inline-block; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; cursor: pointer; text-decoration: none; line-height: 1.3; }
-button:hover:not(:disabled), .button:hover { border-color: var(--accent); }
+button, .button { display: inline-block; background: var(--card); border: 1px solid var(--edge); border-radius: var(--os-radius-sm); padding: 7px 14px; cursor: pointer; text-decoration: none; line-height: 1.3; }
+button:hover:not(:disabled), .button:hover { border-color: var(--accent); background: var(--subtle); }
 button:disabled { opacity: 0.5; cursor: default; }
 button.primary, .button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.primary:hover:not(:disabled), .button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 button.danger { color: var(--bad); border-color: var(--bad); }
 button.small-button { padding: 3px 10px; font-size: 0.9rem; }
 button.icon { padding: 2px 8px; min-width: 32px; min-height: 32px; }
 button.link { background: none; border: none; color: var(--accent); text-decoration: underline; padding: 2px 4px; }
 
-input[type="text"], input[type="search"], input[type="number"], select, textarea { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; width: 100%; }
+input[type="text"], input[type="search"], input[type="number"], select, textarea { background: var(--card); border: 1px solid var(--edge); border-radius: 6px; padding: 6px 9px; width: 100%; }
 textarea { resize: vertical; min-height: 2.4em; line-height: 1.4; }
 input[readonly], textarea[readonly] { background: var(--bg); color: var(--muted); }
 input[type="checkbox"], input[type="radio"] { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); margin: 0; }
@@ -106,7 +213,7 @@ input[type="checkbox"], input[type="radio"] { width: 1.1rem; height: 1.1rem; acc
 .chip { display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; }
 .chip b { font-size: 1.1rem; }
 .chip span { color: var(--muted); font-size: 0.9rem; }
-.chip.on { border-color: var(--accent); background: var(--note-bg); }
+.chip.on { border-color: var(--accent); background: var(--tint); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 24px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; box-shadow: var(--shadow); }
@@ -116,7 +223,7 @@ h2.card-title, h2.checks-title { font-size: 1rem; margin: 0 0 6px; }
 .card-title { overflow-wrap: anywhere; }
 .card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .dropzone { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center; background: var(--card); max-width: 760px; margin: 0 auto 20px; }
-.dropzone.over { border-color: var(--accent); background: var(--note-bg); }
+.dropzone.over { border-color: var(--accent); background: var(--tint); }
 .samples { max-width: 1100px; margin: 8px auto 20px; }
 .samples h2 { margin-bottom: 4px; }
 .samples > .sub { margin-bottom: 12px; }
@@ -126,7 +233,7 @@ h2.card-title, h2.checks-title { font-size: 1rem; margin: 0 0 6px; }
 .library { color: var(--muted); font-size: 0.9rem; text-align: center; }
 
 .panes { display: grid; grid-template-columns: minmax(250px, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }
-.pane-list { position: sticky; top: 64px; max-height: calc(100vh - 90px); overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.pane-list { position: sticky; top: calc(var(--top-height, 96px) + 12px); max-height: calc(100vh - var(--top-height, 96px) - 28px); overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
 .detail { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-height: 200px; min-width: 0; }
 .qlist { list-style: none; margin: 0; padding: 0; }
 .qlist .empty { padding: 16px; color: var(--muted); }
@@ -137,7 +244,7 @@ h2.card-title, h2.checks-title { font-size: 1rem; margin: 0 0 6px; }
 .qrow.v-parsed { border-left-color: var(--ok); }
 .qrow.v-needsReview { border-left-color: var(--warn); }
 .qrow.v-failed { border-left-color: var(--bad); }
-.qrow[aria-current="true"] { background: var(--note-bg); }
+.qrow[aria-current="true"] { background: var(--tint); }
 .qrow.skipped { opacity: 0.6; }
 .qrow .n { font-weight: 700; min-width: 2ch; }
 .qmain { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
@@ -346,6 +453,10 @@ table.results tr.current { background: var(--note-bg); }
    state that was shown by a background alone is gone. The chosen filter, the question or sheet being looked at, a bubble that is ticked
    and the place a file is being dragged to each get the system's highlight colours or an outline, which are kept. */
 @media (forced-colors: active) {
+  /* The navy bar, an open menu's item and the chosen command keep a mark the system's colours can show. */
+  .shell { border-bottom: 1px solid CanvasText; }
+  .menu-item:focus, .menu-item:hover, .cs-option[aria-selected="true"], button.menubar-item[aria-expanded="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .menu-item:focus .ui-icon, .cs-option[aria-selected="true"] .ui-icon, button.menubar-item[aria-expanded="true"] .ui-icon { color: HighlightText; }
   .chip.on, button.bubble.on { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: HighlightText; }
   .chip.on span { color: HighlightText; }
   .qrow[aria-current="true"], table.results tr.current { outline: 3px solid Highlight; outline-offset: -3px; }

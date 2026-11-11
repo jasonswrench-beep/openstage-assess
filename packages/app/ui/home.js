@@ -109,18 +109,20 @@ export async function renderHome(host, _params, shell) {
   const banks = /** @type {any[]} */ (state.banks);
   const cards = banks.map((b) => bankCard(b, { remove: (bank) => void removeUnreadable(bank) }));
 
+  async function newBank() {
+    const title = await askText("New bank", "What is it called?", "", "Create");
+    if (!title) return;
+    try {
+      const made = await post("banks", { title });
+      shell.go(`#/bank/${encodeURIComponent(made.name)}`);
+    } catch (error) {
+      shell.notify(/** @type {Error} */ (error).message, "error");
+    }
+  }
+
   host.append(
     h("div", { class: "page-head" }, h("div", null, h("h1", { text: "Your question banks" }), h("p", { class: "sub", text: "A bank is a file of questions you can search, change, print and export." })), h("div", { class: "head-actions" },
-      h("button", { type: "button", class: "primary", text: "New bank", on: { click: async () => {
-        const title = await askText("New bank", "What is it called?", "", "Create");
-        if (!title) return;
-        try {
-          const made = await post("banks", { title });
-          shell.go(`#/bank/${encodeURIComponent(made.name)}`);
-        } catch (error) {
-          shell.notify(/** @type {Error} */ (error).message, "error");
-        }
-      } } }),
+      h("button", { type: "button", class: "primary", text: "New bank", on: { click: () => void newBank() } }),
       h("button", { type: "button", class: "button", text: "Open a bank file…", on: { click: () => bankInput.click() } }),
     )),
     fileInput,
@@ -142,5 +144,12 @@ export async function renderHome(host, _params, shell) {
       } } }),
     ),
   );
-  return {};
+  // What the File menu and the command search do here (and, chosen on another screen, do here after coming back).
+  return {
+    actions: {
+      newBank: { run: () => void newBank() },
+      openBankFile: { run: () => bankInput.click() },
+      importFile: { run: () => fileInput.click() },
+    },
+  };
 }

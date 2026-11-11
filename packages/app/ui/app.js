@@ -1,10 +1,11 @@
 // @ts-check
 /**
  * The shell: which screen is showing, a message line that is read out as it changes, and a guard so that a change that
- * was not saved is not lost by going somewhere else.
+ * was not saved is not lost by going somewhere else. The navy bar and the menus round every screen are frame.js's.
  */
 
 import { clear, h, screenFocus, skipTo } from "./dom.js";
+import { menuEntries, startFrame } from "./frame.js";
 
 const main = /** @type {HTMLElement} */ (document.getElementById("main"));
 const status = /** @type {HTMLElement} */ (document.getElementById("status"));
@@ -14,7 +15,7 @@ if (skip) skipTo(/** @type {HTMLElement} */ (skip), main);
 // button, so the link was reached only backwards. A screen that is moved to afterwards is (the rule is in dom.js, where it is tested).
 const focusAfterScreen = screenFocus();
 
-/** @type {{ canLeave?: () => Promise<boolean>, dirty?: () => boolean } | null} */
+/** @type {{ canLeave?: () => Promise<boolean>, dirty?: () => boolean, leave?: () => void, actions?: Record<string, { run: () => void, enabled?: () => boolean }>, title?: () => string } | null} */
 let current = null;
 let lastHash = location.hash || "#/";
 let asking = false;
@@ -43,7 +44,16 @@ export function go(hash) {
   else location.hash = hash;
 }
 
-const shell = { notify, go };
+const frame = startFrame(document, { notify, go });
+
+const shell = {
+  notify,
+  go,
+  /** The commands of one of the menus, for a button on a screen that offers the same ones. */
+  menuEntries: (/** @type {string} */ id) => menuEntries(frame.menus, id),
+  /** Draw the navy bar again, when what it shows has changed (a bank renamed). */
+  refreshFrame: () => frame.refresh(),
+};
 
 /** @type {Array<[RegExp, string, string]>} */
 const ROUTES = [
@@ -58,6 +68,7 @@ const ROUTES = [
 
 async function show() {
   const hash = location.hash || "#/";
+  current?.leave?.();
   clear(main);
   current = null;
   for (const [pattern, file, name] of ROUTES) {
@@ -84,9 +95,11 @@ async function show() {
       );
     }
     document.title = "OpenAssess";
+    frame.screenShown(current);
     focusAfterScreen(main);
     return;
   }
+  frame.screenShown(null);
   focusAfterScreen(null); // a page that is not a screen is still the first thing shown
   clear(main);
   main.append(h("div", { class: "screen" }, h("h1", { text: "There is nothing here" }), h("a", { class: "button", href: "#/", text: "Back to your banks" })));

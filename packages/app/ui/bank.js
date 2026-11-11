@@ -11,6 +11,7 @@ import { ask, askText, confirmAction } from "./dialogs.js";
 import { clear, EDITABLE_TYPES, h, plural, TYPE_NAMES, when } from "./dom.js";
 import { createEditor } from "./editor.js";
 import { arrowKeys, fillRows, markSelected, questionRow, ROWS_AT_FIRST } from "./list.js";
+import { menuButton } from "./popupmenu.js";
 import { qualityPanel } from "./quality-panel.js";
 
 /** The label of a question that has no value for a thing, as the engine writes it. */
@@ -33,7 +34,7 @@ const COVERAGE_CHOICES = [...FILTER_AXES.slice(0, 6), ["type", "Kind of question
 /**
  * @param {HTMLElement} host
  * @param {{ name: string }} params
- * @param {{ notify: (message: string, kind?: "ok" | "error") => void, go: (hash: string) => void }} shell
+ * @param {{ notify: (message: string, kind?: "ok" | "error") => void, go: (hash: string) => void, menuEntries?: (id: string) => readonly import("./menubar.js").MenuEntry[], refreshFrame?: () => void }} shell
  */
 export async function renderBank(host, params, shell) {
   const base = `banks/${encodeURIComponent(params.name)}`;
@@ -61,6 +62,9 @@ export async function renderBank(host, params, shell) {
 
   clear(host);
   const head = h("div", { class: "page-head" });
+  // The bank's own commands (Rename, Folders, Coverage, Check quality, Remove) are in the Bank menu, and in this "..." beside its name;
+  // Print, Answer sheets and Export are on the navy bar and in the Test menu. They were eight buttons along the top of the screen.
+  const more = menuButton(document, { id: "bank-more", name: "More for this bank", icon: "ellipsis", entries: () => shell.menuEntries?.("bank") ?? [] });
   const problemsHost = h("div", { attrs: { "aria-live": "polite" } });
   const tools = h("div", { class: "tools" });
   const facetBar = h("div", { class: "facets" });
@@ -121,19 +125,9 @@ export async function renderBank(host, params, shell) {
         h("h1", { text: bank.title }),
         h("p", { class: "sub", text: `${plural(bank.total, "question", "questions")}${stats.withErrors + stats.withWarnings > 0 ? `, ${stats.withErrors} failed and ${stats.withWarnings} to check` : ""}. Changed ${when(bank.modified)}.` }),
       ),
-      h(
-        "div",
-        { class: "head-actions" },
-        h("button", { type: "button", text: "Rename", on: { click: () => void rename() } }),
-        h("button", { type: "button", text: "Print…", on: { click: () => shell.go(`#/print/${encodeURIComponent(params.name)}`) } }),
-        h("button", { type: "button", text: "Export…", on: { click: () => shell.go(`#/export/${encodeURIComponent(params.name)}`) } }),
-        h("button", { type: "button", text: "Answer sheets…", on: { click: () => shell.go(`#/sheets/${encodeURIComponent(params.name)}`) } }),
-        h("button", { type: "button", text: "Folders", on: { click: () => void showFolders() } }),
-        h("button", { type: "button", text: "Coverage", on: { click: () => void showCoverage() } }),
-        h("button", { type: "button", text: "Check quality", on: { click: () => void checkQuality() } }),
-        h("button", { type: "button", class: "danger", text: "Remove…", on: { click: () => void remove() } }),
-      ),
+      h("div", { class: "head-actions" }, more.button),
     );
+    shell.refreshFrame?.();
   }
 
   function renderTools() {
@@ -804,5 +798,30 @@ export async function renderBank(host, params, shell) {
   renderTools();
   renderList();
   await renderDetail();
-  return { canLeave, dirty: () => Boolean(editor?.isDirty()) };
+  return {
+    canLeave,
+    dirty: () => Boolean(editor?.isDirty()),
+    title: () => bank.title,
+    leave: () => more.menu.destroy(),
+    // What the menus, the "..." and the command search do on this screen.
+    actions: {
+      rename: { run: () => void rename() },
+      folders: { run: () => void showFolders() },
+      coverage: { run: () => void showCoverage() },
+      checkQuality: { run: () => void checkQuality() },
+      remove: { run: () => void remove() },
+      search: { run: () => /** @type {HTMLElement | null} */ (document.getElementById("bank-search"))?.focus() },
+      clearFilters: { run: () => void clearFilters(), enabled: () => filtersActive() },
+      ...Object.fromEntries(
+        EDITABLE_TYPES.map((kind) => [
+          `new:${kind}`,
+          {
+            run: async () => {
+              if (await canLeave()) await startNew(kind);
+            },
+          },
+        ]),
+      ),
+    },
+  };
 }

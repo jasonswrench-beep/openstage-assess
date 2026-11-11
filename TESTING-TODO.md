@@ -485,6 +485,30 @@ built-in browser at desktop and phone width. What is left needs a real bank and 
   focus goes back to the control used after a change, and to the heading after a delete. Looked at in the built-in browser, not
   with a screen reader.
 
+## The suite's look (2026-11-11)
+
+Built and checked by tests (`packages/app/test/suite-look.test.ts`) and in a real browser by a script (62 checks: the menus by
+keyboard and pointer, the bank's "...", the command search, the keys list, the dialogs' Close button, 375 and 320 pixels wide, dark
+colours, a high-contrast theme, and OpenStage Author's accessibility audit on the navy bar, the menus and every open dialog and menu,
+which found nothing there). Pictures as it was are in `D:\Claude Audio Test\revamp-screens\assess-before`, and after in
+`assess-a1`. Not tried by a person.
+
+- [ ] Open the app and use it for a while: is every command where you would look for it? Write down anything you would move.
+- [ ] F10, then the arrows through the menus; Enter on an item; Escape back. Ctrl+K and type "print" or "check"; Ctrl+/.
+- [ ] On a bank: the "..." beside its name (Rename, Folders, Coverage, Check quality, Remove), and Print, Answer sheets and Export on
+      the navy bar.
+- [ ] File > New bank… while on another screen: it goes to your banks and asks for the name there. File > Open a bank file… does the
+      same and opens Windows' own file chooser: in the window, check that the chooser still opens after the move (a browser lets a
+      page open one only soon after a click).
+- [ ] With Narrator, and with NVDA (only when you are away from the computer: NVDA logs everything it speaks): a menu's name ("File,
+      menu item, collapsed" or similar), an item that cannot be used now ("Rename…, unavailable"), the command search (the chosen
+      command should be read as Up and Down move while the keyboard stays in the box), and a dialog's Close button.
+- [ ] Windows' high-contrast themes in the window: an open menu's item and the chosen command are filled in the system's highlight colour.
+- [ ] The accessibility audit also listed older things on the screens' own parts, which this change did not touch and did not fix:
+      tick boxes and round buttons are 18 pixels (a target should be 24, unless the words beside them count as part of it, as they do
+      here), a link in a sentence (Show this folder), the select boxes of a bank's tools, and on the import review a heading that
+      skips a level (Pictures). Say whether to work on them.
+
 ## The app and its window
 
 Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in
