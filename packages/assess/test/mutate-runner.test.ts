@@ -252,6 +252,32 @@ describe("the runner that plants faults", () => {
     }
   });
 
+  test("the tests are counted in whichever form the test runner prints them", () => {
+    // With its output piped, Node 22 prints TAP ("# tests 1") and Node 24 prints the spec form ("ℹ tests 1"). The runner once read only the
+    // second, so on GitHub's Node 22 every baseline "printed no count", nothing was planted, and nine tests of this file failed there while
+    // they passed on the Node 24 they were written on. NODE_OPTIONS can name a reporter, which sets the form the test run would have printed
+    // in, so each form is tried, and also two reporters at once with a destination for each (the test run takes out of NODE_OPTIONS any
+    // reporter of its own: node refuses to start with one there and another on its command line).
+    const options = ["--test-reporter=tap", "--test-reporter=spec", "--test-reporter spec --test-reporter-destination stdout", "--max-old-space-size=512 --test-reporter=tap"];
+    for (const nodeOptions of options) {
+      const { repo } = smallRepo();
+      try {
+        const result = spawnSync(process.execPath, [join(repo, "tools", "release", "mutate.mjs"), join(repo, "spec.json")], {
+          encoding: "utf8",
+          cwd: repo,
+          timeout: 120_000,
+          env: cleanEnv({ NODE_OPTIONS: nodeOptions }),
+        });
+        assert.match(result.stdout, /killed\s+a fault/, `with NODE_OPTIONS=${nodeOptions}:\n${result.stdout}${result.stderr}`);
+        assert.doesNotMatch(result.stdout, /BASELINE FAILS/, nodeOptions);
+        assert.equal(result.status, 0, nodeOptions);
+        assert.equal(readFileSync(join(repo, "a.txt"), "utf8"), "original\n");
+      } finally {
+        rmSync(repo, { recursive: true, force: true });
+      }
+    }
+  });
+
   test("a run that ends leaves no folder of its own behind", () => {
     const { repo, run, tag } = smallRepo();
     try {

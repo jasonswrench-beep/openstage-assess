@@ -1183,6 +1183,21 @@ stage 4g rules 42 of 48 and 20 of 24. The first number is the honest one. What i
   were asked for with the corrected brief. The importer has not been run on piece 1: the blind set is scored
   as one, after all four pieces pass.
 
+### GitHub's check was red on Node 22 while every test passed here on Node 24 (10 November 2026, after alpha 23)
+
+The engine check on GitHub runs Node 22 on Linux, and nobody had read it: the tests had only been run on the Windows machine with Node 24.
+The last eight pushes were red (four on "a Common Cartridge package", one on `test/server.test.ts` and the fault runner, and the last three on
+the fault runner's own tests alone, nine of them in five suites). The last three were one fault: `tools/release/mutate.mjs` counted the tests a test run
+printed by reading `ℹ tests 3`, which is how Node 24 prints them when the output is piped, and Node 22 prints `# tests 3` (TAP). On
+Node 22 every baseline "printed no count", nothing was planted, and every test that expects a fault to be planted failed (the signal test
+waited its 90 seconds for a test run that never started). The runner is a development tool and no part of what the app does, so no export
+or import was wrong. The runner now asks for the TAP reporter itself and takes any reporter out of `NODE_OPTIONS` for its test run (node
+refuses to start with one there and another on the command line, which a first version of this fix did not allow for and the new test
+caught); `mutate-runner.test.ts` runs it under four settings of `NODE_OPTIONS` and fails on the earlier runner with the message GitHub
+gave. Forcing TAP in `NODE_OPTIONS` on Node 24 gave the same nine failures before the fix and none after. Node 22 itself has not been run
+on this machine: GitHub's check is where it is run. Read that check after every push; the alpha 23 notes say all tests passed, which was
+true of this machine and of a fresh clone of it and was not true of GitHub's check on that commit.
+
 ### Found by four readers of alpha 22's fixes (8 November 2026, after alpha 22; fixed in alpha 23)
 
 Four readers who had not written alpha 22's fixes ran them: the PDF and zip readers, the patterns and list spreads and the small-format
