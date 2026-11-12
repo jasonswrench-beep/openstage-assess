@@ -1,0 +1,128 @@
+[
+  {
+    "label": "L1 routeOf: the bank's name is not decoded from the address",
+    "file": "packages/app/ui/frame.js",
+    "from": "bank: decodeURIComponent(/** @type {string} */ (bank[2])) }",
+    "to": "bank: /** @type {string} */ (bank[2]) }",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L2 routeOf: a scoring session is taken for a bank's screen",
+    "file": "packages/app/ui/frame.js",
+    "from": "const BANK_ROUTES = /^#\\/(bank|export|print|sheets)\\/([^/]+)$/;",
+    "to": "const BANK_ROUTES = /^#\\/(bank|export|print|sheets|score)\\/([^/]+)$/;",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L3 Print, Answer sheets and Export stay usable on their own screen",
+    "file": "packages/app/ui/frame.js",
+    "from": "enabled: () => route().bank !== null && route().screen !== screen,",
+    "to": "enabled: () => route().bank !== null,",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L4 a command the screen offers is usable even when the screen says not now",
+    "file": "packages/app/ui/frame.js",
+    "from": "return !!action && (action.enabled ? action.enabled() : true);",
+    "to": "return !!action;",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L5 a new question's label keeps the kind's capital letter",
+    "file": "packages/app/ui/frame.js",
+    "from": "return `New ${name.charAt(0).toLowerCase()}${name.slice(1)} question`;",
+    "to": "return `New ${name} question`;",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L6 Home's commands are done on the screen they were chosen on, not on Home",
+    "file": "packages/app/ui/frame.js",
+    "from": "const home = (id, label, icon, title) => ({ label, icon, title, run: () => ctx.onHome(id) });",
+    "to": "const home = (id, label, icon, title) => ({ label, icon, title, run: () => screenAction(id)?.run() });",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L7 Your banks is usable on Home",
+    "file": "packages/app/ui/frame.js",
+    "from": "run: () => ctx.go(\"#/\"), enabled: () => route().screen !== \"home\" },",
+    "to": "run: () => ctx.go(\"#/\") },",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L8 Remove is left out of the Bank menu",
+    "file": "packages/app/ui/frame.js",
+    "from": "        \"-\",\n        offered(\"remove\", \"Remove…\", \"trash\", \"Move this bank to the Deleted folder\"),",
+    "to": "        \"-\",",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L9 the bank's \"...\" offers the first menu, whatever was asked for",
+    "file": "packages/app/ui/frame.js",
+    "from": "return menus.find((m) => m.id === id)?.items ?? [];",
+    "to": "return menus[0]?.items ?? [];",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L10 the navy bar on a bank has no Export",
+    "file": "packages/app/ui/frame.js",
+    "from": "return { menus, quick: [print, sheets, exportTo] };",
+    "to": "return { menus, quick: [print, sheets] };",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L11 moving in a menu does not go round at the end",
+    "file": "packages/app/ui/menubar.js",
+    "from": "  return (current + dir + count) % count;\n}",
+    "to": "  return Math.min(Math.max(current + dir, 0), count - 1);\n}",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L12 a letter finds an item only in the case it was typed",
+    "file": "packages/app/ui/menubar.js",
+    "from": "if ((labels[at] ?? \"\").trim().toLocaleLowerCase().startsWith(l)) return at;",
+    "to": "if ((labels[at] ?? \"\").trim().startsWith(letter)) return at;",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L13 keys are written for aria-keyshortcuts with Ctrl, not Control",
+    "file": "packages/app/ui/menubar.js",
+    "from": "return keys.replace(/Ctrl/g, \"Control\").replace(",
+    "to": "return keys.replace(",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L14 a command in two menus is listed twice by the command search",
+    "file": "packages/app/ui/commandsearch.js",
+    "from": "      const known = byRun.get(item.run);\n      if (known) {",
+    "to": "      const known = byRun.get(item.run);\n      if (known && false) {",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L15 one command found is said as 1 commands found",
+    "file": "packages/app/ui/commandsearch.js",
+    "from": "return count === 1 ? \"1 command found.\" : `${count} commands found.`;",
+    "to": "return `${count} commands found.`;",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L16 the list of keys leaves out Ctrl+/",
+    "file": "packages/app/ui/keys.js",
+    "from": "      { keys: \"Ctrl+/\", does: \"This list of keys\" },\n",
+    "to": "",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L17 tick boxes and round buttons are 18 pixels again",
+    "file": "packages/app/ui/style.css",
+    "from": "input[type=\"checkbox\"], input[type=\"radio\"] { width: 24px; height: 24px;",
+    "to": "input[type=\"checkbox\"], input[type=\"radio\"] { width: 18px; height: 18px;",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  },
+  {
+    "label": "L18 the editor's Pictures heading is an h3 again",
+    "file": "packages/app/ui/editor.js",
+    "from": "h(\"h2\", { text: shown.length === 1 ? \"Picture\" : \"Pictures\" }),",
+    "to": "h(\"h3\", { text: shown.length === 1 ? \"Picture\" : \"Pictures\" }),",
+    "tests": ["packages/app/test/suite-look.test.ts"]
+  }
+]

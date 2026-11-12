@@ -359,7 +359,7 @@ packages/assess/        the engine, published as @openstage/assess
 packages/app/           the app: a local server and its web interface, published as @openstage/app
   src/                  the server, the routes, the editor's conversion to and from the engine's question
   ui/                   the screens: plain JavaScript modules, no framework, no build step
-  test/                 442 tests
+  test/                 443 tests
   shell/                the Tauri window (kept out of the npm workspaces; see its README)
 fixtures/standard-format/   source files with expected output beside them
 fixtures/word-authored/     documents that Word wrote itself, for tests that need no Word

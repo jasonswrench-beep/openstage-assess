@@ -179,6 +179,17 @@ describe("the command search", () => {
     assert.equal(foundText(0, "zzzz"), "No command has those words. Try another word, or look in the menus.");
     assert.equal(foundText(1, "x"), "1 command found.");
   });
+
+  test("a command that is in two menus is listed once, with both menus named", () => {
+    const shared = { label: "Export…", run: () => undefined };
+    const entries = searchEntries([
+      { id: "file", label: "File", items: [shared, "-", { label: "Your banks", run: () => undefined }] },
+      { id: "test", label: "Test", items: [shared] },
+    ]);
+    assert.deepEqual(entries.map((e: { cmd: Cmd }) => e.cmd.label), ["Export…", "Your banks"]);
+    assert.deepEqual(entries[0].menus, ["File", "Test"]);
+    assert.equal(menusText(entries[0].menus), "File and Test menus");
+  });
 });
 
 describe("the list of keys", () => {
