@@ -17,6 +17,12 @@ import { isDict, isName, Lexer, numberOf, parseObject, PdfError, PdfName, PdfRef
 /** The largest file read, and the largest any one stream may grow to when it is unpacked. */
 export const MAX_PDF_BYTES = 300 * 1024 * 1024;
 const MAX_STREAM_BYTES = 256 * 1024 * 1024;
+/**
+ * The most all of one PDF's streams may unpack to together, counted each time one is unpacked (the security review of 2026-11-13). The
+ * cap on one stream did not stop a file of many streams that each unpack to just under it, and the reader runs on the server's one
+ * thread. A real test bank unpacks to a few megabytes. The picture of a scanned page is not counted (see `streamData`).
+ */
+export const MAX_DOCUMENT_UNPACKED_BYTES = 1024 * 1024 * 1024;
 /** The widest row of a predicted stream that is believed: 16 MiB is far more than a page of any picture holds. */
 const MAX_ROW_BYTES = 16 * 1024 * 1024;
 const MAX_PAGES = 5000;
@@ -146,8 +152,12 @@ export class PdfDocument {
    * file's length, so that a file whose every object has a string in it that looks like the start of another is read whole.
    */
   private rereadBudget: number;
+  /** What this document's streams have unpacked to so far, and the most they may (MAX_DOCUMENT_UNPACKED_BYTES unless a test sets less). */
+  private unpacked = 0;
+  private readonly unpackLimit: number;
 
-  constructor(bytes: Uint8Array) {
+  constructor(bytes: Uint8Array, options: { unpackLimit?: number } = {}) {
+    this.unpackLimit = Math.min(MAX_DOCUMENT_UNPACKED_BYTES, Math.max(0, options.unpackLimit ?? MAX_DOCUMENT_UNPACKED_BYTES));
     if (bytes.length === 0) throw new PdfError("This file is empty.");
     if (bytes.length > MAX_PDF_BYTES) throw new PdfError(`This PDF is larger than ${MAX_PDF_BYTES / 1024 / 1024} MB, which is more than a test bank is.`);
     this.bytes = bytes;
@@ -564,9 +574,22 @@ export class PdfDocument {
   // Streams
   // -------------------------------------------------------------------------
 
-  /** A stream's bytes with its filters undone. A filter this does not read is an error that names it. */
-  streamData(stream: PdfStream): Uint8Array {
+  /**
+   * A stream's bytes with its filters undone. A filter this does not read is an error that names it.
+   *
+   * Each stream may unpack to MAX_STREAM_BYTES, and all of them together to the document's limit. `picture` is for the picture of a
+   * scanned page (`sheets/pdf-page.ts`), which is held to the cap on one stream and not counted in the total: its size in pixels is
+   * held to MAX_PIXELS before it is unpacked, and a class's answer sheets scanned in grey unpack to more than a gigabyte together.
+   */
+  streamData(stream: PdfStream, options: { picture?: boolean } = {}): Uint8Array {
     let data: Uint8Array = stream.raw;
+    const counted = options.picture !== true;
+    const left = counted ? Math.max(0, this.unpackLimit - this.unpacked) : MAX_STREAM_BYTES;
+    const cap = Math.min(MAX_STREAM_BYTES, left);
+    const tooMuch = (): never => {
+      throw new PdfError("This PDF's streams unpack to more than a test bank could hold, so it was not read.");
+    };
+    if (cap === 0) tooMuch();
     const filterObject = this.resolve(stream.dict.get("Filter") ?? stream.dict.get("F"));
     const filters = Array.isArray(filterObject) ? filterObject.map((f) => this.name(f)) : [this.name(filterObject)];
     const parmsObject = this.resolve(stream.dict.get("DecodeParms") ?? stream.dict.get("DP"));
@@ -579,12 +602,15 @@ export class PdfDocument {
         case "Fl": {
           let out: Uint8Array;
           try {
-            out = inflateSync(data, { maxOutputLength: MAX_STREAM_BYTES });
+            out = inflateSync(data, { maxOutputLength: cap });
           } catch (error) {
-            if (/larger than|maxOutputLength|buffer/i.test((error as Error).message)) throw new PdfError("A stream in this PDF unpacks to more than a test bank could hold.");
+            if (/larger than|maxOutputLength|buffer/i.test((error as Error).message)) {
+              if (cap < MAX_STREAM_BYTES) tooMuch();
+              throw new PdfError("A stream in this PDF unpacks to more than a test bank could hold.");
+            }
             try {
               // A stream cut short still holds what was written before the cut.
-              out = inflateSync(data, { finishFlush: 2, maxOutputLength: MAX_STREAM_BYTES });
+              out = inflateSync(data, { finishFlush: 2, maxOutputLength: cap });
             } catch {
               throw new PdfError("A stream in this PDF could not be unpacked: it is damaged.");
             }
@@ -600,11 +626,11 @@ export class PdfDocument {
         }
         case "ASCII85Decode":
         case "A85":
-          data = ascii85(data);
+          data = ascii85(data, cap);
           break;
         case "RunLengthDecode":
         case "RL":
-          data = runLength(data);
+          data = runLength(data, cap);
           break;
         case "DCTDecode":
         case "JPXDecode":
@@ -615,6 +641,10 @@ export class PdfDocument {
           throw new PdfError(`A stream in this PDF uses a filter, ${name}, that this reader does not read.`);
       }
     });
+    if (counted) {
+      this.unpacked += data.length;
+      if (this.unpacked > this.unpackLimit) tooMuch();
+    }
     return data;
   }
 

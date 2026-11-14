@@ -17,6 +17,9 @@ tauri = { version = "2", features = [] }
 # when the window starts a download, which is the one place a person asks for a file to be saved.
 [target.'cfg(windows)'.dependencies]
 rfd = { version = "0.16", default-features = false }
+# Opening a page of OpenAssess's releases in the person's own browser (ShellExecuteW), from Check for updates. The same version
+# Tauri already uses, so nothing more is fetched.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [profile.release]
 panic = "abort"

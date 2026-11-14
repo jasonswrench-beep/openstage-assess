@@ -430,11 +430,20 @@ function positionsListed(
   return { positions: positions.sort((x, y) => x - y), ...(positional ? { positional: true as const } : {}) };
 }
 
+/**
+ * A cell as it was before the OpenStage spreadsheet exporter put an apostrophe in front of it so that a spreadsheet program would not
+ * read it as a formula (`guardFormula` in `export/openstage-spreadsheet.ts`): one apostrophe is taken off a run of them at the start,
+ * and only when the run is in front of a character that starts a formula. Any other apostrophe is the author's.
+ */
+export function unguardFormula(cell: string): string {
+  return /^'+[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell;
+}
+
 function build(row: TableRow, order: readonly (Column | null)[], line: number, ctx: Ctx, numbered = false): { question?: Question; orphan?: Orphan } {
   const source = { file: ctx.file, firstBlock: line, lastBlock: line };
   const get = (column: Column): string => {
     const at = order.indexOf(column);
-    return at === -1 ? "" : (row.cells[at] ?? "");
+    return at === -1 ? "" : unguardFormula(row.cells[at] ?? "");
   };
 
   const stem = words(get("question"));

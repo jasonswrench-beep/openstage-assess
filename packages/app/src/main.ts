@@ -8,6 +8,9 @@
  *   --exit-when-stdin-closes    stop when whatever started this stops, which is how the desktop window keeps the server
  *                               from outliving it
  *   --log-requests              print a line for each request, for finding out why a start went wrong
+ *   --release <tag>             the release this copy is (v0.1.0-alpha.26), which the window passes, for Check for updates
+ *   --no-update-check           Check for updates says it is turned off and asks nothing of the network (as does
+ *                               OPENSTAGE_UPDATE_CHECK=off)
  *
  * The line "OPENASSESS_READY <address>" is printed once the server is listening. The desktop window reads it to know where
  * to point itself.
@@ -44,6 +47,10 @@ const server = await startServer({
   ...(port ? { port: Number(port) } : {}),
   // For finding out why a start went wrong: one line for each request, with no address in it that could hold the key.
   ...(flag("log-requests") ? { log: (line: string) => console.log(`OPENASSESS_REQUEST ${line}`) } : {}),
+  updates: {
+    ...(value("release") ? { current: value("release") as string } : {}),
+    enabled: !flag("no-update-check") && (process.env["OPENSTAGE_UPDATE_CHECK"] ?? "").trim().toLowerCase() !== "off",
+  },
 });
 
 console.log(`OPENASSESS_READY ${server.entry}`);

@@ -189,6 +189,8 @@ export function exportBlackboardUpload(questions: readonly Question[], options: 
     name: groups.length === 1 ? `${base} - Blackboard.txt` : `${base} - Blackboard ${i + 1}.txt`,
     // Tab between fields and a line break between rows, with no header row and no blank line, which Blackboard names as an error.
     // UTF-8 with no byte order mark. The file's encoding is not stated by Blackboard.
+    // A field that begins as a spreadsheet formula would is NOT given an apostrophe, unlike the OpenStage spreadsheet's: this file is
+    // for the LMS to read exactly, and an apostrophe would become part of the question there (the security review of 2026-11-13).
     content: group.map((fields) => fields.join("\t")).join("\r\n") + "\r\n",
     questions: group.length,
   }));

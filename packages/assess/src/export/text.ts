@@ -9,7 +9,8 @@
 import { checkAnswerKey } from "../quality/answer-key.ts";
 import { liveFindings } from "../model/findings.ts";
 import { replacePlaceholders } from "../model/markup-scan.ts";
-import { collectRefs, escapeHtml, richTextToPlain, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
+import { collectRefs, escapeHtml, richTextToPlain, sanitizeDeep, stripInvalidCharacters, type RichText } from "../model/richtext.ts";
+import { cleanMathList } from "../model/mathml.ts";
 import type { Question, QuestionType } from "../model/question.ts";
 import type { DestinationReport, ReportItem } from "./types.ts";
 
@@ -20,6 +21,11 @@ import type { DestinationReport, ReportItem } from "./types.ts";
  * formats gain nothing from them either. Done once, at the door of every exporter and every destination check, so that no path to a
  * file can forget it, and so that what a check says is what the export writes. The questions are not changed: a question is copied
  * only when a string in it is cleaned, and the same list is returned when none is.
+ *
+ * The formatting and the equations are cleaned here too, with the same sanitiser and the same list of MathML a bank is held to when
+ * it is opened (`bank/store.ts`), whatever way a question came to the exporter, so that every format that carries HTML (Moodle XML,
+ * QTI 1.2 and 2.1, Common Cartridge, the Brightspace file, GIFT) gets only the closed subset the bank stores (the security review of
+ * 2026-11-13). It is done before an exporter adds markup of its own, such as Moodle's image tags.
  */
 export function exportable<T extends Question>(questions: readonly T[]): readonly T[] {
   const clean = (value: unknown): [unknown, boolean] => {
@@ -48,11 +54,20 @@ export function exportable<T extends Question>(questions: readonly T[]): readonl
     }
     return [value, false];
   };
+  /** The question with any formatting or MathML outside the closed subset taken out, or the same question when there was none. */
+  const safe = (q: T): [T, boolean] => {
+    const sanitized = sanitizeDeep(q);
+    let next = sanitized.removedTags.length + sanitized.removedAttributes.length > 0 ? sanitized.value : q;
+    const math = Array.isArray(next?.math) ? cleanMathList(next.math) : { list: [], changed: 0 };
+    if (math.changed > 0) next = { ...next, math: math.list };
+    return [next, next !== q];
+  };
   let any = false;
   const out = questions.map((q) => {
     const [c, did] = clean(q);
-    any ||= did;
-    return c as T;
+    const [s, cleaned] = safe(c as T);
+    any ||= did || cleaned;
+    return s;
   });
   return any ? out : questions;
 }

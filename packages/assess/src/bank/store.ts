@@ -50,6 +50,8 @@ import {
 import { newBankId, newFolderId } from "../model/ids.ts";
 import { migrateManifest, migrateQuestion, needsMigration } from "../model/migrate.ts";
 import { validateQuestion, type Issue } from "../model/schema.ts";
+import { sanitizeDeep } from "../model/richtext.ts";
+import { cleanMathList } from "../model/mathml.ts";
 import { editQuestion, type EditOptions, type QuestionEdit } from "../model/create.ts";
 import type { HistoryEntry, Question } from "../model/question.ts";
 import { validateTest, type TestRecord } from "../model/test.ts";
@@ -72,6 +74,11 @@ export interface OpenReport {
   migrationNotes: string[];
   /** Present when the bank says it held a different number of questions than were read: what it says, and what was found. */
   countMismatch?: { says: number; found: number };
+  /**
+   * Present when the formatting or an equation of some questions held what OpenAssess does not allow (a script, an event attribute, a
+   * link, MathML off the list) and it was taken out as the bank was read, as an edit would have done. How many questions.
+   */
+  cleaned?: { questions: number };
   migratedFrom?: number;
   elapsedMs: number;
 }
@@ -84,6 +91,11 @@ export interface BankStats {
   withWarnings: number;
   mediaFiles: number;
   totalPoints: number;
+}
+
+/** What to tell a person when a bank's questions held formatting or equations OpenAssess does not allow, and it was taken out. */
+export function cleanedMessage(c: { questions: number }): string {
+  return `Some formatting in ${c.questions} ${c.questions === 1 ? "question was" : "questions was"} removed because OpenAssess does not allow it (a script, a link, an event attribute or an equation part it does not draw). The words are all still there.`;
 }
 
 /** What to tell a person when a bank opens with a different number of questions than it says it held. */
@@ -236,6 +248,8 @@ export class Bank {
     // the next save, so the author's folders were gone. Now the bank opens with no folders, the file is reported, and the damaged
     // file is kept as it was under another name (folders.damaged.json) for someone to mend.
     const invalid: OpenReport["invalid"] = [];
+    // Questions whose formatting or equations held what OpenAssess does not allow, taken out as they were read.
+    let cleanedQuestions = 0;
     let rawFolders: unknown;
     let foldersProblem: string | undefined;
     try {
@@ -315,7 +329,18 @@ export class Bank {
           bank.passthrough.set(name, data);
           continue;
         }
-        const moved = needsMigration(fileVersion) ? migrateQuestion(raw, fileVersion).value : raw;
+        const migratedQuestion = needsMigration(fileVersion) ? migrateQuestion(raw, fileVersion).value : raw;
+        // A bank can come from a colleague, a publisher or a shared folder, so its questions are cleaned as they are read, with the
+        // same sanitiser that creating and editing a question use, and their equations with the same list the window draws from
+        // (the security review of 2026-11-13). A question that holds nothing to take out is kept exactly as it was read.
+        const sanitized = sanitizeDeep(migratedQuestion);
+        const formattingRemoved = sanitized.removedTags.length + sanitized.removedAttributes.length > 0;
+        let moved = formattingRemoved ? sanitized.value : migratedQuestion;
+        const mathList =
+          moved !== null && typeof moved === "object" && Array.isArray((moved as Record<string, unknown>)["math"])
+            ? cleanMathList((moved as Record<string, unknown>)["math"] as Array<{ mathml: string }>)
+            : { list: [], changed: 0 };
+        if (mathList.changed > 0) moved = { ...moved, math: mathList.list };
         const result = validateQuestion(moved);
         if (!result.ok) {
           // Kept in the bank and reported, never dropped: a question the
@@ -358,6 +383,7 @@ export class Bank {
         }
 
         bank.questions.set(question.id, question);
+        if (formattingRemoved || mathList.changed > 0) cleanedQuestions++;
         continue;
       }
 
@@ -467,6 +493,7 @@ export class Bank {
         unknownFiles,
         migrationNotes: migrated.notes,
         ...(countMismatch ? { countMismatch } : {}),
+        ...(cleanedQuestions > 0 ? { cleaned: { questions: cleanedQuestions } } : {}),
         ...(needsMigration(fileVersion) ? { migratedFrom: fileVersion } : {}),
         elapsedMs: performance.now() - started,
       },

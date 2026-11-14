@@ -10,7 +10,7 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Bank, BANK_EXTENSION, countMismatchMessage, type OpenReport } from "./engine.ts";
+import { Bank, BANK_EXTENSION, cleanedMessage, countMismatchMessage, type OpenReport } from "./engine.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { bankFile, bankNames, checkName, cleanName, fileOps, placeFile, placeMade, type FileOps, type Library } from "./library.ts";
 
@@ -51,6 +51,8 @@ export interface BankProblems {
   count: string | null;
   /** Set when questions name pictures that the bank file does not hold. */
   pictures: string | null;
+  /** Set when formatting or an equation OpenAssess does not allow was taken out of some questions as the bank was read. */
+  formatting: string | null;
 }
 
 export class BankStore {
@@ -149,6 +151,7 @@ export class BankStore {
       // Not the questions that were read and only had the wrong file name: they are in the list.
       unreadable: (report?.invalid ?? []).filter((entry) => !entry.loaded).map((entry) => ({ id: entry.id, message: entry.issues[0]?.message ?? "It could not be read." })),
       count: report?.countMismatch ? countMismatchMessage(report.countMismatch) : null,
+      formatting: report?.cleaned ? cleanedMessage(report.cleaned) : null,
       pictures:
         missing.length === 0
           ? null

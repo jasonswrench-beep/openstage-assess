@@ -34,6 +34,7 @@ import { sniffImage } from "../model/image.ts";
 import { isChoice, isFillInBlank, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import { decodeEntities, plainToRich, tokenize, type RichText } from "../model/richtext.ts";
 import { parseXml } from "../import/docx/xml.ts";
+import { cleanMathml } from "../model/mathml.ts";
 import type { ExportResult, ReportItem } from "./types.ts";
 import { escapeXml } from "./moodle-xml.ts";
 import { buildReport, exportable, hasText, keyProblem, plural, plainText, safeName, scorable, TYPE_NAMES, newLosses, type Losses } from "./text.ts";
@@ -91,7 +92,8 @@ const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.leng
 /** An equation as MathML, when the question holds MathML that is well formed and is MathML. Otherwise undefined. */
 function mathOf(question: Question, ref: string): string | undefined {
   const entry = question.math.find((m) => m.id === ref);
-  const source = entry?.mathml.trim() ?? "";
+  // Kept to the list the window draws from before it is written into the package (`mathml.ts`), whatever way the question came here.
+  const source = cleanMathml(entry?.mathml ?? "").mathml.trim();
   if (source === "") return undefined;
   try {
     const root = parseXml(source);

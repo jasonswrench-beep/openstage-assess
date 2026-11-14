@@ -35,7 +35,11 @@ type Row = [string, string, string];
 
 const row = (a: string, b = "", c = ""): Row => [a, b, c];
 
-/** Quoted whenever it holds a comma, a quote or a line break, or begins or ends with a space. A quote inside is doubled. */
+/**
+ * Quoted whenever it holds a comma, a quote or a line break, or begins or ends with a space. A quote inside is doubled. A cell that
+ * begins as a formula would is NOT given an apostrophe, unlike the OpenStage spreadsheet's: this file is for the LMS to read exactly,
+ * and an apostrophe would become part of the question there (the security review of 2026-11-13 left it exact on purpose).
+ */
 function csvCell(value: string): string {
   return /[",\r\n]/.test(value) || /^\s|\s$/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }

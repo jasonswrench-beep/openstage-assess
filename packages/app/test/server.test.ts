@@ -485,7 +485,7 @@ describe("the library", () => {
   // A space is nearly always in the path (a title with two words, a " - Brightspace" suffix), and Node quotes a whole argument that holds one, which Explorer cannot
   // read: it opened the Documents folder and showed nothing. This was found in a recording of the window, not by a test.
   test("gives Explorer its argument as it wants it, with the quotes around the path and not around the whole", () => {
-    const path = "C:\\Users\\Jason\\Documents\\OpenAssess\\Exports\\PDF TB 2 - Brightspace.csv";
+    const path = "C:\\Users\\you\\Documents\\OpenAssess\\Exports\\PDF TB 2 - Brightspace.csv";
     assert.deepEqual(revealCommand(path, "win32"), { command: "explorer.exe", args: [`/select,"${path}"`], verbatim: true });
     assert.throws(() => revealCommand('C:\\Exports\\a" /root,"C:\\.csv', "win32"), /cannot be shown/, "a quote mark would end the argument early");
     assert.deepEqual(revealCommand("/home/a b/Exports/x.csv", "darwin"), { command: "open", args: ["-R", "/home/a b/Exports/x.csv"], verbatim: false });

@@ -110,10 +110,11 @@ export async function renderBank(host, params, shell) {
   function renderProblems() {
     clear(problemsHost);
     const problems = bank.problems;
-    if (!problems || (problems.unreadable.length === 0 && !problems.count && !problems.pictures)) return;
+    if (!problems || (problems.unreadable.length === 0 && !problems.count && !problems.pictures && !problems.formatting)) return;
     const box = h("section", { class: "problem-box", attrs: { role: "note", "aria-label": "Problems reading this bank" } });
     if (problems.count) box.append(h("p", { text: problems.count }));
     if (problems.pictures) box.append(h("p", { text: problems.pictures }));
+    if (problems.formatting) box.append(h("p", { text: problems.formatting }));
     if (problems.unreadable.length > 0) {
       box.append(
         h("p", { text: `${plural(problems.unreadable.length, "file in this bank could not be read, and is", "files in this bank could not be read, and are")} not in the list. ${problems.unreadable.length === 1 ? "It is" : "They are"} kept exactly as ${problems.unreadable.length === 1 ? "it was" : "they were"}, so nothing is lost; saving the bank does not change ${problems.unreadable.length === 1 ? "it" : "them"}.` }),

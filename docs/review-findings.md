@@ -892,7 +892,7 @@ Open:
   groups, because the file's own text has no such characters, and nothing in the file says they were meant to be there.
 - **Answer text matching is strict.** An answer that spells the option's words another way ("Speaking" for "Spoken") is refused
   and said. It could be matched loosely and would then sometimes be a guess.
-- **Only one typesetting program's PDFs have been read.** A PDF from Word's own export, a desktop PDF program, Google Docs, a scanner with text recognition or
+- **Only one typesetting program's PDFs have been read.** A PDF from Word's own export, a desktop PDF program, an online word processor, a scanner with text recognition or
   a publisher's tools sets its text another way (one piece for each word, text in reverse, text in a form drawn page by page), and
   none has been seen. The reader handles what the five and the test builder have: simple and composite fonts with a text map,
   an encoding with changes, packed objects and a stream for the table of objects, compressed streams with predictors, the
@@ -939,7 +939,7 @@ Open:
 - **Excel itself has checked the reader, on one machine and one version.** `check:excel-authored` made 246 comparisons: every
   cell Excel wrote, in the workbook and in the three text files it saved (CSV, CSV UTF-8, Unicode text), against what Excel
   says it holds; and the workbooks this project's own writer makes (the samples, the blank table) opened in Excel, which
-  opened all of them without repair, with the header bold and the drop-down in place. Google Sheets and LibreOffice write their
+  opened all of them without repair, with the header bold and the drop-down in place. An online spreadsheet and LibreOffice write their
   own variants of the same XML, and no workbook from them has been read.
 - **A PDF is refused.** See `docs/design-plan.md`.
 
@@ -1673,7 +1673,7 @@ planted faults (the test for the first had passed with the fault in it, because 
   assessment of Blackboard's kinds, and keeps the advice.
 
 What it checked and found sound: the header rule only turns a name that was not understood into one, so no header that read before
-reads differently; Kahoot, Gimkit and Blooket style headers; `Answer - wrong` and its kin; the registry's order; the home buttons
+reads differently; the headers of quiz game exports; `Answer - wrong` and its kin; the registry's order; the home buttons
 (Enter, Space, focus, a dropped file, no stray reference to the old ids); the nine anchored patterns (also compared by this program
 with the old ones on 4,000,000 random strings). Not run by it: the Windows-only Word checks, and the real file dialog.
 
@@ -1979,7 +1979,7 @@ A 375-question test item file, a 42-question chapter and a 30-question bank went
 - **The two `.doc` files reached the importer as `.docx` that Word made from them.** The importer reads
   `.docx` only, so a file that is a Word 97-2003 binary has to be saved as `.docx` first. Word read copies
   in a separate hidden Word and the originals were not touched, but a person with no Word would not have
-  this route: LibreOffice and Google Docs both save `.docx`, and neither was tried.
+  this route: LibreOffice and an online word processor both save `.docx`, and neither was tried.
 - **The large file has two questions with no usable answer in the source.** 7.11 reads `fasle` and 10.5
   has no answer line. Both are reported and have no key, which is what the expected file says, and both
   are worth fixing in the file by hand.
@@ -2019,8 +2019,8 @@ not show:
   the words, "(Correct)" at the end, the answer on a line under the question, bold. Some of
   those are read and some are not, and none has been seen in a real file but this one's.
 - **Only the ODT reached the importer, by way of Word.** The same chapter came as ODT, EPUB, Markdown
-  and a Google Docs link. A separate hidden Word opened the ODT and saved a .docx, which is
-  the file measured. A .docx that Google Docs writes itself, with its own XML, has not
+  and a link to an online document. A separate hidden Word opened the ODT and saved a .docx, which is
+  the file measured. A .docx that an online word processor writes itself, with its own XML, has not
   been read, and is the file this author would really have.
 - **The Markdown copy reads 0 of 28.** `.md` is accepted as plain text, but a Markdown export
   escapes the bank's own characters ("1\)", "\*"), writes headings as "###" and bold as
@@ -2191,7 +2191,7 @@ not show or what was decided on one file's evidence.
   are not read until stage 5.
 - **The numbering reader has been checked against Word on documents this project
   wrote.** 2,363 paragraphs agree (`npm run check:word`), but nothing a different
-  program wrote has been tried: Google Docs, LibreOffice, a script, a bank that has
+  program wrote has been tried: an online word processor, LibreOffice, a script, a bank that has
   been through years of editing. The dialect pack and the real chapters are for that.
 - **A typed "(a) Mars" is an option label only when Word made the letter.**
   Deliberate, so that nothing read before is read differently. A typed star after the

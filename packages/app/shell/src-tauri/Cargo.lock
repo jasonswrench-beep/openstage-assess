@@ -2085,6 +2085,7 @@ dependencies = [
  "rfd",
  "tauri",
  "tauri-build",
+ "windows",
 ]
 
 [[package]]

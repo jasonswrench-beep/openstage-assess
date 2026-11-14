@@ -1,0 +1,228 @@
+[
+  {
+    "label": "S1 a bank is opened without its questions' formatting cleaned",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "let moved = formattingRemoved ? sanitized.value : migratedQuestion;",
+    "to": "let moved = migratedQuestion;",
+    "tests": [
+      "packages/assess/test/opened-bank-cleaning.test.ts"
+    ]
+  },
+  {
+    "label": "S2 a bank is opened without its equations cleaned",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "if (mathList.changed > 0) moved = { ...moved, math: mathList.list };",
+    "to": "if (mathList.changed < 0) moved = { ...moved, math: mathList.list };",
+    "tests": [
+      "packages/assess/test/opened-bank-cleaning.test.ts"
+    ]
+  },
+  {
+    "label": "S3 the report does not count a cleaned question",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "if (formattingRemoved || mathList.changed > 0) cleanedQuestions++;",
+    "to": "if (formattingRemoved && mathList.changed > 0) cleanedQuestions++;",
+    "tests": [
+      "packages/assess/test/opened-bank-cleaning.test.ts"
+    ]
+  },
+  {
+    "label": "S4 the exporters' door does not clean a question handed to it",
+    "file": "packages/assess/src/export/text.ts",
+    "from": "const [s, cleaned] = safe(c as T);",
+    "to": "const [s, cleaned] = [c as T, false];",
+    "tests": [
+      "packages/assess/test/opened-bank-cleaning.test.ts"
+    ]
+  },
+  {
+    "label": "S5 MathML keeps an element off the list",
+    "file": "packages/assess/src/model/mathml.ts",
+    "from": "  if (!MATH_ELEMENTS.has(name)) return null;\n",
+    "to": "  if (!MATH_ELEMENTS.has(name) && name === \"never\") return null;\n",
+    "tests": [
+      "packages/assess/test/mathml.test.ts"
+    ]
+  },
+  {
+    "label": "S6 MathML keeps an attribute off the list",
+    "file": "packages/assess/src/model/mathml.ts",
+    "from": ".filter(([key, value]) => allowedAttribute(localName(key), value))",
+    "to": ".filter(() => true)",
+    "tests": [
+      "packages/assess/test/mathml.test.ts"
+    ]
+  },
+  {
+    "label": "S7 semantics loses the equation it shows",
+    "file": "packages/assess/src/model/mathml.ts",
+    "from": "if (name === \"semantics\") {",
+    "to": "if (name === \"semantics-never\") {",
+    "tests": [
+      "packages/assess/test/mathml.test.ts"
+    ]
+  },
+  {
+    "label": "S8 MathML without the namespace is rebuilt with it",
+    "file": "packages/assess/src/model/mathml.ts",
+    "from": "if (localName(root.name) !== \"math\" || !declaresMathml(source.trim())) return { mathml: source, changed: false };",
+    "to": "if (localName(root.name) !== \"math\") return { mathml: source, changed: false };",
+    "tests": [
+      "packages/assess/test/mathml.test.ts"
+    ]
+  },
+  {
+    "label": "S9 clean MathML is said to have changed",
+    "file": "packages/assess/src/model/mathml.ts",
+    "from": "if (isClean(source, root)) return { mathml: source, changed: false };",
+    "to": "if (isClean(source, root) && source === \"\") return { mathml: source, changed: false };",
+    "tests": [
+      "packages/assess/test/mathml.test.ts",
+      "packages/app/test/math-draw.test.ts"
+    ]
+  },
+  {
+    "label": "S10 a question is made with its MathML as it came",
+    "file": "packages/assess/src/model/create.ts",
+    "from": "math: cleanMathList(input.math ?? []).list,",
+    "to": "math: input.math ?? [],",
+    "tests": [
+      "packages/assess/test/mathml.test.ts"
+    ]
+  },
+  {
+    "label": "S11 a formula cell is written as it is",
+    "file": "packages/assess/src/export/openstage-spreadsheet.ts",
+    "from": "return FORMULA_START.test(value) || GUARD_LOOKALIKE.test(value) ? `'${value}` : value;",
+    "to": "return value;",
+    "tests": [
+      "packages/assess/test/spreadsheet-formulas.test.ts"
+    ]
+  },
+  {
+    "label": "S12 an apostrophe the author wrote before = is not given one more",
+    "file": "packages/assess/src/export/openstage-spreadsheet.ts",
+    "from": "return FORMULA_START.test(value) || GUARD_LOOKALIKE.test(value) ? `'${value}` : value;",
+    "to": "return FORMULA_START.test(value) ? `'${value}` : value;",
+    "tests": [
+      "packages/assess/test/spreadsheet-formulas.test.ts"
+    ]
+  },
+  {
+    "label": "S13 the reader takes an apostrophe only from a single one",
+    "file": "packages/assess/src/import/spreadsheet.ts",
+    "from": "return /^'+[=+\\-@\\t\\r]/.test(cell) ? cell.slice(1) : cell;",
+    "to": "return /^'[=+\\-@\\t\\r]/.test(cell) ? cell.slice(1) : cell;",
+    "tests": [
+      "packages/assess/test/spreadsheet-formulas.test.ts"
+    ]
+  },
+  {
+    "label": "S14 the reader does not undo the guard",
+    "file": "packages/assess/src/import/spreadsheet.ts",
+    "from": "return at === -1 ? \"\" : unguardFormula(row.cells[at] ?? \"\");",
+    "to": "return at === -1 ? \"\" : (row.cells[at] ?? \"\");",
+    "tests": [
+      "packages/assess/test/spreadsheet-formulas.test.ts"
+    ]
+  },
+  {
+    "label": "S15 what a PDF's streams unpack to is not counted",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "      this.unpacked += data.length;\n",
+    "to": "      this.unpacked += 0;\n",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "S16 a scanned page's picture is counted in the total",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "const counted = options.picture !== true;",
+    "to": "const counted = true;",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "S17 a caller can raise the total",
+    "file": "packages/assess/src/import/pdf/document.ts",
+    "from": "this.unpackLimit = Math.min(MAX_DOCUMENT_UNPACKED_BYTES, Math.max(0, options.unpackLimit ?? MAX_DOCUMENT_UNPACKED_BYTES));",
+    "to": "this.unpackLimit = Math.max(0, options.unpackLimit ?? MAX_DOCUMENT_UNPACKED_BYTES);",
+    "tests": [
+      "packages/assess/test/pdf-hostile.test.ts"
+    ]
+  },
+  {
+    "label": "S18 the bank's screen is not told what was cleaned",
+    "file": "packages/app/src/banks.ts",
+    "from": "formatting: report?.cleaned ? cleanedMessage(report.cleaned) : null,",
+    "to": "formatting: null,",
+    "tests": [
+      "packages/app/test/problems.test.ts"
+    ]
+  },
+  {
+    "label": "U1 a draft counts as a release",
+    "file": "packages/app/src/updates.ts",
+    "from": "if (r[\"draft\"] === true || typeof r[\"tag_name\"] !== \"string\") continue;",
+    "to": "if (typeof r[\"tag_name\"] !== \"string\") continue;",
+    "tests": [
+      "packages/app/test/updates.test.ts"
+    ]
+  },
+  {
+    "label": "U2 checking turned off still asks GitHub",
+    "file": "packages/app/src/updates.ts",
+    "from": "if (!settings.enabled) return { state: \"off\"",
+    "to": "if (!settings.enabled && settings.current === \"never\") return { state: \"off\"",
+    "tests": [
+      "packages/app/test/updates.test.ts"
+    ]
+  },
+  {
+    "label": "U3 a tag that is not a version is given its own page",
+    "file": "packages/app/src/updates.ts",
+    "from": "return tag.startsWith(\"v\") && versionKey(tag) ? `${RELEASES_PAGE}/tag/${tag}` : RELEASES_PAGE;",
+    "to": "return `${RELEASES_PAGE}/tag/${tag}`;",
+    "tests": [
+      "packages/app/test/updates.test.ts"
+    ]
+  },
+  {
+    "label": "U4 a final release sorts before its pre-releases",
+    "file": "packages/app/src/updates.ts",
+    "from": "const stage = m[4] === undefined ? 3 : (STAGES[m[4]] as number);",
+    "to": "const stage = m[4] === undefined ? -1 : (STAGES[m[4]] as number);",
+    "tests": [
+      "packages/app/test/updates.test.ts"
+    ]
+  },
+  {
+    "label": "U5 the page offers a link to any host",
+    "file": "packages/app/ui/updates.js",
+    "from": "parsed.hostname !== \"github.com\"",
+    "to": "parsed.hostname === \"\"",
+    "tests": [
+      "packages/app/test/updates.test.ts"
+    ]
+  },
+  {
+    "label": "U6 the route answers a GET",
+    "file": "packages/app/src/api.ts",
+    "from": "if (first === \"updates\" && req.segments[1] === \"check\" && req.segments.length === 2 && req.method === \"POST\") {",
+    "to": "if (first === \"updates\" && req.segments[1] === \"check\" && req.segments.length === 2) {",
+    "tests": [
+      "packages/app/test/updates.test.ts"
+    ]
+  },
+  {
+    "label": "U7 the server ignores the release the window gave",
+    "file": "packages/app/src/server.ts",
+    "from": "...(options.updates?.current ? { current: options.updates.current } : {}),",
+    "to": "...({}),",
+    "tests": [
+      "packages/app/test/updates.test.ts"
+    ]
+  }
+]

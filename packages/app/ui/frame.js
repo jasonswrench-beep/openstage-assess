@@ -15,6 +15,7 @@ import { openCommandSearch, searchEntries } from "./commandsearch.js";
 import { EDITABLE_TYPES, TYPE_NAMES } from "./dom.js";
 import { openKeys } from "./keys.js";
 import { MenuBar, el, uiIcon } from "./menubar.js";
+import { checkForUpdates } from "./updates.js";
 
 /**
  * @typedef {import("./menubar.js").MenuCommand} MenuCommand
@@ -61,7 +62,7 @@ const KIND_ICONS = {
 
 /**
  * The menus, with the commands that do things through `ctx`. Kept apart from the page so it can be tested without one.
- * @param {{ go: (hash: string) => void, hash: () => string, offer: () => ScreenOffer, onHome: (id: string) => void, showFolder: () => void, search: () => void, keys: () => void }} ctx
+ * @param {{ go: (hash: string) => void, hash: () => string, offer: () => ScreenOffer, onHome: (id: string) => void, showFolder: () => void, search: () => void, keys: () => void, updates?: () => void }} ctx
  * @returns {{ menus: MenuDef[], quick: MenuCommand[] }}  the menus, and the commands of the navy bar on a bank's screen
  */
 export function buildMenus(ctx) {
@@ -163,6 +164,8 @@ export function buildMenus(ctx) {
       items: [
         { label: "Search for a command", icon: "search", keys: "Ctrl+K", title: "Find any command by its name", run: ctx.search },
         { label: "Keyboard keys", icon: "keyboard", keys: "Ctrl+/", title: "Every key OpenAssess has", run: ctx.keys },
+        "-",
+        { label: "Check for updates...", icon: "refresh-cw", title: "Whether a newer OpenAssess is published. It asks GitHub only when you choose this, and installs nothing", run: ctx.updates ?? (() => void checkForUpdates()) },
       ],
     },
   ]);

@@ -1,6 +1,6 @@
 // Runs the app exactly as the installer carries it (its own node.exe, its own copy of the files) and takes a Word file with a picture and
 // curly quotes through import, save, the bank's picture route, print and export, as the window would.
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -28,7 +28,8 @@ const body = [
 ].join("");
 const file = Buffer.from(docx({ body, ...pictureParts([{ rId: "rId10", part: "word/media/image1.png", bytes: BLUE }]) }));
 
-const child = spawn(nodeExe, ["--experimental-strip-types", "--no-warnings", main, "--home", home, "--port", "47321"], { stdio: ["ignore", "pipe", "pipe"] });
+// --no-update-check: Check for updates is tried below with checking turned off, so that this script asks nothing of the network.
+const child = spawn(nodeExe, ["--experimental-strip-types", "--no-warnings", main, "--home", home, "--port", "47321", "--no-update-check"], { stdio: ["ignore", "pipe", "pipe"] });
 let out = "";
 child.stdout.on("data", (d) => (out += d));
 child.stderr.on("data", (d) => (out += d));
@@ -620,6 +621,30 @@ try {
   check("the question dialog is named by its heading", /aria-labelledby/.test(dialogsJs) && /dialog-title/.test(dialogsJs));
   const page = await (await fetch(base + "/math.js", { headers: { cookie } })).text();
   check("the page serves the equation drawer", page.includes("export function drawMath"));
+  // Alpha 26, the security round. The Node carried is the one the release asks for or later.
+  const carriedNode = execFileSync(nodeExe, ["--version"], { encoding: "utf8" }).trim();
+  const [major, minor, patch] = carriedNode.replace(/^v/, "").split(".").map(Number);
+  check("the Node is 24.22.3 or later", fromSource || major > 24 || (major === 24 && (minor > 22 || (minor === 22 && patch >= 3))), carriedNode);
+  // Check for updates is there, and with checking turned off it says so and asks nothing.
+  const updates = await send("POST", "/api/updates/check", {});
+  const updatesJson = await updates.json();
+  check("Check for updates answers, and says checking is turned off when it is", updates.status === 200 && updatesJson.state === "off", JSON.stringify(updatesJson).slice(0, 100));
+  check("and the page offers it in the Help menu", (await text("/frame.js")).includes("Check for updates...") && (await text("/updates.js")).includes("export function releaseLink"));
+  // A bank someone else made, whose question holds a script and an event attribute, opens with them taken out and says so.
+  const engineAt = (path) => pathToFileURL(join(fromSource ? repo : join(res, "app"), "packages/assess/src", path)).href;
+  const { Bank } = await import(engineAt("bank/store.ts"));
+  const { createQuestion } = await import(engineAt("model/create.ts"));
+  const { plainToRich } = await import(engineAt("model/richtext.ts"));
+  const { unzipSync: unzip26, zipSync: zip26 } = await import(engineAt("container/zip.ts"));
+  const sent = Bank.createEmpty("Sent");
+  const sentQ = sent.add(createQuestion({ type: "essay", stem: plainToRich("Discuss the result."), body: {} }));
+  const sentFiles = unzip26(sent.toBytes());
+  const sentName = [...sentFiles.keys()].find((n) => n.includes(sentQ.id));
+  sentFiles.set(sentName, Buffer.from(JSON.stringify({ ...sentQ, stem: { format: "rich", content: '<p>Discuss the result.<script>alert(1)</script><img src="x" onerror="alert(2)"></p>' } })));
+  writeFileSync(join(home, "Banks", "Sent.openassess"), zip26([...sentFiles].map(([name, data]) => ({ name, data }))));
+  const sentReply = await send("GET", "/api/banks/Sent");
+  const sentText = await sentReply.text();
+  check("a bank holding a script and an event attribute opens with both taken out, and says so", sentReply.status === 200 && !/<script|onerror|alert\(/.test(sentText) && /Some formatting in 1 question was removed/.test(sentText), `${sentReply.status} ${sentText.slice(0, 80)}`);
   check("the library folders were made", ["Banks", "Exports", "Deleted"].every((d) => existsSync(join(home, d))), readdirSync(home).join(", "));
 } catch (error) {
   results.push("FAIL " + (error instanceof Error ? error.message : String(error)));
