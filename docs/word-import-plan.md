@@ -166,9 +166,9 @@ would have fixed, so this came first. Six things changed, each described below:
   and the right option marked with an asterisk after its letter ("c. *text"). It read 3 of 28
   before (every choice question failed honestly, for having no key) and 28 of 28 after,
   through the real harness. The expected file was written from the author's ODT export by
-  a separate script. The chapter came as ODT, EPUB, Markdown and a Google Docs link; the
+  a separate script. The chapter came as ODT, EPUB, Markdown and a link to an online document; the
   importer reads none of those, so it was read as a .docx that a separate hidden Word made
-  from the ODT, and a .docx that Google Docs itself writes was not tried. It stays in
+  from the ODT, and a .docx that an online word processor itself writes was not tried. It stays in
   `fixtures/publisher/`, ignored by git.
 - Stage 4c, the rule: a typed asterisk after the letter is the key only as a habit of the
   whole file, on the terms a mark made with formatting has (some options of a question
@@ -820,7 +820,7 @@ footers, comments, footnotes and hidden text (`w:vanish`) are not part of a
 question. They are left out and the file says how many there were, so a question
 that lives in a text box or a footnote is not lost without a word.
 
-**One scope: `.docx`.** Word, Google Docs and LibreOffice can all save as `.docx`.
+**One scope: `.docx`.** Word, an online word processor and LibreOffice can all save as `.docx`.
 The old `.doc`, `.rtf` and `.pages` formats are out.
 
 **Equations arrive late and fail gracefully.** Word equations (OMML) convert to
@@ -924,7 +924,7 @@ readable error. None may hang, crash or write outside its folder.
   definitions and take their numbering from styles. The differential styles cover
   the common shapes, Word itself has been asked about 2,363 paragraphs, and the
   real files will find the rest. What remains is documents that other programs
-  (Google Docs, LibreOffice, a script) wrote in their own way.
+  (an online word processor, LibreOffice, a script) wrote in their own way.
 - **Reading a key from formatting is a guess in disguise.** The per-document
   convention, the single confirmation and the flag on every outlier are there so
   that it never becomes a silent one.
@@ -968,6 +968,6 @@ can be written without guessing.
    tracked deletion, a hyperlink, a picture with alt text, a Word equation, a page
    break, and some empty paragraphs.
 
-If it is easy, save a copy of one of them from Google Docs and one from LibreOffice
+If it is easy, save a copy of one of them from an online word processor and one from LibreOffice
 as well. Each program writes the same layout differently, and those differences are
 what the engine has to survive.

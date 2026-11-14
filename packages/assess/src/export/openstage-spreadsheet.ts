@@ -227,12 +227,26 @@ function plan(question: Question, position: number): Planned {
 // ---------------------------------------------------------------------------
 
 /**
- * Quoted whenever it holds a comma, quote, semicolon or line break. Content is
- * never altered to defend against spreadsheet formulas: the cell would no
- * longer be the question, and Author reads the file directly.
+ * A cell that a spreadsheet program would read as a formula (it begins with =, +, -, @, a tab or a carriage return) is written with an
+ * apostrophe in front, so that opening the file runs nothing (the security review of 2026-11-13). The question is not changed by it:
+ * OpenAssess's own reader (`import/spreadsheet.ts`) and OpenStage Author's question import take one apostrophe off a run of them in
+ * front of those characters, so a question such as "-3 + 4 = ?" comes back as it was written. A cell the author began with
+ * apostrophes and then one of those characters is given one more for the same reason, so the two are exact inverses.
  */
+export const FORMULA_START = /^[=+\-@\t\r]/;
+
+/** Apostrophes the author wrote in front of one of those characters, which the reader would take for the guard. */
+const GUARD_LOOKALIKE = /^'+[=+\-@\t\r]/;
+
+export function guardFormula(value: string): string {
+  // The second test gives apostrophes the author wrote there one more, so that the reader's taking one off gives the author's back.
+  return FORMULA_START.test(value) || GUARD_LOOKALIKE.test(value) ? `'${value}` : value;
+}
+
+/** Guarded (above), then quoted whenever it holds a comma, quote, semicolon or line break. */
 function csvCell(value: string): string {
-  return /[",;\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const cell = guardFormula(value);
+  return /[",;\r\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
 }
 
 function renderCsv(rows: readonly Row[]): string {

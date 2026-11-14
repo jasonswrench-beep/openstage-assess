@@ -208,7 +208,7 @@ answer-line rule, the doubled full stop of a typed question number ("13..") and 
 on four of the five. The fifth begins with a lecture outline whose eight numbered items are read as eight essays, each flagged for
 review, which a score by position counts as every question after them wrong; its 28 real questions are read right. Two answers in
 one of the banks disagree with their own options in the document, and are declared failed in its expected file. All five come from
-one producer, so none of this says how a PDF from Word, a desktop PDF program or Google Docs will read.
+one producer, so none of this says how a PDF from Word, a desktop PDF program or an online word processor will read.
 
 This is the first exporter, and it is built (`src/export/`, command `export`). It
 needs no library. It was checked against Author's own reader, which accepted
@@ -716,7 +716,7 @@ No dates are set.
 - Does reading PDF scans justify a library (a PDF reader), given the rule of no
   runtime dependencies? Decide when answer-sheet scoring starts, and only if
   reading single-JPEG pages proves too narrow.
-- How do PDFs from other programs read (Word, a desktop PDF program, Google Docs, a publisher's own tools)? Only one typesetting program's have
+- How do PDFs from other programs read (Word, a desktop PDF program, an online word processor, a publisher's own tools)? Only one typesetting program's have
   been measured.
 - iPhone photos are HEIC by default. Reading them would need a decoder; the
   alternative is asking the teacher to save as JPG.

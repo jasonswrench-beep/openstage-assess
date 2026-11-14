@@ -34,7 +34,7 @@ describe("a bank that was read with nothing wrong", () => {
     await withApp(async (client) => {
       await client.post("/api/banks", { title: "Fine" });
       const reply = await client.get<Json>("/api/banks/Fine");
-      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null, pictures: null });
+      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null, pictures: null, formatting: null });
     });
   });
 });
@@ -107,6 +107,24 @@ describe("a bank whose folder file is damaged", () => {
   });
 });
 
+describe("a bank whose questions held formatting OpenAssess does not allow", () => {
+  test("opens with it taken out, and says how many questions it touched", async () => {
+    await withApp(async (client) => {
+      writeBank(client, "Sent", (files, qs) => {
+        const name = qs[0] as string;
+        const question = JSON.parse(Buffer.from(files.get(name) as Uint8Array).toString("utf8"));
+        question.stem = { format: "rich", content: '<p>First question here<script>alert(1)</script><img src="x" onerror="alert(2)"></p>' };
+        files.set(name, new Uint8Array(Buffer.from(JSON.stringify(question))));
+      });
+      const reply = await client.get<Json>("/api/banks/Sent");
+      assert.equal(reply.status, 200, reply.text);
+      assert.equal(reply.json["questions"].length, 3, "every question is still there");
+      assert.match(reply.json["problems"].formatting, /^Some formatting in 1 question was removed because OpenAssess does not allow it/);
+      assert.doesNotMatch(reply.text, /<script|onerror|alert\(/);
+    });
+  });
+});
+
 describe("a bank that lost a question file", () => {
   test("says how many it said and how many it found", async () => {
     await withApp(async (client) => {
@@ -138,7 +156,7 @@ describe("a bank whose question file is named for another question", () => {
       const reply = await client.get<Json>("/api/banks/Renamed");
       assert.equal(reply.status, 200, reply.text);
       assert.equal(reply.json["questions"].length, 3, "the question was read, so it is in the list");
-      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null, pictures: null }, "and the screen does not say a file could not be read");
+      assert.deepEqual(reply.json["problems"], { unreadable: [], count: null, pictures: null, formatting: null }, "and the screen does not say a file could not be read");
     });
   });
 });

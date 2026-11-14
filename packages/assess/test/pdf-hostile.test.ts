@@ -18,10 +18,11 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
+import { deflateSync } from "node:zlib";
 
 import type { TextRun } from "../src/import/pdf/content.ts";
-import { PdfError, Lexer } from "../src/import/pdf/objects.ts";
-import { ascii85, PdfDocument, runLength, WordFinder } from "../src/import/pdf/document.ts";
+import { PdfError, Lexer, PdfStream } from "../src/import/pdf/objects.ts";
+import { ascii85, MAX_DOCUMENT_UNPACKED_BYTES, PdfDocument, runLength, WordFinder } from "../src/import/pdf/document.ts";
 import { loadFont, type PdfFont } from "../src/import/pdf/fonts.ts";
 import { layoutLines } from "../src/import/pdf/layout.ts";
 import {
@@ -735,5 +736,59 @@ describe("ASCII85", () => {
     assert.equal(read.timedOut, false, `still reading after ${read.ms} ms`);
     assert.equal(read.status, 0, `the child ended with ${read.status}: ${read.stderr.slice(0, 300)}`);
     assert.deepEqual(read.lines, [["Hello"]]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The total of what one file's streams unpack to (the security review of 2026-11-13)
+// ---------------------------------------------------------------------------
+
+/** A page whose content is the Hello stream and then `count` streams of a megabyte of spaces each, a few kilobytes in the file. */
+function manyStreamsPdf(count: number): Buffer {
+  const pieces = helloPieces();
+  const extra = Array.from({ length: count }, (_, i) => 6 + i);
+  pieces[2] = { num: 3, body: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents [4 0 R ${extra.map((n) => `${n} 0 R`).join(" ")}] >>` };
+  const spaces = deflateSync(Buffer.alloc(1_000_000, 32), { level: 9 });
+  for (const num of extra) pieces.push({ num, dict: "/Filter /FlateDecode", data: spaces });
+  return assemble(pieces);
+}
+
+describe("streams that each unpack to less than the cap on one, and together to far more", () => {
+  test("are stopped when the total for the file is reached, in the reader's own words", () => {
+    const bytes = manyStreamsPdf(4);
+    assert.ok(bytes.length < 50_000, "the file is small");
+    const doc = new PdfDocument(new Uint8Array(bytes), { unpackLimit: 2_500_000 });
+    const page = doc.pages()[0];
+    assert.ok(page);
+    assert.throws(() => doc.pageContent(page), (error: unknown) => {
+      assert.ok(error instanceof PdfError);
+      assert.match(error.message, /streams unpack to more than a test bank could hold/);
+      return true;
+    });
+  });
+
+  test("are read whole when the total is within the limit, and by default", () => {
+    const bytes = new Uint8Array(manyStreamsPdf(4));
+    for (const doc of [new PdfDocument(bytes, { unpackLimit: 5_000_000 }), new PdfDocument(bytes)]) {
+      const page = doc.pages()[0];
+      assert.ok(page);
+      assert.ok(doc.pageContent(page).length >= 4_000_000);
+    }
+  });
+
+  test("the default is a gigabyte, and a caller cannot raise it", () => {
+    assert.equal(MAX_DOCUMENT_UNPACKED_BYTES, 1024 * 1024 * 1024);
+    const doc = new PdfDocument(new Uint8Array(manyStreamsPdf(1)), { unpackLimit: Number.MAX_SAFE_INTEGER });
+    assert.equal((doc as unknown as { unpackLimit: number }).unpackLimit, MAX_DOCUMENT_UNPACKED_BYTES);
+  });
+
+  test("the picture of a scanned page is held to the cap on one stream and is not counted in the total", () => {
+    const doc = new PdfDocument(new Uint8Array(manyStreamsPdf(2)), { unpackLimit: 1_500_000 });
+    const stream = doc.get(6);
+    assert.ok(stream instanceof PdfStream);
+    for (let i = 0; i < 5; i++) assert.equal(doc.streamData(stream, { picture: true }).length, 1_000_000);
+    // Five megabytes of pictures later, a megabyte of text still fits under a limit of a megabyte and a half.
+    assert.equal(doc.streamData(stream).length, 1_000_000);
+    assert.throws(() => doc.streamData(stream), /streams unpack to more than a test bank could hold/);
   });
 });

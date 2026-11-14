@@ -40,16 +40,25 @@ commands are written for Git Bash; PowerShell is named where it differs).
 ## Build and check the installer
 
 1. In `packages/app/shell`: `npm install` (once; the shell is not part of the npm workspaces, so installing the repository does not
-   fetch it), then `npm run build`. It needs Rust with the `x86_64-pc-windows-msvc` toolchain, the Visual Studio C++ build tools and
-   the WebView2 runtime (`packages/app/shell/README.md` has the list). It takes a few minutes and ends with the installer under
-   `src-tauri/target/release/bundle/nsis`.
+   fetch it). Then, from the root of the repository, raise `RELEASE` at the top of `tools/release/build_installer.py` to this
+   release, and run `python -I tools/release/build_installer.py --node <node.exe> --sign`. `<node.exe>` is the Node to carry,
+   24.22.3 or later (`prepare.mjs` refuses an older one); use the official Windows build, signed by the OpenJS Foundation. It needs
+   Rust with the `x86_64-pc-windows-msvc` toolchain, the Visual Studio C++ build tools, the WebView2 runtime
+   (`packages/app/shell/README.md` has the list), 7-Zip, and for `--sign` the signing account in the environment (the top of
+   `tools/release/sign_windows.py` names the variables; set `OPENSTAGE_SIGN_PUBLISHER` to the name the signature must show).
+   It takes a few minutes. It builds the window with this computer's folder names mapped out of it, stops if the window still
+   names the user folder, stops unless the installer carries the web view's setup, signs the window, the installer's plugins,
+   the uninstaller and the setup, unpacks the setup and checks every program in it (ours signed and timestamped by the publisher,
+   `node.exe` and the web view's setup by their makers), and copies the setup and its SHA-256 file to `dist/release`. Without
+   `--sign` it does the same and signs nothing. `python -I tools/release/build_installer.py --check <setup>` checks a setup
+   made before.
 2. `node tools/release/compare-installer-files.mjs`: every file in the folder the installer is built from (`resources/app`, which the build gathers) must be identical to the
    committed one, and every committed file it is meant to carry must be there. If a code commit landed after the build, build again.
 3. `node tools/release/smoke-installed.mjs`: starts the app with the Node and the files the installer carries and drives it as the
    window would. Every line must start with `ok`. Each release adds a block for what it changed; add yours. To try the script itself
    against the committed files before there is a build, run it with `OPENASSESS_SMOKE_SOURCE=1` (that says nothing about an installer;
    in PowerShell set `$env:OPENASSESS_SMOKE_SOURCE = "1"` first). It uses port 47321.
-4. Write the SHA-256 file as `<hash> *<installer file name>`, the hash in lower case:
+4. The SHA-256 file is written by the build, as `<hash> *<installer file name>`, the hash in lower case. To check it by hand:
    `(Get-FileHash -Algorithm SHA256 '<installer>').Hash.ToLower()` in PowerShell.
 
 ## Publish
@@ -58,8 +67,9 @@ commands are written for Git Bash; PowerShell is named where it differs).
   "OpenAssess X.Y.Z alpha N", created with the GitHub command-line tool against the full commit hash (`--target`):
   `gh release create vX.Y.Z-alpha.N <setup .exe> <.sha256.txt> --prerelease --target <full hash> --title "OpenAssess X.Y.Z alpha N" --notes-file <notes>`.
   Never reuse or move a tag. Attach the setup `.exe` and its `.sha256.txt`, and nothing else.
-- The notes are plain words: what was fixed, the two file names, the full SHA-256, the commit it was built from, that it is unsigned
-  (Windows may say "unknown publisher"), what was checked (counts, not adjectives), and what has NOT been tried. Do not say nobody has
+- The notes are plain words: what was fixed, the two file names, the full SHA-256, the commit it was built from, who signed it (or
+  that it is unsigned, and Windows may say "unknown publisher"), what was checked (counts, not adjectives), and what has NOT been
+  tried. Do not say nobody has
   run an installer if earlier ones were run; say this exact installer was not. No em dashes.
 
 ## Afterwards

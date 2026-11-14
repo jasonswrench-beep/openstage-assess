@@ -7,6 +7,7 @@
  */
 
 import { newQuestionId } from "./ids.ts";
+import { cleanMathList } from "./mathml.ts";
 import type { Finding } from "./findings.ts";
 import { checkAnswerKey, replaceFileKeyProblems } from "../quality/answer-key.ts";
 import { replacePlaceholderProblems } from "../quality/placeholders.ts";
@@ -100,7 +101,8 @@ export function createQuestion(input: CreateQuestionInput): Question {
     feedback: clean.value.feedback,
     metadata: { ...emptyMetadata(), ...input.metadata },
     media: input.media ?? [],
-    math: input.math ?? [],
+    // An equation's MathML is kept to the list the window draws from, like the text's markup (`mathml.ts`).
+    math: cleanMathList(input.math ?? []).list,
     // No more than a few of one kind, whichever importer made them and however it looped over the entries of its file; the rest are counted
     // in one finding of the kind, and none is lost without a word (`capFindings`).
     findings: capFindings(findings),

@@ -240,7 +240,8 @@ function decodeFlat(doc: PdfDocument, stream: PdfStream, notes: string[]): PageP
 
   let data: Uint8Array;
   try {
-    data = doc.streamData(stream);
+    // Not counted in the document's total of unpacked bytes: its size was held to MAX_PIXELS above (`PdfDocument.streamData`).
+    data = doc.streamData(stream, { picture: true });
   } catch (error) {
     const message = error instanceof PdfError ? error.message : "it could not be unpacked";
     return /does not read/.test(message) ? refusal("format", `the picture on this page is compressed in a way this reader does not read (${message.replace(/^.*filter, ([A-Za-z0-9]+),.*$/, "$1")}). Set the scanner to save a standard PDF (JPEG), or save the pages as JPG.`) : refusal("damaged", `the picture on this page is damaged: ${message}`);

@@ -78,6 +78,7 @@ export const UI_ICONS = /** @type {const} */ ({
   "pencil-line": [{"tag":"path","d":"M13 21h8"},{"tag":"path","d":"m15 5 4 4"},{"tag":"path","d":"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"}],
   "plus": [{"tag":"path","d":"M5 12h14"},{"tag":"path","d":"M12 5v14"}],
   "printer": [{"tag":"path","d":"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"},{"tag":"path","d":"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"},{"tag":"rect","x":6,"y":14,"width":12,"height":8,"rx":1}],
+  "refresh-cw": [{"tag":"path","d":"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"},{"tag":"path","d":"M21 3v5h-5"},{"tag":"path","d":"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"},{"tag":"path","d":"M8 16H3v5"}],
   "search": [{"tag":"path","d":"m21 21-4.34-4.34"},{"tag":"circle","cx":11,"cy":11,"r":8}],
   "text-cursor-input": [{"tag":"path","d":"M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6"},{"tag":"path","d":"M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7"},{"tag":"path","d":"M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1"},{"tag":"path","d":"M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1"},{"tag":"path","d":"M9 6v12"}],
   "trash": [{"tag":"path","d":"M10 11v6"},{"tag":"path","d":"M14 11v6"},{"tag":"path","d":"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"},{"tag":"path","d":"M3 6h18"},{"tag":"path","d":"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"}],

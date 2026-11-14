@@ -29,6 +29,7 @@ import { checkName, openLibrary } from "./library.ts";
 import { sampleById, samplePath } from "./samples.ts";
 import { ScoringSessions } from "./scoring.ts";
 import { Sessions } from "./sessions.ts";
+import { fetchReleases, type UpdateSettings } from "./updates.ts";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "ui");
 
@@ -80,6 +81,11 @@ export interface ServerOptions {
   token?: string;
   reveal?: Context["reveal"];
   extra?: Context["extra"];
+  /**
+   * Check for updates (`updates.ts`): the release this copy is, whether checking is turned off, and the fetch of the list of releases,
+   * which a test replaces. Left out, checking is on, the copy has no release, and the list is fetched from GitHub when asked for.
+   */
+  updates?: Partial<UpdateSettings>;
 }
 
 export interface RunningServer {
@@ -190,6 +196,11 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     scoring: new ScoringSessions(),
     reveal: options.reveal ?? defaultReveal,
     ...(options.extra ? { extra: options.extra } : {}),
+    updates: {
+      ...(options.updates?.current ? { current: options.updates.current } : {}),
+      enabled: options.updates?.enabled ?? true,
+      fetchReleases: options.updates?.fetchReleases ?? fetchReleases,
+    },
   };
 
   let port = 0;

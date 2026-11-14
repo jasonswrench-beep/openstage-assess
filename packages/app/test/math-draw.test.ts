@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 
 import { cleanOmml, readEquation } from "../../assess/src/import/docx/omml.ts";
 import { parseXml, type XmlElement } from "../../assess/src/import/docx/xml.ts";
+import { cleanMathml, MATH_ATTRIBUTES, MATH_ELEMENTS } from "../../assess/src/model/mathml.ts";
 // @ts-expect-error the interface is plain JavaScript, checked as such, and has no declaration file
 import { ATTRIBUTES, ELEMENTS } from "../ui/math.js";
 
@@ -74,6 +75,15 @@ function walk(el: XmlElement, visit: (e: XmlElement) => void): void {
 }
 
 describe("the MathML the engine writes is only what the window draws", () => {
+  test("and the engine's clean-up of a bank's equations keeps to the same lists (model/mathml.ts)", () => {
+    assert.deepEqual([...MATH_ELEMENTS].sort(), [...ELEMENTS].sort());
+    assert.deepEqual(Object.keys(MATH_ATTRIBUTES).sort(), Object.keys(ATTRIBUTES).sort());
+    const tries = ["true", "false", "0", "1px", "box", "circle", "normal", "bold", "italic", "script", "double-struck", "", "javascript:x"];
+    for (const name of Object.keys(ATTRIBUTES)) {
+      for (const value of tries) assert.equal(MATH_ATTRIBUTES[name]?.(value), ATTRIBUTES[name](value), `${name}="${value}"`);
+    }
+  });
+
   test("for equations of every kind the engine reads, in thousands of random arrangements", () => {
     const rng = random(20261106);
     let read = 0;
@@ -104,6 +114,8 @@ describe("the MathML the engine writes is only what the window draws", () => {
 
       // The copy of Word's own XML is itself a thing the reader accepts, and writes out as it is: reading it again changes nothing.
       assert.equal(cleanOmml(omml), omml, omml);
+      // And the clean-up a bank's equations go through when it is opened keeps what the engine wrote byte for byte.
+      assert.deepEqual(cleanMathml(mathml), { mathml, changed: false }, mathml);
     }
     assert.ok(read > 1500, `only ${read} of 4000 equations were read, so the property was not tried on enough`);
     assert.ok(refused > 100, `only ${refused} were refused, so the refusals were not tried on enough`);

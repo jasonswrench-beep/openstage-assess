@@ -162,12 +162,12 @@ item says what has been run and what has not. Items are removed when done, with 
 - [ ] **Open the blank table and the Excel sample in Excel** (use Save a copy… on the first screen) and look at them: the bold first row, the
   drop-down on Type, the "How to fill it in" sheet. Excel opened them without repair when asked by the check, and nothing
   can say how they look.
-- [ ] **Try a workbook from Google Sheets and one from LibreOffice** (File, Download, Microsoft Excel). Only Excel's own files
+- [ ] **Try a workbook from an online spreadsheet and one from LibreOffice** (each saved or downloaded as an Excel workbook, .xlsx). Only Excel's own files
   have been read; the others write the same format with their own habits.
 - [ ] **Read a CSV this writes in Author** and a CSV Author's template gives in OpenAssess. The second is tested (the template
   reads here as five questions with their keys); the first needs Author running, and the exporter is unchanged.
 - [ ] **Bring in PDFs from other programs, and look at what comes out.** Only five PDFs, all from one typesetting program
-  (a page-layout program), have been read. Word's own "Save as PDF", a desktop PDF program, Google Docs and a publisher's tools each set their text another way,
+  (a page-layout program), have been read. Word's own "Save as PDF", a desktop PDF program, an online word processor and a publisher's tools each set their text another way,
   and none has been tried. Put two or three in `fixtures/publisher/pdf/` with an `.expected.json` written from the document, and
   the question of how they read stops being a guess. `npm run assess -- score fixtures/publisher/pdf` measures them.
 - [ ] **Look at the PDF review screen on a PDF of yours.** Each question's source shows its page. Check the answers against the
@@ -491,8 +491,8 @@ Built and checked by tests (`packages/app/test/suite-look.test.ts`) and in a rea
 keyboard and pointer, the bank's "..." and New question, the command search, the keys list, the dialogs' Close button, 375 and 320
 pixels wide, dark colours, a high-contrast theme, and OpenStage Author's accessibility audit on every screen it reaches, with a
 question open, Folders, Coverage, Check quality and every open dialog and menu, which found nothing). The screen that reviews scanned
-answer sheets was not reached, because the script has no scans. Pictures as it was are in `D:\Claude Audio Test\revamp-screens\assess-before`, and after in
-`assess-a1`. Not tried by a person.
+answer sheets was not reached, because the script has no scans. Pictures as it was are in `revamp-screens\assess-before` in a working folder on the
+build computer, and after in `assess-a1` beside it. Not tried by a person.
 
 - [ ] Open the app and use it for a while: is every command where you would look for it? Write down anything you would move.
 - [ ] F10, then the arrows through the menus; Enter on an item; Escape back. Ctrl+K and type "print" or "check"; Ctrl+/.
@@ -510,6 +510,24 @@ answer sheets was not reached, because the script has no scans. Pictures as it w
       Equations and Tables headings are h2 (they skipped a level), and Write a new question is a New question menu. Look at a screen with
       many tick boxes (Print, Export, Answer sheets): do the bigger boxes look right? The select boxes it flagged were the audit's own
       mistake (it read the choices of a select as its label), corrected in OpenStage Author's `editor/audit/a11y-audit.js`.
+
+## The security round (2026-11-13, alpha 26)
+
+- [ ] **Choose Help, Check for updates... in the installed window, and click the link it gives.** The answer was checked against
+  GitHub's real list of releases (`OPENASSESS_NETWORK_TESTS=1`), and the route, the answers and the links by the tests, but the
+  dialog was not opened by a person, and the link opening in your own browser (and not in the window) was not seen.
+- [ ] **Put `update-check.txt` saying `off` beside `openassess-shell.exe` in the installed folder, start OpenAssess, and check for
+  updates.** It should say that checking is turned off on this computer. Take the file away afterwards.
+- [ ] **Open a bank someone else made, and an old bank of yours.** A bank's question formatting and equations are now cleaned as
+  it opens (a script, a link, an event attribute or an equation part the window does not draw is taken out, and the bank's screen
+  says how many questions it touched). The tests show a clean bank opens unchanged and says nothing; a real bank from
+  someone else has not been opened.
+- [ ] **Open an OpenStage question spreadsheet in Excel that has a question beginning with `=`, `+`, `-` or `@`.** The cell now
+  starts with an apostrophe, so Excel shows it as text and runs nothing. OpenAssess and Author read the file back without the
+  apostrophe (tested). How Excel shows it was not seen.
+- [ ] **Use the installed window for a few minutes: open a bank, export a file and save it, print a test.** The window now goes only
+  to its own start page and its server's pages (`cargo test` checks the rule). If a screen stays blank or the Save dialog does not
+  come, that rule is the first thing to look at.
 
 ## The app and its window
 

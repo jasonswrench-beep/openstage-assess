@@ -51,6 +51,7 @@ import { badRequest, HttpError, notFound } from "./errors.ts";
 import { destinationsRoute, exportRoute } from "./exports.ts";
 import { printRoute } from "./printing.ts";
 import { scoresRoute, scoringRoute } from "./scoring-routes.ts";
+import { checkForUpdates, type UpdateSettings } from "./updates.ts";
 import { sheetsRoute } from "./sheets.ts";
 import { checkName, cleanName, insideLibrary, type Library } from "./library.ts";
 import { sampleById, samplePath, SAMPLES } from "./samples.ts";
@@ -98,6 +99,8 @@ export interface Context {
   reveal: (path: string) => void | Promise<void>;
   /** Further routes, added by the export and print screens. */
   extra?: Array<(ctx: Context, req: ApiRequest) => Promise<ApiResponse | undefined>>;
+  /** Check for updates: the release this copy is, whether checking is on, and how the list of releases is fetched (`updates.ts`). */
+  updates?: UpdateSettings;
 }
 
 const ok = (json: unknown): ApiResponse => ({ status: 200, json });
@@ -762,6 +765,11 @@ export async function handleApi(ctx: Context, req: ApiRequest): Promise<ApiRespo
   if (first === "sheets") return sheetsRoute(ctx, req);
   if (first === "scoring") return scoringRoute(ctx, req);
   if (first === "scores") return scoresRoute(ctx, req);
+  // Check for updates, which asks GitHub for the list of releases. A POST, so that it is an action the page asked for with its key
+  // and its header, and never something another page could set off by pointing at an address.
+  if (first === "updates" && req.segments[1] === "check" && req.segments.length === 2 && req.method === "POST") {
+    return ok(ctx.updates ? await checkForUpdates(ctx.updates) : { state: "off", message: "Checking for updates is turned off on this computer." });
+  }
   if (first === "reveal" && req.method === "POST") {
     const body = jsonBody(req);
     const path = typeof body["path"] === "string" ? body["path"] : "";
