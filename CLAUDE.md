@@ -320,6 +320,13 @@ was read from one real question library, which read none of its 80 questions unt
 is now held to an independent reading of its own XML (`import-brightspace-library.test.ts`, when the file is in `fixtures/publisher/lms`).
 With no `decvar` the whole is 100 (or 1 where that is the biggest score), never merely the biggest, so an answer worth part is not a key.
 
+**QTI 3.0 is QTI 2.1 renamed, both ways, by one function.** `export/qti3.ts` turns a 2.1 tree into 3.0 (`qti-` and kebab case for
+every QTI element and its attributes, the 3.0 namespace, templates and resource types; XHTML and MathML as they were) and back.
+The 3.0 exporter is the 2.1 exporter's package renamed, so it keeps and loses exactly what 2.1 does; the reader renames a 3.0 file to
+2.1 and reads it by the 2.1 rules, and shows its XML in 3.0's spelling. The XML reader keeps no namespace declarations, so a tree
+written out again declares them (`declared`, `withMathNamespace`): the first version wrote a package its own reader refused. Real
+imports, per system, go in `docs/lms-compatibility.md` and nowhere is a cell marked as working on anything but a person's report.
+
 **A PDF is read from its words and where they stand, and never from a font.** It has no list numbers and no styles, so
 the whole of what is known of a question is its text, and an answer is read only where it is written down (an asterisk, an
 `Answer:` line, an Answers list). A bold or italic option is never taken for a key, because it can be bold for another

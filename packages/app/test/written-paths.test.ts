@@ -96,7 +96,7 @@ describe("the path of a file that was written is the file that was written", () 
       };
       const first = await ask();
       const paths = heldToDisk(first, join(home, "Exports"), []);
-      assert.equal(first.length, 3, "a workbook, a CSV and an item analysis");
+      assert.equal(first.length, 4, "a workbook, a CSV, an item analysis and a file for PrismStatistics");
       const second = await ask();
       heldToDisk(second, join(home, "Exports"), paths);
       assert.ok(second.every((f) => / 2\.[a-z]+$/.test(f.name)), second.map((f) => f.name).join(", "));

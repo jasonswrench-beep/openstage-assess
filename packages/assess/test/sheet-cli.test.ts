@@ -211,7 +211,7 @@ describe("openassess sheets score", () => {
     const r = run("score", bankPath(), folder, "--accept-blanks", "--out", out, "--date", "2026-11-04");
     assert.match(r.out, /^Scored 4 sheets for "Quiz"\./m);
     const names = readdirSync(out).sort();
-    assert.deepEqual(names, ["Quiz - Item analysis 2026-11-04.html", "Quiz - Scores 2026-11-04.csv", "Quiz - Scores 2026-11-04.openassess-scores", "Quiz - Scores 2026-11-04.xlsx"]);
+    assert.deepEqual(names, ["Quiz - Item analysis 2026-11-04.html", "Quiz - Results for statistics 2026-11-04.pstat", "Quiz - Scores 2026-11-04.csv", "Quiz - Scores 2026-11-04.openassess-scores", "Quiz - Scores 2026-11-04.xlsx"]);
     const scoresFile = join(out, "Quiz - Scores 2026-11-04.openassess-scores");
     // scoring again from the saved file, with an adjustment, needs no scans
     const again = run("rescore", bankPath(), scoresFile, "--drop", "1", "--credit", "2");

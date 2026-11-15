@@ -17,6 +17,8 @@
  * into LaTeX, so it stays as `[equation]` and the question is flagged) each is reported. A kind this reader does not know (a hotspot,
  * a drag and drop, a calculated question, several blanks with their own drop downs) is kept as an essay with its words. The version
  * is told from the root of each file: `questestinterop` is 1.2, `assessmentItem` is 2.1, and an `assessmentTest` gives the order.
+ * A QTI 3.0 file (`qti-assessment-item`, `qti-assessment-test`) is 2.1 spelled another way, and is renamed to 2.1 as it is read
+ * (`export/qti3.ts`, the renaming the 3.0 exporter uses the other way), so it is read by exactly the same rules.
  */
 
 import { unzipSync } from "../container/zip.ts";
@@ -27,6 +29,7 @@ import type { MediaRef, Question, QuestionBody } from "../model/question.ts";
 import { escapeHtml, isEmptyRichText, plainToRich, rich, richTextToPlain, sanitizeRichText, type RichText } from "../model/richtext.ts";
 import { unreadObjectFindings } from "../model/unread-objects.ts";
 import { allText, elements, first, parseXml, XmlError, type XmlElement, type XmlNode } from "./docx/xml.ts";
+import { fromQti3, isQti3Root, qti3Names } from "../export/qti3.ts";
 import { PictureKeeper, type FoundPicture } from "./html-pictures.ts";
 import { countVerdicts, type Importer, type ImportOptions, type ImportResult, type Orphan, type SourceBlock } from "./types.ts";
 
@@ -790,7 +793,7 @@ function item21(root: XmlElement, tag: string | undefined, source: { file: strin
 /** Whether text looks like a QTI file: a questestinterop, assessmentItem or assessmentTest root, after any declaration and comments. */
 export function looksLikeQtiXml(text: string): boolean {
   const head = text.slice(0, 4000).replace(/^﻿/, "").replace(/^\s*(<\?[\s\S]*?\?>\s*|<!--[\s\S]*?-->\s*)*/, "");
-  return /^<(questestinterop|assessmentItem|assessmentTest)[\s>/]/.test(head);
+  return /^<(questestinterop|assessmentItem|assessmentTest|qti-assessment-item|qti-assessment-test)[\s>/]/.test(head);
 }
 
 interface Found {
@@ -801,13 +804,26 @@ interface Found {
   unreadQti: number;
 }
 
+/**
+ * A QTI 3.0 item or test, renamed to 2.1 (`export/qti3.ts`) and read by the 2.1 reader, so its key is read by the same rules. Every
+ * other document is as it was.
+ */
+const as21 = (root: XmlElement): XmlElement => {
+  if (!isQti3Root(root)) return root;
+  const renamed = fromQti3(root);
+  read3.add(renamed);
+  return renamed;
+};
+/** The documents that were QTI 3.0, so the XML shown beside a question is spelled as the file spells it. */
+const read3 = new WeakSet<XmlElement>();
+
 function gather(bytes: Uint8Array, name: string): Found | { refusal: string } {
   const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
   const docs: Doc[] = [];
   const problems: string[] = [];
   if (!isZip) {
     try {
-      docs.push({ path: name, root: parseXml(Buffer.from(bytes).toString("utf8").replace(/^﻿/, "")) });
+      docs.push({ path: name, root: as21(parseXml(Buffer.from(bytes).toString("utf8").replace(/^﻿/, ""))) });
     } catch (error) {
       if (error instanceof XmlError) return { refusal: `This file is not well formed XML, so it could not be read as QTI: ${error.message}` };
       throw error;
@@ -824,7 +840,7 @@ function gather(bytes: Uint8Array, name: string): Found | { refusal: string } {
   if (xml.length > MOST_FILES) return { refusal: `This package has ${xml.length} XML files, more than the ${MOST_FILES} this reader follows.` };
   for (const path of xml) {
     try {
-      docs.push({ path, root: parseXml(Buffer.from(files.get(path) as Uint8Array).toString("utf8").replace(/^﻿/, "")) });
+      docs.push({ path, root: as21(parseXml(Buffer.from(files.get(path) as Uint8Array).toString("utf8").replace(/^﻿/, ""))) });
     } catch (error) {
       if (error instanceof XmlError) problems.push(`${path} is not well formed XML and was not read: ${error.message}`);
       else throw error;
@@ -934,7 +950,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
   const questions: Question[] = [];
   const orphans: Orphan[] = [];
   entries.forEach((e) => {
-    const own = [`<!-- ${e.doc.path} -->`, ...serialize(e.el)];
+    const own = [`<!-- ${e.doc.path} -->`, ...serialize(read3.has(e.doc.root) ? qti3Names(e.el) : e.el)];
     const source = { file, firstBlock: lines.length, lastBlock: lines.length + own.length - 1 };
     for (const line of own) lines.push(line);
     let built: Built;
@@ -994,7 +1010,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
         "warn",
         blackboard
           ? `No question was found in this file. It is a package that Blackboard exports for its own use, with its questions in .dat files (${datFiles.length === 1 ? "one .dat file" : `${datFiles.length} .dat files`} in all), and this program does not read that form. It does read the tab delimited file that Blackboard takes in (one question to a row, beginning with its type), and a Word, Excel or text file of the questions.${another}`
-          : `No question was found in this file. A QTI file holds item elements (1.2) or assessmentItem files (2.1).${another}`,
+          : `No question was found in this file. A QTI file holds item elements (1.2), assessmentItem files (2.1) or qti-assessment-item files (3.0).${another}`,
       ),
     );
   }
@@ -1012,7 +1028,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
 
 export const qtiImporter: Importer = {
   id: QTI_PROFILE_ID,
-  label: "QTI (1.2 and 2.1)",
+  label: "QTI (1.2, 2.1 and 3.0)",
   extensions: [".zip", ".imscc"],
 
   parse(input: string | SourceBlock[], options: ImportOptions = {}): ImportResult {

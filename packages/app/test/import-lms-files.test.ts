@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Bank, exportBlackboardUpload, exportCommonCartridge, exportQti12, exportQti21, createQuestion, plainToRich } from "../src/engine.ts";
+import { Bank, exportBlackboardUpload, exportCommonCartridge, exportQti12, exportQti21, exportQti30, createQuestion, plainToRich } from "../src/engine.ts";
 import { withApp, type Client } from "./support/app.ts";
 
 type Json = Record<string, any>;
@@ -84,6 +84,7 @@ describe("a QTI package or file", () => {
   for (const [label, run] of [
     ["1.2", exportQti12],
     ["2.1", exportQti21],
+    ["3.0", exportQti30],
   ] as const) {
     test(`a ${label} package is read, shown with its XML beside each question, and saved into a bank`, async () => {
       await withApp(async (client, home) => {
@@ -95,6 +96,9 @@ describe("a QTI package or file", () => {
         assert.deepEqual(reply.json["questions"].map((q: Json) => q.type), ["multipleChoice", "trueFalse", "shortAnswer"]);
         const second = (await client.get<Json>(`/api/sessions/${reply.json["id"]}/questions/1`)).json["question"].origin.source;
         assert.match(reply.json["source"].slice(second.firstBlock, second.lastBlock + 1).join("\n"), /light-year/);
+        // The XML beside a question is spelled as the file spells it, though the reader reads 3.0 by renaming it to 2.1.
+        if (label === "3.0") assert.match(reply.json["source"].join("\n"), /<qti-choice-interaction /);
+        if (label === "3.0") assert.doesNotMatch(reply.json["source"].join("\n"), /<choiceInteraction /);
 
         const saved = await client.post<Json>(`/api/sessions/${reply.json["id"]}/save`, { title: `QTI ${label}` });
         assert.equal(saved.status, 200, saved.text);

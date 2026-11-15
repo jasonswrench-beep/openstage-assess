@@ -998,7 +998,7 @@ describe("exporting", () => {
         const title = "Psychology Chapter Three Test Bank Fall Section 002 ".repeat(3).slice(0, length).replace(/ $/, "x");
         assert.equal(title.length, length);
         const bank = await seeded(client, title);
-        for (const destination of ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "qti-2.1", "common-cartridge", "blackboard-upload"]) {
+        for (const destination of ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "qti-2.1", "qti-3.0", "common-cartridge", "blackboard-upload"]) {
           const checked = await client.post<{ report: { files: string[] } }>(`${bank}/export/check`, { destination });
           assert.equal(checked.status, 200, `${destination} check, title of ${length}: ${checked.text}`);
           // Writing three times: the second and third files are numbered, and every one must be a name that can be downloaded again.
@@ -1051,7 +1051,7 @@ describe("exporting", () => {
     await withApp(async (client) => {
       const reply = await client.get("/api/destinations");
       const ids = (reply.json["destinations"] as Array<{ id: string; label: string; blurb: string }>).map((d) => d.id);
-      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "qti-2.1", "common-cartridge", "blackboard-upload"]);
+      assert.deepEqual(ids, ["openstage-spreadsheet", "moodle-xml", "gift", "d2l-csv", "qti-1.2", "qti-2.1", "qti-3.0", "common-cartridge", "blackboard-upload"]);
     });
   });
 

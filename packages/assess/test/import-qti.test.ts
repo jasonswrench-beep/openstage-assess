@@ -22,6 +22,7 @@ import { textEntry, unzipSync, zipSync, type ZipEntry } from "../src/container/z
 import { exportCommonCartridge } from "../src/export/common-cartridge.ts";
 import { exportQti12 } from "../src/export/qti12.ts";
 import { exportQti21 } from "../src/export/qti21.ts";
+import { exportQti30 } from "../src/export/qti30.ts";
 import { looksLikeQtiXml, qtiImporter } from "../src/import/qti.ts";
 import { importerForContent, runImporter } from "../src/import/registry.ts";
 import { verdictOf } from "../src/import/types.ts";
@@ -515,6 +516,7 @@ describe("what this program exports, read back", () => {
   for (const [label, run, partial] of [
     ["QTI 1.2", exportQti12, false],
     ["QTI 2.1", exportQti21, true],
+    ["QTI 3.0", exportQti30, true],
     ["Common Cartridge", exportCommonCartridge, false],
   ] as const) {
     test(`every question of every fixture bank that ${label} can hold comes back as what it was`, () => {
@@ -553,6 +555,7 @@ describe("what this program exports, read back", () => {
   for (const [label, run, partial] of [
     ["QTI 1.2", exportQti12, false],
     ["QTI 2.1", exportQti21, true],
+    ["QTI 3.0", exportQti30, true],
     ["Common Cartridge", exportCommonCartridge, false],
   ] as const) {
     test(`every real bank in fixtures/publisher, when there are some, comes back from ${label} as what it was`, { skip: hasReal ? false : "none there; the folder is git-ignored and local" }, () => {

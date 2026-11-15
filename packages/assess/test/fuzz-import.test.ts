@@ -24,6 +24,7 @@ import { exportBlackboardUpload } from "../src/export/blackboard-upload.ts";
 import { exportD2lCsv } from "../src/export/d2l-csv.ts";
 import { exportQti12 } from "../src/export/qti12.ts";
 import { exportQti21 } from "../src/export/qti21.ts";
+import { exportQti30 } from "../src/export/qti30.ts";
 import { importerForContent, runImporter } from "../src/import/registry.ts";
 import { createQuestion } from "../src/model/create.ts";
 import { plainToRich } from "../src/model/richtext.ts";
@@ -93,6 +94,7 @@ function seeds(): Seed[] {
   const packages: Array<[string, Uint8Array]> = [
     ["qti12.zip", exportQti12(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
     ["qti21.zip", exportQti21(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
+    ["qti30.zip", exportQti30(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
     ["cartridge.imscc", exportCommonCartridge(made.questions, { name: "Fuzz" }).files[0]?.bytes as Uint8Array],
   ];
   // The Brightspace question library as a CSV, which is read by the keyword in each row's first cell.

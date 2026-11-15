@@ -33,6 +33,9 @@ import {
   QTI12_LABEL,
   QTI21_ID,
   QTI21_LABEL,
+  QTI30_ID,
+  QTI30_LABEL,
+  exportQti30,
   STATUSES,
   type ExportResult,
   type Question,
@@ -84,6 +87,12 @@ export const DESTINATIONS: Destination[] = [
     label: QTI21_LABEL,
     blurb: "A QTI 2.1 zip for Canvas's Import Course Content (QTI .zip file) and for Brightspace's Import/Export/Copy Components. It holds multiple choice, multiple answer, true or false, short answer, matching and essay questions with their points, carries pictures, equations and partial credit, and the check says what each loses.",
     run: exportQti21,
+  },
+  {
+    id: QTI30_ID,
+    label: QTI30_LABEL,
+    blurb: "A QTI 3.0 zip, the newest version of the format, for a learning system that imports it. It is the QTI 2.1 package in 3.0's spelling, so it keeps and loses what that one does; check first that your system reads QTI 3.0, since many read only 1.2 or 2.1.",
+    run: exportQti30,
   },
   {
     id: COMMON_CARTRIDGE_ID,

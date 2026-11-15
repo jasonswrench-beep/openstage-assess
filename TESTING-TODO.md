@@ -241,8 +241,11 @@ Built on 6 November 2026. The sample in `fixtures/moodle-xml` was written from M
   (it is one line in `d2l-csv.ts`).
 - [ ] **A question with bold in its wording.** It is written as HTML with `HTML` in the third cell, which the article shows for
   the question text only. Check that it arrives bold and not as visible tags.
-- [ ] **Course Import's QTI 3.x subset is not built (QTI 2.1 is: its own section below).** Brightspace's Quizzes tool takes QTI up to 1.2 (built, below) and
-  Course Import takes a subset of 2.x and 3.x. Which one matters depends on how you move content.
+- [ ] **Try the QTI 3.0 package in Brightspace's Course Import** (built 15 November 2026: `QTI 3.0 package` in the export screen, or
+  `export <bank> --to qti-3.0`). Brightspace's Quizzes tool takes QTI up to 1.2 (built, below) and Course Import takes a subset of 2.x
+  and 3.x. The 3.0 package is the 2.1 package in 3.0's spelling, written from the specification; no system has been given one. Say
+  whether it is taken, the exact words of any message, and which question types arrive. Record the result in
+  `docs/lms-compatibility.md`, the matrix of what has been imported where.
 
 ## QTI 1.2 package (Brightspace and Canvas)
 
