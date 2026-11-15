@@ -427,7 +427,7 @@ export async function renderScoring(host, params, shell) {
       h(
         "p",
         { class: "sub" },
-        stats.sheets > 0 ? `Mean ${stats.mean} of ${stats.possible}, standard deviation ${stats.sd}, over ${plural(stats.sheets, "complete sheet", "complete sheets")}${stats.reliability ? `; ${stats.reliability.kind} ${stats.reliability.value}` : ""}.` : "No sheet is complete yet, so there is no mean.",
+        stats.sheets > 0 ? `Mean ${stats.mean} of ${stats.possible}, standard deviation ${stats.sd} (of this class, divided by the number of sheets), over ${plural(stats.sheets, "complete sheet", "complete sheets")}${stats.reliability ? `; ${stats.reliability.kind} ${stats.reliability.value}` : ""}.` : "No sheet is complete yet, so there is no mean.",
       ),
       ...stats.notes.map(/** @param {string} n */ (n) => h("p", { class: "hint", text: n })),
       h(
@@ -674,12 +674,12 @@ export async function renderScoring(host, params, shell) {
     const byId = new Map(view.test.items.map(/** @param {any} i */ (i) => [i.id, i]));
     put(
       statsHost,
-      h("p", { class: "sub", text: "Difficulty is the share of the points earned. Discrimination is how well the question told the strong from the weak (the correlation with the total, and the top 27 percent less the bottom 27 percent). Answers are counted in the order of version A, with the right one marked." }),
+      h("p", { class: "sub", text: "Difficulty is the share of the points earned. Discrimination is how well the question told the strong from the weak: the point-biserial is the correlation of the question with the total score, and the total includes the question itself, which raises the figure on a short test; then the top 27 percent less the bottom 27 percent. Answers are counted in the order of version A, with the right one marked." }),
       h(
         "table",
         { class: "results" },
         h("caption", { class: "visually-hidden", text: "Item statistics, one row for each question" }),
-        h("thead", null, h("tr", null, ...["#", "Question", "Sheets", "Difficulty", "Discrimination", "Top less bottom", "Blank", "Answers marked"].map((t) => h("th", { scope: "col", text: t })))),
+        h("thead", null, h("tr", null, ...["#", "Question", "Sheets", "Difficulty", "Point-biserial (total includes the question)", "Top less bottom", "Blank", "Answers marked"].map((t) => h("th", { scope: "col", text: t })))),
         h(
           "tbody",
           null,

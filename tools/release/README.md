@@ -20,6 +20,9 @@ commands are written for Git Bash; PowerShell is named where it differs).
    - `node --experimental-strip-types --no-warnings src/cli/index.ts score` (the import gate, 95 percent or better)
    - `... score ../../fixtures/publisher` and `... score ../../fixtures/publisher/pdf` when those private folders are on the machine
    - `... sheets gate` (no answer read wrong without a flag) and `... perf` (the speed budget)
+   - the shared item-analysis test set (C3), from the core's folder: `node testsets/item-analysis/check/check_openassess.mjs --assess
+     C:\Dev\openassess` must say every figure matches. `item-analysis-reference.test.ts` runs it in `npm test` when the core is beside
+     this repository (or `OPENSTAGE_CORE` names it), and says it skipped when not, so a skip in the output means this step was not done.
    - `OPENASSESS_FUZZ_ROUNDS=6000 node --experimental-strip-types --no-warnings --test test/fuzz-import.test.ts`, a long damaged-file
      run (no crash). In PowerShell set the variable first: `$env:OPENASSESS_FUZZ_ROUNDS = "6000"`.
 4. If the Word reader, the formatting or the tables changed: the `check:word-*` commands in `CLAUDE.md`, which need Word.

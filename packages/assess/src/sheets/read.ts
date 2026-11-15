@@ -14,7 +14,7 @@
 import { planSheet, type SheetPlan } from "./plan.ts";
 import { versionBubbles, cornerMarks, codeCells, layoutFor, pagesNeeded, slotBubbles, slotRow, PAPER_MM, MARK_SIZE, VERSION_LABELS, type PaperName, type Rect, type SheetLayout } from "./geometry.ts";
 import { decodeCode, styleOf, type SheetCode } from "./code.ts";
-import { decideQuestion, decideVersion, type FlagKind, type QuestionDecision, type QuestionStatus } from "./decide.ts";
+import { decideQuestion, decideVersion, LINES, type FillLines, type FlagKind, type QuestionDecision, type QuestionStatus } from "./decide.ts";
 import { applyHomography, homographyFrom, type Homography, type Point } from "./homography.ts";
 import { sample, type GreyImage } from "./image.ts";
 import { findCornerMarks, paperLevel, type FoundMarks, type Refusal } from "./locate.ts";
@@ -286,7 +286,7 @@ export class SheetReader {
 }
 
 /** The decision for every question on a page, for a version of the test. Used when a sheet is read and again when a person settles its version. */
-export function decideAll(plan: SheetPlan, version: number, page: number, layout: SheetLayout, fills: Record<number, number[]>, registered: Map<number, boolean> = new Map(), bilevel = false): QuestionReading[] {
+export function decideAll(plan: SheetPlan, version: number, page: number, layout: SheetLayout, fills: Record<number, number[]>, registered: Map<number, boolean> = new Map(), bilevel = false, lines: Readonly<FillLines> = LINES): QuestionReading[] {
   const label = VERSION_LABELS[version - 1] as (typeof VERSION_LABELS)[number];
   const uses = plan.uses[label];
   const first = (page - 1) * layout.questionsPerPage;
@@ -296,7 +296,7 @@ export function decideAll(plan: SheetPlan, version: number, page: number, layout
     if (index >= plan.drawn.length) break;
     const number = index + 1;
     const f = fills[number] ?? [];
-    const decision: QuestionDecision = decideQuestion(f, uses?.[index], registered.get(number) ?? true, bilevel);
+    const decision: QuestionDecision = decideQuestion(f, uses?.[index], registered.get(number) ?? true, bilevel, lines);
     out.push({ number, status: decision.status, marked: decision.marked, fills: f, kind: decision.kind, reason: decision.reason, rect: slotRow(layout, slot) });
   }
   return out;

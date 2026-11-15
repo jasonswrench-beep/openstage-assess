@@ -10,7 +10,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BANK_EXTENSION, PRODUCT_NAME, ENGINE_VERSION } from "../naming.ts";
@@ -55,6 +55,8 @@ import { administrationFrom } from "../model/statistics.ts";
 import { answerAt, versionQuestions, type TestRecord } from "../model/test.ts";
 import { safeName } from "../export/text.ts";
 import { SheetReader } from "../sheets/read.ts";
+import { calibrate, formatCalibration, listTemplate, readList, type CorpusPage } from "../sheets/calibrate.ts";
+import { decodeTableText, parseDelimited } from "../import/table-csv.ts";
 import { checkPrinting } from "../sheets/check-print.ts";
 import { printTestPaper } from "../sheets/paper.ts";
 
@@ -164,6 +166,12 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
   openassess sheets rescore <bank${BANK_EXTENSION}> <file.openassess-scores> [the same adjustments and options]
       Score again from a saved scores file, with its decisions and adjustments and any more given
       here, with no rescan.
+
+  openassess sheets calibrate <bank${BANK_EXTENSION}> <folder> [--test <id or name>] [--template] [--json]
+      Set the fill lines on real paper. The folder holds scans of sheets volunteers filled in and
+      answers.csv, what each volunteer marked (--template writes its first rows). The lines are
+      tried on half the sheets and reported on the other half, with the fill of marked and empty
+      bubbles by condition and the specification's targets. It proposes lines and changes none.
 
   openassess perf [--count 500]
       Build a bank of N questions and time open, search and save.
@@ -999,7 +1007,7 @@ async function cmdSheets(args: string[]): Promise<number> {
       const what = s.complete ? "complete" : `${s.unsettled} question${s.unsettled === 1 ? "" : "s"} not settled${s.problems.length ? `; ${s.problems.join(" ")}` : ""}`;
       console.log(`  Sheet ${String(s.number).padStart(3)}  ${s.version === undefined ? "?" : String.fromCharCode(64 + s.version)}  ${String(s.earned).padStart(5)} of ${String(s.possible).padEnd(5)} ${s.percent === undefined ? "     " : `${s.percent.toFixed(1).padStart(5)}%`}  ${what}`);
     }
-    if (stats.mean !== undefined) console.log(`Mean ${stats.mean} of ${stats.possible} (standard deviation ${stats.sd}) over ${stats.sheets} complete sheet${stats.sheets === 1 ? "" : "s"}${stats.reliability ? `; ${stats.reliability.kind} ${stats.reliability.value}` : ""}.`);
+    if (stats.mean !== undefined) console.log(`Mean ${stats.mean} of ${stats.possible} (standard deviation ${stats.sd}, of this class, divided by the number of sheets) over ${stats.sheets} complete sheet${stats.sheets === 1 ? "" : "s"}${stats.reliability ? `; ${stats.reliability.kind} ${stats.reliability.value}` : ""}.`);
     for (const note of stats.notes) console.log(`Note: ${note}`);
     for (const a of adjustments) console.log(`Adjustment: question ${versionQuestions(record, "A").findIndex((q) => q.id === a.questionId) + 1}: ${adjustmentWords(a, record)}${a.note ? ` (${a.note})` : ""}`);
 
@@ -1028,7 +1036,58 @@ async function cmdSheets(args: string[]): Promise<number> {
     }
     return scores.every((s) => s.complete) ? 0 : 1;
   }
-  return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, print, read, check, score and rescore.` : "Say which sheets command: gate, print, read, check, score or rescore.");
+  if (sub === "calibrate") {
+    const [bankPath, folderArg] = positional(rest);
+    if (!bankPath || !folderArg) return fail("Name a bank file and the corpus folder: sheets calibrate <bank> <folder>. The folder holds the scans and answers.csv.");
+    const { bank } = await Bank.open(resolve(bankPath));
+    const chosen = pickTest(bank, rest);
+    if ("error" in chosen) return fail(chosen.error);
+    const record = chosen.test;
+    const folder = resolve(folderArg);
+    const listPath = join(folder, "answers.csv");
+    if (has(rest, "template")) {
+      if (await stat(listPath).then(() => true, () => false)) return fail(`${listPath} is already there, and is never written over.`);
+      await mkdir(folder, { recursive: true });
+      await writeFile(listPath, listTemplate(record.questions.length));
+      console.log(`Wrote ${listPath}: one row for each page scanned, the letters each volunteer marked under each question number.`);
+      return 0;
+    }
+    const listBytes = await readFile(listPath).catch(() => undefined);
+    if (!listBytes) return fail(`There is no answers.csv in ${folder}. Make one with: sheets calibrate <bank> <folder> --template`);
+    const { rows: tableRows } = parseDelimited(decodeTableText(new Uint8Array(listBytes)).text);
+    const list = readList(tableRows.map((r) => r.cells));
+    for (const p of list.problems) console.log(`answers.csv line ${p.line}: ${p.message}`);
+    if (list.rows.length === 0) return fail("No row of answers.csv could be used.");
+    const reader = new SheetReader(record);
+    const pages: CorpusPage[] = [];
+    const opened = new Map<string, Awaited<ReturnType<typeof readScans>>>();
+    for (const row of list.rows) {
+      // The list names files inside the corpus folder and nowhere else.
+      const full = resolve(folder, row.file);
+      const inside = relative(folder, full);
+      if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) {
+        console.log(`answers.csv line ${row.line}: "${row.file}" is not inside the corpus folder, so it is not read.`);
+        continue;
+      }
+      let read = opened.get(full);
+      if (!read) {
+        read = await stat(full).then(() => readScans(reader, [full]), () => []);
+        opened.set(full, read);
+      }
+      const entry = read.find((o) => o.entry.source.page === row.page)?.entry;
+      if (!entry) {
+        console.log(`answers.csv line ${row.line}: ${row.file} has no page ${row.page}${read.length === 0 ? " (the file is not there)" : ""}.`);
+        continue;
+      }
+      pages.push({ where: `${row.file} p${row.page}`, sheet: row.sheet, source: row.source, condition: row.condition, version: row.version, answers: row.answers, reading: entry.result });
+    }
+    if (pages.length === 0) return fail("None of the pages listed could be found.");
+    const report = calibrate(pages, reader);
+    console.log(has(rest, "json") ? JSON.stringify(report, null, 2) : formatCalibration(report));
+    const failed = [report.now.scan, report.now.photo].some((t) => t.wrong > 0 || t.version.wrong > 0);
+    return failed ? 1 : 0;
+  }
+  return fail(sub ? `Unknown sheets command "${sub}". The commands are gate, print, read, check, score, rescore and calibrate.` : "Say which sheets command: gate, print, read, check, score, rescore or calibrate.");
 }
 
 function cmdContract(): number {

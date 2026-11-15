@@ -534,6 +534,7 @@ npm run assess -- sheets score <bank> <scans...> [--accept-blanks] [--drop N] [-
 npm run assess -- sheets print <bank> --out <folder>   # the answer sheet, and a booklet and a key for each version
 npm run assess -- sheets rescore <bank> <file.openassess-scores>   # score again from a saved file, with no rescan
 npm run assess -- sheets check <bank> <picture.png>   # Check my printing: a scan of a blank printed copy
+npm run assess -- sheets calibrate <bank> <folder> [--template]   # a real-sheet corpus against the volunteers' answers.csv: lines tried on half, reported on the other half, proposed and never applied
 npm run assess -- score fixtures/publisher/pdf   # the real PDF banks, when they are on this machine
 npm run assess -- perf         # the speed budget on a 500-question bank
 npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|qti-2.1|common-cartridge|blackboard-upload   # the destination check; the Author/Scroll CSV is the default; --out writes it

@@ -26,6 +26,17 @@ export const BLANK = 0.1;
  */
 export const BLANK_MULTIPLE = 0.06;
 
+/**
+ * The three lines together. Reading always uses `LINES`; `calibrate.ts` tries other lines on a real-sheet corpus to propose new ones,
+ * which a person then writes into the constants above. Nothing changes the lines a reading uses at run time.
+ */
+export interface FillLines {
+  filled: number;
+  blank: number;
+  blankMultiple: number;
+}
+export const LINES: Readonly<FillLines> = Object.freeze({ filled: FILLED, blank: BLANK, blankMultiple: BLANK_MULTIPLE });
+
 export type QuestionStatus = "answered" | "blank" | "flagged" | "notOnSheet";
 export type FlagKind = "blank" | "faint" | "multiple" | "beyond" | "registration" | "bilevel";
 
@@ -46,7 +57,8 @@ const list = (places: number[]): string => places.map(placeName).join(", ");
  * (undefined when there is none); `registered` is false when the row's printed circles could not be found where they should be;
  * `bilevel` is true when the picture is black and white.
  */
-export function decideQuestion(fills: readonly number[], use: SlotUse | undefined, registered = true, bilevel = false): QuestionDecision {
+export function decideQuestion(fills: readonly number[], use: SlotUse | undefined, registered = true, bilevel = false, lines: Readonly<FillLines> = LINES): QuestionDecision {
+  const { filled: FILLED, blank: BLANK, blankMultiple: BLANK_MULTIPLE } = lines;
   const kind: SlotKind = use?.kind ?? "none";
   const places = kind === "none" ? 0 : (use as SlotUse).places;
   if (fills.length === 0) return { status: "notOnSheet", marked: [] };
@@ -87,7 +99,8 @@ export interface VersionDecision {
 }
 
 /** Which version a student marked: exactly one filled bubble among the version bubbles, the rest empty. Any other pattern is a flag. */
-export function decideVersion(fills: readonly number[]): VersionDecision {
+export function decideVersion(fills: readonly number[], lines: Readonly<FillLines> = LINES): VersionDecision {
+  const { filled: FILLED, blank: BLANK } = lines;
   const faint = fills.filter((f) => f > BLANK && f < FILLED);
   const filled = fills.map((f, i) => ({ f, i })).filter(({ f }) => f >= FILLED).map(({ i }) => i);
   if (faint.length > 0) return { reason: `A version bubble is marked lightly or in part (fill ${faint.map(fmt).join(", ")}), so the version is not certain.` };

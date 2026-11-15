@@ -10,7 +10,18 @@
  * question's score with the total score (which includes the question), and the top 27 percent against the bottom 27 percent; the options
  * are how many sheets marked each; blanks are how many left it empty; and for the whole test KR-20, or Cronbach's alpha when a question
  * gives partial credit, since KR-20 is defined for questions that are right or wrong.
+ *
+ * Every figure here is held to R by the shared item-analysis test set (C3, `testsets/item-analysis` in openstage-core), within half a
+ * unit in the fourth place (`item-analysis-reference.test.ts`). PrismStatistics computes a different correlation on the same sheets:
+ * its corrected item-total r leaves the question out of the total, and ours keeps it in, which raises the figure, most on a short
+ * test. So ours is always shown as POINT_BISERIAL_LABEL, and the standard deviation (divided by the number of sheets, since it
+ * describes this class and not a sample) as SD_LABEL. Neither tool switches to the other's figure; they are labelled apart.
  */
+
+/** The name of the correlation wherever it is shown or written, so it cannot be read as PrismStatistics's corrected figure. */
+export const POINT_BISERIAL_LABEL = "Point-biserial (total includes the question)";
+/** The name of the standard deviation wherever it is shown or written: of this class, so divided by the number of sheets. */
+export const SD_LABEL = "Standard deviation (of this class, divided by the number of sheets)";
 
 import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
 import type { TestRecord } from "../model/test.ts";
@@ -99,7 +110,9 @@ export function itemStatistics(record: TestRecord, scores: readonly SheetScore[]
 
   const totals = complete.map((s) => s.earned);
   const ordered = complete.map((s, i) => ({ s, i })).sort((a, b) => b.s.earned - a.s.earned || a.s.number - b.s.number);
-  const group = Math.round(0.27 * complete.length);
+  // 27 percent rounded half up, in whole numbers, which is how the shared item-analysis test set (C3, in openstage-core) defines
+  // it: Math.round(0.27 * n) gives the same for every class size tried, but leans on 0.27 being stored a hair above 0.27.
+  const group = Math.floor((27 * complete.length + 50) / 100);
   const canSplit = group >= 2 && group * 2 <= complete.length;
   const upper = new Set(canSplit ? ordered.slice(0, group).map((x) => x.i) : []);
   const lower = new Set(canSplit ? ordered.slice(-group).map((x) => x.i) : []);

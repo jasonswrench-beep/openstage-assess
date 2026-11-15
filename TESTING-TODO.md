@@ -375,14 +375,25 @@ in the tests and in `assess sheets gate`.
 - [ ] **A real-sheet corpus.** Volunteers fill in printed sheets by hand to a written answer list; scan them on the department
   copier (feeder, 200 and 300 dpi, grey and black and white), on a flatbed, and photograph them on an iPhone and an Android phone in
   office light. The expected answers come from the volunteer's list, never from the reader. Tune thresholds on half and report on the
-  other half. The targets are in the spec's success criteria.
+  other half. The targets are in the spec's success criteria. The program side is built (15 November 2026): put the scans in one
+  folder, run `npm run assess -- sheets calibrate <bank> <folder> --template` to get `answers.csv`, and fill in one row for each page:
+  the file and page, a name for the volunteer's sheet (so its pages stay in one half), `scan` or `photo`, the condition in your own
+  words ("copier 300 grey - #2 pencil firm"), the version they filled in, and under each question number the letters they marked
+  (empty for left blank, `?` for a mark meant to be unclear, such as an erasure). Then `sheets calibrate <bank> <folder>` tries the
+  lines on half the sheets, reports them on the other half, and prints the fill of marked and empty bubbles for each condition and
+  each target of the spec. It proposes lines and changes none: if it proposes, write them into `sheets/decide.ts` yourself (or ask a
+  session to), run `npm test` and `sheets gate`, and name the corpus in the commit. The command line cannot decode a JPEG, so save
+  phone photos as PNG first (Photos or Paint, Save as PNG, which keeps them upright). Needs at least 200 marked answers in each
+  half before it will propose anything: about 20 sheets of 20 questions.
 - [ ] **Print the sheet on the department printer and photocopy it.** Check my printing should read a scan of one blank photocopy:
   corner marks, code strip, no blank bubble read as filled, and the scale within 2 percent. (`assess sheets check <bank> <picture.png>`
   does this on a PNG now; it says the printed size only when the picture says how many dots to the inch it was scanned at.)
 - [ ] **Set the lines for a filled bubble and an empty one on real pencil.** They are provisional: 0.5 and 0.1 (0.06 for a question with
   several answers), chosen on drawn sheets where a firm mark reads 0.65 to 0.85 and a hurried scribble 0.4 to 0.6. Real graphite on a
   real scanner may read lighter, and then firm marks will be flagged more than they should be. Fill in sheets with a #2 pencil, a
-  ballpoint and a felt pen, lightly and firmly, and look at the fills in `assess sheets read <bank> <picture.png> --json`.
+  ballpoint and a felt pen, lightly and firmly, and look at the fills in `assess sheets read <bank> <picture.png> --json`, or for a
+  whole corpus in the "By condition" part of `sheets calibrate`, which gives the least, the 5th percentile, the median and the most of
+  the marked bubbles and of the empty ones for each pen and machine.
 - [ ] **A black and white scan of pencil marks.** The reader knows a black and white picture when it sees one (hardly any grey) and reads
   no question with several answers from it, because pale pencil can vanish and a smudge can come out solid, and no program can tell
   which. Scan the real sheets in black and white and see how much of a class this flags. If instructors scan in black and white by

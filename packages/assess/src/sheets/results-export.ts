@@ -18,7 +18,7 @@ import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../mod
 import { placeLetter, VERSION_LABELS, versionQuestions, type TestRecord, type VersionLabel } from "../model/test.ts";
 import { versionKey } from "../quality/test-key.ts";
 import { adjustmentEffect, adjustmentWords, scoreSheets, type Adjustment, type SettledSheet, type SheetScore } from "./score.ts";
-import type { TestStatistics } from "./stats.ts";
+import { POINT_BISERIAL_LABEL, SD_LABEL, type TestStatistics } from "./stats.ts";
 
 export interface ResultsExport {
   xlsx: Uint8Array;
@@ -78,7 +78,7 @@ export function exportResults(record: TestRecord, settled: readonly SettledSheet
     adjustmentRows.push([q ? `${first.findIndex((x) => x.id === q.id) + 1}. ${stemOf(q)}` : a.questionId, adjustmentWords(a, record), a.versions ? a.versions.map((v) => VERSION_LABELS[v - 1]).join(", ") : "All", effect.changed.length, a.note ?? "", a.at ?? ""]);
   }
 
-  const statRows: XlsxCell[][] = [["Question", "Question text", "Sheets", "Difficulty", "Point-biserial", "Top 27% less bottom 27%", "Blanks", "Answers marked", "Notes"]];
+  const statRows: XlsxCell[][] = [["Question", "Question text", "Sheets", "Difficulty", POINT_BISERIAL_LABEL, "Top 27% less bottom 27%", "Blanks", "Answers marked", "Notes"]];
   for (const item of stats.items) {
     const q = record.questions.find((x) => x.id === item.questionId) as Question;
     const labelFor = (answer: string, i: number): string => (answer === "true" ? "True" : answer === "false" ? "False" : placeLetter(i));
@@ -90,7 +90,7 @@ export function exportResults(record: TestRecord, settled: readonly SettledSheet
   statRows.push(["Sheets used", "", stats.sheets]);
   if (stats.leftOut > 0) statRows.push(["Sheets left out", "", stats.leftOut]);
   if (stats.mean !== undefined) statRows.push(["Mean score", "", stats.mean, "", "", "", "", `of ${stats.possible ?? ""}`]);
-  if (stats.sd !== undefined) statRows.push(["Standard deviation", "", stats.sd]);
+  if (stats.sd !== undefined) statRows.push([SD_LABEL, "", stats.sd]);
   if (stats.reliability) statRows.push([stats.reliability.kind, "", stats.reliability.value, "", "", "", "", `${stats.reliability.items} questions`]);
   for (const n of stats.notes) statRows.push(["Note", n]);
 
@@ -130,7 +130,7 @@ export function itemAnalysisHtml(record: TestRecord, stats: TestStatistics, date
         .map((a) => `<tr class="${a.correct ? "right" : ""}"><td class="l">${esc(a.label)}${a.correct ? " &#10003;" : ""}</td><td>${esc(a.text)}</td><td class="n">${a.chosen}</td><td class="bar"><span style="width:${Math.round((100 * a.chosen) / most)}%"></span></td></tr>`)
         .join("");
       return `<section class="item"><h2>${number}. ${esc(richTextToPlain(q.stem))}</h2><table class="options">${rows}</table>
-<p class="figures">${item.sheets} sheet${item.sheets === 1 ? "" : "s"}. Difficulty ${fmt(item.difficulty)}. Point-biserial ${fmt(item.discrimination.pointBiserial)}. Top 27% less bottom 27% ${fmt(item.discrimination.upperLower)}${item.discrimination.groupSize ? ` (${item.discrimination.groupSize} sheets each)` : ""}. Left blank ${item.blanks}.</p>${item.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}</section>`;
+<p class="figures">${item.sheets} sheet${item.sheets === 1 ? "" : "s"}. Difficulty ${fmt(item.difficulty)}. ${POINT_BISERIAL_LABEL} ${fmt(item.discrimination.pointBiserial)}. Top 27% less bottom 27% ${fmt(item.discrimination.upperLower)}${item.discrimination.groupSize ? ` (${item.discrimination.groupSize} sheets each)` : ""}. Left blank ${item.blanks}.</p>${item.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}</section>`;
     })
     .join("\n");
   const reliability = stats.reliability ? `${esc(stats.reliability.kind)} ${stats.reliability.value.toFixed(2)} (${stats.reliability.items} questions)` : "not worked out";
@@ -148,7 +148,7 @@ td.bar span{display:block;height:.7em;background:#777}tr.right td.bar span{backg
 @media print{body{margin:0;max-width:none}}
 </style></head><body>
 <h1>${esc(record.name)}: item analysis</h1>
-<p class="summary">${esc(date)}. ${stats.sheets} sheet${stats.sheets === 1 ? "" : "s"}${stats.mean !== undefined ? `; mean ${stats.mean} of ${stats.possible ?? ""}, standard deviation ${stats.sd}` : ""}. Reliability: ${reliability}.${stats.notes.map((n) => ` ${esc(n)}`).join("")}</p>
+<p class="summary">${esc(date)}. ${stats.sheets} sheet${stats.sheets === 1 ? "" : "s"}${stats.mean !== undefined ? `; mean ${stats.mean} of ${stats.possible ?? ""}, standard deviation ${stats.sd} (of this class, divided by the number of sheets)` : ""}. Reliability: ${reliability}.${stats.notes.map((n) => ` ${esc(n)}`).join("")}</p>
 ${blocks}
 </body></html>
 `;
