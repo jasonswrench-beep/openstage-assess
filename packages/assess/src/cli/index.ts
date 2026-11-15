@@ -58,6 +58,8 @@ import { SheetReader } from "../sheets/read.ts";
 import { calibrate, formatCalibration, listTemplate, readList, type CorpusPage } from "../sheets/calibrate.ts";
 import { decodeTableText, parseDelimited } from "../import/table-csv.ts";
 import { pstatAppVersion, pstatFileName, pstatProject, writePstatFile } from "../sheets/pstat-export.ts";
+import { LMS_REPORTS, lmsResults } from "../results/lms-results.ts";
+import { POINT_BISERIAL_LABEL } from "../sheets/stats.ts";
 import { checkPrinting } from "../sheets/check-print.ts";
 import { printTestPaper } from "../sheets/paper.ts";
 
@@ -175,6 +177,12 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       answers.csv, what each volunteer marked (--template writes its first rows). The lines are
       tried on half the sheets and reported on the other half, with the fill of marked and empty
       bubbles by condition and the specification's targets. It proposes lines and changes none.
+
+  openassess results <bank${BANK_EXTENSION}> <file.csv> --lms canvas|brightspace|blackboard [--name <quiz>] [--date YYYY-MM-DD] [--out <folder>] [--save-statistics]
+      A learning system's quiz results report, read into the same item statistics as scanned
+      sheets: each question matched to the bank's by its words (or a title only one question has),
+      the system's own points for each attempt, and no column about a student read. --out writes a
+      .pstat file for PrismStatistics; --save-statistics keeps the class figures in the bank.
 
   openassess perf [--count 500]
       Build a bank of N questions and time open, search and save.
@@ -561,6 +569,56 @@ function ruleLine(rule: { axis: string; value: string; count: number; and?: Read
 function findBlueprint(bank: Bank, key: string): Blueprint | undefined {
   const wanted = key.trim().toLocaleLowerCase();
   return bank.listBlueprints().find((b) => b.id === key || b.name.trim().toLocaleLowerCase() === wanted);
+}
+
+/** A learning system's quiz results report, read into the same item statistics as scanned sheets. */
+async function cmdResults(args: string[]): Promise<number> {
+  const [bankPath, file] = positional(args);
+  const lms = arg(args, "lms");
+  const reports = LMS_REPORTS.map((r) => `  ${r.id}: ${r.lms}, the ${r.report} report. ${r.how}`).join("\n");
+  if (!bankPath || !file || !lms) return fail(`Name a bank, a results file and its learning system: results <bank> <file.csv> --lms <system>. The systems and their reports:\n${reports}`);
+  const report = LMS_REPORTS.find((r) => r.id === lms);
+  if (!report) return fail(`"${lms}" is not one of the learning systems this reads:\n${reports}`);
+  const { bank } = await Bank.open(resolve(bankPath));
+  const bytes = new Uint8Array(await readFile(resolve(file)));
+  const date = arg(args, "date") ?? new Date().toISOString().slice(0, 10);
+  const name = arg(args, "name") ?? `${basename(file, extname(file))} (${report.lms})`;
+  const done = lmsResults(report.id, bytes, bank.sortedQuestions(), { name, date });
+  if (!done.ok) return fail(done.reason);
+  const { read, matches, record, scores, stats } = done;
+  for (const n of read.notes) console.log(`Note: ${n}`);
+  const used = matches.filter((m) => m.questionId);
+  console.log(`${read.attempts.length} attempt${read.attempts.length === 1 ? "" : "s"} and ${read.questions.length} question${read.questions.length === 1 ? "" : "s"} read from ${report.lms}'s ${report.report} report; ${used.length} matched to questions of the bank.`);
+  for (const m of matches) {
+    const lq = read.questions.find((q) => q.key === m.key);
+    const words = (lq?.text ?? "").slice(0, 70);
+    if (!m.questionId) console.log(`  Not matched: ${m.key} "${words}": ${m.reason}`);
+    else if (m.by === "title") console.log(`  Matched by its title, not its words: ${m.key} "${words}"`);
+  }
+  if (stats.mean !== undefined) console.log(`Mean ${stats.mean} of ${stats.possible} (standard deviation ${stats.sd}, of this class, divided by the number of attempts) over ${stats.sheets} complete attempt${stats.sheets === 1 ? "" : "s"}${stats.reliability ? `; ${stats.reliability.kind} ${stats.reliability.value}` : ""}.`);
+  for (const note of stats.notes) console.log(`Note: ${note.replace(/sheets?/g, (w) => (w === "sheet" ? "attempt" : "attempts"))}`);
+  for (const item of stats.items) {
+    const at = record.questions.findIndex((q) => q.id === item.questionId) + 1;
+    console.log(`  ${String(at).padStart(3)}. difficulty ${item.difficulty ?? "-"}, ${POINT_BISERIAL_LABEL.toLowerCase()} ${item.discrimination.pointBiserial ?? "-"}, top less bottom ${item.discrimination.upperLower ?? "-"} (${item.sheets} attempts)`);
+  }
+  const out = arg(args, "out");
+  if (out) {
+    const folder = resolve(out);
+    await mkdir(folder, { recursive: true });
+    const made = pstatProject(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION));
+    made.project.source.report.notes.unshift(`From ${report.lms}'s ${report.report} report, with the learning system's own points.`);
+    let target = join(folder, pstatFileName(record.name, date));
+    for (let n = 2; await stat(target).then(() => true, () => false); n++) target = join(folder, pstatFileName(record.name, date).replace(/\.pstat$/, ` ${n}.pstat`));
+    await writeFile(target, writePstatFile(made.project));
+    console.log(`  Wrote ${target}`);
+  }
+  if (has(args, "save-statistics")) {
+    if (stats.sheets === 0) return fail("There are no complete attempts, so there are no figures to keep in the bank.");
+    bank.addAdministration(administrationFrom(record, stats, date));
+    await bank.save(resolve(bankPath));
+    console.log(`The class-level figures were kept in ${bankPath}. No response, name or file name is in them.`);
+  }
+  return 0;
 }
 
 async function cmdBlueprint(args: string[]): Promise<number> {
@@ -1161,6 +1219,8 @@ async function main(): Promise<number> {
       return cmdCoverage(args);
     case "blueprint":
       return cmdBlueprint(args);
+    case "results":
+      return cmdResults(args);
     case "search":
       return cmdSearch(args);
     case "score":

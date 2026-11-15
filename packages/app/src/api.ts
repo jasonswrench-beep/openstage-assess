@@ -51,6 +51,7 @@ import { badRequest, HttpError, notFound } from "./errors.ts";
 import { destinationsRoute, exportRoute } from "./exports.ts";
 import { printRoute } from "./printing.ts";
 import { scoresRoute, scoringRoute } from "./scoring-routes.ts";
+import { lmsReportsRoute } from "./lms-results.ts";
 import { checkForUpdates, type UpdateSettings } from "./updates.ts";
 import { sheetsRoute } from "./sheets.ts";
 import { checkName, cleanName, insideLibrary, type Library } from "./library.ts";
@@ -765,6 +766,7 @@ export async function handleApi(ctx: Context, req: ApiRequest): Promise<ApiRespo
   if (first === "sheets") return sheetsRoute(ctx, req);
   if (first === "scoring") return scoringRoute(ctx, req);
   if (first === "scores") return scoresRoute(ctx, req);
+  if (first === "lms-reports" && req.segments.length === 1) return lmsReportsRoute(req);
   // Check for updates, which asks GitHub for the list of releases. A POST, so that it is an action the page asked for with its key
   // and its header, and never something another page could set off by pointing at an address.
   if (first === "updates" && req.segments[1] === "check" && req.segments.length === 2 && req.method === "POST") {

@@ -505,6 +505,15 @@ is beside this repository, and `item-analysis-reference.test.ts` runs the set's 
 core. A field the profile does not have (the letters, the key, bank ids) is asked of the core in `CORE-REQUESTS.md` and is not added
 here, because a reader of format 1 may drop a member it does not know. The correlation is always labelled `POINT_BISERIAL_LABEL`.
 
+**A learning system's results report gives its own points, and a question is matched by words one question alone has.**
+`results/lms-results.ts` reads Canvas's Student Analysis, Brightspace's quiz statistics export and Blackboard's Download Results by
+their column names, one layout each, and refuses a file that is not that layout. The points are the system's and are never worked out
+again from the bank's key; a response counts against an answer only when its words are exactly that answer's. No column about a student
+is read (`PERSONAL`), an attempt is its place in the file, and the app's route holds nothing between requests. A question is matched by
+its stem with typography folded on both sides, then by a title one bank question alone has; two bank questions with the same words, or
+two report questions that find one bank question, match nothing and say so. Do not add a looser match without a person confirming it.
+The layouts are from documentation, not real reports (`TESTING-TODO.md`).
+
 **The app never keeps a picture of a student's sheet, and keeps what it holds in memory until the person saves.**
 A scoring sitting (`packages/app/src/scoring.ts`) holds the readings, the person's decisions and the
 adjustments, and for each question a person may have to look at a small cut-out of the row, cut upright
@@ -550,6 +559,7 @@ npm run assess -- export <bank> --to gift|moodle-xml|d2l-csv|qti-1.2|qti-2.1|com
 npm run assess -- print <bank> --out <folder>   # a student copy and an answer key, as Word or PDF
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
 npm run assess -- check <bank> [--save]   # notes on the writing of each question, copies, and where the right answers sit
+npm run assess -- results <bank> <file.csv> --lms canvas|brightspace|blackboard [--out <folder>] [--save-statistics]   # a learning system's quiz results into the same item statistics
 npm run assess -- coverage <bank> [--rows objective] [--cols bloom]   # what the bank covers: questions by objective, chapter, tag, Bloom level and so on
 npm run assess -- blueprint <bank> list|add|draw|remove   # a stored recipe for a test; draw writes nothing and says how short each rule came out and why
 npm run assess -- contract     # the read contract and consumer capabilities

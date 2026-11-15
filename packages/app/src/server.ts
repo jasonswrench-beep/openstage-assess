@@ -109,6 +109,7 @@ export function uploadLimit(segments: readonly string[]): number {
   if (a === "scoring" && (b === "open" || c === "files")) return MAX_UPLOAD;
   if (a === "scoring" && c === "pages") return MAX_PAGE;
   if (a === "sheets" && segments[4] === "printing-check") return MAX_UPLOAD;
+  if (a === "sheets" && c === "lms-results" && segments.length === 3) return MAX_UPLOAD;
   if ((a === "banks" || a === "sessions") && c === "questions" && segments[4] === "pictures") return MAX_PICTURE_UPLOAD;
   return MAX_JSON;
 }

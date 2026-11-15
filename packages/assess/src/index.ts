@@ -60,6 +60,8 @@ export { exportResults, itemAnalysisHtml } from "./sheets/results-export.ts";
 export { PSTAT_EXTENSION, PSTAT_PROFILE, pstatAppVersion, pstatFileName, pstatProject, writePstatFile } from "./sheets/pstat-export.ts";
 export type { PstatExport, PstatProject } from "./sheets/pstat-export.ts";
 export { POINT_BISERIAL_LABEL, SD_LABEL } from "./sheets/stats.ts";
+export { LMS_REPORTS, lmsResults, matchQuestions, readLmsResults, scoresFromLms } from "./results/lms-results.ts";
+export type { LmsId, LmsReport, LmsResults, Match as LmsMatch } from "./results/lms-results.ts";
 export { administrationFrom, validateAdministration } from "./model/statistics.ts";
 export type { Administration, AdministrationItem } from "./model/statistics.ts";
 export { runSheetGate, formatGate } from "./sheets/gate.ts";

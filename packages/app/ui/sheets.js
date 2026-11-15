@@ -38,6 +38,7 @@ export async function renderSheets(host, params, shell) {
   const printHost = h("div", { attrs: { "aria-live": "polite" } });
   const checkHost = h("div", { attrs: { "aria-live": "polite" } });
   const savedHost = h("div", { attrs: { "aria-live": "polite" } });
+  const lmsHost = h("div");
   const makeHost = h("div");
 
   host.append(
@@ -54,6 +55,7 @@ export async function renderSheets(host, params, shell) {
       printHost,
       checkHost,
       savedHost,
+      lmsHost,
       makeHost,
     ),
   );
@@ -348,6 +350,125 @@ export async function renderSheets(host, params, shell) {
   }
 
   // -------------------------------------------------------------------------------------------------------------------------
+  // Results from a learning system: the same item statistics, from a quiz's results report
+
+  /** @type {any[]} */
+  let reports = [];
+  try {
+    reports = (await get("lms-reports")).reports;
+  } catch {
+    reports = [];
+  }
+
+  function renderLms() {
+    clear(lmsHost);
+    const resultHost = h("div", { attrs: { "aria-live": "polite" } });
+    const system = h("select", { id: "lms-system" }, ...reports.map(/** @param {any} r */ (r) => h("option", { value: r.id, text: r.lms })));
+    const how = h("p", { class: "hint", id: "lms-how" });
+    const showHow = () => {
+      const r = reports.find((x) => x.id === system.value);
+      how.textContent = r ? `Download its ${r.report} report. ${r.how}` : "";
+    };
+    system.addEventListener("change", showHow);
+    showHow();
+    const quiz = h("input", { type: "text", id: "lms-name", attrs: { maxlength: "120", autocomplete: "off" } });
+    const upload = h("input", { type: "file", id: "lms-file", accept: ".csv,.txt,.tsv,.xls" });
+    /** @type {Uint8Array | undefined} */
+    let bytes;
+    /** @param {string} extra */
+    const send = async (extra) => {
+      if (!bytes) return undefined;
+      const query = new URLSearchParams({ lms: system.value, ...(quiz.value.trim() ? { name: quiz.value.trim() } : {}) });
+      return post(`${base}/lms-results?${query.toString()}${extra}`, bytes);
+    };
+    upload.addEventListener("change", async () => {
+      const file = upload.files?.[0];
+      if (!file) return;
+      bytes = new Uint8Array(await file.arrayBuffer());
+      if (!quiz.value.trim()) quiz.value = file.name.replace(/\.[a-z]{2,4}$/i, "").slice(0, 100);
+      try {
+        showResult(await send(""));
+      } catch (error) {
+        clear(resultHost);
+        tell(error);
+      }
+      upload.value = "";
+    });
+
+    /** @param {any} r */
+    function showResult(r) {
+      clear(resultHost);
+      if (!r) return;
+      const s = r.stats;
+      const figure = (/** @type {number | undefined} */ v) => (v === undefined || v === null ? "–" : String(v));
+      const write = h("button", { type: "button", text: "Write a file for PrismStatistics (.pstat)", disabled: s.sheets === 0 });
+      write.addEventListener("click", async () => {
+        write.disabled = true;
+        try {
+          const done = await send("&write=statistics");
+          put(resultHost, h("div", { class: "written" }, ...done.written.map(/** @param {any} file */ (file) => h("div", { class: "file-row" }, h("span", { class: "file-name", text: file.name }), ...fileButtons(file, shell)))));
+          shell.notify(`Wrote ${done.written[0]?.name} in the Exports folder.`, "ok");
+        } catch (error) {
+          tell(error);
+        } finally {
+          write.disabled = false;
+        }
+      });
+      const keep = h("button", { type: "button", text: "Keep the class figures in the bank…", disabled: s.sheets === 0 });
+      keep.addEventListener("click", async () => {
+        const yes = await confirmAction("Keep the class figures in the bank?", `The bank will keep, for "${r.name}" on ${r.date}, the number of complete attempts (${s.sheets}) and for each question its difficulty, its discrimination, how many marked each answer and how many left it blank. No attempt, name, response or file name is kept. The bank file is shared when you share the bank.`, { yes: "Keep the figures" });
+        if (!yes) return;
+        try {
+          const done = await send("&confirm=true");
+          keep.disabled = true;
+          shell.notify(`The figures of ${plural(done.kept.sheets, "attempt", "attempts")} are kept in the bank.`, "ok");
+        } catch (error) {
+          tell(error);
+        }
+      });
+      put(
+        resultHost,
+        h("h3", { text: `${r.name}: ${plural(r.attempts, "attempt", "attempts")}, ${plural(r.matched.length, "question", "questions")} matched to this bank` }),
+        ...r.notes.map(/** @param {string} n */ (n) => h("p", { class: "hint", text: n })),
+        r.unmatched.length > 0
+          ? h(
+              "div",
+              { class: "problems" },
+              h("p", { class: "sub", text: `${plural(r.unmatched.length, "question of the report is", "questions of the report are")} not in the figures, because ${r.unmatched.length === 1 ? "it was" : "they were"} not matched to one question of the bank:` }),
+              h("ul", null, ...r.unmatched.map(/** @param {any} u */ (u) => h("li", { text: `${u.text.slice(0, 90) || u.key}: ${u.reason}` }))),
+            )
+          : null,
+        h("p", { class: "sub", text: s.sheets > 0 ? `Mean ${s.mean} of ${s.possible}, standard deviation ${s.sd} (of this class, divided by the number of attempts), over ${plural(s.sheets, "complete attempt", "complete attempts")}${s.reliability ? `; ${s.reliability.kind} ${s.reliability.value}` : ""}. The points are the learning system's own.` : "No attempt has points for every question matched, so there are no figures." }),
+        ...s.notes.map(/** @param {string} n */ (n) => h("p", { class: "hint", text: n.replace(/\bsheets\b/g, "attempts").replace(/\bsheet\b/g, "attempt") })),
+        s.items.length > 0
+          ? h(
+              "table",
+              { class: "results" },
+              h("caption", { class: "visually-hidden", text: "Item statistics from the learning system's results, one row for each question" }),
+              h("thead", null, h("tr", null, ...["#", "Question", "Attempts", "Difficulty", "Point-biserial (total includes the question)", "Top less bottom", "Blank"].map((t) => h("th", { scope: "col", text: t })))),
+              h("tbody", null, ...s.items.map(/** @param {any} i */ (i) => h("tr", null, h("th", { scope: "row", text: String(i.number ?? "") }), h("td", { text: i.stem }), h("td", { text: String(i.sheets) }), h("td", { text: figure(i.difficulty) }), h("td", { text: figure(i.pointBiserial) }), h("td", { text: figure(i.upperLower) }), h("td", { text: String(i.blanks) })))),
+            )
+          : null,
+        h("div", { class: "editor-actions" }, write, keep),
+      );
+    }
+
+    put(
+      lmsHost,
+      h(
+        "section",
+        { class: "panel" },
+        h("h2", { text: "Results from a learning system" }),
+        h("p", { class: "sub", text: "A quiz given online, made from this bank: its results report gives the same item statistics as scanned sheets, from the learning system's own points. Each question is matched to this bank's by its words. Nothing about a student is read from the report." }),
+        h("div", { class: "field" }, h("label", { for: "lms-system", class: "field-label", text: "Learning system" }), system, how),
+        h("div", { class: "field" }, h("label", { for: "lms-name", class: "field-label", text: "The quiz's name, for the figures" }), quiz),
+        h("div", { class: "field" }, h("label", { for: "lms-file", class: "field-label", text: "The results report" }), upload),
+        resultHost,
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------------
   // Making a test
 
   const questions = /** @type {any[]} */ (bank.questions);
@@ -523,6 +644,7 @@ export async function renderSheets(host, params, shell) {
 
   renderTests();
   renderSaved();
+  renderLms();
   renderMake();
   return {};
 }

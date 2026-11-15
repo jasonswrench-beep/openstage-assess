@@ -428,6 +428,25 @@ own reader and checker and to every case of the set (`pstat-export.test.ts`). Wh
   chapter, Bloom level) and bank question ids. The core's locked profile has none of them, so they are asked of the core in
   `CORE-REQUESTS.md` (request 1) and not built here. Until then the scores sheet's letters are still in each version's own order.
 
+## Results from a learning system (development list item 4)
+
+Built 15 November 2026: Answer sheets has a "Results from a learning system" panel, and the command line has `results <bank> <file>
+--lms canvas|brightspace|blackboard`. Each reads one report by its column names, takes the learning system's own points, matches
+each question to the bank by its exact words (then a title only one question has), and reads no column about a student. The three
+layouts were written from documentation and memory, and **no real report from any of them has been read**. Everything else is tested.
+
+- [ ] **Download a real results report from each system and import it.** For a quiz made from an OpenAssess export: Canvas's Student
+  Analysis CSV, Brightspace's quiz statistics export with a row per question of each attempt, and Blackboard's Download Results (comma
+  separated, By Question and User). Choose the system on the Answer sheets screen and pick the file. If it is refused, the message
+  names the columns it looked for: send me the first row (the column names) and one row with the student columns blanked, and I will
+  fix the layout from it. If it reads, check the attempts count, that every question matched, and that the difficulty of one question
+  agrees with what the learning system's own statistics page shows.
+- [ ] **A question that did not match.** A question edited in the learning system after the export, or two bank questions with the same
+  words, is left out of the figures and listed with the reason. Say whether that is what you want, or whether a looser match would be
+  worth a confirm step (a looser match is never made without one, since it could put one question's figures on another).
+- [ ] **Moodle is not in the menu.** Its Responses report has the words of each answer and no points per question, and its Grades
+  report the points and no question text, so neither alone gives what the others do. Send a sample of both if Moodle results matter.
+
 ## Check quality (the notes about writing and accessibility)
 
 Planned in `docs/design-plan.md` (phase 7, first set). Everything a program can check is in `quality-items`, `quality-bank`,
