@@ -514,6 +514,14 @@ its stem with typography folded on both sides, then by a title one bank question
 two report questions that find one bank question, match nothing and say so. Do not add a looser match without a person confirming it.
 The layouts are from documentation, not real reports (`TESTING-TODO.md`).
 
+**Item history is read from the class figures and never stored, and its notes say nothing when unsure.** `bank/item-history.ts`
+reads the administrations a bank keeps back across classes for each question: every class in date order, which wording it saw (the
+test's own copy when the bank still holds the test, otherwise the question's history on that day, the first wording counting from
+before the question was made in this bank), and the change in difficulty. Its notes (runs the wrong way, weak, too easy, too hard, a
+wrong answer nobody chose, drift) use only classes that saw the question as it is now and only once those come to `SMALL_GROUP`
+attempts; they are worked out each time, never stored, never touch status, version or findings, and the one about unchosen answers
+is skipped for a question with no key. The lines are named constants, moved on real banks only.
+
 **The app never keeps a picture of a student's sheet, and keeps what it holds in memory until the person saves.**
 A scoring sitting (`packages/app/src/scoring.ts`) holds the readings, the person's decisions and the
 adjustments, and for each question a person may have to look at a small cut-out of the row, cut upright
@@ -560,6 +568,7 @@ npm run assess -- print <bank> --out <folder>   # a student copy and an answer k
 npm run assess -- review <file>  # one web page: what an import made of a file, question by question
 npm run assess -- check <bank> [--save]   # notes on the writing of each question, copies, and where the right answers sit
 npm run assess -- results <bank> <file.csv> --lms canvas|brightspace|blackboard [--out <folder>] [--save-statistics]   # a learning system's quiz results into the same item statistics
+npm run assess -- history <bank> [--to-revise]   # each question's figures across the classes the bank keeps, and the ones worth another look
 npm run assess -- coverage <bank> [--rows objective] [--cols bloom]   # what the bank covers: questions by objective, chapter, tag, Bloom level and so on
 npm run assess -- blueprint <bank> list|add|draw|remove   # a stored recipe for a test; draw writes nothing and says how short each rule came out and why
 npm run assess -- contract     # the read contract and consumer capabilities

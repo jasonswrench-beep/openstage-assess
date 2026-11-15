@@ -60,6 +60,7 @@ import { checkBankQuality, type BankQualityReport } from "../quality/bank.ts";
 import { QUALITY_CODES, withFreshQuality } from "../quality/items.ts";
 import { SearchIndex, matchesQuery } from "./search.ts";
 import { tidyRule, validateBlueprint, type Blueprint, type BlueprintRule } from "./blueprint.ts";
+import { itemHistory, type ItemHistory } from "./item-history.ts";
 
 export interface OpenReport {
   /** Questions that failed validation, with their issues. Never silently dropped. */
@@ -667,6 +668,11 @@ export class Bank {
 
   removeAdministration(id: string): boolean {
     return this.administrations.delete(id);
+  }
+
+  /** How each question has done across the classes whose figures this bank keeps, worked out now and never stored (`item-history.ts`). */
+  itemHistory(): Map<string, ItemHistory> {
+    return itemHistory(this.sortedQuestions(), this.listAdministrations(), (id) => this.getTest(id));
   }
 
   // -------------------------------------------------------------------------

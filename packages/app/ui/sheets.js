@@ -39,6 +39,7 @@ export async function renderSheets(host, params, shell) {
   const checkHost = h("div", { attrs: { "aria-live": "polite" } });
   const savedHost = h("div", { attrs: { "aria-live": "polite" } });
   const lmsHost = h("div");
+  const historyHost = h("div");
   const makeHost = h("div");
 
   host.append(
@@ -56,6 +57,7 @@ export async function renderSheets(host, params, shell) {
       checkHost,
       savedHost,
       lmsHost,
+      historyHost,
       makeHost,
     ),
   );
@@ -422,6 +424,7 @@ export async function renderSheets(host, params, shell) {
           const done = await send("&confirm=true");
           keep.disabled = true;
           shell.notify(`The figures of ${plural(done.kept.sheets, "attempt", "attempts")} are kept in the bank.`, "ok");
+          void renderHistory();
         } catch (error) {
           tell(error);
         }
@@ -466,6 +469,64 @@ export async function renderSheets(host, params, shell) {
         resultHost,
       ),
     );
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------------
+  // Item history: the class figures the bank keeps, read back across classes
+
+  async function renderHistory() {
+    clear(historyHost);
+    /** @type {any} */
+    let history;
+    try {
+      history = await get(`${base}/history`);
+    } catch (error) {
+      tell(error);
+      return;
+    }
+    const listHost = h("div", { attrs: { "aria-live": "polite" } });
+    const only = h("input", { type: "checkbox", id: "history-only" });
+    const figure = (/** @type {number | undefined} */ v) => (v === undefined || v === null ? "–" : String(v));
+    const draw = () => {
+      clear(listHost);
+      const shown = history.questions.filter(/** @param {any} q */ (q) => !only.checked || q.notes.length > 0);
+      if (shown.length === 0) {
+        put(listHost, h("p", { class: "sub", text: only.checked ? "No question has a note: none is worth another look on the figures kept so far." : "No question has figures yet." }));
+        return;
+      }
+      put(
+        listHost,
+        ...shown.map(/** @param {any} q */ (q) =>
+          h(
+            "details",
+            { class: "history-item" },
+            h("summary", { text: `${q.title || q.stem}: ${plural(q.runs.length, "class", "classes")}${q.pooled?.difficulty !== undefined ? `, ${Math.round(q.pooled.difficulty * 100)} percent right` : ""}${q.notes.length ? ", worth a look" : ""}` }),
+            ...q.notes.map(/** @param {any} n */ (n) => h("p", { class: "note", text: n.message })),
+            q.trend ? h("p", { class: "sub", text: `Difficulty ${q.trend.from} on ${q.trend.fromDate} and ${q.trend.to} on ${q.trend.toDate} (${q.trend.change >= 0 ? "+" : ""}${q.trend.change}).` }) : null,
+            h(
+              "table",
+              { class: "results" },
+              h("caption", { class: "visually-hidden", text: `Each class that answered ${q.title || "this question"}` }),
+              h("thead", null, h("tr", null, ...["Date", "Test", "Attempts", "Difficulty", "Point-biserial (total includes the question)", "Wording"].map((t) => h("th", { scope: "col", text: t })))),
+              h("tbody", null, ...q.runs.map(/** @param {any} r */ (r) => h("tr", null, h("th", { scope: "row", text: r.date }), h("td", { text: r.testName }), h("td", { text: `${r.sheets}${r.unstable ? " (fewer than 30)" : ""}` }), h("td", { text: figure(r.difficulty) }), h("td", { text: figure(r.pointBiserial) }), h("td", { text: r.current ? "As it is now" : "An earlier wording" })))),
+            ),
+          ),
+        ),
+      );
+    };
+    only.addEventListener("change", draw);
+    put(
+      historyHost,
+      h(
+        "section",
+        { class: "panel" },
+        h("h2", { text: "How the questions have done across classes" }),
+        h("p", { class: "sub", text: history.classes === 0 ? "When you keep the class figures after scoring (from sheets or a learning system), each question's figures from every class show here, with notes on the ones worth another look." : `From the figures of ${plural(history.classes, "class", "classes")} kept in this bank. A note uses only classes that saw the question as it is now, and only once they come to 30 attempts; it is advice, and changes nothing.` }),
+        history.classes === 0 ? null : checkRow(only, "Only the questions worth another look", "A question that runs the wrong way, tells strong from weak only a little, is nearly always right or nearly always wrong, has a wrong answer nobody chooses, or has got easier or harder."),
+        history.classes === 0 ? null : listHost,
+      ),
+    );
+    if (history.classes > 0) draw();
   }
 
   // -------------------------------------------------------------------------------------------------------------------------
@@ -645,6 +706,7 @@ export async function renderSheets(host, params, shell) {
   renderTests();
   renderSaved();
   renderLms();
+  void renderHistory();
   renderMake();
   return {};
 }

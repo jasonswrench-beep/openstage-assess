@@ -428,6 +428,21 @@ own reader and checker and to every case of the set (`pstat-export.test.ts`). Wh
   chapter, Bloom level) and bank question ids. The core's locked profile has none of them, so they are asked of the core in
   `CORE-REQUESTS.md` (request 1) and not built here. Until then the scores sheet's letters are still in each version's own order.
 
+## Item history across classes (development list item 5)
+
+Built 15 November 2026: Answer sheets has "How the questions have done across classes", and the command line has `history <bank>
+[--to-revise]`. It reads back the class figures you chose to keep, and notes questions that run the wrong way, tell strong from weak
+only a little (point-biserial under 0.15), are right 95 percent of the time or more or 25 percent or less, have a wrong answer nobody
+chose, or got 20 points easier or harder with the same wording. Only classes that saw the question as it is now count, and only once
+they reach 30 attempts together.
+
+- [ ] **Keep the figures of two or three real classes and read the notes as the author.** Are the lines right? A two-option true or
+  false question will often sit above 0.95 for a reason; a mastery quiz is meant to be easy. Say which notes you would switch off or
+  move, and I will change the constants on your numbers, never to make a test pass.
+- [ ] **Edit a question that has figures, then look at its history.** The classes before the edit should say "An earlier wording" and
+  stop feeding the notes. The day of an edit and the day of a class are compared by date, so an edit on the day of a class counts as
+  before it.
+
 ## Results from a learning system (development list item 4)
 
 Built 15 November 2026: Answer sheets has a "Results from a learning system" panel, and the command line has `results <bank> <file>

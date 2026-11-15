@@ -59,6 +59,8 @@ import { calibrate, formatCalibration, listTemplate, readList, type CorpusPage }
 import { decodeTableText, parseDelimited } from "../import/table-csv.ts";
 import { pstatAppVersion, pstatFileName, pstatProject, writePstatFile } from "../sheets/pstat-export.ts";
 import { LMS_REPORTS, lmsResults } from "../results/lms-results.ts";
+import type { ItemHistory } from "../bank/item-history.ts";
+import { richTextToPlain } from "../model/richtext.ts";
 import { POINT_BISERIAL_LABEL } from "../sheets/stats.ts";
 import { checkPrinting } from "../sheets/check-print.ts";
 import { printTestPaper } from "../sheets/paper.ts";
@@ -183,6 +185,11 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       sheets: each question matched to the bank's by its words (or a title only one question has),
       the system's own points for each attempt, and no column about a student read. --out writes a
       .pstat file for PrismStatistics; --save-statistics keeps the class figures in the bank.
+
+  openassess history <bank${BANK_EXTENSION}> [--to-revise] [--json]
+      How each question has done across the classes whose figures the bank keeps: every class in
+      date order, the change in difficulty, and notes on the questions worth another look (worked
+      out from classes that saw the question as it is now, 30 attempts or more, never stored).
 
   openassess perf [--count 500]
       Build a bank of N questions and time open, search and save.
@@ -569,6 +576,38 @@ function ruleLine(rule: { axis: string; value: string; count: number; and?: Read
 function findBlueprint(bank: Bank, key: string): Blueprint | undefined {
   const wanted = key.trim().toLocaleLowerCase();
   return bank.listBlueprints().find((b) => b.id === key || b.name.trim().toLocaleLowerCase() === wanted);
+}
+
+/** How each question has done across the classes whose figures the bank keeps, and the ones worth another look. */
+async function cmdHistory(args: string[]): Promise<number> {
+  const [bankPath] = positional(args);
+  if (!bankPath) return fail("Name a bank: history <bank> [--to-revise] [--json].");
+  const { bank } = await Bank.open(resolve(bankPath));
+  const histories = bank.itemHistory();
+  const questions = bank.sortedQuestions();
+  const shown = questions.filter((q) => histories.has(q.id) && (!has(args, "to-revise") || (histories.get(q.id)?.notes.length ?? 0) > 0));
+  if (has(args, "json")) {
+    console.log(JSON.stringify(shown.map((q) => histories.get(q.id)), null, 2));
+    return 0;
+  }
+  const classes = bank.listAdministrations().length;
+  if (classes === 0) {
+    console.log("This bank keeps no class figures yet. Keep them after scoring (sheets score --save-statistics, results --save-statistics, or Keep the class figures in the app).");
+    return 0;
+  }
+  const flagged = questions.filter((q) => (histories.get(q.id)?.notes.length ?? 0) > 0).length;
+  console.log(`${classes} class${classes === 1 ? "" : "es"} kept; ${histories.size} question${histories.size === 1 ? " has" : "s have"} figures, ${flagged} with something worth a look.`);
+  for (const q of shown) {
+    const h = histories.get(q.id) as ItemHistory;
+    const words = richTextToPlain(q.stem).replace(/\s+/g, " ").slice(0, 70);
+    console.log(`\n${q.title || words}`);
+    for (const r of h.runs) {
+      console.log(`  ${r.date}  ${r.testName.slice(0, 30).padEnd(30)}  ${String(r.sheets).padStart(4)} attempts  difficulty ${r.difficulty ?? "-"}  point-biserial ${r.pointBiserial ?? "-"}${r.current ? "" : "  (an earlier wording)"}${r.unstable ? "  (fewer than 30)" : ""}`);
+    }
+    if (h.trend) console.log(`  Difficulty ${h.trend.from} to ${h.trend.to} (${h.trend.change >= 0 ? "+" : ""}${h.trend.change}) from ${h.trend.fromDate} to ${h.trend.toDate}.`);
+    for (const n of h.notes) console.log(`  Note: ${n.message}`);
+  }
+  return 0;
 }
 
 /** A learning system's quiz results report, read into the same item statistics as scanned sheets. */
@@ -1221,6 +1260,8 @@ async function main(): Promise<number> {
       return cmdBlueprint(args);
     case "results":
       return cmdResults(args);
+    case "history":
+      return cmdHistory(args);
     case "search":
       return cmdSearch(args);
     case "score":

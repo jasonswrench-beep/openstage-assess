@@ -223,11 +223,26 @@ async function pickRoute(ctx: Context, req: ApiRequest, bankName: string): Promi
 }
 
 /** /api/sheets/:bank/tests... and /api/sheets/:bank/pick */
+/**
+ * GET /api/sheets/<bank>/history: how each question with class figures has done across classes, with the notes on those worth another
+ * look, worked out now from the figures the bank keeps (nothing is stored by asking).
+ */
+async function historyRoute(ctx: Context, bankName: string): Promise<ApiResponse> {
+  const bank = await ctx.banks.open(bankName);
+  const histories = bank.itemHistory();
+  const questions = bank.sortedQuestions().filter((q) => histories.has(q.id));
+  return ok({
+    classes: bank.listAdministrations().length,
+    questions: questions.map((q) => ({ id: q.id, title: q.title, stem: richTextToPlain(q.stem).replace(/\s+/g, " ").trim().slice(0, 200), version: q.version, ...histories.get(q.id) })),
+  });
+}
+
 export async function sheetsRoute(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   const [, rawBank, what, id, action] = req.segments;
   if (rawBank !== undefined && what === "pick" && id === undefined && req.method === "POST") return pickRoute(ctx, req, checkName(rawBank));
   if (rawBank !== undefined && what === "blueprints") return blueprintsRoute(ctx, req, checkName(rawBank));
   if (rawBank !== undefined && what === "lms-results" && id === undefined) return lmsResultsRoute(ctx, req, checkName(rawBank));
+  if (rawBank !== undefined && what === "history" && id === undefined && req.method === "GET") return historyRoute(ctx, checkName(rawBank));
   if (rawBank === undefined || what !== "tests") throw notFound("There is no such page.");
   const bankName = checkName(rawBank);
 

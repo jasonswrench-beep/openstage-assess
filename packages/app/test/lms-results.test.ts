@@ -79,6 +79,12 @@ describe("results from a learning system", () => {
       assert.equal(k.json["kept"]["sheets"], 2);
       const figures = (await client.get<Json>("/api/sheets/Quiz%20bank/tests")).json["figures"];
       assert.deepEqual(figures.map((f: Json) => [f.test, f.date, f.sheets]), [["Quiz 3", "2026-10-02", 2]]);
+
+      // The figures kept are read back as each question's history, with no note on two attempts.
+      const history = await client.get<Json>("/api/sheets/Quiz%20bank/history");
+      assert.equal(history.status, 200, history.text);
+      assert.equal(history.json["classes"], 1);
+      assert.deepEqual(history.json["questions"].map((q: Json) => [q.stem, q.runs.length, q.runs[0].current, q.notes.length]), [["What is 2 + 2?", 1, true, 0], ["Which city is the capital of France?", 1, true, 0]]);
     });
   });
 
