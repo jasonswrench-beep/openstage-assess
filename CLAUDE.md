@@ -496,6 +496,15 @@ no file name, picture or name; a bank holds class-level figures only (`model/sta
 name from being carried in by another writer. Do not add a field to either to make something easier,
 and do not write figures into a bank unless the instructor asked (`--save-statistics`).
 
+**The file for PrismStatistics is the core's format, written by our own code and held to the core's files.** `sheets/pstat-export.ts`
+writes a `.pstat` in profile `OpenAssess item results 1` of `specs/pstat/PSTAT-1.md` in `openstage-core`, exactly: complete sheets
+only, points per question by its version A number, empty (never 0) where a question does not count, no question text, no name, no
+file name, empty `operations` and `results`. It is not the core's `@openstage/pstat`, because the engine has no runtime dependency;
+`pstat-export.test.ts` reads every case of the core's item-analysis test set with the core's `readPstat` and `checkPstat` when the core
+is beside this repository, and `item-analysis-reference.test.ts` runs the set's checker on `sheets/stats.ts`. Neither copies the
+core. A field the profile does not have (the letters, the key, bank ids) is asked of the core in `CORE-REQUESTS.md` and is not added
+here, because a reader of format 1 may drop a member it does not know. The correlation is always labelled `POINT_BISERIAL_LABEL`.
+
 **The app never keeps a picture of a student's sheet, and keeps what it holds in memory until the person saves.**
 A scoring sitting (`packages/app/src/scoring.ts`) holds the readings, the person's decisions and the
 adjustments, and for each question a person may have to look at a small cut-out of the row, cut upright

@@ -57,6 +57,9 @@ export type { ItemStatistics, OptionCount, TestStatistics } from "./sheets/stats
 export { SCORES_EXTENSION, newScoresFile, readScoresFile, restore, scoresFileName, writeScoresFile } from "./sheets/scores-file.ts";
 export type { ScoresFile } from "./sheets/scores-file.ts";
 export { exportResults, itemAnalysisHtml } from "./sheets/results-export.ts";
+export { PSTAT_EXTENSION, PSTAT_PROFILE, pstatAppVersion, pstatFileName, pstatProject, writePstatFile } from "./sheets/pstat-export.ts";
+export type { PstatExport, PstatProject } from "./sheets/pstat-export.ts";
+export { POINT_BISERIAL_LABEL, SD_LABEL } from "./sheets/stats.ts";
 export { administrationFrom, validateAdministration } from "./model/statistics.ts";
 export type { Administration, AdministrationItem } from "./model/statistics.ts";
 export { runSheetGate, formatGate } from "./sheets/gate.ts";

@@ -57,6 +57,7 @@ import { safeName } from "../export/text.ts";
 import { SheetReader } from "../sheets/read.ts";
 import { calibrate, formatCalibration, listTemplate, readList, type CorpusPage } from "../sheets/calibrate.ts";
 import { decodeTableText, parseDelimited } from "../import/table-csv.ts";
+import { pstatAppVersion, pstatFileName, pstatProject, writePstatFile } from "../sheets/pstat-export.ts";
 import { checkPrinting } from "../sheets/check-print.ts";
 import { printTestPaper } from "../sheets/paper.ts";
 
@@ -161,7 +162,9 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       --accept-blanks takes a row the reader found blank as blank. The adjustments name a question
       by its number in version A: drop it from the total, give everyone credit, change its points,
       or count another letter as right as well. With --out, write the scores file, a workbook, a
-      CSV and the item analysis page. --save-statistics keeps the class-level figures in the bank.
+      CSV, the item analysis page and a .pstat file for PrismStatistics (the points on each question
+      of each complete sheet, with no names and no question text). --save-statistics keeps the
+      class-level figures in the bank.
 
   openassess sheets rescore <bank${BANK_EXTENSION}> <file.openassess-scores> [the same adjustments and options]
       Score again from a saved scores file, with its decisions and adjustments and any more given
@@ -1022,6 +1025,7 @@ async function cmdSheets(args: string[]): Promise<number> {
         [`${exported.base}.xlsx`, exported.xlsx],
         [`${exported.base}.csv`, exported.csv],
         [`${safeName(record.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(record, stats, date)],
+        [pstatFileName(record.name, date), writePstatFile(pstatProject(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION)).project)],
       ];
       for (const [name, data] of writes) {
         await writeFile(join(folder, name), data);

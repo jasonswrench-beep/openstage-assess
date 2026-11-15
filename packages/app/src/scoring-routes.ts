@@ -15,7 +15,12 @@ import {
   adjustmentEffect,
   adjustmentWords,
   answerAt,
+  ENGINE_VERSION,
   exportResults,
+  PSTAT_EXTENSION,
+  pstatAppVersion,
+  pstatProject,
+  writePstatFile,
   itemAnalysisHtml,
   newScoresFile,
   readScoresFile,
@@ -166,8 +171,8 @@ async function saveOnce(ctx: Context, s: ScoringSession): Promise<ApiResponse> {
 async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Promise<ApiResponse> {
   const input = jsonObject(req);
   onlyFields(input, ["what", "date"], "The request");
-  const WHAT = ["workbook", "csv", "analysis"] as const;
-  const what = input["what"] === undefined ? [...WHAT] : Array.isArray(input["what"]) && input["what"].length > 0 && input["what"].every((w) => (WHAT as readonly unknown[]).includes(w)) ? [...new Set(input["what"] as Array<(typeof WHAT)[number]>)] : (() => { throw badRequest("Say what to write, from workbook, csv and analysis."); })();
+  const WHAT = ["workbook", "csv", "analysis", "statistics"] as const;
+  const what = input["what"] === undefined ? [...WHAT] : Array.isArray(input["what"]) && input["what"].length > 0 && input["what"].every((w) => (WHAT as readonly unknown[]).includes(w)) ? [...new Set(input["what"] as Array<(typeof WHAT)[number]>)] : (() => { throw badRequest("Say what to write, from workbook, csv, analysis and statistics."); })();
   const date = dateOf(input["date"]);
   const c = compute(s);
   if (c.scores.length === 0) throw badRequest("There are no sheets to write results for yet.");
@@ -176,6 +181,13 @@ async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Pr
   if (what.includes("workbook")) files.push([`${made.base}.xlsx`, made.xlsx, "workbook"]);
   if (what.includes("csv")) files.push([`${made.base}.csv`, made.csv, "csv"]);
   if (what.includes("analysis")) files.push([`${cleanName(s.test.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(s.test, c.stats, date), "analysis"]);
+  // For PrismStatistics: the core's .pstat profile, the complete sheets only, no names and no question text. `app_version` names the
+  // release Check for updates knows this copy as.
+  if (what.includes("statistics")) {
+    const pstat = pstatProject(s.test, c.scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION));
+    if (pstat.sheets === 0 && what.length === 1) throw badRequest("No sheet is complete yet, so there is nothing to send for statistics: settle the flagged questions first.");
+    if (pstat.sheets > 0) files.push([`${cleanName(s.test.name, "Test")} - Results for statistics ${date}${PSTAT_EXTENSION}`, writePstatFile(pstat.project), "statistics"]);
+  }
   const written = [];
   for (const [wanted, data, kind] of files) {
     const name = await writeNewFile(ctx.library.exports, checkName(fitFileName(wanted)), data);

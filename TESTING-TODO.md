@@ -405,6 +405,29 @@ in the tests and in `assess sheets gate`.
   flag, and firm marks on clean scans were flagged 0 times in 100. That says the rules hold. It does not say how many answers a real
   class will have flagged; only the real-sheet corpus does.
 
+## Item statistics and the PrismStatistics link
+
+Built 15 November 2026 (development list items 2 and 3). The figures are held to R by the shared test set in `openstage-core`
+(`item-analysis-reference.test.ts`, which runs only when the core is beside this repository), and the `.pstat` file to the core's
+own reader and checker and to every case of the set (`pstat-export.test.ts`). What is left needs PrismStatistics on screen.
+
+- [ ] **Open a `.pstat` file from OpenAssess in PrismStatistics with a double-click.** Score a class (the drawn sheets of `sheets
+  gate` will do, or a real class), tick "A file for PrismStatistics" under Results and press Write the results, then double-click
+  the file in the Exports folder. Look for: the test's name as the title; one row per complete sheet; `sheet`, `version` (shown as
+  A, B), `q01` and on labelled Question 1 and on, and `total`; empty cells, not 0, where a question was dropped for one version; and
+  the note about sheets left out in the import report. Run Reliability on the question variables and Descriptives on `total`, and see
+  that the mean matches OpenAssess's and the SD is a little larger (PrismStatistics divides by n - 1, OpenAssess by n, and both say so).
+- [ ] **Read the labels as an instructor would.** The Score screen's table now heads the column "Point-biserial (total includes the
+  question)" and explains it in the sentence above the table; the workbook and the item analysis page use the same words, and the
+  standard deviation says it divides by the number of sheets. Is that clear next to PrismStatistics's "Corrected item-total r (total
+  leaves the item out)", or does it need a sentence on why the two differ?
+- [ ] **Run the C3 check before each release** (it is in `tools/release/README.md` now): from `C:\Dev\openstage-core`, `node
+  testsets/item-analysis/check/check_openassess.mjs --assess C:\Dev\openassess`. `npm test` runs it too when the core is beside this
+  repository, and says "skipped" when it is not.
+- [ ] **Decide what else the `.pstat` file should carry.** The list asks for the letters marked, the key, the item details (objective,
+  chapter, Bloom level) and bank question ids. The core's locked profile has none of them, so they are asked of the core in
+  `CORE-REQUESTS.md` (request 1) and not built here. Until then the scores sheet's letters are still in each version's own order.
+
 ## Check quality (the notes about writing and accessibility)
 
 Planned in `docs/design-plan.md` (phase 7, first set). Everything a program can check is in `quality-items`, `quality-bank`,

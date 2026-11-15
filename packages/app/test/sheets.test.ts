@@ -685,7 +685,17 @@ test("will not open scores against a test whose record has changed since, even u
       const done = await client.post<Json>(`/api/scoring/${sid}/export`, { date: "2026-11-04" });
       assert.equal(done.status, 200, done.text);
       const written = done.json["written"] as Array<{ name: string; kind: string }>;
-      assert.deepEqual(written.map((w) => w.kind).sort(), ["analysis", "csv", "workbook"]);
+      assert.deepEqual(written.map((w) => w.kind).sort(), ["analysis", "csv", "statistics", "workbook"]);
+      // The file for PrismStatistics: the core's profile, the release this copy is, and none of the scan's file names.
+      const pstatName = written.find((w) => w.kind === "statistics")!.name;
+      assert.match(pstatName, / - Results for statistics 2026-11-04\.pstat$/);
+      const pstat = unzipSync(new Uint8Array(readFileSync(join(home, "Exports", pstatName))));
+      const project = JSON.parse(new TextDecoder().decode(pstat.get("project.json")));
+      assert.equal(project.profile, "OpenAssess item results 1");
+      assert.match(project.app_version, /^OpenAssess /);
+      assert.deepEqual(project.operations, []);
+      const projectText = new TextDecoder().decode(pstat.get("project.json"));
+      for (const label of labels) assert.ok(!projectText.includes(label.replace(/\.png$/, "")), "no file label of a scan");
       const csv = readFileSync(join(home, "Exports", written.find((w) => w.kind === "csv")!.name), "utf8");
       assert.ok(csv.startsWith("﻿Sheet,Version,Name,"), "Excel opens it with the byte order mark, and the Name column is there for the instructor to fill");
       for (const label of labels) assert.ok(!csv.includes(label.replace(/\.png$/, "")));

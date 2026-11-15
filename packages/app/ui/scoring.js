@@ -722,9 +722,9 @@ export async function renderScoring(host, params, shell) {
   function renderSave() {
     clear(saveHost);
     const written = h("div", { attrs: { "aria-live": "polite" } });
-    const choices = { workbook: true, csv: true, analysis: true };
+    const choices = { workbook: true, csv: true, analysis: true, statistics: true };
     /**
-     * @param {"workbook" | "csv" | "analysis"} key
+     * @param {"workbook" | "csv" | "analysis" | "statistics"} key
      * @param {string} label
      * @param {string} hint
      */
@@ -770,6 +770,7 @@ export async function renderScoring(host, params, shell) {
       tick("workbook", "A workbook (Excel)", "Scores with an empty Name column for you to fill, the key of each version, the adjustments and the item figures."),
       tick("csv", "The scores as a CSV", "For a spreadsheet or a learning system's grade import."),
       tick("analysis", "A page of item analysis", "For printing or filing: each question with how many marked each answer."),
+      tick("statistics", "A file for PrismStatistics (.pstat)", "The points on each question of every complete sheet, by version, for deeper analysis; it opens in PrismStatistics with a double-click. No name and no question text go in."),
       h("div", { class: "editor-actions" }, write),
       written,
       h("h3", { text: "The class figures" }),
