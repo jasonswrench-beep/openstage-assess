@@ -10,7 +10,9 @@ The build plan runs nine phases across four releases. Phase 1 is done. Phase 2
 is the Word import engine, planned in `docs/word-import-plan.md`. Phase 3, the
 app, has its first version (`packages/app`): the import review and repair, the
 bank, export and print, as a local server shown in a browser or a Tauri window.
-`docs/design-plan.md` records what is intended and why: read it first. `docs/review-findings.md` is the list of known defects:
+`docs/design-plan.md` records what is intended and why: read it first. Work that needs a piece of the shared core (`openstage-core`,
+`C:\Dev\openstage-core`; read its `CORE-NOTES.md`) is built on the core as published and never copied or reimplemented here; what the
+core does not offer yet is asked for in `CORE-REQUESTS.md`. `docs/review-findings.md` is the list of known defects:
 read it before starting work, because it records what is already known to be
 broken and why two delivery fallbacks were deleted rather than repaired.
 

@@ -53,7 +53,7 @@ OpenAssess would then store references on a question (its `metadata`, a field th
 bank screen, and run the comparison when a new edition is chosen. It has a reader for .docx and PDF already, but the comparison and the
 reference format are the core's to define, so nothing is built until they exist.
 
-## 3. C8, the local AI runtime and assistant server (for list item 8)
+## 3. C8, the local AI runtime and assistant server (for list items 8 and 9)
 
 **Asked 15 November 2026. Core state: not started.**
 
@@ -64,6 +64,14 @@ bring-your-own keys, and one pattern for each tool's assistant server. OpenAsses
   feature still works without it;
 - the assistant server pattern (transport, tool descriptions, how a call is approved by the person);
 - where the settings page lives, so OpenAssess does not keep keys of its own.
+
+Item 9 (short-answer boxes photographed and scored against a rubric, as suggestions a person confirms) waits on the same piece: a
+suggestion needs the handwriting read, which plain code cannot do and a model can, and the list names handwriting recognition as the
+risk. What OpenAssess would add itself, once C8 says how a model is called: a new sheet layout with a box for each short answer (a new
+layout number, since the code strip of a printed sheet never changes meaning), the box cut out upright through the reader's own
+transform as the review's pictures are now, and the suggestion shown beside the rubric for a person to accept or change. No score from
+a model counts until a person confirms it, and a box the model cannot read is a flag, as a faint bubble is. Without a model the boxes
+would still be printed, cut out and scored by a person against the rubric; say if that is worth building before C8.
 
 The rules OpenAssess keeps whatever C8 says: a model never writes an answer key without a person choosing it ("never guess an answer
 key"), an AI suggestion is a finding a person accepts or dismisses, and nothing is sent off the machine unless the person turned that

@@ -446,6 +446,16 @@ they reach 30 attempts together.
   stop feeding the notes. The day of an edit and the day of a class are compared by date, so an edit on the day of a class counts as
   before it.
 
+## Development list items 7 to 9: waiting on the shared core
+
+Not built, on purpose: each needs a shared core piece that is not published yet, and the rule for this round is to ask the core
+rather than build a private copy. The requests are in `CORE-REQUESTS.md`.
+
+- [ ] **Item 7, links from questions to textbook passages, waits on C7 (the source ledger).** Request 2 says what OpenAssess needs.
+- [ ] **Item 8, AI drafting, import rescue and an assistant server, waits on C8.** Request 3.
+- [ ] **Item 9, short-answer boxes scored against a rubric, waits on C8 for reading handwriting.** Request 3 says what OpenAssess
+  would add itself. Decide whether boxes that a person scores by hand, with no reading at all, are worth building before C8.
+
 ## Results from a learning system (development list item 4)
 
 Built 15 November 2026: Answer sheets has a "Results from a learning system" panel, and the command line has `results <bank> <file>
