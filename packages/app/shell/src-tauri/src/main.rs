@@ -75,6 +75,31 @@ fn node_path(resources: &Path) -> Option<PathBuf> {
     cfg!(debug_assertions).then(|| PathBuf::from(name))
 }
 
+/// A release as words, "0.1.0 alpha 27" for v0.1.0-alpha.27, for the window's title.
+fn spoken(release: &str) -> String {
+    let plain = release.trim().trim_start_matches('v');
+    match plain.split_once('-') {
+        Some((version, stage)) => format!("{version} {}", stage.replace('.', " ")),
+        None => plain.to_string(),
+    }
+}
+
+/// Settings in the environment that make Node load other code than the app's (`NODE_OPTIONS` can name a file to run before the
+/// app, `NODE_PATH` a folder to load modules from). The window starts the server without them, so that the release runs only the
+/// Node and the app files the installer carries (a report of alpha 26 found `NODE_OPTIONS` still reached the server).
+/// `NODE_EXTRA_CA_CERTS` is kept: it only adds certificates, which a school's network may need for Check for updates.
+const NODE_SETTINGS_REMOVED: [&str; 2] = ["NODE_OPTIONS", "NODE_PATH"];
+
+/// The command that starts the app's server: this Node, the app's main file, and none of `NODE_SETTINGS_REMOVED`.
+fn server_command(node: &Path, script: &Path) -> Command {
+    let mut command = Command::new(node);
+    command.arg("--experimental-strip-types").arg("--no-warnings").arg(script).arg("--exit-when-stdin-closes");
+    for name in NODE_SETTINGS_REMOVED {
+        command.env_remove(name);
+    }
+    command
+}
+
 /// Whether Check for updates is turned off on this computer: `OPENSTAGE_UPDATE_CHECK=off`, or a file `update-check.txt` beside the
 /// program that says `off` (the way an IT department turns it off for the copies it installs). The server is then told so.
 fn update_check_off() -> bool {
@@ -254,6 +279,10 @@ fn main() {
                 builder.on_download(move |webview, event| on_download(webview, event, &chosen))
             };
             let window = builder.build()?;
+            // The title names the release this copy is, so it can be seen without asking (a report of alpha 26: no screen showed it).
+            if let Some(release) = RELEASE {
+                let _ = window.set_title(&format!("OpenAssess {}", spoken(release)));
+            }
             let resources = app.path().resource_dir().unwrap_or_else(|_| PathBuf::from("."));
 
             let Some(root) = app_root(&resources) else {
@@ -269,12 +298,7 @@ fn main() {
                 say(&window, "OpenAssess could not find the Node it carries. Reinstall it.");
                 return Ok(());
             };
-            let mut command = Command::new(node);
-            command
-                .arg("--experimental-strip-types")
-                .arg("--no-warnings")
-                .arg(&script)
-                .arg("--exit-when-stdin-closes");
+            let mut command = server_command(&node, &script);
             if let Some(release) = RELEASE {
                 command.arg("--release").arg(release);
             }
@@ -352,7 +376,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_release_page, may_show};
+    use super::{is_release_page, may_show, server_command, spoken, NODE_SETTINGS_REMOVED};
     use tauri::Url;
 
     fn url(text: &str) -> Url {
@@ -381,6 +405,28 @@ mod tests {
         ] {
             assert!(!may_show(&url(other), 47321), "{other}");
         }
+    }
+
+    #[test]
+    fn a_release_is_said_in_words_for_the_title() {
+        assert_eq!(spoken("v0.1.0-alpha.27"), "0.1.0 alpha 27");
+        assert_eq!(spoken("1.0.0"), "1.0.0");
+    }
+
+    #[test]
+    fn the_server_is_started_without_the_settings_that_make_node_run_other_code() {
+        let command = server_command(std::path::Path::new("node.exe"), std::path::Path::new("main.ts"));
+        let removed: Vec<String> = command
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(name, _)| name.to_string_lossy().to_uppercase())
+            .collect();
+        for name in NODE_SETTINGS_REMOVED {
+            assert!(removed.contains(&name.to_string()), "{name} is taken out");
+        }
+        assert!(!removed.iter().any(|n| n == "NODE_EXTRA_CA_CERTS"), "certificates a network needs are kept");
+        let args: Vec<String> = command.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["--experimental-strip-types", "--no-warnings", "main.ts", "--exit-when-stdin-closes"]);
     }
 
     #[test]

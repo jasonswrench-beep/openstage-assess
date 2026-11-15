@@ -125,6 +125,31 @@ describe("a bank whose questions held formatting OpenAssess does not allow", () 
   });
 });
 
+describe("a bank opened from a file with Open a bank file...", () => {
+  test("says what was cleaned out of it, in the answer and on the bank's screen", async () => {
+    await withApp(async (client) => {
+      const bank = Bank.createEmpty("Sent to me");
+      const id = bank.add(essay("First question here")).id;
+      const files = unzipSync(bank.toBytes());
+      const name = [...files.keys()].find((n) => n.includes(id)) as string;
+      const question = JSON.parse(Buffer.from(files.get(name) as Uint8Array).toString("utf8"));
+      question.stem = { format: "rich", content: '<p>First question here<script>alert(1)</script></p>' };
+      files.set(name, new Uint8Array(Buffer.from(JSON.stringify(question))));
+      const bytes = new Uint8Array(zipSync([...files].map(([n, data]) => ({ name: n, data }))));
+      const opened = await client.send<Json>("POST", "/api/banks/open?name=Sent.openassess", bytes);
+      assert.equal(opened.status, 200, opened.text);
+      assert.match(opened.json["formatting"], /^Some formatting in 1 question was removed/);
+      const shown = await client.get<Json>(`/api/banks/${encodeURIComponent(opened.json["name"])}`);
+      assert.match(shown.json["problems"].formatting, /^Some formatting in 1 question was removed/);
+      assert.doesNotMatch(shown.text, /<script|alert\(/);
+      // A clean bank brought in the same way says nothing.
+      const clean = await client.send<Json>("POST", "/api/banks/open?name=Clean.openassess", Bank.createEmpty("Clean").toBytes());
+      assert.equal(clean.json["formatting"], undefined);
+      assert.equal((await client.get<Json>(`/api/banks/${encodeURIComponent(clean.json["name"])}`)).json["problems"].formatting, null);
+    });
+  });
+});
+
 describe("a bank that lost a question file", () => {
   test("says how many it said and how many it found", async () => {
     await withApp(async (client) => {

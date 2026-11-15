@@ -4,12 +4,17 @@
  * hands back what was chosen, or null when it was closed without a choice.
  */
 
-import { clear, h } from "./dom.js";
+import { clear, h, keepTabInside } from "./dom.js";
 import { uiIcon } from "./ui-icons.js";
 
-/** @returns {HTMLDialogElement} */
+/** The one dialog, with Tab kept inside it (set up the first time it is used). @returns {HTMLDialogElement} */
 function dialog() {
-  return /** @type {HTMLDialogElement} */ (document.getElementById("dialog"));
+  const box = /** @type {HTMLDialogElement} */ (document.getElementById("dialog"));
+  if (box && !box.dataset["tabKept"]) {
+    box.dataset["tabKept"] = "1";
+    keepTabInside(box);
+  }
+  return box;
 }
 
 /**

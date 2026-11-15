@@ -156,8 +156,8 @@
   {
     "label": "S18 the bank's screen is not told what was cleaned",
     "file": "packages/app/src/banks.ts",
-    "from": "formatting: report?.cleaned ? cleanedMessage(report.cleaned) : null,",
-    "to": "formatting: null,",
+    "from": "      formatting: report?.cleaned\n        ? cleanedMessage(report.cleaned)\n",
+    "to": "      formatting: false\n        ? cleanedMessage(report.cleaned)\n",
     "tests": [
       "packages/app/test/problems.test.ts"
     ]

@@ -575,8 +575,8 @@
   {
     "label": "a busy rename is not tried again",
     "file": "packages/assess/src/bank/store.ts",
-    "from": "if (attempt >= RENAME_TRIES ||",
-    "to": "if (true ||",
+    "from": "if (!busy || io.now() - started >= RENAME_PATIENCE_MS) throw error;",
+    "to": "if (true) throw error;",
     "tests": [
       "packages/assess/test/small-defects.test.ts"
     ]

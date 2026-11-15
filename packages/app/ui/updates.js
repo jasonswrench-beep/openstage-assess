@@ -7,7 +7,7 @@
 
 import { post } from "./api.js";
 import { ask } from "./dialogs.js";
-import { h } from "./dom.js";
+import { focusBack, h } from "./dom.js";
 
 /** The path of OpenAssess's releases on GitHub. The server gives the whole address; this is only what it must be. */
 const RELEASES_PATH = "/jasonswrench-beep/openstage-assess/releases";
@@ -46,6 +46,7 @@ export function describeAnswer(answer) {
 
 /** Asks, and shows the answer. */
 export async function checkForUpdates() {
+  const from = document.activeElement;
   /** @type {any} */
   let answer;
   try {
@@ -62,4 +63,6 @@ export async function checkForUpdates() {
   }
   body.push(h("p", { class: "hint", text: "OpenAssess asks GitHub only when you choose this, sends nothing about you or your banks, and installs nothing." }));
   await ask({ title: "Check for updates", body, actions: [{ label: "Close", value: null, primary: true }] });
+  // Back where it was, or, when that is gone (the Help menu's item, hidden once the menu closed), to the Help menu.
+  focusBack(document, from);
 }

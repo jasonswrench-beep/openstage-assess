@@ -1,0 +1,47 @@
+[
+  {
+    "label": "A1 a busy file is given up on at once",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "if (!busy || io.now() - started >= RENAME_PATIENCE_MS) throw error;",
+    "to": "if (!busy || io.now() - started >= 0) throw error;",
+    "tests": [
+      "packages/assess/test/store-resilience.test.ts"
+    ]
+  },
+  {
+    "label": "A2 a refusal that is not about being busy is tried again",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "const busy = code === \"EPERM\" || code === \"EBUSY\" || code === \"EACCES\";",
+    "to": "const busy = code !== undefined;",
+    "tests": [
+      "packages/assess/test/store-resilience.test.ts"
+    ]
+  },
+  {
+    "label": "A3 the waits grow without end",
+    "file": "packages/assess/src/bank/store.ts",
+    "from": "return Math.min(250, 10 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 10);",
+    "to": "return 10 * 2 ** (attempt - 1) + Math.floor(Math.random() * 10);",
+    "tests": [
+      "packages/assess/test/store-resilience.test.ts"
+    ]
+  },
+  {
+    "label": "A4 Open a bank file says nothing of what was cleaned",
+    "file": "packages/app/src/banks.ts",
+    "from": "    return { name, skipped, formatting: cleanedMessage(cleaned) };",
+    "to": "    return { name, skipped };",
+    "tests": [
+      "packages/app/test/problems.test.ts"
+    ]
+  },
+  {
+    "label": "A5 the bank's screen forgets what was cleaned when it was brought in",
+    "file": "packages/app/src/banks.ts",
+    "from": "    this.cleanedWhenBroughtIn.set(name, cleaned);\n",
+    "to": "",
+    "tests": [
+      "packages/app/test/problems.test.ts"
+    ]
+  }
+]

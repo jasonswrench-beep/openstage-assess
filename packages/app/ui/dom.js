@@ -19,6 +19,52 @@
  * @param {...(Node | string | null | undefined | false)} children
  * @returns {any}
  */
+/**
+ * Keep Tab and Shift+Tab inside a dialog: from its last control Tab goes to its first, and from its first Shift+Tab goes to its last.
+ * A modal dialog lets the keyboard leave it for the page behind, which is inert, so the first Shift+Tab in a window went nowhere a
+ * person could see (a report of alpha 26).
+ * @param {HTMLElement} container
+ */
+export function keepTabInside(container) {
+  container.addEventListener("keydown", (/** @type {KeyboardEvent} */ event) => {
+    if (event.key !== "Tab") return;
+    const stops = /** @type {HTMLElement[]} */ ([...container.querySelectorAll("a[href], button, input, select, textarea, [tabindex]")]).filter(
+      (el) => !(/** @type {any} */ (el).disabled) && el.tabIndex >= 0 && !el.closest("[hidden]"),
+    );
+    if (stops.length === 0) return;
+    const first = /** @type {HTMLElement} */ (stops[0]);
+    const last = /** @type {HTMLElement} */ (stops[stops.length - 1]);
+    const at = container.ownerDocument.activeElement;
+    if (event.shiftKey && (at === first || !container.contains(at))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (at === last || !container.contains(at))) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
+/**
+ * Where the keyboard goes when a window opened from a menu closes and the place it came from is gone (a menu's item is hidden once
+ * the menu closes): the Help menu's button, else the page's main part.
+ * @param {Document} doc
+ * @param {Element | null} from
+ */
+export function focusBack(doc, from) {
+  const there = /** @type {HTMLElement | null} */ (from);
+  if (there && there !== doc.body && there.isConnected && !there.closest("[hidden]")) {
+    there.focus();
+    return;
+  }
+  const help = /** @type {HTMLElement | null} */ (doc.getElementById("menu-help-button"));
+  if (help) {
+    help.focus();
+    return;
+  }
+  /** @type {HTMLElement | null} */ (doc.getElementById("main"))?.focus();
+}
+
 export function h(tag, props, ...children) {
   const node = /** @type {any} */ (document.createElement(tag));
   if (props) {

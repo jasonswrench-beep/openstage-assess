@@ -339,7 +339,12 @@ export async function renderBank(host, params, shell) {
     try {
       const result = await post(`${base}/filing`, { folderId: wanted || null, questionIds: ids });
       await reload();
-      const said = [result.filed === 1 ? "1 question was" : `${result.filed} questions were`, wanted ? `put in ${where}` : "taken out of their folders"].join(" ");
+      // The Folders panel, when it is open, counts the questions in each folder: it is drawn again with the new counts (a report of
+      // alpha 24 and 26: it kept "0 questions" until Folders was chosen again). The keyboard stays on the filing list.
+      if (selected === null && detail.querySelector("section.folders")) drawFolders(undefined, true);
+      // The filing list is drawn again with the list, so the keyboard is put back on it rather than left on the page.
+      /** @type {HTMLElement | null} */ (filingHost.querySelector("select"))?.focus();
+      const said =[result.filed === 1 ? "1 question was" : `${result.filed} questions were`, wanted ? `put in ${where}` : "taken out of their folders"].join(" ");
       shell.notify(`${said}.${result.alreadyThere > 0 ? ` ${result.alreadyThere} ${result.alreadyThere === 1 ? "was" : "were"} already there.` : ""}`, "ok");
     } catch (error) {
       shell.notify(/** @type {Error} */ (error).message, "error");
@@ -475,8 +480,11 @@ export async function renderBank(host, params, shell) {
     drawFolders();
   }
 
-  /** @param {string} [focusKey] the control to put the focus on when the panel is drawn again ("name", or a control's data-key); the heading when none */
-  function drawFolders(focusKey) {
+  /**
+   * @param {string} [focusKey] the control to put the focus on when the panel is drawn again ("name", or a control's data-key); the heading when none
+   * @param {boolean} [keepFocus] leave the keyboard where it is: the panel is drawn again for something done outside it
+   */
+  function drawFolders(focusKey, keepFocus = false) {
     // Drawn after a request: a person may have started changing a question while it ran, and the panel would replace the change.
     if (editor?.isDirty()) return;
     hold();
@@ -533,6 +541,7 @@ export async function renderBank(host, params, shell) {
       panel.append(tree);
     }
     detail.append(panel);
+    if (keepFocus) return;
     const target = focusKey === "name" ? nameInput : focusKey ? panel.querySelector(`[data-key="${CSS.escape(focusKey)}"]`) : null;
     /** @type {HTMLElement} */ (target ?? heading).focus();
   }

@@ -10,7 +10,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
-import { Bank } from "../src/bank/store.ts";
+import { Bank, RENAME_PATIENCE_MS, renameWhenFree, renameWait } from "../src/bank/store.ts";
 import { unzipSync, zipSync, type ZipEntry } from "../src/container/zip.ts";
 import { createQuestion } from "../src/model/create.ts";
 
@@ -104,5 +104,58 @@ describe("the container refuses what it cannot vouch for", () => {
     good.writeUInt32LE(good.length * 4, central + 20);
 
     assert.throws(() => unzipSync(good), /damaged/);
+  });
+});
+
+/**
+ * A file the system has only just made can be held for a moment (something looks it over), and a rename onto it is refused meanwhile.
+ * In a test of alpha 26 the first save into a new bank failed so, because the tries gave up after a third of a second. They wait about
+ * three seconds now. Time here is a stand-in, so the test takes no time.
+ */
+describe("a save onto a file that is busy", () => {
+  const busy = (code: string) => Object.assign(new Error(`${code}: operation not permitted, rename`), { code });
+
+  /** A rename that is refused with `code` until `freeAt` milliseconds have passed on the stand-in clock. */
+  function stand(freeAt: number, code = "EPERM") {
+    let clock = 0;
+    let tries = 0;
+    const io = {
+      rename: async () => {
+        tries++;
+        if (clock < freeAt) throw busy(code);
+      },
+      wait: async (ms: number) => {
+        clock += ms;
+      },
+      now: () => clock,
+    };
+    return { io, tries: () => tries, clock: () => clock };
+  }
+
+  it("waits out a file held for a second and a half, which the old tries gave up on", async () => {
+    for (const code of ["EPERM", "EBUSY", "EACCES"]) {
+      const s = stand(1500, code);
+      await renameWhenFree("a.writing", "a.openassess", s.io);
+      assert.ok(s.clock() >= 1500 && s.clock() < RENAME_PATIENCE_MS + 300, `${code}: ${s.clock()} ms`);
+    }
+  });
+
+  it("gives up after about three seconds on a file that stays refused, with the system's own error", async () => {
+    const s = stand(Number.POSITIVE_INFINITY);
+    await assert.rejects(() => renameWhenFree("a.writing", "a.openassess", s.io), /EPERM/);
+    assert.ok(s.clock() >= RENAME_PATIENCE_MS && s.clock() < RENAME_PATIENCE_MS + 300, `${s.clock()} ms`);
+    assert.ok(s.tries() < 40, `${s.tries()} tries`);
+  });
+
+  it("does not wait at all for a refusal that is not about the file being busy", async () => {
+    const s = stand(Number.POSITIVE_INFINITY, "ENOSPC");
+    await assert.rejects(() => renameWhenFree("a.writing", "a.openassess", s.io), /ENOSPC/);
+    assert.equal(s.tries(), 1);
+    assert.equal(s.clock(), 0);
+  });
+
+  it("waits a little at first and never more than a quarter of a second between tries", () => {
+    assert.ok(renameWait(1) < 20);
+    for (let attempt = 1; attempt < 50; attempt++) assert.ok(renameWait(attempt) <= 260, `${attempt}`);
   });
 });

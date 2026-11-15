@@ -150,25 +150,42 @@ function isUsableFolderFile(value: unknown): value is FolderFile {
   return record["root"].every((node) => folder(node, 0)) && record["filters"].every(filter);
 }
 
-/** How many times a rename is tried before a refusal is believed. */
-const RENAME_TRIES = 8;
+/** How long a rename refused because the file is busy is tried again, in all, before the refusal is believed. */
+export const RENAME_PATIENCE_MS = 3000;
+
+/** The wait before try number `attempt` + 1: short at first, then up to a quarter of a second. */
+export function renameWait(attempt: number): number {
+  return Math.min(250, 10 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 10);
+}
 
 /**
- * A rename onto a file, tried again a few times when the system says the file is busy. On Windows a rename onto a file that another
- * handle has open, or that another rename is replacing at that moment, is refused (EPERM, EBUSY or EACCES) and is fine a few
- * milliseconds later: a reader found one ordinary edit of a bank fail this way when anything had the bank open, and twelve saves of
- * one bank at once, from two copies of the app, failed this way though each had a temporary file of its own. A refusal that is for
- * good (a read-only file, a folder in the way) is still refused, after about a third of a second.
+ * A rename onto a file, tried again when the system says the file is busy. On Windows a rename onto a file that another handle has
+ * open, or that another rename is replacing at that moment, is refused (EPERM, EBUSY or EACCES) and is fine a little later: a reader
+ * found one ordinary edit of a bank fail this way when anything had the bank open, and twelve saves of one bank at once, from two
+ * copies of the app, failed this way though each had a temporary file of its own. A file the system has only just made can be held
+ * for longer than that, while something looks it over: the first save into a new bank failed so in a test of alpha 26, after the
+ * third of a second the tries used to last. They last about three seconds now (`RENAME_PATIENCE_MS`). A refusal that is for good (a
+ * read-only file, a folder in the way) is still refused, after that.
  */
-async function renameWhenFree(from: string, to: string): Promise<void> {
+export async function renameWhenFree(
+  from: string,
+  to: string,
+  io: { rename: (from: string, to: string) => Promise<void>; wait: (ms: number) => Promise<void>; now: () => number } = {
+    rename,
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: () => Date.now(),
+  },
+): Promise<void> {
+  const started = io.now();
   for (let attempt = 1; ; attempt++) {
     try {
-      await rename(from, to);
+      await io.rename(from, to);
       return;
     } catch (error) {
       const code = (error as { code?: string } | null)?.code;
-      if (attempt >= RENAME_TRIES || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 10 * attempt + Math.floor(Math.random() * 10)));
+      const busy = code === "EPERM" || code === "EBUSY" || code === "EACCES";
+      if (!busy || io.now() - started >= RENAME_PATIENCE_MS) throw error;
+      await io.wait(renameWait(attempt));
     }
   }
 }

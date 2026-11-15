@@ -26,7 +26,9 @@ page of OpenAssess's releases on GitHub, which Help > Check for updates offers, 
 the person's own browser, never in the window (`is_release_page`). A link that asks for a new
 window never gets one. `cargo test` in `src-tauri` checks both rules.
 
-A release build runs only the Node and the app files the installer put beside it. A debug build
+A release build runs only the Node and the app files the installer put beside it, and starts Node
+without `NODE_OPTIONS` and `NODE_PATH`, which could make it load other code (`NODE_EXTRA_CA_CERTS`,
+which only adds certificates, is kept). A release build's title bar names the release. A debug build
 (`npm run dev`) may also use `OPENASSESS_APP_ROOT`, the repository it was built in, and the Node on
 the path; a release build never does, so nothing in the environment or in a folder above the
 program can choose the code it runs.

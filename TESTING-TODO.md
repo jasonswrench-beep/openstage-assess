@@ -529,6 +529,25 @@ build computer, and after in `assess-a1` beside it. Not tried by a person.
   to its own start page and its server's pages (`cargo test` checks the rule). If a screen stays blank or the Save dialog does not
   come, that rule is the first thing to look at.
 
+## Alpha 27 (2026-11-15, from a test of alpha 26)
+
+- [ ] **Install alpha 27 and make a new bank, then save a question into it straight away.** In a test copy of alpha 26 the first
+  save into a new bank failed in 10 of 11 runs (Windows refused the rename for longer than the third of a second the tries lasted).
+  The tries now last about three seconds; the tests show it waits out a file held for a second and a half. A real installed copy
+  has not been tried.
+- [ ] **Open a bank file someone sent (File, Open a bank file...).** If it held a script or the like, the message and the bank's
+  screen should say how many questions were cleaned. Tested with a made-up bank; a real one has not been opened.
+- [ ] **Look at the title bar of the installed window.** It should say OpenAssess 0.1.0 alpha 27.
+- [ ] **Help, Keyboard keys and Help, Check for updates with the keyboard.** When each closes, the keyboard should be on the Help
+  menu, and Tab and Shift+Tab should stay inside the window while it is open. Checked in a headless browser, not with a screen
+  reader.
+- [ ] **File questions from the list while the Folders panel is open.** The counts should change at once, and the keyboard should
+  stay on the filing list. Checked in a headless browser.
+- [ ] **Decide about the key cookie.** A browser sends a cookie to every port of 127.0.0.1, so another program listening on this
+  computer could be sent the window's key if the window asked it for a page (the window refuses to go there, but a test of alpha
+  26 saw two such requests). The security review listed the cookie design as one not to change; keeping the key out of cookies
+  would be a larger change.
+
 ## The app and its window
 
 Everything below was run by tests (`npm test` in `packages/app`, 96 of them, through a real HTTP client) and looked at in

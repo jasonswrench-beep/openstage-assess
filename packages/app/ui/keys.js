@@ -4,6 +4,7 @@
  * follows OpenStage Author's window of the same name (see NOTICE): a table for each group, each named by its heading.
  */
 
+import { focusBack, keepTabInside } from "./dom.js";
 import { el } from "./menubar.js";
 
 /** @typedef {{ keys: string, does: string }} KeyRow */
@@ -118,8 +119,10 @@ export function openKeys(doc) {
   dialog.addEventListener("close", () => {
     dialog.remove();
     openNow = null;
-    if (from && from !== doc.body && from.isConnected && !from.closest("[hidden]")) from.focus();
+    // Back where it was, or, when that is gone (the Help menu's item, hidden once the menu closed), to the Help menu.
+    focusBack(doc, from);
   });
+  keepTabInside(dialog);
   doc.body.append(dialog);
   openNow = dialog;
   dialog.showModal();

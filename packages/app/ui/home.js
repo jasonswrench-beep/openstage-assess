@@ -46,7 +46,8 @@ export async function renderHome(host, _params, shell) {
     if (!file) return;
     try {
       const adopted = await api("POST", `banks/open?name=${encodeURIComponent(file.name)}`, file);
-      shell.notify(`Opened as "${adopted.name}".`, "ok");
+      // What was cleaned out of it is said here and on the bank's screen.
+      shell.notify(typeof adopted.formatting === "string" ? `Opened as "${adopted.name}". ${adopted.formatting}` : `Opened as "${adopted.name}".`, "ok");
       shell.go(`#/bank/${encodeURIComponent(adopted.name)}`);
     } catch (error) {
       shell.notify(/** @type {Error} */ (error).message, "error");

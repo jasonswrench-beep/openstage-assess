@@ -59,6 +59,12 @@ export class BankStore {
   readonly library: Library;
   private readonly held = new Map<string, Held>();
   /**
+   * What was cleaned out of a bank brought in with Open a bank file..., by the bank's name. The bank is saved clean as it is brought
+   * in, so reading it again finds nothing to say; this keeps the note for the bank's screen while the app runs (a report of
+   * alpha 26: the note was shown for a bank put in the folder by hand, and never for one opened from a file).
+   */
+  private readonly cleanedWhenBroughtIn = new Map<string, { questions: number }>();
+  /**
    * The end of the last piece of work queued for each bank. It is kept apart from `held` on purpose: a bank that is read
    * again because its file changed gets a new entry there, and a queue that went with it would split in two.
    */
@@ -151,7 +157,11 @@ export class BankStore {
       // Not the questions that were read and only had the wrong file name: they are in the list.
       unreadable: (report?.invalid ?? []).filter((entry) => !entry.loaded).map((entry) => ({ id: entry.id, message: entry.issues[0]?.message ?? "It could not be read." })),
       count: report?.countMismatch ? countMismatchMessage(report.countMismatch) : null,
-      formatting: report?.cleaned ? cleanedMessage(report.cleaned) : null,
+      formatting: report?.cleaned
+        ? cleanedMessage(report.cleaned)
+        : this.cleanedWhenBroughtIn.has(name)
+          ? cleanedMessage(this.cleanedWhenBroughtIn.get(name) as { questions: number })
+          : null,
       pictures:
         missing.length === 0
           ? null
@@ -204,7 +214,7 @@ export class BankStore {
   }
 
   /** A bank file from somewhere else, kept in the library under a new name. It is read first, and refused if it is not a bank. */
-  async adopt(bytes: Uint8Array, fileName: string): Promise<{ name: string; skipped: number }> {
+  async adopt(bytes: Uint8Array, fileName: string): Promise<{ name: string; skipped: number; formatting?: string }> {
     let opened;
     try {
       opened = Bank.fromBytes(bytes);
@@ -213,7 +223,11 @@ export class BankStore {
     }
     const wanted = cleanName(fileName.replace(/\.openassess$/i, "") || opened.bank.manifest.title);
     const name = await placeMade(this.library.banks, wanted, BANK_EXTENSION, (temp) => this.saveBank(opened.bank, temp), this.files);
-    return { name, skipped: opened.report.invalid.filter((entry) => !entry.loaded).length };
+    const skipped = opened.report.invalid.filter((entry) => !entry.loaded).length;
+    const cleaned = opened.report.cleaned;
+    if (!cleaned) return { name, skipped };
+    this.cleanedWhenBroughtIn.set(name, cleaned);
+    return { name, skipped, formatting: cleanedMessage(cleaned) };
   }
 
   async retitle(name: string, title: string): Promise<void> {
