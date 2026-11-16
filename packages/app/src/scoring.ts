@@ -19,6 +19,7 @@ import {
   itemStatistics,
   openScans,
   orient,
+  pageBoxes,
   placeLetter,
   richTextToPlain,
   scoreSheets,
@@ -189,9 +190,14 @@ function reviewRects(s: ScoringSession, reading: SheetReading): Array<{ key: str
   const out: Array<{ key: string; rect: sheetGeometry.Rect }> = [];
   for (const q of reading.questions) if (q.status === "flagged" || q.status === "blank") out.push({ key: `q${q.number}`, rect: q.rect });
   for (const f of reading.flags) if (f.kind === "version") out.push({ key: "version", rect: f.rect });
+  // A written-answer page: every box is cut out, since every one is scored by a person. The page is let go once they are.
+  if (reading.written) {
+    const planned = s.reader.planFor(reading.code);
+    if (planned.ok) for (const b of pageBoxes(planned.plan, reading.code.page)) out.push({ key: `q${b.question}`, rect: b.rect });
+  }
   // A page whose version is not settled has no decisions yet; once a person settles the version, any row may need looking at.
   if (reading.version === undefined) {
-    const planned = s.reader.plan(reading.code.paper, reading.code.large);
+    const planned = s.reader.planFor(reading.code);
     if (planned.ok) {
       const layout = sheetGeometry.layoutFor(reading.code.paper, planned.plan.style);
       for (const n of Object.keys(reading.fills).map(Number)) out.push({ key: `q${n}`, rect: sheetGeometry.slotRow(layout, (n - 1) % layout.questionsPerPage) });
@@ -306,7 +312,7 @@ function placesOf(s: ScoringSession, c: Computed, sheet: BatchSheet, version: nu
   const printed = printedAs(c, sheet);
   const label = letterOf(version) as VersionLabel | undefined;
   if (!printed || !label) return { labels: [], multiple: false };
-  const planned = s.reader.plan(printed.code.paper, printed.code.large);
+  const planned = s.reader.planFor(printed.code);
   if (!planned.ok) return { labels: [], multiple: false };
   const use = planned.plan.uses[label]?.[number - 1];
   const drawn = planned.plan.drawn[number - 1];
@@ -319,7 +325,7 @@ function pageOf(c: Computed, sheet: BatchSheet, number: number): { entry: number
   for (const p of sheet.pages) {
     if (!p) continue;
     const r = (c.entries[p.entry] as BatchEntry).result;
-    if (r.ok && r.fills[number]) return { entry: p.entry, reading: r };
+    if (r.ok && (r.fills[number] || r.written?.includes(number))) return { entry: p.entry, reading: r };
   }
   return undefined;
 }
@@ -338,6 +344,23 @@ export interface QueueItem {
   multiple: boolean;
   stem?: string;
   version?: string;
+  /**
+   * For a short answer written in its box, what the person scores it against: what it is worth on this sheet, and its accepted answers
+   * (the rubric of a short answer). The points given are the person's; nothing is read from the writing.
+   */
+  written?: { worth: number; accepted: string[]; caseSensitive: boolean };
+}
+
+/** The rubric of a short answer on a sheet, when the question at that place on its version is written in a box. */
+function writtenOf(s: ScoringSession, c: Computed, index: number, number: number): QueueItem["written"] {
+  const settled = c.settled[index];
+  const score = c.scores[index];
+  const label = letterOf(settled?.version) as VersionLabel | undefined;
+  if (!settled || !score || !label) return undefined;
+  const q = versionQuestions(s.test, label)[number - 1];
+  if (!q || q.type !== "shortAnswer") return undefined;
+  const body = q.body as { accepted: string[]; caseSensitive: boolean };
+  return { worth: score.questions.find((x) => x.number === number)?.possible ?? 0, accepted: [...body.accepted], caseSensitive: body.caseSensitive };
 }
 
 export function queueOf(s: ScoringSession, c: Computed): QueueItem[] {
@@ -379,6 +402,7 @@ export function queueOf(s: ScoringSession, c: Computed): QueueItem[] {
         multiple: places.multiple,
         stem: stemOf(s, settled.version, number),
         version: letterOf(settled.version) as string,
+        ...(where?.reading.written?.includes(number) ? { written: writtenOf(s, c, i, number) } : {}),
       });
     }
   });
@@ -468,7 +492,7 @@ export function sheetView(s: ScoringSession, number: number): Record<string, unk
   const score = c.scores[at] as SheetScore;
   const settled = c.settled[at] as SettledSheet;
   const sheet = c.batch.sheets[at] as BatchSheet;
-  const decided = new Set(s.decisions.filter((d) => d.sheet === number && d.kind === "answer").map((d) => (d as { question: number }).question));
+  const decided = new Set(s.decisions.filter((d) => d.sheet === number && (d.kind === "answer" || d.kind === "written")).map((d) => (d as { question: number }).question));
   return {
     number,
     version: letterOf(score.version) ?? null,
@@ -497,6 +521,9 @@ export function sheetView(s: ScoringSession, number: number): Record<string, unk
           earned: q.earned,
           possible: q.possible,
           marked: answer?.kind === "marked" ? answer.places.map(name).join("") : answer?.kind === "blank" ? "" : null,
+          // A written answer: the points a person gave, and the rubric, for changing them.
+          ...(answer?.kind === "written" ? { awarded: answer.awarded, of: answer.of } : {}),
+          ...(where?.reading.written?.includes(q.number) ? { written: writtenOf(s, c, at, q.number) } : {}),
           by: answer && answer.kind !== "unsettled" ? answer.by : null,
           decided: decided.has(q.number),
           why: q.why ?? (answer?.kind === "unsettled" ? answer.why : null),

@@ -9,13 +9,19 @@
  * shuffled. The plan therefore says, for each version, what each place holds, and for the sheet itself the most bubbles any version
  * needs in each place. A place is labelled T and F only when it is a true or false question in every version; otherwise its bubbles
  * are lettered, and the sheet says that for a true or false question A is True and B is False.
+ *
+ * When the person asks for boxes (`boxes`), a short answer question is written in a box of its own on the written-answer pages that
+ * follow the bubble pages: a place where any version has a short answer gets a box, numbered as the booklet numbers it, and a person
+ * scores what is written there against the question's accepted answers. Without boxes a short answer is answered in the booklet, as it
+ * always was, and nothing about the bubble pages changes either way.
  */
 
-import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
+import { isChoice, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import { versionQuestions, type TestRecord, type VersionLabel } from "../model/test.ts";
-import { MAX_SHEET_PAGES, layoutFor, pagesNeeded, placeName, type PaperName, type SheetStyle } from "./geometry.ts";
+import { boxPagesNeeded, MAX_SHEET_PAGES, layoutFor, pagesNeeded, placeName, type PaperName, type SheetStyle } from "./geometry.ts";
 
-export type SlotKind = "choice" | "multiple" | "trueFalse" | "none";
+/** `written`: a short answer, written in a box on the written-answer pages and scored by a person. */
+export type SlotKind = "choice" | "multiple" | "trueFalse" | "written" | "none";
 
 export interface SlotUse {
   kind: SlotKind;
@@ -36,8 +42,12 @@ export interface SheetPlan {
   paper: PaperName;
   style: SheetStyle;
   large: boolean;
-  /** How many pages of answer sheet the test takes. */
+  /** How many pages of answer sheet the test takes: the bubble pages, then the written-answer pages. */
   pages: number;
+  /** How many of them are bubble pages; the rest are written-answer pages. */
+  bubblePages: number;
+  /** The question numbers (from 1) that have a box on the written-answer pages, in order. Empty without boxes. */
+  boxes: number[];
   /** For each version, what each numbered place holds. */
   uses: Partial<Record<VersionLabel, SlotUse[]>>;
   /** What the shared sheet prints in each numbered place. */
@@ -53,9 +63,10 @@ export type PlanResult = { ok: true; plan: SheetPlan } | { ok: false; reason: st
 const MOST_PLACES = 8;
 const MOST_PLACES_LARGE = 5;
 
-/** What one question needs of a sheet. */
-export function useOf(question: Question): SlotUse {
+/** What one question needs of a sheet. With `boxes`, a short answer is written in a box. */
+export function useOf(question: Question, boxes = false): SlotUse {
   const base = { questionId: question.id };
+  if (boxes && isShortAnswer(question)) return { ...base, kind: "written", places: 0 };
   if (isTrueFalse(question)) return { ...base, kind: "trueFalse", places: 2 };
   if (isChoice(question) || isMultipleResponse(question)) {
     const count = question.body.options.length;
@@ -70,6 +81,8 @@ export interface PlanOptions {
   paper?: PaperName;
   /** Large print: 7 mm bubbles, five to a question. */
   large?: boolean;
+  /** A box on the written-answer pages for each short answer, scored by a person. */
+  boxes?: boolean;
 }
 
 export function planSheet(record: TestRecord, options: PlanOptions = {}): PlanResult {
@@ -78,7 +91,7 @@ export function planSheet(record: TestRecord, options: PlanOptions = {}): PlanRe
   const slots = record.questions.length;
 
   const uses: SheetPlan["uses"] = {};
-  for (const version of record.versions) uses[version.label] = versionQuestions(record, version.label).map(useOf);
+  for (const version of record.versions) uses[version.label] = versionQuestions(record, version.label).map((q) => useOf(q, options.boxes === true));
   const all = Object.values(uses) as SlotUse[][];
 
   // A loop and not `Math.max(m, ...)`: a test record of 130,000 questions is more arguments than a call can take, and is to be refused below
@@ -89,8 +102,13 @@ export function planSheet(record: TestRecord, options: PlanOptions = {}): PlanRe
   if (large && most > MOST_PLACES_LARGE) return { ok: false, reason: `a large print sheet has ${MOST_PLACES_LARGE} bubbles to a question, and this test has a question of ${most} answers` };
 
   const layout = layoutFor(paper, style);
-  const pages = pagesNeeded(layout, slots);
-  if (pages > MAX_SHEET_PAGES) return { ok: false, reason: `this test has ${slots} questions, which is ${pages} pages of answer sheet, and a test has at most ${MAX_SHEET_PAGES}` };
+  const bubblePages = pagesNeeded(layout, slots);
+  // A place gets a box when any version holds a short answer there: a student of that version writes in it, and one of another version,
+  // whose question there has bubbles, leaves it.
+  const boxes: number[] = [];
+  for (let i = 0; i < slots; i++) if (all.some((list) => list[i]?.kind === "written")) boxes.push(i + 1);
+  const pages = bubblePages + boxPagesNeeded(paper, boxes.length);
+  if (pages > MAX_SHEET_PAGES) return { ok: false, reason: `this test has ${slots} questions${boxes.length ? ` and ${boxes.length} written-answer boxes` : ""}, which is ${pages} pages of answer sheet, and a test has at most ${MAX_SHEET_PAGES}` };
 
   let lettersForTrueFalse = false;
   const drawn: DrawnSlot[] = [];
@@ -111,5 +129,6 @@ export function planSheet(record: TestRecord, options: PlanOptions = {}): PlanRe
       notes.push(`${where} ${i + 1} has no bubbles: ${u.why}. It keeps its number, and the sheet says to answer it in the booklet.`);
     });
   }
-  return { ok: true, plan: { paper, style, large, pages, uses, drawn, lettersForTrueFalse, notes } };
+  if (boxes.length > 0) notes.push(`${boxes.length === 1 ? "One short answer is" : `${boxes.length} short answers are`} written in a box on the written-answer page${pages - bubblePages === 1 ? "" : "s"} (page${pages - bubblePages === 1 ? "" : "s"} ${bubblePages + 1}${pages - bubblePages > 1 ? ` to ${pages}` : ""}), and scored by a person at review.`);
+  return { ok: true, plan: { paper, style, large, pages, bubblePages, boxes, uses, drawn, lettersForTrueFalse, notes } };
 }

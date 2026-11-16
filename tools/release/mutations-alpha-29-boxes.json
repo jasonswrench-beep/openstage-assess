@@ -1,0 +1,165 @@
+[
+  {
+    "label": "X1 points for a box are taken for any unsettled question, a flagged row of bubbles among them",
+    "file": "packages/assess/src/sheets/score.ts",
+    "from": "if (!boxed.has(d.question)) continue;",
+    "to": "if (answers[d.question]?.kind !== \"unsettled\" && answers[d.question]?.kind !== \"written\" && answers[d.question]?.kind !== \"blank\") continue;",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X2 points for a box are taken for a question with no box at all",
+    "file": "packages/assess/src/sheets/score.ts",
+    "from": "if (!boxed.has(d.question)) continue;",
+    "to": "if (false) continue;",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X3 a box not yet scored counts as scored and earns nothing, so the sheet reads complete",
+    "file": "packages/assess/src/sheets/score.ts",
+    "from": "if (answer.kind !== \"written\") return { ...base, outcome: \"unsettled\", earned: 0, possible: round(points), why: \"What is written in this box has not been scored yet.\" };",
+    "to": "if (answer.kind !== \"written\") return { ...base, outcome: \"wrong\", earned: 0, possible: round(points) };",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X4 points out of an older worth are not scaled, and can go above the question's worth now",
+    "file": "packages/assess/src/sheets/score.ts",
+    "from": "const share = answer.of > 0 ? Math.min(1, Math.max(0, answer.awarded / answer.of)) : 0;\n    const earned = round(points * share);",
+    "to": "const share = answer.of > 0 ? Math.max(0, answer.awarded / answer.of) : 0;\n    const earned = round(answer.awarded);",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X5 a box on a version whose question there has bubbles is made to wait for a person",
+    "file": "packages/assess/src/sheets/score.ts",
+    "from": "if (use?.kind !== \"written\") continue;",
+    "to": "if (use === undefined) continue;",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X6 a written-answer page is read against the plan without boxes",
+    "file": "packages/assess/src/sheets/read.ts",
+    "from": "return boxed.ok && boxed.plan.boxes.length > 0 && boxed.plan.pages === code.pages ? boxed : plain;",
+    "to": "return plain;",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X7 a page whose kind does not fit its place is read anyway",
+    "file": "packages/assess/src/sheets/read.ts",
+    "from": "if (boxPage !== code.page > plan.bubblePages) {",
+    "to": "if (false) {",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X8 a blurred written-answer page is passed for a person to score",
+    "file": "packages/assess/src/sheets/read.ts",
+    "from": "if (sigma > MAX_BLUR_MM) return refuse(\"quality\", `This picture is blurred: its edges are soft over about ${(sigma * 2.563).toFixed(1)} mm where a sharp scan is under 0.3.",
+    "to": "if (sigma > 99) return refuse(\"quality\", `This picture is blurred: its edges are soft over about ${(sigma * 2.563).toFixed(1)} mm where a sharp scan is under 0.3.",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X9 a place gets a box only when the first version has a short answer there",
+    "file": "packages/assess/src/sheets/plan.ts",
+    "from": "for (let i = 0; i < slots; i++) if (all.some((list) => list[i]?.kind === \"written\")) boxes.push(i + 1);",
+    "to": "for (let i = 0; i < slots; i++) if (all[0]?.[i]?.kind === \"written\") boxes.push(i + 1);",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X10 the written-answer pages are not counted in the sheet's pages",
+    "file": "packages/assess/src/sheets/plan.ts",
+    "from": "const pages = bubblePages + boxPagesNeeded(paper, boxes.length);",
+    "to": "const pages = bubblePages + (boxes.length > 0 ? 1 : 0);",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X11 the boxes of the second written-answer page repeat the first page's",
+    "file": "packages/assess/src/sheets/print.ts",
+    "from": "const first = (pageNumber - plan.bubblePages - 1) * per;",
+    "to": "const first = 0;",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X12 a page of boxes is drawn with the strip of a bubble page",
+    "file": "packages/assess/src/sheets/code.ts",
+    "from": "export const isBoxPage = (code: Pick<SheetCode, \"layout\">): boolean => code.layout === LAYOUT_BOXES;",
+    "to": "export const isBoxPage = (code: Pick<SheetCode, \"layout\">): boolean => code.layout === LAYOUT_BOXES && false;",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts",
+      "packages/assess/test/sheet-code.test.ts"
+    ]
+  },
+  {
+    "label": "X13 the scores file takes points above a question's worth",
+    "file": "packages/assess/src/sheets/scores-file.ts",
+    "from": "awarded >= 0 && awarded <= of))",
+    "to": "awarded >= 0))",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X14 the scores file takes a list of boxes on a page of bubbles",
+    "file": "packages/assess/src/sheets/scores-file.ts",
+    "from": "if ((r[\"written\"] !== undefined) !== isBoxPage(c)) return",
+    "to": "if (false) return",
+    "tests": [
+      "packages/assess/test/sheet-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X15 the app takes points above the worth of the question",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "raw >= 0 && raw <= worth) awarded",
+    "to": "raw >= 0) awarded",
+    "tests": [
+      "packages/app/test/written-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X16 the app takes points for a question with no box on the sheet",
+    "file": "packages/app/src/scoring-routes.ts",
+    "from": "answer.kind === \"blank\") || !writtenOn(s, at, question)) throw",
+    "to": "answer.kind === \"blank\") || false) throw",
+    "tests": [
+      "packages/app/test/written-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X17 the app's review queue gives a box no rubric",
+    "file": "packages/app/src/scoring.ts",
+    "from": "        ...(where?.reading.written?.includes(number) ? { written: writtenOf(s, c, i, number) } : {}),",
+    "to": "",
+    "tests": [
+      "packages/app/test/written-boxes.test.ts"
+    ]
+  },
+  {
+    "label": "X18 the app cuts out no box of a written-answer page",
+    "file": "packages/app/src/scoring.ts",
+    "from": "  if (reading.written) {",
+    "to": "  if (reading.written && false) {",
+    "tests": [
+      "packages/app/test/written-boxes.test.ts"
+    ]
+  }
+]

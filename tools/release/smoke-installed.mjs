@@ -678,6 +678,20 @@ try {
   const scoring28 = await text("/scoring.js");
   check("the Score screen names the correlation with the total that includes the question", scoring28.includes("Point-biserial (total includes the question)"));
 
+  // New in alpha 29: boxes for short answers on a page after the bubbles, scored by a person.
+  const boxesBank = Bank.createEmpty("Boxes");
+  const boxChoice = boxesBank.add(createQuestion({ type: "multipleChoice", stem: plainToRich("What is 2 + 2?"), body: { shuffle: false, options: ["3", "4", "5"].map((t, i) => ({ id: `o${i}`, content: plainToRich(t), correct: i === 1 })) } }));
+  const boxShort = boxesBank.add(createQuestion({ type: "shortAnswer", stem: plainToRich("Name the capital of France."), body: { caseSensitive: false, accepted: ["Paris"] } }));
+  writeFileSync(join(home, "Banks", "Boxes.openassess"), boxesBank.toBytes());
+  const boxTest = await (await send("POST", "/api/sheets/Boxes/tests", { name: "Box test", questionIds: [boxChoice.id, boxShort.id], versions: 1 })).json();
+  const boxPrint = async (boxes) => (await send("POST", `/api/sheets/Boxes/tests/${boxTest.test?.id}/print`, { boxes, booklets: false, keys: false })).json();
+  const plainSheet = await boxPrint(false);
+  const boxedSheet = await boxPrint(true);
+  check("a test with a short answer says so, and its sheet has a written-answer page only when boxes are asked for", boxTest.test?.shortAnswers === 1 && plainSheet.written?.[0]?.pages === 1 && boxedSheet.written?.[0]?.pages === 2 && (boxedSheet.notes ?? []).some((n) => /written-answer page \(page 2\)/.test(n)), JSON.stringify([boxTest.test?.shortAnswers, plainSheet.written?.[0]?.pages, boxedSheet.written?.[0]?.pages]));
+  check("the boxed answer sheet is a PDF of two pages", Boolean(boxedSheet.written?.[0]) && /\/Count 2\b/.test(Buffer.from(readFileSync(boxedSheet.written[0].path)).toString("latin1")), boxedSheet.written?.[0]?.name ?? "none");
+  const sheetsJs = await text("/sheets.js");
+  check("the print panel offers boxes for short answers, and the Score screen scores a box against its accepted answers", sheetsJs.includes("Boxes for short answers") && scoring28.includes("Full marks") && scoring28.includes("Accepted answers"));
+
   check("the library folders were made", ["Banks", "Exports", "Deleted"].every((d) => existsSync(join(home, d))), readdirSync(home).join(", "));
 } catch (error) {
   results.push("FAIL " + (error instanceof Error ? error.message : String(error)));

@@ -9,11 +9,16 @@
  * bubbles by its printed outline and measure it; and apply the rules in decide.ts.
  *
  * A reading holds the fill of every bubble, so a different answer key or a settled version never needs another scan.
+ *
+ * A written-answer page (layout 3, plan.ts) is checked the same way up to the grid (corner marks, code strip, test, layout, size and
+ * sharpness) and has no grid to measure: its reading lists the questions whose boxes it holds, for each to be cut out and scored by a
+ * person. Nothing written in a box is read.
  */
 
 import { planSheet, type SheetPlan } from "./plan.ts";
-import { versionBubbles, cornerMarks, codeCells, layoutFor, pagesNeeded, slotBubbles, slotRow, PAPER_MM, MARK_SIZE, VERSION_LABELS, type PaperName, type Rect, type SheetLayout } from "./geometry.ts";
-import { decodeCode, styleOf, type SheetCode } from "./code.ts";
+import { versionBubbles, cornerMarks, codeCells, layoutFor, slotBubbles, slotRow, PAPER_MM, MARK_SIZE, VERSION_LABELS, type PaperName, type Rect, type SheetLayout } from "./geometry.ts";
+import { decodeCode, isBoxPage, styleOf, type SheetCode } from "./code.ts";
+import { pageBoxes } from "./print.ts";
 import { decideQuestion, decideVersion, LINES, type FillLines, type FlagKind, type QuestionDecision, type QuestionStatus } from "./decide.ts";
 import { applyHomography, homographyFrom, type Homography, type Point } from "./homography.ts";
 import { sample, type GreyImage } from "./image.ts";
@@ -71,6 +76,8 @@ export interface SheetReading {
   quality: { dpi: number; markSidePx: number; ring: number; ringExpected: number; blurMm: number; shiftMedianMm: number; shiftMaxMm: number; blankLevel: number; quarterTurns: number; bilevel: boolean };
   /** Things to tell the instructor about the picture, which are not flags on a question. */
   notes: string[];
+  /** On a written-answer page, the questions (from 1) whose boxes it holds, for a person to score. Absent on a page of bubbles. */
+  written?: number[];
 }
 
 export type SheetResult = SheetReading | Refusal;
@@ -129,14 +136,25 @@ export class SheetReader {
     this.record = record;
   }
 
-  plan(paper: PaperName, large: boolean): ReturnType<typeof planSheet> {
-    const key = `${paper}:${large}`;
+  plan(paper: PaperName, large: boolean, boxes = false): ReturnType<typeof planSheet> {
+    const key = `${paper}:${large}:${boxes}`;
     let plan = this.plans.get(key);
     if (!plan) {
-      plan = planSheet(this.record, { paper, large });
+      plan = planSheet(this.record, { paper, large, boxes });
       this.plans.set(key, plan);
     }
     return plan;
+  }
+
+  /**
+   * The plan a page was printed from, told by its own code: with boxes when its sheet has more pages than the bubbles take. Without boxes
+   * and with them are told apart by the count of pages, which differ by the written-answer pages, so one cannot be read as the other.
+   */
+  planFor(code: Pick<SheetCode, "paper" | "large" | "pages" | "layout">): ReturnType<typeof planSheet> {
+    const plain = this.plan(code.paper, code.large);
+    if (!isBoxPage(code) && (!plain.ok || plain.plan.pages === code.pages)) return plain;
+    const boxed = this.plan(code.paper, code.large, true);
+    return boxed.ok && boxed.plan.boxes.length > 0 && boxed.plan.pages === code.pages ? boxed : plain;
   }
 
   /** One page of picture, read. */
@@ -180,16 +198,21 @@ export class SheetReader {
       const hex = (v: number): string => v.toString(16).toUpperCase().padStart(5, "0");
       return refuse("test", `This sheet is from another test: its code says ${hex(code.test)} and the test being scored is ${hex(record.fingerprint)}. Open the scans for this test, or choose the test this sheet belongs to.`);
     }
-    const planned = this.plan(paper, code.large);
+    const planned = this.planFor(code);
     if (!planned.ok) return refuse("test", `The sheet for this test cannot be planned as it was printed: ${planned.reason}.`);
     const plan: SheetPlan = planned.plan;
+    const boxPage = isBoxPage(code);
     const style = styleOf(code);
-    if (style !== plan.style) {
+    if (!boxPage && style !== plan.style) {
       return refuse("test", `This sheet was printed in a ${style} layout, and the test as it stands now would print a ${plan.style} one. The test was changed after the sheets were printed, so they cannot be read against it.`);
     }
     const layout = layoutFor(paper, plan.style);
-    if (code.pages !== pagesNeeded(layout, plan.drawn.length)) {
-      return refuse("test", `This sheet says the test has ${code.pages} page${code.pages === 1 ? "" : "s"} of answer sheet, and the test as it stands now needs ${pagesNeeded(layout, plan.drawn.length)}. The test was changed after the sheets were printed.`);
+    if (code.pages !== plan.pages) {
+      return refuse("test", `This sheet says the test has ${code.pages} page${code.pages === 1 ? "" : "s"} of answer sheet, and the test as it stands now needs ${plan.pages}${plan.boxes.length === 0 ? "" : ` with boxes for its short answers (${plan.bubblePages} without)`}. The test was changed after the sheets were printed.`);
+    }
+    // A page's kind and its place agree: a written-answer page after the bubble pages, a page of bubbles among them.
+    if (boxPage !== code.page > plan.bubblePages) {
+      return refuse("code", `This page says it is page ${code.page} of ${code.pages} and a ${boxPage ? "written-answer" : "bubble"} page, and the test has ${plan.bubblePages} bubble page${plan.bubblePages === 1 ? "" : "s"} first. The strip may be damaged; rescan the page.`);
     }
 
     const ppm = pixelsPerMm(h, { x: PAPER_MM[paper].width / 2, y: PAPER_MM[paper].height / 2 });
@@ -200,6 +223,27 @@ export class SheetReader {
     const markSideMm = found.side / ppm;
     if (markSideMm < MARK_SIZE * 0.75 || markSideMm > MARK_SIZE * 1.25) {
       return refuse("shape", `The corner marks measure ${markSideMm.toFixed(1)} mm against the ${MARK_SIZE} mm they are printed at, so these are not the marks of this sheet or the picture is distorted. Rescan the page flat.`);
+    }
+
+    if (boxPage) {
+      // No grid to measure: the page is checked for size and sharpness above and here, and its boxes are listed for a person.
+      const sigma = edgeSigma(image, h, layout);
+      if (sigma === undefined) return refuse("quality", "The edges of the corner marks cannot be measured in this picture, so its sharpness is not known. The picture may be too small, too light or too dark. Scan again at 150 dots to the inch or more in grey, or photograph the page in good light.");
+      if (sigma > MAX_BLUR_MM) return refuse("quality", `This picture is blurred: its edges are soft over about ${(sigma * 2.563).toFixed(1)} mm where a sharp scan is under 0.3. Scan again with the page flat on the glass, or hold the camera still and focus on the page.`);
+      const version = code.version !== 0 ? code.version : record.versions.length === 1 ? 1 : undefined;
+      return {
+        ok: true,
+        code,
+        ...(version !== undefined ? { version } : {}),
+        versionSource: code.version !== 0 ? "code" : record.versions.length === 1 ? "single" : "bubble",
+        questions: [],
+        fills: {},
+        unregistered: [],
+        flags: [],
+        quality: { dpi, markSidePx: found.side, ring: 0, ringExpected: expectedRing(sigma), blurMm: sigma, shiftMedianMm: 0, shiftMaxMm: 0, blankLevel: paperGrey, quarterTurns: found.quarterTurns, bilevel: isBilevel(image) },
+        notes: [],
+        written: pageBoxes(plan, code.page).map((b) => b.question),
+      };
     }
 
     // The bubbles of this page.

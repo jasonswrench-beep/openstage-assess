@@ -17,6 +17,8 @@ import type { TestRecord } from "../model/test.ts";
 export interface PaperOptions {
   paper: PaperName;
   large: boolean;
+  /** Written-answer pages after the bubble pages, with a box for each short answer that a person scores. Off unless asked for. */
+  boxes?: boolean;
   /** One sheet for every version (students fill in the version's bubble), a sheet for each version, or none. */
   sheet: "shared" | "each" | "none";
   booklets: boolean;
@@ -52,7 +54,7 @@ export function printTestPaper(record: TestRecord, given: Partial<PaperOptions> 
   const title = safeName(record.name, "Test");
 
   if (options.sheet !== "none") {
-    const planned = planSheet(record, { paper: options.paper, large: options.large });
+    const planned = planSheet(record, { paper: options.paper, large: options.large, boxes: options.boxes === true });
     if (!planned.ok) return { ok: false, reason: `The answer sheet for this test cannot be made: ${planned.reason}.` };
     notes.push(...planned.plan.notes);
     const several = record.versions.length > 1;

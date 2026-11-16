@@ -18,7 +18,7 @@
 
 import { zipSync } from "../container/zip.ts";
 import { safeName } from "../export/text.ts";
-import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
+import { isChoice, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import { letterFor, versionQuestions, VERSION_LABELS, type TestRecord, type VersionLabel } from "../model/test.ts";
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { CREDITED_UNSETTLED, keyOf, pointsOf, type Adjustment, type SheetScore } from "./score.ts";
@@ -240,7 +240,7 @@ function typeOf(question: Question, source: Pstat2Options["source"]): PartType {
  * question credited to everyone is `credit_all`; otherwise the letters of version A that earn the points, with an answer also accepted
  * added (one letter more for a one-answer question, one more letter in the string for select-all).
  */
-function entryFor(record: TestRecord, question: Question, type: PartType, adjustments: readonly Adjustment[], version: number, possible: number | undefined): Omit<KeyEntry, "versions"> {
+function entryFor(record: TestRecord, question: Question, type: PartType, adjustments: readonly Adjustment[], version: number, possible: number | undefined, written = false): Omit<KeyEntry, "versions"> {
   const mine = adjustments.filter((a) => a.questionId === question.id && (a.versions === undefined || a.versions.includes(version)));
   const partial = type === "select_all" && isMultipleResponse(question) && question.body.partialCredit === true;
   // Rounded to the millionth, as score.ts rounds what a question is worth: a points adjustment of 0.1234567 scored 0.123457, and a key
@@ -249,7 +249,15 @@ function entryFor(record: TestRecord, question: Question, type: PartType, adjust
   const points = possible ?? stated;
   // A dropped entry still needs a number above 0; the question counts on none of its versions' sheets, so the number earns nothing.
   const dropped: Omit<KeyEntry, "versions"> = { correct: [], points: points > 0 ? points : 1, adjustment: "dropped", partial_credit: false };
-  if (type === "other") return possible !== undefined && possible > 0 ? { correct: [], points: possible, adjustment: "none", partial_credit: false } : dropped;
+  if (type === "other") {
+    // A learning system's question, worth what the system said.
+    if (possible !== undefined) return possible > 0 ? { correct: [], points: possible, adjustment: "none", partial_credit: false } : dropped;
+    // On scanned sheets, a short answer written in its box and scored by a person counts as scored there (the points are the person's),
+    // when the sheet had boxes; anything else of type other (an essay) counts on no sheet.
+    if (!written || !hasUsableKey(question) || mine.some((a) => a.kind === "drop") || !(stated > 0)) return dropped;
+    if (mine.some((a) => a.kind === "credit")) return { correct: [], points: stated, adjustment: "credit_all", partial_credit: false };
+    return { correct: [], points: stated, adjustment: "none", partial_credit: false };
+  }
   if (!hasUsableKey(question) || mine.some((a) => a.kind === "drop") || !(points > 0)) return dropped;
   if (mine.some((a) => a.kind === "credit")) return { correct: [], points, adjustment: "credit_all", partial_credit: partial };
   const key = [...keyOf(question), ...mine.flatMap((a) => (a.kind === "alsoRight" ? [a.answer] : []))];
@@ -264,7 +272,7 @@ const nullable = (v: string | undefined): string | null => (v === undefined || v
 /**
  * The project and its part in profile 2. Everything profile 1 writes is written the same way; then, for scanned sheets, one answer
  * variable per question variable with the letters marked in version A's lettering ("" for blank, null exactly where the points are
- * null); then `assessment.json` with every question of version A, those left out among them. No student id or name is written:
+ * null; "" also for a short answer scored in its box, which has no letters, and said); then `assessment.json` with every question of version A, those left out among them. No student id or name is written:
  * OpenAssess holds none (the spec lets a writer that holds them leave them out, and one that holds none writes no such variable).
  */
 export function pstatProject2(record: TestRecord, scores: readonly SheetScore[], appVersion: string, options: Pstat2Options): Pstat2Export {
@@ -307,7 +315,9 @@ export function pstatProject2(record: TestRecord, scores: readonly SheetScore[],
       const type = typeOf(question, options.source);
       // A learning system's points: what the question was worth there, the most any attempt was out of.
       const possible = options.source === "learning system report" ? sheets.reduce((most, s) => Math.max(most, s.questions.find((q) => q.questionId === question.id)?.possible ?? 0), 0) : undefined;
-      const perVersion = versions.map((_l, k) => entryFor(record, question, type, adjustments, k + 1, possible));
+      // A short answer counts on a version's sheets when they were printed with boxes: its points are there, scored by a person.
+      const written = isShortAnswer(question) && options.source === "scanned sheets" && sheets.some((s) => s.questions.some((q) => q.questionId === question.id && q.possible > 0));
+      const perVersion = versions.map((_l, k) => entryFor(record, question, type, adjustments, k + 1, possible, written));
       const same = perVersion.every((e) => JSON.stringify(e) === JSON.stringify(perVersion[0]));
       const key: KeyEntry[] = same ? [perVersion[0] as KeyEntry] : groupByEntry(perVersion);
       const order = type === "true_false" ? ["true", "false"] : type === "other" ? [] : record.versions[0]?.options[question.id] ?? (isChoice(question) || isMultipleResponse(question) ? question.body.options.map((o) => o.id) : []);
@@ -332,6 +342,14 @@ export function pstatProject2(record: TestRecord, scores: readonly SheetScore[],
   first.forEach((question, i) => {
     const n = sheets.filter((s) => s.questions.some((q) => q.questionId === question.id && q.outcome === "credited" && q.why === CREDITED_UNSETTLED)).length;
     if (n > 0 && options.source === "scanned sheets") project.source.report.notes.push(`r${tag(i)}: question ${i + 1} was credited to everyone, and on ${n} sheet${n === 1 ? "" : "s"} its marks were not settled; the answer cell there is empty, as for a blank.`);
+  });
+  // A short answer written in its box and scored by a person has no letters, and the format wants an answer variable for every question
+  // variable and keeps null for where the points are null, so its cells are "" whatever the person gave. Said, for the same reason; the
+  // core is asked for a word for it (CORE-HANDOFF.md).
+  first.forEach((question, i) => {
+    if (options.source !== "scanned sheets" || typeOf(question, options.source) !== "other") return;
+    const n = sheets.filter((s) => s.questions.some((q) => q.questionId === question.id && q.possible > 0 && q.outcome !== "blank")).length;
+    if (n > 0) project.source.report.notes.push(`r${tag(i)}: question ${i + 1} is written in a box and scored by a person, and has no letters; its answer cell is empty on the ${n} sheet${n === 1 ? "" : "s"} where it was not left blank, as for a blank. Its points are in q${tag(i)}.`);
   });
 
   // The spec forbids a key that does not give the points written. Every cell is checked against the key by the spec's rule before the

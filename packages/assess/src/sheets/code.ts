@@ -5,7 +5,7 @@
  * read. It holds, in order and most significant bit first:
  *
  *   Start      1 bit    always black, so a strip read backwards is caught
- *   Layout     4 bits   which arrangement of the grid (1 standard, 2 wide), so old sheets stay readable if the layout changes
+ *   Layout     4 bits   which arrangement of the page (1 standard, 2 wide, 3 written-answer boxes), so old sheets stay readable
  *   Paper      2 bits   Letter, A4, large print Letter, large print A4
  *   Test       20 bits  the test record's fingerprint, so a sheet from another test is refused
  *   Page       6 bits   the page number and the number of pages, each from 1 to 8
@@ -24,6 +24,14 @@ const DATA_BITS = CODE_BITS - 12;
 /** The arrangement of the grid. A value never changes meaning once sheets have been printed with it. */
 export const LAYOUT_STANDARD = 1;
 export const LAYOUT_WIDE = 2;
+/**
+ * A written-answer page: boxes for short answers, after the bubble pages (since 15 November 2026). It has no grid, so it has no style;
+ * its paper code still says large print when the bubble pages are, so the reader plans the same sheet from either kind of page.
+ */
+export const LAYOUT_BOXES = 3;
+
+/** Whether a page is a written-answer page. */
+export const isBoxPage = (code: Pick<SheetCode, "layout">): boolean => code.layout === LAYOUT_BOXES;
 
 export interface SheetCode {
   layout: number;
@@ -90,7 +98,7 @@ export function codeProblem(code: SheetCode): CodeProblem | undefined {
   if (!Number.isInteger(code.page) || code.page < 1 || code.page > code.pages) return "the page is not one of the pages";
   if (!Number.isInteger(code.version) || code.version < 0 || code.version > 4) return "the version is 0 to 4";
   if (!Number.isInteger(code.layout) || code.layout < 1 || code.layout > 15) return "the layout is 1 to 15";
-  if (styleOf(code) === undefined) return code.layout === LAYOUT_WIDE && code.large ? "there is no wide sheet in large print" : `layout ${code.layout} is not one this program knows`;
+  if (code.layout !== LAYOUT_BOXES && styleOf(code) === undefined) return code.layout === LAYOUT_WIDE && code.large ? "there is no wide sheet in large print" : `layout ${code.layout} is not one this program knows`;
   return undefined;
 }
 

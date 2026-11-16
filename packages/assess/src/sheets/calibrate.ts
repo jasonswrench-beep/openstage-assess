@@ -198,7 +198,7 @@ function prepare(pages: readonly CorpusPage[], reader: SheetReader): { judged: J
   pages.forEach((p, page) => {
     const r = p.reading;
     if (!r.ok) return;
-    const planned = reader.plan(r.code.paper, r.code.large);
+    const planned = reader.planFor(r.code);
     if (!planned.ok) return void unjudged.push(`${p.where}: ${planned.reason}`);
     const plan = planned.plan;
     const layout = layoutFor(r.code.paper, plan.style);

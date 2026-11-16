@@ -390,6 +390,16 @@ in the tests and in `assess sheets gate`.
   turns it upright), open "Set the fill lines on real paper" under Keep and write, press "Write an answer list for these pictures"
   (it has a row for each picture already), fill it in, and open it there; the report is the same. Needs at least 200 marked answers in
   each half before it will propose anything: about 20 sheets of 20 questions.
+- [ ] **Boxes for short answers, on real paper.** Built 15 November 2026 (development list item 9): tick "Boxes for short answers"
+  when printing the sheet of a test with a short answer (or `assess sheets print <bank> --boxes`), and a page of boxes follows the
+  bubble pages, twelve boxes to a page, with each short answer's bubble row saying which box and page to write in. Print one, write
+  in the boxes in pencil and in pen, scan it with the bubble page on the copier and photograph it on a phone, and score the class:
+  each box waits in Review with its piece of picture, the question's worth and its accepted answers, and the keys are a number
+  typed in the points box and Enter to record it, F for full marks, 0 for left blank, Z to take back. Look at: whether 26 mm is tall
+  enough for a student's answer (a name, a number, a short phrase), whether the piece is large and sharp enough on a laptop to read a
+  pencil answer, whether a page photographed at a slant still cuts each box out whole, and whether the card reads sensibly with a
+  screen reader (the points box, the rubric and the buttons were looked at in the accessibility tree, not heard). Nothing written
+  in a box is read by the program; a model's suggestion waits on the core's C8.
 - [ ] **Print the sheet on the department printer and photocopy it.** Check my printing should read a scan of one blank photocopy:
   corner marks, code strip, no blank bubble read as filled, and the scale within 2 percent. (`assess sheets check <bank> <picture.png>`
   does this on a PNG now; it says the printed size only when the picture says how many dots to the inch it was scanned at.)
@@ -460,8 +470,9 @@ rather than build a private copy. The requests are in `CORE-REQUESTS.md`.
 
 - [ ] **Item 7, links from questions to textbook passages, waits on C7 (the source ledger).** Request 2 says what OpenAssess needs.
 - [ ] **Item 8, AI drafting, import rescue and an assistant server, waits on C8.** Request 3.
-- [ ] **Item 9, short-answer boxes scored against a rubric, waits on C8 for reading handwriting.** Request 3 says what OpenAssess
-  would add itself. Decide whether boxes that a person scores by hand, with no reading at all, are worth building before C8.
+- [x] **Item 9, short-answer boxes scored against a rubric.** Built on 15 November 2026 without any reading of handwriting, as the
+  core's notes asked: a person scores every box. Only a model's suggestion of a score waits on C8 (request 3). What to try by hand is
+  under Answer sheets, "Boxes for short answers".
 
 ## Results from a learning system (development list item 4)
 

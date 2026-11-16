@@ -471,6 +471,20 @@ is a change that stops printed sheets reading, which is never made quietly. A ne
 gets a new layout number. A sheet carries no answer and no student detail, and it says in words
 which test and which sheet it is.
 
+**A box for a short answer is scored by a person, and nothing written in it is read.** Boxes are asked for when the sheet is
+printed (`boxes` in `planSheet`, the "Boxes for short answers" tick, `sheets print --boxes`); without them the plan, the pages and
+every strip are what they were. With them, each place where any version has a short answer gets a box on a written-answer page after
+the bubble pages (`boxesPerPage`, `boxRect` in `geometry.ts`), and that page carries layout 3 (`LAYOUT_BOXES`), a layout number of its
+own because the strip never changes meaning; the reader tells the boxed plan from the plain one by the count of pages (`planFor`) and
+refuses a page whose kind does not fit its place. A written-answer page is checked as any page is up to the grid (marks, strip, test,
+size, sharpness) and lists its boxes (`written`); each box is cut out upright for Review, and the person's points (`kind: "written"`,
+with the worth the question had then, so a later change of points scales them and never above the worth) are the score. A box not yet
+scored is unsettled and earns nothing, points for a box are taken only for a box the sheet holds on its version (a flagged row of
+bubbles is unsettled too, and is not a box), and bubbles given by hand to a boxed question do not score it. A model's reading of the
+writing waits on the core's C8 and would be a suggestion a person accepts. In the .pstat such a question is type `other` with an
+empty answer cell, said in the notes, until the core rules on it (`CORE-HANDOFF.md` 2c). The faults are planted by
+`tools/release/mutations-alpha-29-boxes.json`.
+
 **The sheet reader flags what it cannot vouch for, and an answer read wrong without a flag fails the gate.**
 `sheets/decide.ts` records a question as answered only when every bubble is plainly filled or plainly
 empty and the pattern means an answer; a blank row, a faint mark, two marks on one answer, a mark where
@@ -569,14 +583,14 @@ by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 ## Commands
 
 ```
-npm test                       # 3655 engine tests and 442 app tests, Node's own runner
+npm test                       # 3802 engine tests and 470 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate
 npm run assess -- sheets gate  # the answer sheet reader's gate: no answer read wrong without a flag, on drawn and spoiled sheets
 npm run assess -- sheets read <bank> <picture.png|scan.pdf|folder>    # scanned sheets against a test in the bank, put into sheets in order
 npm run assess -- sheets score <bank> <scans...> [--accept-blanks] [--drop N] [--out <folder>]   # scores, item statistics, and with --out the scores file, workbook, CSV and item analysis
-npm run assess -- sheets print <bank> --out <folder>   # the answer sheet, and a booklet and a key for each version
+npm run assess -- sheets print <bank> --out <folder> [--boxes]   # the answer sheet, and a booklet and a key for each version; --boxes adds a page of boxes for the short answers
 npm run assess -- sheets rescore <bank> <file.openassess-scores>   # score again from a saved file, with no rescan
 npm run assess -- sheets check <bank> <picture.png>   # Check my printing: a scan of a blank printed copy
 npm run assess -- sheets calibrate <bank> <folder> [--template]   # a real-sheet corpus against the volunteers' answers.csv: lines tried on half, reported on the other half, proposed and never applied

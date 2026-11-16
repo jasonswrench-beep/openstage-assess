@@ -46,6 +46,7 @@ export type { Intake, IntakePage, PictureKind, Source } from "./sheets/intake.ts
 export { readPdfPictures, orient } from "./sheets/pdf-page.ts";
 export type { Orientation, PagePicture, PdfPagePicture, PictureRefusalCause } from "./sheets/pdf-page.ts";
 export { cropRects, CROP_DPI } from "./sheets/crop.ts";
+export { boxPageOf, pageBoxes } from "./sheets/print.ts";
 export { printTestPaper, DEFAULT_PAPER } from "./sheets/paper.ts";
 export type { PaperFile, PaperOptions, PaperResult } from "./sheets/paper.ts";
 export { assembleBatch } from "./sheets/batch.ts";

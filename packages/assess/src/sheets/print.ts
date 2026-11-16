@@ -8,28 +8,34 @@
  * What is drawn: four corner marks (the top left with a white centre), the code strip, the title and a name box, the version bubbles
  * when there is more than one version, a few lines of instruction with a mark to copy and three not to make, and the grid of
  * bubbles with the question numbers. A question the sheet cannot carry keeps its number and has no bubbles.
+ *
+ * With boxes (plan.ts), written-answer pages follow the bubble pages: the same corner marks, code strip (layout 3), title and name box,
+ * a line of instruction, and a box for each short answer with its number, two columns of them. Nothing on them is read by the program:
+ * each box is cut out for a person to score.
  */
 
 import { deflateSync } from "node:zlib";
 
 import { measureText } from "../print/pdf.ts";
-import { encodeCode, layoutNumber, type SheetCode } from "./code.ts";
+import { encodeCode, LAYOUT_BOXES, layoutNumber, type SheetCode } from "./code.ts";
 import {
   CODE_CELL,
   FOOTER_RISE,
   HOLLOW_SIZE,
   VERSION_LABELS,
+  boxesPerPage,
+  boxRect,
   cornerMarks,
   codeCells,
   exampleMarks,
   instructionArea,
   layoutFor,
   nameBox,
-  pagesNeeded,
   slotBubbles,
   slotNumberAnchor,
   versionBubbles,
   type Point,
+  type Rect,
   type SheetLayout,
 } from "./geometry.ts";
 import type { SheetPlan } from "./plan.ts";
@@ -148,16 +154,29 @@ export interface SheetInput {
 
 /** The code a page of this sheet carries. */
 export function sheetCode(plan: SheetPlan, input: SheetInput, page: number): SheetCode {
-  const layout = layoutFor(plan.paper, plan.style);
   return {
-    layout: layoutNumber(plan.style),
+    layout: page > plan.bubblePages ? LAYOUT_BOXES : layoutNumber(plan.style),
     paper: plan.paper,
     large: plan.large,
     test: input.fingerprint,
     page,
-    pages: pagesNeeded(layout, plan.drawn.length),
+    pages: plan.pages,
     version: input.version ?? 0,
   };
+}
+
+/** The written-answer page (from 1) a question's box is on, or undefined when it has none. */
+export function boxPageOf(plan: SheetPlan, question: number): number | undefined {
+  const at = plan.boxes.indexOf(question);
+  return at < 0 ? undefined : plan.bubblePages + 1 + Math.floor(at / boxesPerPage(plan.paper));
+}
+
+/** The boxes of one written-answer page (from 1): each question's number and its rectangle in millimetres. */
+export function pageBoxes(plan: SheetPlan, pageNumber: number): Array<{ question: number; rect: Rect }> {
+  if (pageNumber <= plan.bubblePages) return [];
+  const per = boxesPerPage(plan.paper);
+  const first = (pageNumber - plan.bubblePages - 1) * per;
+  return plan.boxes.slice(first, first + per).map((question, place) => ({ question, rect: boxRect(plan.paper, place) }));
 }
 
 const hex5 = (value: number): string => value.toString(16).toUpperCase().padStart(5, "0");
@@ -165,7 +184,7 @@ const hex5 = (value: number): string => value.toString(16).toUpperCase().padStar
 /** Draws one page of the sheet (from 1) onto a surface. */
 export function drawSheetPage(plan: SheetPlan, input: SheetInput, pageNumber: number, page: Surface): void {
   const layout = layoutFor(plan.paper, plan.style);
-  const pages = pagesNeeded(layout, plan.drawn.length);
+  const pages = plan.pages;
 
   // The corner marks. The top left has a white square in its middle.
   for (const mark of cornerMarks(layout)) {
@@ -200,6 +219,17 @@ export function drawSheetPage(plan: SheetPlan, input: SheetInput, pageNumber: nu
     page.text(`Version ${VERSION_LABELS[input.version - 1]}`, layout.width - 52, 44, 11, { bold: true });
   }
 
+  // A written-answer page: a line of instruction and the boxes, and nothing to fill in with a bubble.
+  if (pageNumber > plan.bubblePages) {
+    page.text("Write the answer to each question in the box with its number, inside the lines. Write nothing in a box whose question has bubbles.", 22, 56, 7.5);
+    for (const { question, rect } of pageBoxes(plan, pageNumber)) {
+      page.rect(rect.x, rect.y, rect.width, rect.height, "S", 0);
+      page.text(`${question}.`, rect.x + 1.5, rect.y + 4, 8, { bold: true });
+    }
+    page.text("Write only inside the boxes, and only between the four black squares.", layout.width / 2, layout.height - FOOTER_RISE, 6.5, { align: "center", gray: 0.45 });
+    return;
+  }
+
   // The instructions, and the marks to copy and not to copy.
   const area = instructionArea(layout);
   const lines: string[] = ["Use a pencil or a dark pen. Fill the bubble completely. If you change an answer, erase the old mark completely."];
@@ -209,6 +239,7 @@ export function drawSheetPage(plan: SheetPlan, input: SheetInput, pageNumber: nu
   // Any version, not only a place that has no bubbles in all of them: with shuffled questions an essay can stand where another version
   // has a choice question, so the sheet has bubbles there and the student of the one version still has to answer in the booklet.
   if (uses.some((u) => u?.kind === "none")) lines.push("A question that cannot be answered with a bubble is answered in the test booklet.");
+  if (plan.boxes.length > 0) lines.push(`A short answer is written in its box on the written-answer page${plan.pages - plan.bubblePages === 1 ? "" : "s"} at the end of this sheet.`);
   let y = area.y + 2.8;
   for (const text of lines.flatMap((l) => wrap(l, area.width, 7.5))) {
     page.text(text, area.x, y, 7.5);
@@ -238,7 +269,8 @@ export function drawSheetPage(plan: SheetPlan, input: SheetInput, pageNumber: nu
     page.text(`${index + 1}.`, anchor.x, anchor.y + 1, layout.style === "large" ? 11 : 8, { align: "right" });
     const centers = slotBubbles(layout, slot);
     if (drawn.places === 0) {
-      page.text("answer in the booklet", (centers[0] as Point).x - layout.placePitch / 2 + 1, anchor.y + 1, 6.5, { gray: 0.5 });
+      const boxPage = boxPageOf(plan, index + 1);
+      page.text(boxPage === undefined ? "answer in the booklet" : `write in box ${index + 1}, page ${boxPage}`, (centers[0] as Point).x - layout.placePitch / 2 + 1, anchor.y + 1, 6.5, { gray: 0.5 });
       continue;
     }
     for (let p = 0; p < drawn.places; p++) {
@@ -265,7 +297,7 @@ export interface SheetFile {
 /** The answer sheet as a PDF: one page for every 100 questions on a standard sheet (50 on a wide one, 51 in large print). */
 export function printSheet(plan: SheetPlan, input: SheetInput, at: Date = new Date()): SheetFile {
   const layout = layoutFor(plan.paper, plan.style);
-  const pages = pagesNeeded(layout, plan.drawn.length);
+  const pages = plan.pages;
   const drawn = Array.from({ length: pages }, (_x, i) => drawPage(plan, input, layout, i + 1));
 
   const parts: Buffer[] = [];

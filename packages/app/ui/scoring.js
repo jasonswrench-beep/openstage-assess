@@ -10,7 +10,7 @@
  */
 
 import { del, get, post, put as putJson } from "./api.js";
-import { ask } from "./dialogs.js";
+import { ask, askText } from "./dialogs.js";
 import { checkRow, clear, h, plural, put } from "./dom.js";
 import { fileButtons } from "./files.js";
 import { sendScans } from "./scan.js";
@@ -73,7 +73,7 @@ export async function renderScoring(host, params, shell) {
   let busy = false;
   /** @type {number | null} */
   let openSheet = null;
-  /** @type {Array<{ sheet: number, kind: "answer" | "version", question?: number }>} */
+  /** @type {Array<{ sheet: number, kind: "answer" | "version" | "written", question?: number }>} */
   const trail = [];
   let said = "";
   let sayTimer = 0;
@@ -244,6 +244,121 @@ export async function renderScoring(host, params, shell) {
     if (text) sayTimer = window.setTimeout(() => (announcer.textContent = text), 50);
   }
 
+  /**
+   * A short answer written in its box: the box as scanned, the question's rubric (its accepted answers and what it is worth), and the
+   * points the person gives. Nothing is read from the writing, so nothing is offered as a guess.
+   * @param {any} item
+   * @param {HTMLElement} card
+   * @param {HTMLElement} live
+   */
+  function renderWritten(item, card, live) {
+    const items = view.queue.items;
+    const w = item.written;
+    const points = h("input", { type: "number", id: "written-points", attrs: { min: "0", max: String(w.worth), step: "any", inputmode: "decimal", "aria-describedby": "written-rubric" } });
+    /** @param {number | "blank"} awarded */
+    async function recordWritten(awarded) {
+      if (busy) return;
+      busy = true;
+      try {
+        const next = await post(`${base}/decisions`, { sheet: item.sheet, kind: "written", question: item.question, awarded });
+        trail.push({ sheet: item.sheet, kind: "written", question: item.question });
+        say(`Recorded ${awarded === "blank" ? "blank" : `${awarded} of ${w.worth}`} for sheet ${item.sheet}, question ${item.question}. ${next.queue.total === 0 ? "That was the last one." : `${next.queue.total} to go.`}`);
+        apply(next);
+        focusCard();
+      } catch (error) {
+        tell(error);
+      } finally {
+        busy = false;
+      }
+    }
+    const recordTyped = () => {
+      const value = points.value.trim() === "" ? NaN : Number(points.value);
+      if (!(value >= 0 && value <= w.worth)) {
+        say(`Type the points, from 0 to ${w.worth}, or say the box was left blank.`);
+        live.textContent = said;
+        points.focus();
+        return;
+      }
+      void recordWritten(value);
+    };
+    const move = (/** @type {number} */ by) => {
+      cursor = (cursor + by + items.length) % items.length;
+      say("");
+      renderReview();
+      focusCard();
+    };
+    const undo = async () => {
+      const last = trail.pop();
+      if (!last || busy) {
+        say("There is nothing to take back.");
+        live.textContent = said;
+        return;
+      }
+      try {
+        const next = await post(`${base}/decisions/undo`, last);
+        const back = next.queue.items.findIndex(/** @param {any} i */ (i) => i.sheet === last.sheet && (last.kind === "version" ? i.kind === "version" : i.question === last.question));
+        if (back !== -1) cursor = back;
+        say(`Took back the last decision. ${next.queue.total} to go.`);
+        apply(next);
+        focusCard();
+      } catch (error) {
+        tell(error);
+      }
+    };
+    const rubric = `Worth ${w.worth} point${w.worth === 1 ? "" : "s"}. Accepted answers: ${w.accepted.length > 0 ? w.accepted.join("; ") : "none given"}${w.caseSensitive ? " (capital letters count)" : ""}.`;
+    put(
+      card,
+      h("h3", { text: `Sheet ${item.sheet}, question ${item.question}, version ${item.version}: a written answer` }),
+      h("p", { class: "stem", text: item.stem }),
+      h("p", { class: "why", text: item.why }),
+      item.picture
+        ? h("img", { class: "crop", src: `/api/scoring/${encodeURIComponent(sid)}/entries/${item.entry}/crops/q${item.question}`, attrs: { alt: `What is written in the box for question ${item.question}, as scanned. Nothing in it is read by the program.` } })
+        : h("p", { class: "hint", text: item.entry === undefined ? "There is no picture of this box." : "No picture is kept of this one: scores opened from a saved file carry the readings but no pictures." }),
+      h("p", { class: "rubric", id: "written-rubric", text: rubric }),
+      h("div", { class: "field" }, h("label", { for: "written-points", class: "field-label", text: `Points, from 0 to ${w.worth}` }), points),
+      h(
+        "div",
+        { class: "review-actions" },
+        h("button", { type: "button", class: "primary", text: "Record the points (Enter)", on: { click: recordTyped } }),
+        h("button", { type: "button", text: `Full marks (F)`, on: { click: () => void recordWritten(w.worth) } }),
+        h("button", { type: "button", text: "No marks", on: { click: () => void recordWritten(0) } }),
+        h("button", { type: "button", text: "Left blank (0)", on: { click: () => void recordWritten("blank") } }),
+        h("button", { type: "button", text: "Previous (←)", disabled: items.length < 2, on: { click: () => move(-1) } }),
+        h("button", { type: "button", text: "Skip (→)", disabled: items.length < 2, on: { click: () => move(1) } }),
+        h("button", { type: "button", text: "Take back the last (Z)", disabled: trail.length === 0, on: { click: () => void undo() } }),
+      ),
+      h("p", { class: "hint", text: "Keys: type the points and press Enter; on the card, F gives full marks, 0 says the box was left blank, the arrows move, Z takes back." }),
+      live,
+    );
+    points.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        recordTyped();
+      }
+    });
+    // Keys on the card itself, not while the points are being typed: a 0 typed there is a score, not a blank.
+    card.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || busy || e.target !== card) return;
+      const key = e.key.toLowerCase();
+      if (e.key === "ArrowRight" && items.length > 1) {
+        e.preventDefault();
+        move(1);
+      } else if (e.key === "ArrowLeft" && items.length > 1) {
+        e.preventDefault();
+        move(-1);
+      } else if (key === "z") {
+        e.preventDefault();
+        void undo();
+      } else if (key === "f") {
+        e.preventDefault();
+        void recordWritten(w.worth);
+      } else if (key === "0") {
+        e.preventDefault();
+        void recordWritten("blank");
+      }
+    });
+  }
+
   function renderReview() {
     clear(reviewHost);
     const items = view.queue.items;
@@ -272,6 +387,11 @@ export async function renderScoring(host, params, shell) {
     const card = h("div", { class: "review-card", tabIndex: 0, attrs: { role: "group", "aria-label": isVersion ? `Sheet ${item.sheet}: which version` : `Sheet ${item.sheet}, question ${item.question}` } });
     const live = h("p", { class: "hint", text: said });
     const fills = item.fills.map(/** @param {number} f @param {number} i */ (f, i) => `${item.labels[i] ?? String.fromCharCode(65 + i)} ${Math.round(f * 100)}%`).join(", ");
+    if (item.written) {
+      renderWritten(item, card, live);
+      reviewHost.append(card);
+      return;
+    }
 
     /** @param {number[] | "blank" | number} choice */
     async function record(choice) {
@@ -489,7 +609,7 @@ export async function renderScoring(host, params, shell) {
                 null,
                 h("th", { scope: "row", text: String(q.number) }),
                 h("td", null, h("span", { text: q.stem }), q.why ? h("span", { class: "hint", text: ` ${q.why}` }) : null, picture),
-                h("td", { text: q.marked === null ? "?" : q.marked === "" ? "blank" : q.marked }),
+                h("td", { text: q.awarded !== undefined ? `written: ${q.awarded} of ${q.of}` : q.written && q.marked === "" ? "blank" : q.written ? "written: not scored" : q.marked === null ? "?" : q.marked === "" ? "blank" : q.marked }),
                 h("td", { text: /** @type {Record<string, string>} */ (OUTCOME_WORDS)[q.outcome] ?? q.outcome }),
                 h("td", { text: q.possible === 0 ? "" : `${q.earned} of ${q.possible}` }),
                 h("td", { text: q.by === "person" ? "You" : q.by === "reader" ? "The reader" : "" }),
@@ -497,7 +617,8 @@ export async function renderScoring(host, params, shell) {
                   "td",
                   null,
                   q.labels.length > 0 ? h("button", { type: "button", class: "small-button", text: "Change…", on: { click: () => void change(n, q) } }) : null,
-                  q.decided ? h("button", { type: "button", class: "small-button", text: "Take back", on: { click: () => void takeBack(n, q.number) } }) : null,
+                  q.written && q.possible > 0 ? h("button", { type: "button", class: "small-button", text: "Score…", attrs: { "aria-label": `Score… question ${q.number}` }, on: { click: () => void scoreWritten(n, q) } }) : null,
+                  q.decided ? h("button", { type: "button", class: "small-button", text: "Take back", on: { click: () => void takeBack(n, q.number, q.written ? "written" : "answer") } }) : null,
                   q.picture
                     ? h("button", {
                         type: "button",
@@ -505,7 +626,7 @@ export async function renderScoring(host, params, shell) {
                         text: "Picture",
                         on: {
                           click: () => {
-                            if (picture.hidden && picture.childNodes.length === 0) put(picture, h("img", { class: "crop", src: `/api/scoring/${encodeURIComponent(sid)}/entries/${q.entry}/crops/q${q.number}`, attrs: { alt: `The row of bubbles for question ${q.number} as scanned.` } }));
+                            if (picture.hidden && picture.childNodes.length === 0) put(picture, h("img", { class: "crop", src: `/api/scoring/${encodeURIComponent(sid)}/entries/${q.entry}/crops/q${q.number}`, attrs: { alt: q.written ? `What is written in the box for question ${q.number}, as scanned.` : `The row of bubbles for question ${q.number} as scanned.` } }));
                             picture.hidden = !picture.hidden;
                           },
                         },
@@ -540,12 +661,36 @@ export async function renderScoring(host, params, shell) {
   }
 
   /**
+   * A written answer scored again from a sheet's own view: the points, or blank.
+   * @param {number} sheet
+   * @param {any} q
+   */
+  async function scoreWritten(sheet, q) {
+    const w = q.written;
+    const typed = await askText(`Score sheet ${sheet}, question ${q.number}`, `Points, from 0 to ${w.worth}, or the word blank. Accepted answers: ${w.accepted.join("; ") || "none given"}.`, q.awarded !== undefined ? String(q.awarded) : "", "Record");
+    if (typed === null) return;
+    const value = typed.trim().toLowerCase() === "blank" ? "blank" : typed.trim() === "" ? NaN : Number(typed);
+    if (value !== "blank" && !(value >= 0 && value <= w.worth)) {
+      shell.notify(`Give the points, from 0 to ${w.worth}, or blank.`, "error");
+      return;
+    }
+    try {
+      apply(await post(`${base}/decisions`, { sheet, kind: "written", question: q.number, awarded: value }));
+      trail.push({ sheet, kind: "written", question: q.number });
+      shell.notify(`Question ${q.number} on sheet ${sheet} is scored.`, "ok");
+    } catch (error) {
+      tell(error);
+    }
+  }
+
+  /**
    * @param {number} sheet
    * @param {number} question
+   * @param {"answer" | "written"} [kind]
    */
-  async function takeBack(sheet, question) {
+  async function takeBack(sheet, question, kind = "answer") {
     try {
-      apply(await post(`${base}/decisions/undo`, { sheet, kind: "answer", question }));
+      apply(await post(`${base}/decisions/undo`, { sheet, kind, question }));
       shell.notify("Your decision is taken back, and the reader's own reading stands.", "ok");
     } catch (error) {
       tell(error);

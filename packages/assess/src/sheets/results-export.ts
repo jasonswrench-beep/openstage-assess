@@ -42,7 +42,7 @@ function scoreRows(record: TestRecord, scores: readonly SheetScore[], settled: r
     for (let q = 1; q <= most; q++) {
       const a = sheet.answers[q];
       const outcome = s.questions[q - 1]?.outcome;
-      cells.push(outcome === "notOnSheet" ? "-" : !a ? "" : a.kind === "marked" ? letters(a.places) : a.kind === "unsettled" ? "?" : "");
+      cells.push(outcome === "notOnSheet" ? "-" : !a ? "" : a.kind === "marked" ? letters(a.places) : a.kind === "written" ? `${a.awarded} of ${a.of}` : a.kind === "unsettled" ? "?" : "");
     }
     rows.push([s.number, s.version !== undefined ? (VERSION_LABELS[s.version - 1] as string) : "?", "", ...cells, s.earned, s.possible, s.percent !== undefined ? Math.round(s.percent * 10) / 10 : "", s.complete ? "Yes" : `No: ${s.unsettled} question${s.unsettled === 1 ? "" : "s"} not settled${s.problems.length ? `; ${s.problems.join(" ")}` : ""}`]);
   });

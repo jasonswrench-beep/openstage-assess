@@ -55,12 +55,15 @@ describe("the code strip", () => {
   });
 
   test("writes the squares it always has: a sheet already printed must still be read by every later version of this program", () => {
-    // These are the strips of three sheets, written out once and pinned. If one of them changes, sheets in classrooms stop reading.
+    // These are the strips of four sheets, written out once and pinned. If one of them changes, sheets in classrooms stop reading. The
+    // fourth is a written-answer page (layout 3, 15 November 2026): page 3 of 3 of a shared A4 sheet, its data bits written by hand from
+    // the table at the top of code.ts (1, 0011, 01, the 20 bits of 0x0ABCD, 010, 010, 000) and its check bits checked below.
     const squares = (c: SheetCode): string => encodeCode(c).map((b) => (b ? "1" : "0")).join("");
     const pinned: Array<[SheetCode, string]> = [
       [code(), "100010010101011110011011110000000000011001001111"],
       [code({ layout: LAYOUT_WIDE, paper: "a4", test: 0x12345, page: 2, pages: 3, version: 2 }), "100100100010010001101000101001010010110001100010"],
       [code({ paper: "letter", large: true, test: 0, page: 8, pages: 8, version: 4 }), "100011000000000000000000000111111100001011010011"],
+      [code({ layout: 3, paper: "a4", test: 0x0abcd, page: 3, pages: 3, version: 0 }), "100110100001010101111001101010010000000010100101"],
     ];
     // The check bits are the remainder of the 36 data bits followed by twelve zeros, divided by x^12 + x^11 + x^3 + x^2 + x + 1.
     // Written here from the definition, with big integers, and not from the program's own shifting register.
@@ -180,7 +183,7 @@ describe("the code strip", () => {
       [{ version: -1 }, /0 to 4/],
       [{ layout: 0 }, /1 to 15/],
       [{ layout: 16 }, /1 to 15/],
-      [{ layout: 3 }, /layout 3 is not one this program knows/],
+      [{ layout: 4 }, /layout 4 is not one this program knows/],
       [{ layout: LAYOUT_WIDE, large: true }, /no wide sheet in large print/],
     ] as Array<[Partial<SheetCode>, RegExp]>) {
       assert.match(codeProblem(code(bad)) ?? "", why, JSON.stringify(bad));
@@ -198,7 +201,8 @@ describe("the code strip", () => {
       if (paperBits) [out[5], out[6]] = paperBits;
       return withCheck(out);
     };
-    for (const layout of [3, 5, 15]) {
+    // Layout 3 was the example of an unknown layout until it became the written-answer page (15 November 2026).
+    for (const layout of [4, 5, 15]) {
       const read = decodeCode(withLayout(layout));
       assert.equal(read.ok, false, `layout ${layout}`);
       assert.match((read as { reason: string }).reason, new RegExp(`layout ${layout} is not one this program knows`));

@@ -49,6 +49,8 @@ export function summary(record: TestRecord): Record<string, unknown> {
     created: record.created,
     versions: record.versions.map((v) => v.label),
     questions: record.questions.length,
+    // How many short answers, which can be printed with boxes on written-answer pages.
+    shortAnswers: record.questions.filter((q) => q.type === "shortAnswer").length,
     points: Math.round(record.questions.reduce((sum, q) => sum + pointsOf(q), 0) * 1000) / 1000,
     questionOrder: record.questionOrder,
     fingerprint: hex(record.fingerprint),
@@ -155,9 +157,10 @@ const FORMATS = ["pdf", "docx"] as const;
 /** The paper is made by the engine, the same function the command line uses; what is done here is to read the request and to write the files. */
 async function printTestPaperRoute(ctx: Context, req: ApiRequest, record: TestRecord, media: ReadonlyMap<string, Uint8Array>): Promise<ApiResponse> {
   const input = jsonObject(req);
-  onlyFields(input, ["paper", "large", "sheet", "booklets", "keys", "formats", "nameBox"], "The request");
+  onlyFields(input, ["paper", "large", "boxes", "sheet", "booklets", "keys", "formats", "nameBox"], "The request");
   const paper = oneOf(input["paper"], PAPERS, "the paper", "letter");
   const large = flag(input["large"], "Large print", false);
+  const boxes = flag(input["boxes"], "Boxes for short answers", false);
   const sheet = oneOf(input["sheet"], ["shared", "each", "none"] as const, "which answer sheets to print", "shared");
   const booklets = flag(input["booklets"], "The booklets", true);
   const keys = flag(input["keys"], "The answer keys", true);
@@ -171,7 +174,7 @@ async function printTestPaperRoute(ctx: Context, req: ApiRequest, record: TestRe
             throw badRequest("Say what to print the booklets and keys as, from pdf and docx.");
           })();
 
-  const made = printTestPaper(record, { paper, large, sheet, booklets, keys, nameBox, formats, media });
+  const made = printTestPaper(record, { paper, large, boxes, sheet, booklets, keys, nameBox, formats, media });
   if (!made.ok) throw badRequest(made.reason);
   const written: Array<{ name: string; path: string; kind: string; version?: string; format: string; pages?: number }> = [];
   for (const file of made.files) {

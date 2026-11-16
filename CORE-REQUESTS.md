@@ -36,6 +36,11 @@ help OpenAssess most:
 version A's numbers with gaps (case `omitted-25`), which OpenAssess writes again. Profile 2 is not written by OpenAssess yet, and the
 core asks that `student_id` is not written until the author decides whether profile 2 carries one at all.
 
+**Still open in 7.2 (15 November 2026), as `CORE-HANDOFF.md` section 2c says:** an answer cell for a question that has no letters on
+scanned sheets (a short answer written in its box and scored by a person). The checker wants an `r` variable for each `q` variable and
+keeps null for where the points are null, so OpenAssess writes `""`, which the spec means as left blank, and says so in the file's
+notes. A ruling (no `r` variable for type `other`, or a value for "no letters") would let a blank count from the letters be trusted.
+
 ## 2. C7, the source ledger (for list item 7)
 
 **Asked 15 November 2026. Core state: not started (CORE-NOTES lists C1, C2 and C4 in progress, nothing for C7).**
@@ -71,7 +76,9 @@ risk. What OpenAssess would add itself, once C8 says how a model is called: a ne
 layout number, since the code strip of a printed sheet never changes meaning), the box cut out upright through the reader's own
 transform as the review's pictures are now, and the suggestion shown beside the rubric for a person to accept or change. No score from
 a model counts until a person confirms it, and a box the model cannot read is a flag, as a faint bubble is. Without a model the boxes
-would still be printed, cut out and scored by a person against the rubric; say if that is worth building before C8.
+would still be printed, cut out and scored by a person against the rubric; say if that is worth building before C8. (Answered in the
+core's notes, and built on 15 November 2026: layout 3, a page of boxes after the bubbles, each box scored by a person. What still waits
+on C8 is only the model's suggestion beside the rubric.)
 
 The rules OpenAssess keeps whatever C8 says: a model never writes an answer key without a person choosing it ("never guess an answer
 key"), an AI suggestion is a finding a person accepts or dismisses, and nothing is sent off the machine unless the person turned that

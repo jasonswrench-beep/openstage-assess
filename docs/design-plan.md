@@ -528,8 +528,9 @@ sheets as scans, and the program scores them. It is realistic as a later
 milestone, after printing and versions exist, and not part of 1.0.
 
 **What it covers.** Only questions a sheet can carry: multiple choice, multiple
-response and true or false, with a handful of options each. The destination
-check lists essays, short answers and the rest as left off. It never replaces
+response and true or false, with a handful of options each, and short answers
+written in boxes when those are asked for (below). The destination check lists
+essays, short answers without boxes and the rest as left off. It never replaces
 the accessible route, because some students cannot use a bubble sheet.
 
 **Stages.**
@@ -557,6 +558,19 @@ that turns a picture of a sheet into a reading (with its accuracy gate), images 
 sheets area (assemble, print, check my printing, score, review, results) are built, as of
 5 November 2026. What is open is real paper: real sheets, real scanners and phones, and the
 thresholds tuned on them (`TESTING-TODO.md`).
+
+**Boxes for short answers** (development list item 9, built 15 November 2026). Asked for
+when the sheet is printed, a short answer gets a box on a written-answer page after the
+bubble pages. The page has its own layout number (3) on the code strip, because the strip
+of a printed sheet never changes meaning, and the reader checks it as it checks any page (the
+corner marks, the strip, the test, the size and the sharpness) and then lists its boxes. Each
+box is cut out upright through the reader's own transform and shown in Review beside the
+question's worth and accepted answers, and a person gives the points, part points, none, or
+says it was left blank. Nothing written in a box is read by the program: reading handwriting
+needs a model, which waits on the shared core's C8, and even then a model's score would be a
+suggestion that counts only once a person accepts it. The points are kept with the worth the
+question had then, so a later change of points scales them and never raises them above the
+worth. Without boxes asked for, the plan, the pages and every strip are what they always were.
 
 **Never guess.** A blank answer, two marks, or a faint mark is flagged, with a
 picture of that part of the sheet beside it, for the teacher to settle with a

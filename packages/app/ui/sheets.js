@@ -142,7 +142,7 @@ export async function renderSheets(host, params, shell) {
     clear(printHost);
     clear(checkHost);
     const several = t.versions.length > 1;
-    const s = { paper: "letter", large: false, sheet: "shared", booklets: true, keys: true, pdf: true, docx: false, nameBox: true };
+    const s = { paper: "letter", large: false, boxes: false, sheet: "shared", booklets: true, keys: true, pdf: true, docx: false, nameBox: true };
     const writtenHost = h("div", { attrs: { "aria-live": "polite" } });
     const make = h("button", { type: "button", class: "primary", text: "Make the files" });
 
@@ -183,6 +183,7 @@ export async function renderSheets(host, params, shell) {
         const result = await post(`${base}/tests/${t.id}/print`, {
           paper: s.paper,
           large: s.large,
+          boxes: s.boxes,
           sheet: s.sheet,
           booklets: s.booklets,
           keys: s.keys,
@@ -232,6 +233,9 @@ export async function renderSheets(host, params, shell) {
           radio("sheet", "none", "No answer sheet", "Only the booklets and keys; students answer in the booklet."),
           h("div", { class: "grid" }, h("div", { class: "field small" }, h("label", { for: "sheet-paper", class: "field-label", text: "Paper" }), paper)),
           tick("sheet-large", "Large print", false, (v) => (s.large = v), "Bigger bubbles and writing, five answers to a question at most."),
+          t.shortAnswers > 0
+            ? tick("sheet-boxes", "Boxes for short answers", false, (v) => (s.boxes = v), "A page after the bubbles with a box for each short answer. You score what is written in each box at review, against its accepted answers; the program reads none of it.")
+            : null,
           tick("sheet-name", "A box for the student's name", true, (v) => (s.nameBox = v)),
         ),
         h("fieldset", { class: "panel" }, h("legend", { text: "Booklets and keys" }),

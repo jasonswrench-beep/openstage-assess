@@ -224,5 +224,37 @@ export function slotRow(l: SheetLayout, slot: number): Rect {
   return { x: columnLeft(l, slot), y: rowCenterY(l, slot) - l.rowPitch / 2, width: columnWidth(l), height: l.rowPitch };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// Written-answer pages: a box for each short answer, after the bubble pages, with the same corner marks, code strip and name box.
+
+/** Where the boxes begin, below the title, the name box and a line of instruction. */
+export const BOX_TOP = 62;
+/** The space between two boxes, across and down. */
+export const BOX_GAP = 5;
+/** A box's height: room for a few words or a line or two of working. */
+export const BOX_HEIGHT = 26;
+/** Two columns of boxes, between the same 22 mm margins as the name box. */
+export const BOX_COLUMNS = 2;
+const BOX_SIDE = 22;
+
+/** How many boxes a written-answer page holds on this paper. */
+export function boxesPerPage(paper: PaperName): number {
+  const { height } = PAPER_MM[paper];
+  const rows = Math.floor((height - FOOTER_RISE - 6 - BOX_TOP + BOX_GAP) / (BOX_HEIGHT + BOX_GAP));
+  return rows * BOX_COLUMNS;
+}
+
+/** How many written-answer pages a number of boxes takes: none for none. */
+export const boxPagesNeeded = (paper: PaperName, boxes: number): number => (boxes === 0 ? 0 : Math.ceil(boxes / boxesPerPage(paper)));
+
+/** The box at a place on its page (from 0), across then down. The number it is labelled with is printed inside its top left. */
+export function boxRect(paper: PaperName, place: number): Rect {
+  const { width } = PAPER_MM[paper];
+  const boxWidth = (width - 2 * BOX_SIDE - (BOX_COLUMNS - 1) * BOX_GAP) / BOX_COLUMNS;
+  const column = place % BOX_COLUMNS;
+  const row = Math.floor(place / BOX_COLUMNS);
+  return { x: BOX_SIDE + column * (boxWidth + BOX_GAP), y: BOX_TOP + row * (BOX_HEIGHT + BOX_GAP), width: boxWidth, height: BOX_HEIGHT };
+}
+
 /** The letter of a place: A, B, C and on. */
 export const placeName = (place: number): string => String.fromCharCode(65 + place);

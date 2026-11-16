@@ -143,7 +143,7 @@ const USAGE = `${PRODUCT_NAME} engine ${ENGINE_VERSION}
       drawn, filled in like a student's, damaged like a scan or a photograph, and read.
       An answer read wrong without a flag fails it. Exit code 1 on failure.
 
-  openassess sheets print <bank${BANK_EXTENSION}> --out <folder> [--test <id or name>] [--paper letter|a4] [--sheet shared|each|none] [--large] [--no-booklets] [--no-keys] [--docx] [--no-name-box]
+  openassess sheets print <bank${BANK_EXTENSION}> --out <folder> [--test <id or name>] [--paper letter|a4] [--sheet shared|each|none] [--large] [--boxes] [--no-booklets] [--no-keys] [--docx] [--no-name-box]
       Write the paper for an assembled test: the answer sheet (a PDF, one for every version or
       one for each), and a student booklet and an answer key for each version. The booklets and
       keys are PDF, or Word with --docx. A file already in the folder is never written over.
@@ -937,7 +937,7 @@ async function cmdSheets(args: string[]): Promise<number> {
     const { bank } = await Bank.open(resolve(bankPath));
     const chosen = pickTest(bank, rest);
     if ("error" in chosen) return fail(chosen.error);
-    const made = printTestPaper(chosen.test, { paper, sheet, large: has(rest, "large"), booklets: !has(rest, "no-booklets"), keys: !has(rest, "no-keys"), nameBox: !has(rest, "no-name-box"), formats: has(rest, "docx") ? ["docx"] : ["pdf"], media: bank.media });
+    const made = printTestPaper(chosen.test, { paper, sheet, large: has(rest, "large"), boxes: has(rest, "boxes"), booklets: !has(rest, "no-booklets"), keys: !has(rest, "no-keys"), nameBox: !has(rest, "no-name-box"), formats: has(rest, "docx") ? ["docx"] : ["pdf"], media: bank.media });
     if (!made.ok) return fail(made.reason);
     const folder = resolve(out);
     await mkdir(folder, { recursive: true });

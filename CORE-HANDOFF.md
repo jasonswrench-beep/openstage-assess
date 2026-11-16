@@ -71,6 +71,20 @@ Two things in OpenAssess changed that the checker touches, and neither moved a f
   and says why when it does not** (a learning system's points above a question's worth, below 0, or worth nothing on one attempt and
   something on another). A second review found the core's checker refusing such files.
 
+## 2c. Third round: item 9, boxes for short answers (15 November 2026)
+
+- **Built as the core's notes said, before C8:** a written-answer page after the bubble pages, code layout 3, a box for each short
+  answer, each box cut out upright for a person, who gives the points. Nothing written in a box is read. C8 is needed only for a model's
+  suggested score beside the rubric, and that would count only once a person accepts it.
+- **Profile 2 writes such a question as type `other`**, with `correct: []`, the question's worth as `points` (or `credit_all`,
+  `dropped`) and the person's points, part points among them, in its `q` cell. `checkPstat` (PSTAT-1 1.2) finds nothing.
+- **A second gap in 7.2 to rule on, like the credited one above:** the checker wants an `r` variable for every `q` variable, and an `r`
+  cell is null only where the points are null, so a box a person scored has `""` in its answer cell, which the spec keeps for "left
+  blank". OpenAssess writes `""` and says so in `source.report.notes` ("r02: question 2 is written in a box and scored by a person ...").
+  Either of these would settle it: let `answer_variable` be null and the `r` variable be left out for a question of type `other` on
+  scanned sheets, or name a cell value for "no letters" (for example `null` with the points present, for type `other` only). A reader
+  that counts blanks from the letters would then not count a scored box as one.
+
 ## 3. For PrismStatistics (passed on through the core, since the two tools share files and not code)
 
 - **Keep the `profile` member when saving** a project that has one. Today it is dropped, which the spec allows, but then a file

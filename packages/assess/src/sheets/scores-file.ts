@@ -15,7 +15,7 @@
 
 import { jsonEntry, readJson, unzipSync, zipSync, type ZipEntry } from "../container/zip.ts";
 import { safeName } from "../export/text.ts";
-import { codeProblem, styleOf, type SheetCode } from "./code.ts";
+import { codeProblem, isBoxPage, styleOf, type SheetCode } from "./code.ts";
 import { layoutFor, placeOf, slotRow } from "./geometry.ts";
 import type { Batch, BatchEntry, BatchSheet } from "./batch.ts";
 import type { Adjustment, Decision } from "./score.ts";
@@ -51,6 +51,8 @@ export interface StoredReading {
   questions: StoredQuestion[];
   quality: SheetReading["quality"];
   notes: string[];
+  /** On a written-answer page, the questions whose boxes it holds. */
+  written?: number[];
 }
 
 export interface StoredPage {
@@ -98,6 +100,8 @@ function storedReading(r: SheetReading): StoredReading {
     questions: r.questions.map((q) => ({ number: q.number, status: q.status, marked: q.marked, ...(q.kind ? { kind: q.kind } : {}), ...(q.reason ? { reason: q.reason } : {}) })),
     quality: r.quality,
     notes: r.notes,
+    // A written-answer page keeps which boxes it holds: the question numbers, and no picture of what was written in them.
+    ...(r.written ? { written: r.written } : {}),
   };
 }
 
@@ -174,7 +178,7 @@ function known(obj: Record<string, unknown>, keys: readonly string[], where: str
 
 function checkReading(r: unknown, where: string): string | undefined {
   if (!isObject(r)) return `${where} is not an object`;
-  const unknownKey = known(r, ["code", "version", "versionSource", "versionFills", "fills", "unregistered", "questions", "quality", "notes"], where);
+  const unknownKey = known(r, ["code", "version", "versionSource", "versionFills", "fills", "unregistered", "questions", "quality", "notes", "written"], where);
   if (unknownKey) return unknownKey;
   if (!isObject(r["code"])) return `${where} has no code`;
   const c = r["code"] as unknown as SheetCode;
@@ -197,6 +201,9 @@ function checkReading(r: unknown, where: string): string | undefined {
     if (!isCount(q["number"]) || !["answered", "blank", "flagged", "notOnSheet"].includes(String(q["status"])) || !Array.isArray(q["marked"])) return `${where}.questions.${i} is not a question's reading`;
   }
   if (!Array.isArray(r["unregistered"]) || !Array.isArray(r["notes"])) return `${where} lacks unregistered or notes`;
+  if (r["written"] !== undefined && !(Array.isArray(r["written"]) && r["written"].every((n) => isCount(n) && (n as number) >= 1))) return `${where}.written is not a list of question numbers`;
+  // A list of boxes belongs on a written-answer page and nowhere else.
+  if ((r["written"] !== undefined) !== isBoxPage(c)) return `${where}: ${isBoxPage(c) ? "a written-answer page lists no boxes" : "a page of bubbles lists boxes"}`;
   if (!isObject(r["quality"])) return `${where}.quality is not an object`;
   return known(r["quality"], ["dpi", "markSidePx", "ring", "ringExpected", "blurMm", "shiftMedianMm", "shiftMaxMm", "blankLevel", "quarterTurns", "bilevel"], `${where}.quality`);
 }
@@ -225,14 +232,18 @@ function checkDecisions(raw: unknown): string | undefined {
   if (!Array.isArray(raw)) return `${DECISIONS} is not a list`;
   for (const [i, d] of raw.entries()) {
     if (!isObject(d)) return `${DECISIONS}: ${i} is not an object`;
-    const k = known(d, ["sheet", "kind", "question", "places", "version", "readerSaw", "at"], `${DECISIONS}: ${i}`);
+    const k = known(d, ["sheet", "kind", "question", "places", "version", "readerSaw", "at", "awarded", "of"], `${DECISIONS}: ${i}`);
     if (k) return k;
     if (!isCount(d["sheet"])) return `${DECISIONS}: ${i} has no sheet`;
     if (d["kind"] === "answer") {
       if (!isCount(d["question"]) || !(d["places"] === "blank" || (Array.isArray(d["places"]) && d["places"].every(isCount)))) return `${DECISIONS}: ${i} is not an answer`;
     } else if (d["kind"] === "version") {
       if (!(Number.isInteger(d["version"]) && (d["version"] as number) >= 1 && (d["version"] as number) <= 4)) return `${DECISIONS}: ${i} is not a version`;
-    } else return `${DECISIONS}: ${i} is neither an answer nor a version`;
+    } else if (d["kind"] === "written") {
+      const of = d["of"];
+      const awarded = d["awarded"];
+      if (!isCount(d["question"]) || !(typeof of === "number" && Number.isFinite(of) && of > 0) || !(awarded === "blank" || (typeof awarded === "number" && Number.isFinite(awarded) && awarded >= 0 && awarded <= of))) return `${DECISIONS}: ${i} is not a score for a written answer`;
+    } else return `${DECISIONS}: ${i} is neither an answer, a version nor a score for a written answer`;
   }
   return undefined;
 }
@@ -366,5 +377,6 @@ function restoreReading(s: StoredReading): SheetReading {
     flags,
     quality: s.quality,
     notes: s.notes,
+    ...(s.written ? { written: s.written } : {}),
   };
 }

@@ -13,7 +13,7 @@
 
 import { hasUsableKey } from "../quality/answer-key.ts";
 import { richTextToPlain } from "../model/richtext.ts";
-import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
+import { isChoice, isMultipleResponse, isShortAnswer, isTrueFalse, type Question } from "../model/question.ts";
 import { VERSION_LABELS, versionQuestions, type TestRecord, type VersionLabel } from "../model/test.ts";
 import type { BatchEntry, BatchSheet } from "./batch.ts";
 import { layoutFor } from "./geometry.ts";
@@ -25,7 +25,13 @@ export type SettledAnswer =
   | { kind: "marked"; places: number[]; by: "reader" | "person" }
   | { kind: "blank"; by: "reader" | "person" }
   /** Flagged and not yet decided. */
-  | { kind: "unsettled"; why: string };
+  | { kind: "unsettled"; why: string }
+  /**
+   * A short answer written in its box and scored by a person: `awarded` points out of the `of` the question was worth when they scored
+   * it, so that a later change to its worth (an adjustment) scales the score rather than leaving it above or below what the question is
+   * now worth. Nothing is read from the writing itself.
+   */
+  | { kind: "written"; awarded: number; of: number; by: "person" };
 
 export interface SettledSheet {
   /** Its place in the batch, from 1. */
@@ -41,7 +47,9 @@ export interface SettledSheet {
 /** What a person decided at review. The reader's own words are kept beside it, so that what was seen and what was decided are both on record. */
 export type Decision =
   | { sheet: number; kind: "answer"; question: number; places: number[] | "blank"; readerSaw?: string; at?: string }
-  | { sheet: number; kind: "version"; version: number; readerSaw?: string; at?: string };
+  | { sheet: number; kind: "version"; version: number; readerSaw?: string; at?: string }
+  /** A person's score for what was written in a question's box: points out of what it was worth then, or left blank. */
+  | { sheet: number; kind: "written"; question: number; awarded: number | "blank"; of: number; at?: string };
 
 export interface SettleOptions {
   /** Take a row the reader found blank as blank without anyone confirming it. */
@@ -66,6 +74,8 @@ export function settleSheets(sheets: readonly BatchSheet[], entries: readonly Ba
     if (versionDecision && versionDecision.kind === "version") version = versionDecision.version;
 
     const answers: Record<number, SettledAnswer> = {};
+    // The questions written in a box on this sheet's version: the only ones a person's points for a box are taken for.
+    const boxed = new Set<number>();
     sheet.pages.forEach((page, index) => {
       if (!page) {
         problems.push(`Page ${index + 1} did not come.`);
@@ -76,9 +86,22 @@ export function settleSheets(sheets: readonly BatchSheet[], entries: readonly Ba
         problems.push(`Page ${page.page} could not be read (${result.reason}).`);
         return;
       }
+      // A written-answer page: each box whose question is a short answer on this sheet's version waits for a person's score. A box whose
+      // question has bubbles on this version is left alone; it is the box of another version's short answer.
+      if (result.written) {
+        const planned = options.reader?.planFor(result.code);
+        const label = version !== undefined ? (VERSION_LABELS[version - 1] as VersionLabel) : undefined;
+        for (const number of result.written) {
+          const use = planned?.ok && label ? planned.plan.uses[label]?.[number - 1] : undefined;
+          if (use?.kind !== "written") continue;
+          boxed.add(number);
+          answers[number] = { kind: "unsettled", why: "What is written in this box has not been scored yet." };
+        }
+        return;
+      }
       let questions = result.questions;
       if (questions.length === 0 && version !== undefined && options.reader) {
-        const planned = options.reader.plan(result.code.paper, result.code.large);
+        const planned = options.reader.planFor(result.code);
         if (planned.ok) {
           const registered = new Map(result.unregistered.map((n) => [n, false] as const));
           questions = decideAll(planned.plan, version, result.code.page, layoutFor(result.code.paper, planned.plan.style), result.fills, registered, result.quality.bilevel);
@@ -94,6 +117,13 @@ export function settleSheets(sheets: readonly BatchSheet[], entries: readonly Ba
     });
     // A person's decision on a question replaces what the reader said, whichever it was.
     for (const d of mine) {
+      if (d.kind === "written") {
+        // Only a box the sheet holds: a score for a question with no box on this sheet's version means nothing, and is not taken. Being
+        // unsettled is not enough, because a flagged row of bubbles is unsettled too.
+        if (!boxed.has(d.question)) continue;
+        answers[d.question] = d.awarded === "blank" ? { kind: "blank", by: "person" } : { kind: "written", awarded: d.awarded, of: d.of, by: "person" };
+        continue;
+      }
       if (d.kind !== "answer") continue;
       answers[d.question] = d.places === "blank" ? { kind: "blank", by: "person" } : { kind: "marked", places: [...d.places].sort((a, b) => a - b), by: "person" };
     }
@@ -227,7 +257,9 @@ export function keyOf(question: Question): string[] {
 function scoreQuestion(question: Question, number: number, answer: SettledAnswer | undefined, adjustments: readonly Adjustment[], version: number): QuestionScore {
   const base = { number, questionId: question.id, marked: [] as string[] };
   const mine = adjustments.filter((a) => a.questionId === question.id && (a.versions === undefined || a.versions.includes(version)));
-  const carried = isChoice(question) || isMultipleResponse(question) || isTrueFalse(question);
+  // A short answer counts on a sheet printed with its box: the box's answer (scored, blank or waiting) is there only then.
+  const written = isShortAnswer(question) && answer !== undefined;
+  const carried = isChoice(question) || isMultipleResponse(question) || isTrueFalse(question) || written;
   if (!carried) return { ...base, outcome: "notOnSheet", earned: 0, possible: 0, why: "A bubble sheet cannot carry this kind of question." };
   if (!hasUsableKey(question)) return { ...base, outcome: "notScored", earned: 0, possible: 0, why: "This question has no usable answer key, so it is not scored." };
   if (mine.some((a) => a.kind === "drop")) return { ...base, outcome: "dropped", earned: 0, possible: 0, why: "Dropped from the total." };
@@ -236,6 +268,14 @@ function scoreQuestion(question: Question, number: number, answer: SettledAnswer
   if (mine.some((a) => a.kind === "credit")) return { ...base, outcome: "credited", earned: round(points), possible: round(points), marked: answer?.kind === "marked" ? answersFor(question, answer.places) : [], ...(!answer || answer.kind === "unsettled" ? { why: CREDITED_UNSETTLED } : {}) };
   if (!answer || answer.kind === "unsettled") return { ...base, outcome: "unsettled", earned: 0, possible: round(points), why: answer?.kind === "unsettled" ? answer.why : "The sheet has nothing for this question." };
   if (answer.kind === "blank") return { ...base, outcome: "blank", earned: 0, possible: round(points) };
+  if (written) {
+    if (answer.kind !== "written") return { ...base, outcome: "unsettled", earned: 0, possible: round(points), why: "What is written in this box has not been scored yet." };
+    // Out of what it was worth when scored, scaled to what it is worth now, and never above it or below nothing.
+    const share = answer.of > 0 ? Math.min(1, Math.max(0, answer.awarded / answer.of)) : 0;
+    const earned = round(points * share);
+    return { ...base, outcome: share >= 1 ? "right" : share <= 0 ? "wrong" : "partial", earned, possible: round(points) };
+  }
+  if (answer.kind === "written") return { ...base, outcome: "unsettled", earned: 0, possible: round(points), why: "A score for a written answer was given to a question that is answered with bubbles." };
 
   const marked = answersFor(question, answer.places);
   const key = new Set(keyOf(question));

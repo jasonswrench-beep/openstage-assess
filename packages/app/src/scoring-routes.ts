@@ -267,7 +267,7 @@ function placesFor(s: ScoringSession, sheetNumber: number, question: number): { 
   for (const p of sheet.pages) {
     const r = p ? (c.entries[p.entry] as BatchEntry).result : undefined;
     if (!r?.ok) continue;
-    const planned = s.reader.plan(r.code.paper, r.code.large);
+    const planned = s.reader.planFor(r.code);
     if (!planned.ok) break;
     const use = planned.plan.uses[letterOf(settled.version) as VersionLabel]?.[question - 1];
     if (use && use.places > 0) return { places: use.places, multiple: use.kind === "multiple" };
@@ -275,15 +275,42 @@ function placesFor(s: ScoringSession, sheetNumber: number, question: number): { 
   throw badRequest(`Question ${question} has no bubbles on this sheet, so it cannot be settled by choosing a bubble.`);
 }
 
+/** Whether a question is written in a box on a sheet (by its place in the sitting): a written-answer page of it lists the box. */
+function writtenOn(s: ScoringSession, at: number, question: number): boolean {
+  const c = compute(s);
+  const sheet = c.batch.sheets[at];
+  return (sheet?.pages ?? []).some((p) => {
+    const r = p ? (c.entries[p.entry] as BatchEntry).result : undefined;
+    return r?.ok === true && (r.written?.includes(question) ?? false);
+  });
+}
+
 function decide(s: ScoringSession, req: ApiRequest): void {
   const input = jsonObject(req);
-  onlyFields(input, ["sheet", "kind", "question", "places", "version"], "The decision");
+  onlyFields(input, ["sheet", "kind", "question", "places", "version", "awarded"], "The decision");
   const sheet = whole(input["sheet"], "The sheet", 1, 100000);
   const c = compute(s);
   if (!c.batch.sheets.some((x) => x.number === sheet)) throw notFound(`There is no sheet ${sheet}.`);
-  const kind = oneOf(input["kind"], ["answer", "version"] as const, "what is being decided");
+  const kind = oneOf(input["kind"], ["answer", "version", "written"] as const, "what is being decided");
   let decision: Decision;
-  if (kind === "version") {
+  if (kind === "written") {
+    // A person's points for what is written in a box: only for a box this sheet holds on its version, and from nothing to what the
+    // question is worth there now. The worth is kept with the points, so a later change to it scales them.
+    const question = whole(input["question"], "The question", 1, s.test.questions.length);
+    const at = c.settled.findIndex((x) => x.number === sheet);
+    const settled = c.settled[at];
+    if (settled?.version === undefined) throw badRequest("Settle the version of this sheet first: which question is in a box depends on it.");
+    const answer = settled.answers[question];
+    if (!answer || !(answer.kind === "unsettled" || answer.kind === "written" || answer.kind === "blank") || !writtenOn(s, at, question)) throw badRequest(`Question ${question} is not written in a box on sheet ${sheet}.`);
+    const worth = c.scores[at]?.questions.find((q) => q.number === question)?.possible ?? 0;
+    if (!(worth > 0)) throw badRequest(`Question ${question} does not count on this sheet (it was dropped, or it has no usable answer), so it is not scored.`);
+    const raw = input["awarded"];
+    let awarded: number | "blank";
+    if (raw === "blank") awarded = "blank";
+    else if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 && raw <= worth) awarded = Math.round(raw * 1e6) / 1e6;
+    else throw badRequest(`Give the points, from 0 to the ${worth} this question is worth, or say the box was left blank.`);
+    decision = { sheet, kind: "written", question, awarded, of: worth };
+  } else if (kind === "version") {
     const version = whole(input["version"], "The version", 1, s.test.versions.length);
     decision = { sheet, kind: "version", version, readerSaw: "The version was not certain." };
   } else {
@@ -310,8 +337,8 @@ function undo(s: ScoringSession, req: ApiRequest): void {
   const input = jsonObject(req);
   onlyFields(input, ["sheet", "kind", "question"], "The request");
   const sheet = whole(input["sheet"], "The sheet", 1, 100000);
-  const kind = oneOf(input["kind"], ["answer", "version"] as const, "what is being taken back");
-  const question = kind === "answer" ? whole(input["question"], "The question", 1, s.test.questions.length) : undefined;
+  const kind = oneOf(input["kind"], ["answer", "version", "written"] as const, "what is being taken back");
+  const question = kind !== "version" ? whole(input["question"], "The question", 1, s.test.questions.length) : undefined;
   const before = s.decisions.length;
   s.decisions = s.decisions.filter((d) => !(d.sheet === sheet && d.kind === kind && (d.kind === "version" || (d as { question: number }).question === question)));
   if (s.decisions.length === before) throw badRequest("There is no such decision to take back.");
