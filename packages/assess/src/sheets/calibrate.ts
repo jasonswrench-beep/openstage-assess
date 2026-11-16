@@ -135,7 +135,8 @@ export function readList(rows: readonly (readonly string[])[]): { rows: ListRow[
       const places = [...new Set([...raw].map((c) => c.charCodeAt(0) - 65))].sort((a, b) => a - b);
       answers.set(number, places);
     }
-    out.push({ line, file, page, sheet: cell("sheet") || `${file} ${page}`, source: sourceText, condition: cell("condition") || "(no condition given)", version, answers });
+    // A row with no sheet named is the file's sheet, so the pages of one file stay together (by the page, they were dealt apart).
+    out.push({ line, file, page, sheet: cell("sheet") || file, source: sourceText, condition: cell("condition") || "(no condition given)", version, answers });
   });
   return { rows: out, problems };
 }
@@ -364,20 +365,18 @@ const spread = (values: number[]): FillSpread => {
 };
 
 /**
- * The halves: within each condition the volunteer sheets are taken in the order the list gives them and dealt out in turn, so every
- * condition is in both halves and the pages of one sheet stay together.
+ * The halves: the volunteer sheets are taken in the order the list first names them and dealt out in turn, so every page of one sheet,
+ * under every condition it was scanned or photographed in, is in the same half. The same marks read on a copier and on a phone are
+ * not two samples: dealt within each condition, one sheet's marks fell in both halves (and a missing photo shifted every sheet after
+ * it), and the half the lines were judged on held marks they were fitted to.
  */
 export function halvesOf(pages: readonly CorpusPage[]): boolean[] {
   const sheetHalf = new Map<string, boolean>();
-  const dealt = new Map<string, number>();
   return pages.map((p) => {
-    const key = `${p.condition}\u0000${p.sheet}`;
-    let half = sheetHalf.get(key);
+    let half = sheetHalf.get(p.sheet);
     if (half === undefined) {
-      const n = dealt.get(p.condition) ?? 0;
-      dealt.set(p.condition, n + 1);
-      half = n % 2 === 0;
-      sheetHalf.set(key, half);
+      half = sheetHalf.size % 2 === 0;
+      sheetHalf.set(p.sheet, half);
     }
     return half;
   });

@@ -68,7 +68,7 @@ describe("the answer list", () => {
     assert.deepEqual(rows.map((r) => r.file), ["c.png"]);
     assert.match(problems.find((p) => p.line === 2)?.message ?? "", /Question 2 says "B\?"/);
     assert.match(problems.find((p) => p.line === 3)?.message ?? "", /neither scan nor photo/);
-    assert.equal(rows[0]?.sheet, "c.png 1", "a row with no sheet named is a sheet of its own");
+    assert.equal(rows[0]?.sheet, "c.png", "a row with no sheet named is its file's sheet, so the pages of one file stay together");
   });
 
   test("refuses a list with no file or source column, or no question", () => {
@@ -105,6 +105,25 @@ describe("the halves", () => {
   });
 });
 
+describe("the halves keep a sheet in one half (found by an independent review)", () => {
+  test("a volunteer's sheet scanned and photographed is in one half under every condition, even when a photo is missing", () => {
+    const p = (sheet: string, condition: string): CorpusPage => ({ ...page(0, {}, 0.8, 0), sheet, condition });
+    const pages = [p("Ana", "copier"), p("Bo", "copier"), p("Cy", "copier"), p("Ana", "phone"), p("Cy", "phone"), p("Bo", "phone")];
+    const h = halvesOf(pages);
+    assert.equal(h[0], h[3], "Ana");
+    assert.equal(h[1], h[5], "Bo, though the photo of Bo came after Cy's");
+    assert.equal(h[2], h[4], "Cy");
+  });
+
+  test("the two pages of one file with no sheet named stay together", () => {
+    const { rows } = readList([["file", "page", "source", "1"], ["vol1.pdf", "1", "scan", "A"], ["vol1.pdf", "2", "scan", "B"], ["vol2.pdf", "1", "scan", "C"]]);
+    const pages = rows.map((r) => ({ ...page(0, {}, 0.8, 0), sheet: r.sheet }));
+    const h = halvesOf(pages);
+    assert.equal(h[0], h[1]);
+    assert.notEqual(h[0], h[2]);
+  });
+});
+
 describe("calibrating", () => {
   test("light pencil that the lines in use flag is read once the line for a mark comes down, and the second half bears it out", () => {
     // Light marks at 0.33 to 0.40, clean paper at 0.01 to 0.03: every marked answer is flagged as faint under the lines in use.
@@ -122,6 +141,19 @@ describe("calibrating", () => {
     assert.ok(r.targets.some((t) => /The lines in use, scans: 100\.0 percent .* not met/.test(t)), r.targets.join("\n"));
     assert.ok(r.targets.some((t) => /The proposed lines, scans: 0\.0 percent .* met/.test(t)), r.targets.join("\n"));
     assert.match(formatCalibration(r), /A person writes them into packages\/assess\/src\/sheets\/decide\.ts/);
+  });
+
+  test("never proposes a line for clean paper that would read a light mark as blank, though it would raise no flag", () => {
+    // Marks at 0.20 are under the lowest line for a mark tried (0.30), so the best any lines can do is flag them; and they are under the
+    // highest line for clean paper tried (0.25), where every mark reads as blank with no flag at all. That would cost a person nothing to
+    // look at and would lose every answer to someone who accepts blanks, so it is not a candidate: the marks stay flagged.
+    const pages = Array.from({ length: 24 }, (_x, n) => page(n, answersFor(n), 0.2, 0.01));
+    const r = calibrate(pages, reader);
+    assert.equal(r.noProposal, undefined, r.noProposal);
+    const l = r.proposed!.lines;
+    assert.ok(l.blank < 0.2, JSON.stringify(l));
+    assert.equal(r.proposed!.tune.missed + r.proposed!.report.missed, 0);
+    assert.ok(r.proposed!.report.answersFlagged > 0, "flagged, not read and not lost");
   });
 
   test("never changes the lines a reading uses", () => {

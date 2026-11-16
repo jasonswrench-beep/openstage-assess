@@ -21,6 +21,11 @@ export interface AdministrationItem {
   questionId: string;
   /** How many sheets this question counted on. */
   sheets: number;
+  /**
+   * The question's version in the test that was given, so the figures are known to be for that wording. Absent in figures kept before
+   * 15 November 2026, where it is worked out from the test or the question's history (`item-history.ts`).
+   */
+  version?: number;
   difficulty?: number;
   pointBiserial?: number;
   upperLower?: number;
@@ -59,6 +64,7 @@ export function administrationFrom(record: TestRecord, stats: TestStatistics, da
     items: stats.items.map((i) => ({
       questionId: i.questionId,
       sheets: i.sheets,
+      ...versionOf(record, i.questionId),
       ...(i.difficulty !== undefined ? { difficulty: i.difficulty } : {}),
       ...(i.discrimination.pointBiserial !== undefined ? { pointBiserial: i.discrimination.pointBiserial } : {}),
       ...(i.discrimination.upperLower !== undefined ? { upperLower: i.discrimination.upperLower } : {}),
@@ -67,6 +73,11 @@ export function administrationFrom(record: TestRecord, stats: TestStatistics, da
     })),
   };
 }
+
+const versionOf = (record: TestRecord, id: string): { version?: number } => {
+  const v = record.questions.find((q) => q.id === id)?.version;
+  return Number.isInteger(v) && (v as number) >= 1 ? { version: v as number } : {};
+};
 
 export type AdministrationCheck = { ok: true; administration: Administration } | { ok: false; issues: Issue[] };
 
@@ -107,7 +118,8 @@ export function validateAdministration(value: unknown): AdministrationCheck {
     items.forEach((raw, i) => {
       const at = `items.${i}`;
       if (!isObject(raw)) return bad(at, "An item is an object.");
-      onlyKnown(raw, ["questionId", "sheets", "difficulty", "pointBiserial", "upperLower", "options", "blanks"], at, bad);
+      onlyKnown(raw, ["questionId", "sheets", "version", "difficulty", "pointBiserial", "upperLower", "options", "blanks"], at, bad);
+      if (raw["version"] !== undefined && !(Number.isInteger(raw["version"]) && (raw["version"] as number) >= 1)) bad(`${at}.version`, "The version is a whole number from 1.");
       if (!isId(raw["questionId"], "q")) bad(`${at}.questionId`, "The question id is not a question id.");
       else if (seen.has(raw["questionId"])) bad(`${at}.questionId`, "A question is in these figures twice.");
       else seen.add(raw["questionId"]);

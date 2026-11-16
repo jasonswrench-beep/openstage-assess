@@ -607,12 +607,15 @@ describe("what is kept and what is written", () => {
       const file = (listed.json["written"] as Json[])[0]!["name"] as string;
       assert.match(file, / - Answer list for calibration\.csv$/);
       const rows = readFileSync(join(home, "Exports", file), "utf8").trim().split("\n");
-      assert.deepEqual(rows.slice(1).map((r) => r.split(",").slice(0, 2)), labels.map((l) => [l, "1"]), "a row for each picture, by the label the window gave it");
+      // Each picture by its place, never by the label the window gave it: those reach no file. The labels come back for the screen only.
+      assert.deepEqual(rows.slice(1).map((r) => r.split(",").slice(0, 2)), [["picture 1", "1"], ["picture 2", "1"]]);
+      for (const label of labels) assert.ok(!readFileSync(join(home, "Exports", file), "utf8").includes(label.replace(/\.png$/, "")), label);
+      assert.deepEqual(listed.json["pictures"], labels.map((l, i) => ({ name: `picture ${i + 1}`, label: l, page: 1 })));
       assert.ok(rows.slice(1).every((r) => r.split(",")[3] === ""), "the source is left for the person, so an untouched row is refused");
 
       const letters = (places: number[]) => places.map((p) => String.fromCharCode(65 + p)).join("");
       const head = rows[0];
-      const filled = [head, ...(["A", "B"] as const).map((v, i) => [labels[i], "1", `S${i}`, "photo", "phone - office light", v, ...rightPlaces(record, v).map(letters)].join(",")), "nothere.png,1,X,scan,flatbed,A"].join("\n");
+      const filled = [head, ...(["A", "B"] as const).map((v, i) => [i === 0 ? "picture 1" : labels[i], "1", `S${i}`, "photo", "phone - office light", v, ...rightPlaces(record, v).map(letters)].join(",")), "nothere.png,1,X,scan,flatbed,A"].join("\n");
       const r = await client.post<Json>(`/api/scoring/${sid}/calibrate`, new TextEncoder().encode(filled));
       assert.equal(r.status, 200, r.text);
       assert.equal(r.json["pages"], 2);
@@ -758,7 +761,9 @@ test("will not open scores against a test whose record has changed since, even u
       const stats = [...entries.keys()].filter((n) => n.startsWith("statistics/"));
       assert.equal(stats.length, 1);
       const text = Buffer.from(entries.get(stats[0]!) as Uint8Array).toString("utf8");
-      assert.ok(!/sheet\s*\d|Jane|Sam|file/i.test(text.replace(/"sheets":\d+/g, "").replace(/"sheets"/g, "")), "no sheet, no name, no file");
+      // Ids are set aside first: they are random letters, and one with "SAM" in it failed this test now and then for no fault.
+      const words = text.replace(/"(q|t|adm|o)_[0-9A-Z]{26}"/g, '""').replace(/"sheets":\d+/g, "").replace(/"sheets"/g, "");
+      assert.ok(!/sheet\s*\d|Jane|Sam|file/i.test(words), `no sheet, no name, no file: ${words}`);
     });
   });
 

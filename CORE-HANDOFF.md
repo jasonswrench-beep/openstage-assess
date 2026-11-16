@@ -12,6 +12,7 @@ into OpenAssess.
 | Core piece | What OpenAssess does now | Result |
 |---|---|---|
 | PSTAT-1, profile `OpenAssess item results 1` | Writes it with its own code (`packages/assess/src/sheets/pstat-export.ts`), because the engine keeps no runtime dependency. Offered on the Score screen ("A file for PrismStatistics"), by `sheets score --out`, and from a learning system's results report | All seven test-set cases come out equal to the set's own `.pstat` files (everything but `app_version`), read with the core's `readPstat`; `checkPstat` finds nothing wrong with any; a file with a total that is not the sum of its questions is refused by it, so the check can fail |
+| An independent review of this code (15 November 2026) | Found, among others, three ways OpenAssess wrote a `.pstat` the core's `checkPstat` refuses: a question left out, a class with nothing in it, and points with seven decimal places (a total rounded to six). All three are fixed and held to `checkPstat` in OpenAssess's tests | `checkPstat` passes for each |
 | C3 item-analysis test set | `item-analysis-reference.test.ts` runs `check/check_openassess.mjs` from the core folder (beside the repository, or `OPENSTAGE_CORE`), and runs it again against a `reference.json` with one figure changed, which must fail. Skipped, and said, when the core is not there. Added to the release checklist | Every figure matches |
 | Point-biserial label | "Point-biserial (total includes the question)" in the app, the workbook and the item analysis page. The SD says "of this class, divided by the number of sheets" | As the set's README asks |
 
@@ -35,16 +36,23 @@ Two things in OpenAssess changed that the checker touches, and neither moved a f
    - **test details**: test id, date given, and source (scanned sheets or a learning system's report).
    Plus test-set cases for each, so both tools are held to the same files. OpenAssess will not put any of this in an unknown member,
    since PrismStatistics drops members it does not know when it saves.
-2. **A sentence in 7.1 on numbering when a question is left out.** It says the `q` variables are in assembled order and labelled with
-   the version A number. Those agree in OpenAssess, but when a question counts on no sheet it is left out and the names skip
-   (`q01`, `q03`), so a name and its label always agree. No test-set case has a question left out. Please say which is meant, and
-   add a case.
-3. **C7, the source ledger** (OpenAssess list item 7): a passage-reference format with a spec, the comparison of two editions of a
+2. **A sentence in 7.1 on numbering when a question is left out.** The text says each `q` variable is labelled with "the
+   question's number on version A", and `checkPstat` holds the kept questions to `q01`, `q02` and on in a row, labelled `Question 1`,
+   `Question 2` and on, with the width from how many are kept. The two disagree as soon as a question counts on no sheet (dropped, an
+   essay on a bubble sheet, no usable key). OpenAssess first followed the text and wrote `q01, q03`, which `checkPstat` refused; it now
+   follows the checker and adds a note in `source.report.notes` saying which question of version A each renumbered variable is
+   ("q02 is question 3 of version A"). Please make the text say what the checker does (or the other way about), and add a test-set
+   case with a question left out.
+4. **C7, the source ledger** (OpenAssess list item 7): a passage-reference format with a spec, the comparison of two editions of a
    .docx or PDF source (unchanged, changed with old and new text, or gone), and a test set of two editions.
-4. **C8, the local AI runtime and assistant server** (OpenAssess items 8 and 9): how a tool asks whether a model or key is there and
+5. **C8, the local AI runtime and assistant server** (OpenAssess items 8 and 9): how a tool asks whether a model or key is there and
    calls it, the assistant-server pattern, and where keys are kept. Item 9 (handwritten short answers scored against a rubric) needs
    it to read handwriting. OpenAssess's rules whatever C8 says: a model never sets an answer key, a suggestion is something a person
    accepts, and nothing leaves the machine unless the person turned that on.
+
+3. **Writing nothing is a writer rule too.** A class with no complete sheet, or whose every question was dropped, makes a file
+   with three variables, which `checkPstat` refuses. OpenAssess no longer writes such a file and says why; the spec could say a
+   writer must not.
 
 ## 3. For PrismStatistics (passed on through the core, since the two tools share files and not code)
 

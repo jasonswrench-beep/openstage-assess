@@ -14,6 +14,36 @@ at.** Most of the serious findings are variations on that.
 
 ---
 
+## Review of the 15 November 2026 round (alpha 28: calibration, the .pstat file, LMS results, item history, QTI 3.0)
+
+An independent reader proved ten faults in the new code, each with a script, and pointed at one more in code written while it read.
+All are fixed, each with a test and a planted fault in `tools/release/mutations-alpha-28-statistics.json`.
+
+- **The `.pstat` was refused by the core's own checker** when a question was left out (named by its version A number, with a gap),
+  when a class had no complete sheet or every question was dropped (a file with no question), and when points had seven places (the
+  total rounded to six). Now numbered in a row with a note, never written empty, and the total is the sum to the last digit.
+- **One student's answer was given to another** in a results report sorted by question with the names taken out: attempts were
+  told apart only by a repeated question. A long report with no column saying whose a row is, or with one attempt's rows apart, is
+  refused now.
+- **Item history credited old figures to new wording** when a question was edited on the day of the class (the version a class saw
+  was worked out from the day). The figures now record each question's version. Figures kept before this have no version and are
+  still worked out by the day.
+- **A history note claimed 45 attempts and rested on 5** (a class where everyone was right has no point-biserial). Each note is now
+  held to the attempts behind its own figure, and names them.
+- **A QTI 3.0 question's shared passage was dropped without a word.** The question now says so and the passage is kept as text no
+  question claimed.
+- **One volunteer's sheet fell in both halves of a calibration** (dealt within each condition, and a missing photo shifted the rest),
+  so lines were judged on marks they were fitted to. Sheets are dealt as a whole now.
+- **A response that read two ways** ("A, B" beside the answers "A, B", "A" and "B") was read one way; now neither. **Blackboard's
+  Manual Score** was ignored; it is used where filled, and said. **A question worth no points** made every attempt incomplete; it now
+  counts on none. **`results --date 2026-13-45`** was kept in the bank; it is refused. The **default quiz name** was the report's file
+  name, which went into the `.pstat` and the bank; it is the system's name now.
+- **The calibration list wrote the labels the window gives the scans into a file**, against the rule that they live only in memory.
+  It names pictures by their place now and shows the labels on screen.
+
+One consequence to know: the class figures now carry each question's `version`, and a release before alpha 28 refuses a field it
+does not know, so it keeps such a figures file as damaged (byte for byte, reported, as for any part it cannot read) rather than read it.
+
 ## Fixed
 
 ### The accuracy gate was not measuring what it claimed

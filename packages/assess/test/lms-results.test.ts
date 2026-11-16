@@ -103,7 +103,7 @@ describe("reading a results report", () => {
     assert.match(broken.ok ? "" : broken.reason, /should be headed with its points/);
     const notNumber = readLmsResults("canvas", [["101: A question", "1.0"], ["x", "one"]]);
     assert.match(notNumber.ok ? "" : notNumber.reason, /Row 2 has "one" where the points earned/);
-    const mixed = readLmsResults("brightspace", [["Q #", "Q Text", "Score", "Out Of"], ["1", "First words", "1", "1"], ["1", "Other words", "1", "1"]]);
+    const mixed = readLmsResults("brightspace", [["Username", "Q #", "Q Text", "Score", "Out Of"], ["a", "1", "First words", "1", "1"], ["b", "1", "Other words", "1", "1"]]);
     assert.match(mixed.ok ? "" : mixed.reason, /different words/);
   });
 
@@ -113,6 +113,43 @@ describe("reading a results report", () => {
     const t = Date.now();
     plainOf("<".repeat(200000));
     assert.ok(Date.now() - t < 500, "a run of < is read once");
+  });
+});
+
+describe("faults found by an independent review", () => {
+  test("a report with no column that says whose a row is, is refused: attempts cannot be told apart", () => {
+    const rows = [["Q #", "Q Text", "Answer", "Score", "Out Of"], ["1", "What is 2 + 2?", "4", "1", "1"], ["1", "What is 2 + 2?", "5", "0", "1"], ["2", "Which?", "a", "1", "1"], ["2", "Which?", "c", "1", "1"]];
+    const r = readLmsResults("brightspace", rows);
+    assert.equal(r.ok, false);
+    assert.match(r.ok ? "" : r.reason, /no column that says whose each row is/);
+  });
+
+  test("a report sorted by question, so one attempt's rows are apart, is refused rather than mixed", () => {
+    const rows = [["Username", "Q #", "Q Text", "Answer", "Score", "Out Of"], ["x", "1", "One", "a", "1", "1"], ["y", "1", "One", "b", "0", "1"], ["z", "1", "One", "a", "1", "1"], ["x", "2", "Two", "c", "1", "1"]];
+    const r = readLmsResults("brightspace", rows);
+    assert.equal(r.ok, false);
+    assert.match(r.ok ? "" : r.reason, /Row 5 goes with an attempt whose rows came earlier/);
+  });
+
+  test("a multiple answer response that is one answer's words and also two answers' marks neither", () => {
+    const q = mr("Pick.", ["A, B", "A", "B"], [1, 2]);
+    const read = ok(readLmsResults("canvas", [["1: Pick.", "1"], ["A, B", "1"], ["A; B", "1"]]));
+    const scores = scoresFromLms(read, matchQuestions(read.questions, [q]), [q]);
+    assert.deepEqual(scores.map((s) => s.questions[0]?.marked), [[], ["o1", "o2"]]);
+  });
+
+  test("Blackboard's Manual Score is used where it is filled, and said", () => {
+    const rows = [["Username", "Question ID", "Question", "Answer", "Possible Points", "Auto Score", "Manual Score"], ["a", "q1", "What is 2 + 2?", "four", "1", "0", "1"], ["b", "q1", "What is 2 + 2?", "4", "1", "1", ""]];
+    const r = ok(readLmsResults("blackboard", rows));
+    assert.deepEqual(r.attempts.map((a) => a.answers.get("q1")?.earned), [1, 1]);
+    assert.ok(r.notes.some((n) => /1 answer has a score given by hand/.test(n)), r.notes.join(" | "));
+  });
+
+  test("a question worth no points counts on no attempt, and the others still make figures", () => {
+    const read = ok(readLmsResults("canvas", [["1: What is 2 + 2?", "1", "2: Which city is the capital of France?", "0"], ["4", "1", "Paris", "0"], ["5", "0", "Lyon", "0"]]));
+    const scores = scoresFromLms(read, matchQuestions(read.questions, bankQuestions), bankQuestions);
+    assert.deepEqual(scores.map((s) => [s.complete, s.possible]), [[true, 1], [true, 1]]);
+    assert.equal(scores[0]?.questions[1]?.outcome, "notScored");
   });
 });
 
@@ -188,6 +225,12 @@ describe("openassess results", () => {
   });
   after(() => rmSync(dir, { recursive: true, force: true }));
 
+  test("refuses a date that is not a day", () => {
+    const r = run(join(dir, "b.openassess"), join(dir, "quiz3.csv"), "--lms", "canvas", "--date", "2026-13-45", "--save-statistics");
+    assert.equal(r.code, 2);
+    assert.match(r.err, /--date is a day written like 2026-11-04, not "2026-13-45"/);
+  });
+
   test("names the systems it reads when none is given", () => {
     const r = run(join(dir, "b.openassess"), join(dir, "quiz3.csv"));
     assert.equal(r.code, 2);
@@ -202,7 +245,7 @@ describe("openassess results", () => {
     assert.match(r.out, /3 attempts and 3 questions read from Canvas's Student Analysis report; 3 matched/);
     assert.match(r.out, /Matched by its title|over 3 complete attempts/);
     const [file] = readdirSync(out);
-    assert.match(file ?? "", /^quiz3 \(Canvas\) - Results for statistics 2026-10-02\.pstat$/);
+    assert.match(file ?? "", /^Quiz results \(Canvas\) - Results for statistics 2026-10-02\.pstat$/, "named for the system and never for the report's file");
     const text = new TextDecoder().decode(unzipSync(new Uint8Array(readFileSync(join(out, file as string)))).get("project.json"));
     const project = JSON.parse(text);
     assert.equal(project.source.report.notes[0], "From Canvas's Student Analysis report, with the learning system's own points.");

@@ -189,7 +189,8 @@ describe("the figures a bank keeps", () => {
     assert.equal(administration.items.length, 4);
     const json = JSON.stringify(administration);
     assert.ok(!/Smith|\.pdf|fingerprint|sheet 1|"number"|"fills"/.test(json), "nothing a student did, and no file");
-    assert.deepEqual(Object.keys(administration.items[0] as object).sort(), ["blanks", "difficulty", "options", "pointBiserial", "questionId", "sheets", "upperLower"].filter((k) => k in (administration.items[0] as object)).sort());
+    assert.deepEqual(Object.keys(administration.items[0] as object).sort(), // The question's version (since 15 November 2026) says which wording the figures are for; it is about the question, not a student.
+["blanks", "difficulty", "options", "pointBiserial", "questionId", "sheets", "upperLower", "version"].filter((k) => k in (administration.items[0] as object)).sort());
     const check = validateAdministration(administration);
     assert.ok(check.ok, check.ok ? "" : check.issues.map((i) => i.message).join("; "));
   });

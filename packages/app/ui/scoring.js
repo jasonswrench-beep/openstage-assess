@@ -752,6 +752,7 @@ export async function renderScoring(host, params, shell) {
             h("h3", { text: "The files are made" }),
             h("p", { class: "sub", text: "They are in the Exports folder inside your OpenAssess folder. Nothing already there was written over." }),
             ...result.written.map(/** @param {any} file */ (file) => h("div", { class: "file-row" }, h("span", { class: "file-name", text: file.name }), ...fileButtons(file, shell))),
+            ...(result.notes ?? []).map(/** @param {string} n */ (n) => h("p", { class: "hint", text: n })),
           ),
         );
       } catch (error) {
@@ -792,7 +793,13 @@ export async function renderScoring(host, params, shell) {
       try {
         const done = await post(`${base}/calibration-list`);
         clear(out);
-        put(out, h("div", { class: "written" }, ...done.written.map(/** @param {any} file */ (file) => h("div", { class: "file-row" }, h("span", { class: "file-name", text: file.name }), ...fileButtons(file, shell)))));
+        put(
+          out,
+          h("div", { class: "written" }, ...done.written.map(/** @param {any} file */ (file) => h("div", { class: "file-row" }, h("span", { class: "file-name", text: file.name }), ...fileButtons(file, shell)))),
+          // The list names each picture by its place, since the names the pictures came with are never written to a file; this is the key.
+          h("p", { class: "sub", text: "The list names each picture by its place in this sitting:" }),
+          h("ul", null, ...done.pictures.map(/** @param {any} p */ (p) => h("li", { text: `${p.name}: ${p.label}, page ${p.page}` }))),
+        );
       } catch (error) {
         tell(error);
       }

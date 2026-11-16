@@ -29,6 +29,7 @@ const mc = (stem: string, at = "2026-01-05T00:00:00.000Z"): Question =>
 const edited = (q: Question, day: string): Question => ({ ...q, version: 2, history: [...q.history, { at: `${day}T12:00:00.000Z`, by: "t", change: "edited", fromVersion: 1, toVersion: 2 }] });
 
 const TEST_ID = `t_${"5".padStart(26, "0")}`;
+const AT_TEST = "2026-02-01T00:00:00.000Z";
 function run(date: string, items: Array<{ q: Question; sheets: number; difficulty?: number; pointBiserial?: number; chosen?: number[] }>, testId = TEST_ID): Administration {
   const sheets = Math.max(...items.map((i) => i.sheets));
   return {
@@ -102,7 +103,10 @@ describe("item history", () => {
   test("takes the version a class saw from the test's own copy when the bank still holds the test", () => {
     const q1 = mc("Copied");
     const record = createTest({ id: TEST_ID, name: "Midterm", questions: [q1], versions: 1, seed: "s", at: "2026-02-01T00:00:00.000Z" });
-    const now = edited(q1, "2026-01-01"); // a history that says version 2 was in force, and a test copy that says 1
+    // Edited after it was made (5 January) and before the class (1 March): the history says version 2 was in force, and the test's
+    // copy, taken before the edit, says 1. The copy is what the class saw. (With the edit dated before the question was made, the
+    // history also came to 1, and a planted fault that skipped the copy went unseen.)
+    const now = edited(q1, "2026-02-10");
     const h = itemHistory([now], [run("2026-03-01", [{ q: now, sheets: 40, difficulty: 0.5, pointBiserial: 0.3 }])], (id) => (id === TEST_ID ? record : undefined)).get(now.id)!;
     assert.equal(h.runs[0]?.version, 1);
     assert.equal(h.runs[0]?.current, false);
@@ -131,6 +135,33 @@ describe("item history", () => {
     const q = createQuestion({ type: "multipleChoice", stem: plainToRich("No key"), body: { shuffle: false, options: [0, 1, 2].map((i) => ({ id: `o${i}`, content: plainToRich(`A${i}`), correct: false })) }, by: "t", at: "2026-01-01T00:00:00.000Z", id: `q_${String(++made).padStart(26, "0")}` });
     const h = itemHistory([q], [run("2026-03-01", [{ q, sheets: 40, difficulty: 0.5, pointBiserial: 0.3, chosen: [20, 20, 0] }])], none);
     assert.ok(!codes(h, q).includes("history.unchosen"));
+  });
+});
+
+describe("faults found by an independent review", () => {
+  test("the version the figures recorded is the one used, not the day: a question rewritten on the day of a class keeps the old figures apart", () => {
+    const q = edited(mc("Rewritten today"), "2026-11-15");
+    const a = run("2026-11-15", [{ q, sheets: 40, difficulty: 0.1, pointBiserial: -0.4, chosen: [4, 36, 0, 0] }]);
+    (a.items[0] as { version?: number }).version = 1;
+    const h = itemHistory([q], [a], none).get(q.id)!;
+    assert.deepEqual([h.runs[0]?.version, h.runs[0]?.current], [1, false]);
+    assert.deepEqual(h.notes, []);
+  });
+
+  test("the figures kept for a test record the version of each question in it", async () => {
+    const { administrationFrom } = await import("../src/model/statistics.ts");
+    const q = edited(mc("Kept"), "2026-01-06");
+    const record = createTest({ id: TEST_ID, name: "T", questions: [q], versions: 1, seed: "s", at: AT_TEST });
+    const adm = administrationFrom(record, { sheets: 1, leftOut: 0, unstable: true, items: [{ questionId: q.id, sheets: 1, difficulty: 1, discrimination: {}, options: [], blanks: 0, notes: [] }], notes: [] }, "2026-02-01");
+    assert.equal(adm.items[0]?.version, 2);
+  });
+
+  test("a note on the point-biserial needs 30 attempts behind the point-biserial, and says how many", () => {
+    const q = mc("All right in the big class");
+    const h = itemHistory([q], [run("2026-03-01", [{ q, sheets: 40, difficulty: 1, chosen: [40, 0, 0, 0] }]), run("2026-04-01", [{ q, sheets: 5, difficulty: 0.4, pointBiserial: -0.6, chosen: [2, 3, 0, 0] }])], none);
+    assert.ok(!codes(h, q).includes("history.wrong-way"), "five attempts are not enough");
+    const big = itemHistory([q], [run("2026-03-01", [{ q, sheets: 40, difficulty: 1, chosen: [40, 0, 0, 0] }]), run("2026-04-01", [{ q, sheets: 31, difficulty: 0.4, pointBiserial: -0.6, chosen: [12, 19, 0, 0] }])], none);
+    assert.match(big.get(q.id)!.notes.find((n) => n.code === "history.wrong-way")?.message ?? "", /^Over 1 class \(31 attempts\)/);
   });
 });
 

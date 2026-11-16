@@ -471,6 +471,10 @@ layouts were written from documentation and memory, and **no real report from an
   names the columns it looked for: send me the first row (the column names) and one row with the student columns blanked, and I will
   fix the layout from it. If it reads, check the attempts count, that every question matched, and that the difficulty of one question
   agrees with what the learning system's own statistics page shows.
+- [ ] **Keep the user name column in Brightspace's and Blackboard's reports.** Those reports have a row for each question of each
+  attempt, and the user name (or id) column is the only way to tell one attempt's rows from another's: a report without it, or one
+  re-sorted by question, is refused with a message, because a review showed it otherwise mixed students. The column is never read into
+  anything. If the systems' own downloads come sorted some other way, say so.
 - [ ] **A question that did not match.** A question edited in the learning system after the export, or two bank questions with the same
   words, is left out of the figures and listed with the reason. Say whether that is what you want, or whether a looser match would be
   worth a confirm step (a looser match is never made without one, since it could put one question's figures on another).

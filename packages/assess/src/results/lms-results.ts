@@ -145,26 +145,34 @@ function readCanvas(rows: readonly (readonly string[])[]): LmsRead {
 }
 
 /** A report with one row for each question of each attempt, read by the names of the columns it must have. */
-function readLong(lms: LmsId, rows: readonly (readonly string[])[], columns: { attempt: string[]; question: string[]; text: string[]; title?: string[]; response: string[]; earned: string[]; possible: string[] }, name: string): LmsRead {
+function readLong(lms: LmsId, rows: readonly (readonly string[])[], columns: { attempt: string[]; question: string[]; text: string[]; title?: string[]; response: string[]; earned: string[]; manual?: string[]; possible: string[] }, name: string): LmsRead {
   const [header, ...body] = rows;
   if (!header) return { ok: false, reason: "The file is empty." };
   const names = header.map(norm);
   const find = (options: readonly string[]): number => names.findIndex((n) => options.includes(n));
-  const at = { attempt: find(columns.attempt), question: find(columns.question), text: find(columns.text), title: columns.title ? find(columns.title) : -1, response: find(columns.response), earned: find(columns.earned), possible: find(columns.possible) };
+  const at = { attempt: find(columns.attempt), question: find(columns.question), text: find(columns.text), title: columns.title ? find(columns.title) : -1, response: find(columns.response), earned: find(columns.earned), manual: columns.manual ? find(columns.manual) : -1, possible: find(columns.possible) };
   const missing = (["question", "text", "earned", "possible"] as const).filter((k) => at[k] < 0).map((k) => `"${columns[k][0]}"`);
   if (missing.length > 0) return { ok: false, reason: `This is not ${name}: it has no ${missing.join(", ")} column. Make that report again, as the import menu says, and do not change its columns.` };
   // An attempt is the student's rows taken together. The report says who, and the person is never read: a change of the user columns
-  // (or of the attempt number) starts the next attempt, known only by its place.
+  // (or of the attempt number) starts the next attempt, known only by its place. The who columns are used for that and for nothing
+  // else, and without them attempts cannot be told apart: a report sorted by question with the names taken out gave one student's
+  // answer to the first question and another's to the second to one attempt, and figures were made from a total nobody earned. So a
+  // report with no who column is refused, and so is one whose rows for one attempt are not together.
   const who = names.map((n, i) => (PERSONAL.includes(n) && !["section", "section #", "date", "attempt start", "attempt end", "submitted"].includes(n) ? i : -1)).filter((i) => i >= 0);
+  if (who.length === 0) return { ok: false, reason: `This report has no column that says whose each row is (a user name, an id or a name), so one attempt's rows cannot be told from another's. Download ${name} again with those columns: they are used only to keep each attempt's rows together, and are never read into anything.` };
   const questions = new Map<string, LmsQuestion>();
   const attempts: LmsAttempt[] = [];
+  const finished = new Set<string>();
   let lastKey = "";
+  let manualUsed = 0;
   for (const [r, row] of body.entries()) {
     if (row.every((c) => c.trim() === "")) continue;
     const attemptKey = [...who.map((i) => row[i] ?? ""), at.attempt >= 0 ? (row[at.attempt] ?? "") : ""].join("\u0000");
     const key = (row[at.question] ?? "").trim();
     let current = attempts[attempts.length - 1];
     if (!current || attemptKey !== lastKey || current.answers.has(key)) {
+      if (attemptKey !== lastKey && finished.has(attemptKey)) return { ok: false, reason: `Row ${r + 2} goes with an attempt whose rows came earlier, so the report is not sorted by student and attempt. Sort it by student (and by attempt) without changing anything else, or download it again, and import it then.` };
+      if (current) finished.add(lastKey);
       current = { number: attempts.length + 1, answers: new Map() };
       attempts.push(current);
       lastKey = attemptKey;
@@ -175,12 +183,18 @@ function readLong(lms: LmsId, rows: readonly (readonly string[])[], columns: { a
     const known = questions.get(key);
     if (!known) questions.set(key, { key, text, ...(title ? { title } : {}) });
     else if (known.text !== text) return { ok: false, reason: `Question ${key} has different words in row ${r + 2} than earlier in the file, so the report mixes two quizzes or two versions of a question. Export one quiz at a time.` };
-    const earned = points(row[at.earned]);
+    const auto = points(row[at.earned]);
+    // A score given by hand (Blackboard's Manual Score) is the one the course uses where it is filled; it was left unread at first.
+    const manual = at.manual >= 0 ? points(row[at.manual]) : undefined;
+    const earned = manual !== undefined && manual !== "bad" ? manual : auto;
+    if (manual !== undefined && manual !== "bad") manualUsed++;
     const possible = points(row[at.possible]);
-    if (earned === "bad" || possible === "bad") return { ok: false, reason: `Row ${r + 2} has "${(row[earned === "bad" ? at.earned : at.possible] ?? "").slice(0, 20)}" where a number of points should be.` };
+    if (earned === "bad" || possible === "bad" || manual === "bad") return { ok: false, reason: `Row ${r + 2} has "${(row[manual === "bad" ? at.manual : earned === "bad" ? at.earned : at.possible] ?? "").slice(0, 20)}" where a number of points should be.` };
     current.answers.set(key, { response: at.response >= 0 ? (row[at.response] ?? "") : undefined, ...(earned !== undefined ? { earned } : {}), ...(possible !== undefined ? { possible } : {}) });
   }
-  return { ok: true, lms, questions: [...questions.values()], attempts, notes: personalNote(header) };
+  const notes = personalNote(header);
+  if (manualUsed > 0) notes.push(`${said(manualUsed, "answer has", "answers have")} a score given by hand, which is used in place of the score the system worked out.`);
+  return { ok: true, lms, questions: [...questions.values()], attempts, notes };
 }
 
 /** A report, read as the layout of the system named. */
@@ -189,7 +203,7 @@ export function readLmsResults(lms: LmsId, rows: readonly (readonly string[])[])
   if (lms === "brightspace") {
     return readLong("brightspace", rows, { attempt: ["attempt #", "attempt"], question: ["q #", "q#", "question #"], text: ["q text", "question text"], title: ["q title", "question title"], response: ["answer", "response"], earned: ["score", "points"], possible: ["out of", "points possible"] }, "the Brightspace quiz statistics export");
   }
-  return readLong("blackboard", rows, { attempt: ["attempt"], question: ["question id", "question number"], text: ["question"], response: ["answer", "given answer"], earned: ["auto score", "score"], possible: ["possible points", "points possible"] }, "Blackboard's Download Results, by question and user");
+  return readLong("blackboard", rows, { attempt: ["attempt"], question: ["question id", "question number"], text: ["question"], response: ["answer", "given answer"], earned: ["auto score", "score"], manual: ["manual score"], possible: ["possible points", "points possible"] }, "Blackboard's Download Results, by question and user");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -246,15 +260,18 @@ function answersOf(question: Question, response: string): string[] {
   if (!isChoice(question) && !isMultipleResponse(question)) return [];
   const options = question.body.options.map((o) => ({ id: o.id, words: compare(richTextToPlain(o.content)) }));
   const whole = options.filter((o) => o.words === words);
-  if (whole.length === 1) return [(whole[0] as { id: string }).id];
-  if (!isMultipleResponse(question)) return [];
+  if (!isMultipleResponse(question)) return whole.length === 1 ? [(whole[0] as { id: string }).id] : [];
+  const readings: string[][] = whole.length === 1 ? [[(whole[0] as { id: string }).id]] : [];
   for (const sep of [";", ",", "|"]) {
     const parts = words.split(sep).map((p) => p.trim()).filter((p) => p !== "");
     if (parts.length < 2) continue;
     const ids = parts.map((p) => options.filter((o) => o.words === p));
-    if (ids.every((m) => m.length === 1)) return [...new Set(ids.map((m) => (m[0] as { id: string }).id))];
+    if (ids.every((m) => m.length === 1)) readings.push([...new Set(ids.map((m) => (m[0] as { id: string }).id))]);
   }
-  return [];
+  // A response that is one answer's words and also several answers' ("A, B" beside the answers "A, B", "A" and "B") is read neither
+  // way: the answer counts and the notes on unchosen answers are built on it.
+  const distinct = new Set(readings.map((r) => [...r].sort().join("\u0000")));
+  return distinct.size === 1 ? (readings[0] as string[]) : [];
 }
 
 export type LmsResults =
@@ -294,7 +311,10 @@ export function scoresFromLms(read: Extract<LmsRead, { ok: true }>, matches: rea
       const possible = answer?.possible;
       const earned = answer?.earned;
       const marked = answer?.response !== undefined ? answersOf(q, answer.response) : [];
-      if (possible === undefined || earned === undefined || possible <= 0) {
+      // A question worth nothing in the course counts on no attempt, as one dropped from a test does; taken as unsettled, it left every
+      // attempt incomplete and the whole report refused.
+      if (possible === 0) return { number: j + 1, questionId: q.id, outcome: "notScored" as Outcome, earned: 0, possible: 0, marked, why: "The learning system gives it no points." };
+      if (possible === undefined || earned === undefined || possible < 0) {
         unsettled++;
         return { number: j + 1, questionId: q.id, outcome: "unsettled" as Outcome, earned: 0, possible: possible && possible > 0 ? possible : 0, marked, why: "The learning system gave no points for it in this attempt." };
       }

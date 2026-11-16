@@ -91,7 +91,7 @@ export function fromQti3(root: XmlElement): XmlElement {
 }
 
 /** Whether a document's root is a QTI 3.0 item or test. */
-export const isQti3Root = (root: XmlElement): boolean => root.name === "qti-assessment-item" || root.name === "qti-assessment-test";
+export const isQti3Root = (root: XmlElement): boolean => root.name === "qti-assessment-item" || root.name === "qti-assessment-test" || root.name === "qti-assessment-stimulus";
 
 const escapeText = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const escapeAttr = (s: string): string => escapeText(s).replace(/"/g, "&quot;");

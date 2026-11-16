@@ -66,10 +66,13 @@ export interface ItemHistory {
 const round = (v: number): number => Math.round(v * 10000) / 10000;
 
 /**
- * The version of a question a class saw: the test's own copy when the bank still holds the test, otherwise the version the question's
- * history says it had at the end of that day. Undefined when neither can say.
+ * The version of a question a class saw: what the figures recorded, which they do from 15 November 2026; for older figures, the test's
+ * own copy when the bank still holds the test, otherwise the version the question's history says it had at the end of that day.
+ * Undefined when none can say. The day was all there was at first, and it is wrong on the day itself: figures read in from a learning
+ * system this morning and the question rewritten this afternoon counted the old figures as the new wording's.
  */
-function versionSeen(question: Question, run: Administration, test: TestRecord | undefined): number | undefined {
+function versionSeen(question: Question, run: Administration, test: TestRecord | undefined, recorded: number | undefined): number | undefined {
+  if (recorded !== undefined) return recorded;
   const copy = test?.questions.find((q) => q.id === question.id);
   if (copy) return copy.version;
   const changes = question.history.filter((h) => h.toVersion !== undefined).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
@@ -108,7 +111,7 @@ export function itemHistory(questions: readonly Question[], administrations: rea
     for (const item of run.items) {
       const question = byId.get(item.questionId);
       if (!question) continue;
-      const version = versionSeen(question, run, test);
+      const version = versionSeen(question, run, test, item.version);
       const history = out.get(question.id) ?? { questionId: question.id, runs: [], notes: [] };
       history.runs.push({
         administrationId: run.id,
@@ -136,25 +139,29 @@ export function itemHistory(questions: readonly Question[], administrations: rea
     const now = history.runs.filter((r) => r.current);
     const sheets = now.reduce((s, r) => s + r.sheets, 0);
     if (now.length === 0) continue;
-    const weighted = (key: "difficulty" | "pointBiserial"): number | undefined => {
+    // Each figure pooled from the classes that have it, with the classes and attempts behind it: a class where everyone was right has
+    // no point-biserial, and a note on the pooled one once rested on 5 attempts while it said 45.
+    const weighted = (key: "difficulty" | "pointBiserial"): { value: number; classes: number; sheets: number } | undefined => {
       const have = now.filter((r) => r[key] !== undefined);
       const n = have.reduce((s, r) => s + r.sheets, 0);
-      return n === 0 ? undefined : round(have.reduce((s, r) => s + (r[key] as number) * r.sheets, 0) / n);
+      return n === 0 ? undefined : { value: round(have.reduce((s, r) => s + (r[key] as number) * r.sheets, 0) / n), classes: have.length, sheets: n };
     };
-    const pooled = { classes: now.length, sheets, ...(weighted("difficulty") !== undefined ? { difficulty: weighted("difficulty") } : {}), ...(weighted("pointBiserial") !== undefined ? { pointBiserial: weighted("pointBiserial") } : {}) };
-    history.pooled = pooled;
-    // Say nothing on too few attempts.
-    if (sheets < SMALL_GROUP) continue;
-    const classes = `${now.length} class${now.length === 1 ? "" : "es"} (${sheets} attempts)`;
-    const pb = pooled.pointBiserial;
-    if (pb !== undefined && pb < 0) {
-      history.notes.push({ code: "history.wrong-way", message: `Over ${classes} the students who did better on the whole test did worse on this question (point-biserial ${pb.toFixed(2)}). Check that the key is right and the wording is not misleading.` });
-    } else if (pb !== undefined && pb < WEAK_DISCRIMINATION) {
-      history.notes.push({ code: "history.weak", message: `Over ${classes} this question told the stronger students from the weaker only a little (point-biserial ${pb.toFixed(2)}, under ${WEAK_DISCRIMINATION}).` });
+    const pd = weighted("difficulty");
+    const pp = weighted("pointBiserial");
+    history.pooled = { classes: now.length, sheets, ...(pd ? { difficulty: pd.value } : {}), ...(pp ? { pointBiserial: pp.value } : {}) };
+    // Say nothing on too few attempts: the line is held to the attempts behind each figure, and the note names them.
+    const over = (f: { classes: number; sheets: number }): string => `${f.classes} class${f.classes === 1 ? "" : "es"} (${f.sheets} attempts)`;
+    if (pp && pp.sheets >= SMALL_GROUP) {
+      const pb = pp.value;
+      if (pb < 0) history.notes.push({ code: "history.wrong-way", message: `Over ${over(pp)} the students who did better on the whole test did worse on this question (point-biserial ${pb.toFixed(2)}). Check that the key is right and the wording is not misleading.` });
+      else if (pb < WEAK_DISCRIMINATION) history.notes.push({ code: "history.weak", message: `Over ${over(pp)} this question told the stronger students from the weaker only a little (point-biserial ${pb.toFixed(2)}, under ${WEAK_DISCRIMINATION}).` });
     }
-    const d = pooled.difficulty;
-    if (d !== undefined && d >= TOO_EASY) history.notes.push({ code: "history.too-easy", message: `Over ${classes}, ${Math.round(d * 100)} percent got this right: it may not be telling you much.` });
-    if (d !== undefined && d <= TOO_HARD) history.notes.push({ code: "history.too-hard", message: `Over ${classes}, only ${Math.round(d * 100)} percent got this right. Check the key, the wording and whether it was taught.` });
+    if (pd && pd.sheets >= SMALL_GROUP) {
+      const d = pd.value;
+      if (d >= TOO_EASY) history.notes.push({ code: "history.too-easy", message: `Over ${over(pd)}, ${Math.round(d * 100)} percent got this right: it may not be telling you much.` });
+      if (d <= TOO_HARD) history.notes.push({ code: "history.too-hard", message: `Over ${over(pd)}, only ${Math.round(d * 100)} percent got this right. Check the key, the wording and whether it was taught.` });
+    }
+    if (sheets < SMALL_GROUP) continue;
 
     // A wrong answer nobody chose, over every class that saw the question as it is now.
     const right = rightAnswers(question);

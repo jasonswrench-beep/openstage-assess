@@ -604,6 +604,10 @@ const OTHER_INTERACTIONS = ["inlineChoiceInteraction", "associateInteraction", "
 
 function item21(root: XmlElement, tag: string | undefined, source: { file: string; firstBlock: number; lastBlock: number }, ctx: Context, docPath: string): Built {
   const r = new ItemReader(ctx, docPath);
+  // A shared passage (a QTI 3.0 stimulus) is a file of its own that the question only names. Its words are kept as text no question
+  // claimed, and the question says so: read as it was at first, the question was "parsed" and the passage was nowhere.
+  const stimuli = all(root, "assessmentStimulusRef").map((s) => attr(s, "href") || attr(s, "identifier"));
+  if (stimuli.length > 0) r.note(FindingCode.UnreadContent, "warn", `This question refers to a passage kept in another file (${stimuli.map((h) => quoted(h)).join(", ")}), which is not part of its text. The passage is kept as text no question claimed; put it into the question if the question needs it.`);
   const decls = declarations(root);
   const body = first(root, "itemBody") ?? NONE;
   const score = elements(root, "outcomeDeclaration").find((o) => attr(o, "identifier") === "SCORE");
@@ -914,6 +918,7 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
   const byPath = new Map(found.docs.map((d) => [d.path, d] as const));
   const placed = new Set<string>();
   let ignored = 0;
+  const passages: Doc[] = [];
   const title = (el: XmlElement): string | undefined => {
     const t = attr(el, "title").replace(/\s+/g, " ").trim();
     return t !== "" && t.length <= 100 ? t : undefined;
@@ -942,7 +947,8 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
       walk(doc.root, assessments.length === 1 ? title(assessments[0] as XmlElement) : undefined);
     } else if (doc.root.name === "assessmentItem" && !placed.has(doc.path)) {
       entries.push({ version: "2.1", doc, el: doc.root });
-    } else if (doc.root.name !== "assessmentItem" && doc.root.name !== "assessmentTest") ignored++;
+    } else if (doc.root.name === "assessmentStimulus") passages.push(doc);
+    else if (doc.root.name !== "assessmentItem" && doc.root.name !== "assessmentTest") ignored++;
   }
   if (entries.length > MOST_ITEMS) return refuse(`This file has ${entries.length} questions, more than the ${MOST_ITEMS} this reader follows.`);
 
@@ -975,6 +981,13 @@ function readBytes(bytes: Uint8Array, options: ImportOptions): ImportResult {
     if (built.question) questions.push(built.question);
     if (built.orphan) orphans.push(built.orphan);
   });
+  for (const doc of passages) {
+    const own = [`<!-- ${doc.path} -->`, ...serialize(read3.has(doc.root) ? qti3Names(doc.root) : doc.root)];
+    const source = { file, firstBlock: lines.length, lastBlock: lines.length + own.length - 1 };
+    for (const line of own) lines.push(line);
+    const words = allText(first(doc.root, "stimulusBody") ?? doc.root).replace(/\s+/g, " ").trim();
+    if (words !== "") orphans.push({ source, text: words, reason: "A passage (a stimulus) that questions refer to. It is not part of any question's text." });
+  }
 
   // Brightspace keeps a difficulty, a bonus mark and a mandatory mark for each question in `itemproc_extension`. The model has no place
   // for them (a difficulty is a different scale), so they are counted and said once for the file and not for every question.

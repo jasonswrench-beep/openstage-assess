@@ -31,10 +31,11 @@ help OpenAssess most:
    table. Item details are not secret in the way question text is; question text stays out, as 7.1 says.
 4. Test set cases for the new parts, so PrismStatistics and OpenAssess are held to the same files.
 
-One wording point in 7.1, not a request: it says the `q` variables are "in the order the test was assembled" and labelled with
-"the question's number on version A". In OpenAssess version A is the assembled order, so these agree; when a question counts on no
-sheet and is left out, OpenAssess names the variables by the version A number (`q01`, `q03`), so a name and its label always agree.
-The set has no case with a question left out. A sentence in 7.1 saying which is meant would settle it for other writers.
+One wording point in 7.1: it says each `q` variable is labelled with "the question's number on version A", while `checkPstat` holds
+the kept questions to `q01`, `q02` and on in a row, labelled `Question 1` and on. They disagree when a question counts on no sheet.
+OpenAssess first followed the text (`q01`, `q03`), which `checkPstat` refused; it now follows the checker and says in
+`source.report.notes` which question of version A each renumbered variable is. The set has no case with a question left out. A
+sentence in 7.1, and a case, would settle it.
 
 ## 2. C7, the source ledger (for list item 7)
 

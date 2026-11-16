@@ -185,6 +185,7 @@ async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Pr
   if (c.scores.length === 0) throw badRequest("There are no sheets to write results for yet.");
   const made = exportResults(s.test, c.settled, s.adjustments, c.stats, date);
   const files: Array<[string, Uint8Array | string, string]> = [];
+  const notes: string[] = [];
   if (what.includes("workbook")) files.push([`${made.base}.xlsx`, made.xlsx, "workbook"]);
   if (what.includes("csv")) files.push([`${made.base}.csv`, made.csv, "csv"]);
   if (what.includes("analysis")) files.push([`${cleanName(s.test.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(s.test, c.stats, date), "analysis"]);
@@ -192,27 +193,37 @@ async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Pr
   // release Check for updates knows this copy as.
   if (what.includes("statistics")) {
     const pstat = pstatProject(s.test, c.scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION));
-    if (pstat.sheets === 0 && what.length === 1) throw badRequest("No sheet is complete yet, so there is nothing to send for statistics: settle the flagged questions first.");
-    if (pstat.sheets > 0) files.push([`${cleanName(s.test.name, "Test")} - Results for statistics ${date}${PSTAT_EXTENSION}`, writePstatFile(pstat.project), "statistics"]);
+    if (pstat.refused && what.length === 1) throw badRequest(pstat.refused);
+    // Asked for with the other files, a .pstat that cannot be written is said beside them rather than left out without a word.
+    if (pstat.refused) notes.push(`The file for PrismStatistics was not written. ${pstat.refused}`);
+    else files.push([`${cleanName(s.test.name, "Test")} - Results for statistics ${date}${PSTAT_EXTENSION}`, writePstatFile(pstat.project), "statistics"]);
   }
   const written = [];
   for (const [wanted, data, kind] of files) {
     const name = await writeNewFile(ctx.library.exports, checkName(fitFileName(wanted)), data);
     written.push({ name, path: join(ctx.library.exports, name), kind });
   }
-  return ok({ written });
+  return ok({ written, notes });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Setting the fill lines on real paper (the engine's calibrate.ts), from the pictures of this sitting. The window decodes a phone's
 // JPEG, which the command line cannot, so a corpus of photographs is calibrated here. Nothing is changed: the lines are proposed.
 
-/** POST /scoring/<id>/calibration-list: an answer list with a row for each picture of the sitting, written into Exports. */
+/** How a picture of the sitting is named in the answer list: by its place, never by the label the window gave it. */
+const pictureName = (place: number): string => `picture ${place}`;
+
+/**
+ * POST /scoring/<id>/calibration-list: an answer list with a row for each picture of the sitting, written into Exports. A row names
+ * its picture by its place in the sitting ("picture 3"), and the answer says which label each place is, for the window to show: the
+ * labels the window gives the scans live only in memory and reach no file (`CLAUDE.md`), and the first version wrote them into the list.
+ */
 async function calibrationList(ctx: Context, s: ScoringSession): Promise<ApiResponse> {
-  const pages = compute(s).entries.map((e) => e.source);
-  if (pages.length === 0) throw badRequest("Add the scans of the volunteers' sheets first: the list has a row for each picture.");
+  const entries = compute(s).entries;
+  if (entries.length === 0) throw badRequest("Add the scans of the volunteers' sheets first: the list has a row for each picture.");
+  const pages = entries.map((e, i) => ({ file: pictureName(i + 1), page: e.source.page }));
   const name = await writeNewFile(ctx.library.exports, checkName(fitFileName(`${cleanName(s.test.name, "Test")} - Answer list for calibration.csv`)), listTemplate(s.test.questions.length, pages));
-  return ok({ written: [{ name, path: join(ctx.library.exports, name), kind: "calibration-list" }] });
+  return ok({ written: [{ name, path: join(ctx.library.exports, name), kind: "calibration-list" }], pictures: entries.map((e, i) => ({ name: pictureName(i + 1), label: e.source.file, page: e.source.page })) });
 }
 
 /** POST /scoring/<id>/calibrate, with the filled-in answer list as the body: the report, for reading. */
@@ -223,7 +234,10 @@ function calibrateSitting(req: ApiRequest, s: ScoringSession): ApiResponse {
   const entries = compute(s).entries;
   const pages: CorpusPage[] = [];
   for (const row of list.rows) {
-    const found = entries.filter((e) => e.source.file === row.file && e.source.page === row.page);
+    // A row names a picture by its place ("picture 3", as the list this screen writes does) or by the label the window showed.
+    const place = /^picture ([0-9]{1,6})$/i.exec(row.file.trim());
+    const byPlace = place ? entries[Number(place[1]) - 1] : undefined;
+    const found = place ? (byPlace && byPlace.source.page === row.page ? [byPlace] : []) : entries.filter((e) => e.source.file === row.file && e.source.page === row.page);
     if (found.length === 0) problems.push(`Line ${row.line}: no picture of this sitting is ${row.file}, page ${row.page}.`);
     else if (found.length > 1) problems.push(`Line ${row.line}: ${found.length} pictures of this sitting are ${row.file}, page ${row.page}, so which one is meant is not known.`);
     else pages.push({ where: `${row.file} p${row.page}`, sheet: row.sheet, source: row.source, condition: row.condition, ...(row.version !== undefined ? { version: row.version } : {}), answers: row.answers, reading: (found[0] as BatchEntry).result });

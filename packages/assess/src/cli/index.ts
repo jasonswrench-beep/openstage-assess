@@ -623,7 +623,10 @@ async function cmdResults(args: string[]): Promise<number> {
   const { bank } = await Bank.open(resolve(bankPath));
   const bytes = new Uint8Array(await readFile(resolve(file)));
   const date = arg(args, "date") ?? new Date().toISOString().slice(0, 10);
-  const name = arg(args, "name") ?? `${basename(file, extname(file))} (${report.lms})`;
+  // A day that is a day: "2026-13-45" was kept in the bank as the date a class sat the quiz.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date) return fail(`--date is a day written like 2026-11-04, not "${date}".`);
+  // Not the report's file name, which goes into the .pstat and the bank: a file name can say more than it should.
+  const name = arg(args, "name") ?? `Quiz results (${report.lms})`;
   const done = lmsResults(report.id, bytes, bank.sortedQuestions(), { name, date });
   if (!done.ok) return fail(done.reason);
   const { read, matches, record, scores, stats } = done;
@@ -647,6 +650,7 @@ async function cmdResults(args: string[]): Promise<number> {
     const folder = resolve(out);
     await mkdir(folder, { recursive: true });
     const made = pstatProject(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION));
+    if (made.refused) return fail(`No file for PrismStatistics: ${made.refused}`);
     made.project.source.report.notes.unshift(`From ${report.lms}'s ${report.report} report, with the learning system's own points.`);
     let target = join(folder, pstatFileName(record.name, date));
     for (let n = 2; await stat(target).then(() => true, () => false); n++) target = join(folder, pstatFileName(record.name, date).replace(/\.pstat$/, ` ${n}.pstat`));
@@ -1124,8 +1128,11 @@ async function cmdSheets(args: string[]): Promise<number> {
         [`${exported.base}.xlsx`, exported.xlsx],
         [`${exported.base}.csv`, exported.csv],
         [`${safeName(record.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(record, stats, date)],
-        [pstatFileName(record.name, date), writePstatFile(pstatProject(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION)).project)],
       ];
+      // The file for PrismStatistics only when it holds a sheet and a question: one with neither is refused by the core's checker.
+      const pstat = pstatProject(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION));
+      if (pstat.refused) console.log(`No file for PrismStatistics: ${pstat.refused}`);
+      else writes.push([pstatFileName(record.name, date), writePstatFile(pstat.project)]);
       for (const [name, data] of writes) {
         await writeFile(join(folder, name), data);
         console.log(`  Wrote ${join(folder, name)}`);

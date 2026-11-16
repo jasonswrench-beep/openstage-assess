@@ -11,7 +11,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { unzipSync } from "../src/container/zip.ts";
+import { textEntry, unzipSync, zipSync } from "../src/container/zip.ts";
 import { exportQti21 } from "../src/export/qti21.ts";
 import { exportQti30, QTI30_ID } from "../src/export/qti30.ts";
 import { fromQti3, QTI3_ITEM_TYPE, QTI3_NAMESPACE, toQti3, xmlText } from "../src/export/qti3.ts";
@@ -103,6 +103,19 @@ describe("reading QTI 3.0", () => {
     const q = read("i.xml", new TextEncoder().encode(item)).questions[0] as Question & { body: { options: Array<{ correct: boolean }> } };
     assert.ok(q.body.options.every((o) => !o.correct), "no key is guessed");
     assert.notEqual(verdictOf(q), "parsed");
+  });
+
+  test("a question that refers to a shared passage says so, and the passage is kept as text no question claimed (found by a review)", () => {
+    const item = `<qti-assessment-item xmlns="${QTI3_NAMESPACE}" identifier="i1" title="With a passage"><qti-assessment-stimulus-ref identifier="s1" href="s1.xml"/><qti-response-declaration identifier="RESPONSE" cardinality="single" base-type="identifier"><qti-correct-response><qti-value>A</qti-value></qti-correct-response></qti-response-declaration><qti-item-body><qti-choice-interaction response-identifier="RESPONSE" max-choices="1"><qti-prompt>Pick one</qti-prompt><qti-simple-choice identifier="A">One</qti-simple-choice><qti-simple-choice identifier="B">Two</qti-simple-choice></qti-choice-interaction></qti-item-body></qti-assessment-item>`;
+    const stimulus = `<qti-assessment-stimulus xmlns="${QTI3_NAMESPACE}" identifier="s1" title="Passage"><qti-stimulus-body><p>The river rose three metres in one night.</p></qti-stimulus-body></qti-assessment-stimulus>`;
+    const zip = zipSync([textEntry("i1.xml", item), textEntry("s1.xml", stimulus)]);
+    const back = read("passage.zip", zip);
+    assert.equal(back.questions.length, 1);
+    const q = back.questions[0] as Question;
+    assert.equal(verdictOf(q), "needsReview");
+    assert.ok(q.findings.some((f) => /refers to a passage kept in another file \(s1\.xml\)/.test(f.message)), q.findings.map((f) => f.message).join(" | "));
+    assert.equal(back.orphans.length, 1);
+    assert.match(back.orphans[0]?.text ?? "", /The river rose three metres in one night\./);
   });
 
   test("every fixture reads to the same questions from 3.0 as from 2.1", () => {

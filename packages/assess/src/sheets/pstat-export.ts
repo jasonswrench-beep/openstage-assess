@@ -52,6 +52,11 @@ export interface PstatExport {
   /** How many sheets went in, and how many were left out because they are not complete. */
   sheets: number;
   leftOut: number;
+  /**
+   * Why the file must not be written, when it must not: the profile needs at least one sheet and one question, and a file with
+   * neither is one the core's checker refuses (rule F1). Undefined when it can be written.
+   */
+  refused?: string;
 }
 
 /**
@@ -72,21 +77,24 @@ export function pstatProject(record: TestRecord, scores: readonly SheetScore[], 
   const notes: string[] = [];
   if (leftOut > 0) notes.push(`${leftOut} sheet${leftOut === 1 ? " was" : "s were"} left out because ${leftOut === 1 ? "it is" : "they are"} not complete: a question that counts is not settled, a page is missing, or the version is not known.`);
 
-  // The questions in the order the test was assembled, which is version A's order, each named by its number there.
+  // The questions in the order the test was assembled, which is version A's order. The ones kept are numbered q01, q02 and on with no
+  // gap and labelled Question 1, Question 2 and on, as the core's checker holds the profile to (rule F1); when a question counts on no
+  // sheet and is left out, the numbers after it are not version A's any more, and a note says which question each is. Named by the
+  // version A number instead, the file was refused by the checker whenever a question was dropped or the sheet could not carry it.
   const first = versionQuestions(record, "A" as VersionLabel);
-  const width = Math.max(2, String(first.length).length);
+  const kept = first.map((question, i) => ({ question, number: i + 1, cells: sheets.map((s) => {
+    const q = s.questions.find((x) => x.questionId === question.id);
+    return q && q.possible > 0 ? q.earned : null;
+  }) }));
+  for (const k of kept) if (sheets.length > 0 && k.cells.every((c) => c === null)) notes.push(`Question ${k.number} counts on none of the sheets written (it was dropped, or the sheet does not carry it), so it is left out.`);
+  const counted = kept.filter((k) => k.cells.some((c) => c !== null));
+  const width = Math.max(2, String(counted.length).length);
   const items: Array<{ id: string; name: string; label: string; cells: Array<number | null> }> = [];
-  first.forEach((question, i) => {
-    const cells = sheets.map((s) => {
-      const q = s.questions.find((x) => x.questionId === question.id);
-      return q && q.possible > 0 ? q.earned : null;
-    });
-    const name = `q${String(i + 1).padStart(width, "0")}`;
-    if (cells.every((c) => c === null)) {
-      if (sheets.length > 0) notes.push(`Question ${i + 1} counts on none of the sheets written (it was dropped, or the sheet does not carry it), so it is left out.`);
-      return;
-    }
-    items.push({ id: question.id, name, label: `Question ${i + 1}`, cells });
+  const renumbered: string[] = [];
+  counted.forEach(({ question, number, cells }, j) => {
+    const name = `q${String(j + 1).padStart(width, "0")}`;
+    if (j + 1 !== number) renumbered.push(`${name} is question ${number}`);
+    items.push({ id: question.id, name, label: `Question ${j + 1}`, cells });
     // Where a question does not count on some sheets, say on which: by version when it is empty on every sheet of those versions.
     const empty = sheets.filter((_s, j) => cells[j] === null);
     if (empty.length > 0) {
@@ -96,6 +104,8 @@ export function pstatProject(record: TestRecord, scores: readonly SheetScore[], 
     }
   });
 
+  if (renumbered.length > 0) notes.push(`Because a question is left out, the questions after it are numbered in order here and not as on version A: ${renumbered.join(", ")} of version A.`);
+
   const used = [...new Set(sheets.map((s) => s.version))].sort((a, b) => a - b);
   const variables: Variable[] = [
     { id: 1, name: "sheet", label: "Sheet number", measure: "nominal", value_labels: [], missing_values: [] },
@@ -103,9 +113,10 @@ export function pstatProject(record: TestRecord, scores: readonly SheetScore[], 
     ...items.map((it, j) => ({ id: 3 + j, name: it.name, label: it.label, measure: "scale" as const, value_labels: [], missing_values: [] })),
     { id: 3 + items.length, name: "total", label: "Total score", measure: "scale", value_labels: [], missing_values: [] },
   ];
-  // The total is the sum of the cells written, so it is the points earned on the questions that count on the sheet, and a reader
-  // that adds the question columns gets the same number.
-  const totals = sheets.map((_s, j) => round(items.reduce((sum, it) => sum + (it.cells[j] ?? 0), 0)));
+  // The total is the sum of the cells written, added in the order of the columns and not rounded, so a reader that adds the question
+  // columns gets the same number to the last digit. Rounded to six places, a total of three cells of 0.3333333 was 1 and the cells
+  // added to 0.9999999, which the core's checker refused.
+  const totals = sheets.map((_s, j) => items.reduce((sum, it) => sum + (it.cells[j] ?? 0), 0));
   const columns = [
     { type: "numeric" as const, values: sheets.map((s) => s.number) },
     { type: "numeric" as const, values: sheets.map((s) => s.version) },
@@ -125,11 +136,9 @@ export function pstatProject(record: TestRecord, scores: readonly SheetScore[], 
     },
     sheets: sheets.length,
     leftOut,
+    ...(sheets.length === 0 ? { refused: "No sheet is complete, so there is nothing to send for statistics: settle the flagged questions first." } : items.length === 0 ? { refused: "No question counts on the sheets, so there is nothing to send for statistics." } : {}),
   };
 }
-
-/** Sums of points kept to six places, as the scores are, so 0.1 + 0.2 is written 0.3. */
-const round = (value: number): number => Math.round(value * 1e6) / 1e6;
 
 /**
  * The bytes of the file: `project.json` alone, deflated, as UTF-8 with no byte-order mark, under a fixed date so the same sheets make

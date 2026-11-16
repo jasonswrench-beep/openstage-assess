@@ -506,9 +506,11 @@ name from being carried in by another writer. Do not add a field to either to ma
 and do not write figures into a bank unless the instructor asked (`--save-statistics`).
 
 **The file for PrismStatistics is the core's format, written by our own code and held to the core's files.** `sheets/pstat-export.ts`
-writes a `.pstat` in profile `OpenAssess item results 1` of `specs/pstat/PSTAT-1.md` in `openstage-core`, exactly: complete sheets
-only, points per question by its version A number, empty (never 0) where a question does not count, no question text, no name, no
-file name, empty `operations` and `results`. It is not the core's `@openstage/pstat`, because the engine has no runtime dependency;
+writes a `.pstat` in profile `OpenAssess item results 1` of `specs/pstat/PSTAT-1.md` in `openstage-core`, as the core's `checkPstat`
+holds it: complete sheets only; the questions that count numbered `q01`, `q02` and on with no gap (with a note naming the version A
+number of any renumbered one: named by the version A number, a file with a question dropped was refused); empty (never 0) where a
+question does not count; a total that is the sum of its cells to the last digit; no question text, no name, no file name, empty
+`operations` and `results`; and no file at all for a class with no complete sheet or no question (`refused`). It is not the core's `@openstage/pstat`, because the engine has no runtime dependency;
 `pstat-export.test.ts` reads every case of the core's item-analysis test set with the core's `readPstat` and `checkPstat` when the core
 is beside this repository, and `item-analysis-reference.test.ts` runs the set's checker on `sheets/stats.ts`. Neither copies the
 core. A field the profile does not have (the letters, the key, bank ids) is asked of the core in `CORE-REQUESTS.md` and is not added

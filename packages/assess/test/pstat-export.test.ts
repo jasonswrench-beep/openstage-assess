@@ -109,8 +109,24 @@ describe("the .pstat export", () => {
   test("leaves out a question that counts on no sheet, and says so", () => {
     const dropped = scoresOf(record, [{ sheet: 1, version: 1, points: [1, null, 1, 1] }, { sheet: 2, version: 2, points: [0, null, 1, null] }], [1, 1, 1, 1]);
     const p = pstatProject(record, dropped, "OpenAssess test").project;
-    assert.deepEqual(p.dataset.variables.map((v) => v.name), ["sheet", "version", "q01", "q03", "q04", "total"]);
+    // Numbered in a row, as the core's checker holds the profile to, with a note on which question of version A each is.
+    assert.deepEqual(p.dataset.variables.map((v) => [v.name, v.label]), [["sheet", "Sheet number"], ["version", "Version"], ["q01", "Question 1"], ["q02", "Question 2"], ["q03", "Question 3"], ["total", "Total score"]]);
     assert.ok(p.source.report.notes.includes("Question 2 counts on none of the sheets written (it was dropped, or the sheet does not carry it), so it is left out."));
+    assert.ok(p.source.report.notes.includes("Because a question is left out, the questions after it are numbered in order here and not as on version A: q02 is question 3, q03 is question 4 of version A."), p.source.report.notes.join(" | "));
+  });
+
+  test("refuses to make a file with no sheet or no question, which the profile has no room for", () => {
+    const none = pstatProject(record, scoresOf(record, [{ sheet: 1, version: 1, points: [1, 1, 1, 1], complete: false }], [1, 1, 1, 1]), "OpenAssess test");
+    assert.match(none.refused ?? "", /No sheet is complete/);
+    const dropped = pstatProject(record, scoresOf(record, [{ sheet: 1, version: 1, points: [null, null, null, null] }], [1, 1, 1, 1]), "OpenAssess test");
+    assert.match(dropped.refused ?? "", /No question counts/);
+    assert.equal(pstatProject(record, scoresOf(record, [{ sheet: 1, version: 1, points: [1, 0, 1, 1] }], [1, 1, 1, 1]), "x").refused, undefined);
+  });
+
+  test("the total is the sum of the cells to the last digit, however many places the points have", () => {
+    const thirds = pstatProject(record, scoresOf(record, [{ sheet: 1, version: 1, points: [0.3333333, 0.3333333, 0.3333333, 0.1] }], [1, 1, 1, 1]), "x").project;
+    const cells = thirds.dataset.columns.slice(2, -1).map((c) => c.values[0] as number);
+    assert.equal(thirds.dataset.columns.at(-1)?.values[0], cells.reduce((s, v) => s + v, 0));
   });
 
   test("numbers the questions with as many digits as the largest needs", () => {
@@ -118,6 +134,11 @@ describe("the .pstat export", () => {
     const p = pstatProject(many, scoresOf(many, [{ sheet: 1, version: 1, points: many.questions.map(() => 1) }], many.questions.map(() => 1)), "x").project;
     assert.equal(p.dataset.variables[2]?.name, "q001");
     assert.equal(p.dataset.variables[102]?.name, "q101");
+    // With two of the 101 left out there are 99 kept, and two digits are enough: the width is the kept questions', as the core's checker
+    // has it.
+    const fewer = pstatProject(many, scoresOf(many, [{ sheet: 1, version: 1, points: many.questions.map((_q, i) => (i >= 99 ? null : 1)) }], many.questions.map(() => 1)), "x").project;
+    assert.equal(fewer.dataset.variables[2]?.name, "q01");
+    assert.equal(fewer.dataset.variables.at(-2)?.name, "q99");
   });
 
   test("the same sheets make the same bytes, and the file is a single deflated project.json", () => {
@@ -164,6 +185,18 @@ describe("the .pstat export against the core", () => {
       assert.deepEqual({ ...mine, app_version: "" }, { ...theirs, app_version: "" }, `${name}: the set's file`);
       assert.match(mine.app_version, /^OpenAssess /);
     }
+  });
+
+  test("the files the review found refused by the core's checker are accepted now: a question left out, 100 questions with one left out, points with seven places", { skip }, async () => {
+    const pstat = await import(pathToFileURL(join(core as string, "packages", "pstat", "src", "index.js")).href);
+    const four = createTest({ id: `t_${"6".padStart(26, "0")}`, name: "Four", questions: [question(), question(), question(), question()], versions: 1, seed: "s", at: AT });
+    const dropped = writePstatFile(pstatProject(four, scoresOf(four, [{ sheet: 1, version: 1, points: [1, null, 0, 1] }, { sheet: 2, version: 1, points: [0, null, 1, 1] }], [1, 1, 1, 1]), "OpenAssess test").project);
+    assert.deepEqual(pstat.checkPstat(dropped), []);
+    const many = createTest({ id: `t_${"4".padStart(26, "0")}`, name: "Hundred", questions: Array.from({ length: 100 }, () => question()), versions: 1, seed: "s", at: AT });
+    const ninetyNine = writePstatFile(pstatProject(many, scoresOf(many, [{ sheet: 1, version: 1, points: many.questions.map((_q, i) => (i === 99 ? null : 1)) }], many.questions.map(() => 1)), "OpenAssess test").project);
+    assert.deepEqual(pstat.checkPstat(ninetyNine), []);
+    const thirds = writePstatFile(pstatProject(four, scoresOf(four, [{ sheet: 1, version: 1, points: [0.3333333, 0.3333333, 0.3333333, 0] }], [1, 1, 1, 1]), "OpenAssess test").project);
+    assert.deepEqual(pstat.checkPstat(thirds), []);
   });
 
   test("the core's checker refuses a broken file, so the test above can fail", { skip }, async () => {
