@@ -429,9 +429,14 @@ own reader and checker and to every case of the set (`pstat-export.test.ts`). Wh
 - [ ] **Run the C3 check before each release** (it is in `tools/release/README.md` now): from `C:\Dev\openstage-core`, `node
   testsets/item-analysis/check/check_openassess.mjs --assess C:\Dev\openassess`. `npm test` runs it too when the core is beside this
   repository, and says "skipped" when it is not.
-- [ ] **Decide what else the `.pstat` file should carry.** The list asks for the letters marked, the key, the item details (objective,
-  chapter, Bloom level) and bank question ids. The core's locked profile has none of them, so they are asked of the core in
-  `CORE-REQUESTS.md` (request 1) and not built here. Until then the scores sheet's letters are still in each version's own order.
+- [ ] **Open a profile 2 file in PrismStatistics.** Since 15 November 2026 the file carries, beside the points, the letters each
+  sheet marked in version A's lettering (`r01` and on) and `assessment.json`: each question's bank id, key and details (objective,
+  chapter, Bloom level, difficulty, tags). PrismStatistics was asked (through the core) to offer Item Analysis on the letters with the
+  file's key. Check that it opens the file, that the letters read as you would expect from the sheets, and that grouping by objective
+  or Bloom level works. Question text and option text are never in the file.
+- [ ] **A student id in the file.** You decided the format may carry one, off by default. OpenAssess holds no student ids (the sheets
+  have none and a learning system's id columns are never read), so it writes none; the column could be filled from a learning system's
+  report if you turned it on. Say if that is wanted.
 
 ## Item history across classes (development list item 5)
 

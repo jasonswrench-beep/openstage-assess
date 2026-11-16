@@ -57,8 +57,8 @@ export type { ItemStatistics, OptionCount, TestStatistics } from "./sheets/stats
 export { SCORES_EXTENSION, newScoresFile, readScoresFile, restore, scoresFileName, writeScoresFile } from "./sheets/scores-file.ts";
 export type { ScoresFile } from "./sheets/scores-file.ts";
 export { exportResults, itemAnalysisHtml } from "./sheets/results-export.ts";
-export { PSTAT_EXTENSION, PSTAT_PROFILE, pstatAppVersion, pstatFileName, pstatProject, writePstatFile } from "./sheets/pstat-export.ts";
-export type { PstatExport, PstatProject } from "./sheets/pstat-export.ts";
+export { PSTAT_EXTENSION, PSTAT_PART, PSTAT_PROFILE, PSTAT_PROFILE_2, pstatAppVersion, pstatFileName, pstatProject, pstatProject2, writePstatFile } from "./sheets/pstat-export.ts";
+export type { AssessmentPart, PstatExport, Pstat2Export, PstatProject } from "./sheets/pstat-export.ts";
 export { POINT_BISERIAL_LABEL, SD_LABEL } from "./sheets/stats.ts";
 export { calibrate, formatCalibration, listTemplate, readList, LEAST_TO_TUNE } from "./sheets/calibrate.ts";
 export type { CalibrationReport, CorpusPage } from "./sheets/calibrate.ts";

@@ -58,7 +58,7 @@ import { safeName } from "../export/text.ts";
 import { SheetReader } from "../sheets/read.ts";
 import { calibrate, formatCalibration, listTemplate, readList, type CorpusPage } from "../sheets/calibrate.ts";
 import { decodeTableText, parseDelimited } from "../import/table-csv.ts";
-import { pstatAppVersion, pstatFileName, pstatProject, writePstatFile } from "../sheets/pstat-export.ts";
+import { pstatAppVersion, pstatFileName, pstatProject2, writePstatFile } from "../sheets/pstat-export.ts";
 import { LMS_REPORTS, lmsResults } from "../results/lms-results.ts";
 import type { ItemHistory } from "../bank/item-history.ts";
 import { richTextToPlain } from "../model/richtext.ts";
@@ -649,12 +649,12 @@ async function cmdResults(args: string[]): Promise<number> {
   if (out) {
     const folder = resolve(out);
     await mkdir(folder, { recursive: true });
-    const made = pstatProject(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION));
+    const made = pstatProject2(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION), { source: "learning system report", given: date });
     if (made.refused) return fail(`No file for PrismStatistics: ${made.refused}`);
     made.project.source.report.notes.unshift(`From ${report.lms}'s ${report.report} report, with the learning system's own points.`);
     let target = join(folder, pstatFileName(record.name, date));
     for (let n = 2; await stat(target).then(() => true, () => false); n++) target = join(folder, pstatFileName(record.name, date).replace(/\.pstat$/, ` ${n}.pstat`));
-    await writeFile(target, writePstatFile(made.project));
+    await writeFile(target, writePstatFile(made.project, made.part));
     console.log(`  Wrote ${target}`);
   }
   if (has(args, "save-statistics")) {
@@ -1130,9 +1130,9 @@ async function cmdSheets(args: string[]): Promise<number> {
         [`${safeName(record.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(record, stats, date)],
       ];
       // The file for PrismStatistics only when it holds a sheet and a question: one with neither is refused by the core's checker.
-      const pstat = pstatProject(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION));
+      const pstat = pstatProject2(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION), { source: "scanned sheets", given: date, adjustments });
       if (pstat.refused) console.log(`No file for PrismStatistics: ${pstat.refused}`);
-      else writes.push([pstatFileName(record.name, date), writePstatFile(pstat.project)]);
+      else writes.push([pstatFileName(record.name, date), writePstatFile(pstat.project, pstat.part)]);
       for (const [name, data] of writes) {
         await writeFile(join(folder, name), data);
         console.log(`  Wrote ${join(folder, name)}`);

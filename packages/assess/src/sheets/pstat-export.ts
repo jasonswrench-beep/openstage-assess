@@ -1,8 +1,9 @@
 /**
  * The scored sheets of a class as a `.pstat` file, which PrismStatistics opens as a project with a double-click.
  *
- * The format is the core's (`specs/pstat/PSTAT-1.md` in openstage-core, format 1, spec revision 1.0, locked), and the layout is its
- * profile `OpenAssess item results 1` (section 7.1), followed exactly: one case per complete sheet in sheet-number order; the variables
+ * The format is the core's (`specs/pstat/PSTAT-1.md` in openstage-core, format 1, spec revision 1.1, locked), and the layout is its
+ * profile `OpenAssess item results 1` (section 7.1), followed exactly, or profile 2 (section 7.2, `pstatProject2` below), which adds
+ * the letters marked and the part `assessment.json` (the key, the item details and the bank's ids). Profile 1 is: one case per complete sheet in sheet-number order; the variables
  * `sheet`, `version` (labelled A, B and on), one `q` variable per question that counts on an exported sheet, holding the points
  * earned (empty where it does not count on that sheet, never 0), and `total`. The question's words are not written, because a results
  * file is shared and a test's questions are kept secure. No name, student id, file name or picture goes in.
@@ -17,13 +18,18 @@
 
 import { zipSync } from "../container/zip.ts";
 import { safeName } from "../export/text.ts";
-import { versionQuestions, VERSION_LABELS, type TestRecord, type VersionLabel } from "../model/test.ts";
-import type { SheetScore } from "./score.ts";
+import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
+import { letterFor, versionQuestions, VERSION_LABELS, type TestRecord, type VersionLabel } from "../model/test.ts";
+import { hasUsableKey } from "../quality/answer-key.ts";
+import { keyOf, pointsOf, type Adjustment, type SheetScore } from "./score.ts";
 
 export const PSTAT_EXTENSION = ".pstat";
 export const PSTAT_FORMAT = "PrismStatistics project";
 export const PSTAT_VERSION = 1;
 export const PSTAT_PROFILE = "OpenAssess item results 1";
+export const PSTAT_PROFILE_2 = "OpenAssess item results 2";
+/** Profile 2's part: the second entry of the archive. */
+export const PSTAT_PART = "assessment.json";
 /** The one entry of the archive. */
 export const PSTAT_ENTRY = "project.json";
 
@@ -40,8 +46,8 @@ export interface PstatProject {
   format: typeof PSTAT_FORMAT;
   version: typeof PSTAT_VERSION;
   app_version: string;
-  profile: typeof PSTAT_PROFILE;
-  dataset: { name: string; variables: Variable[]; columns: Array<{ type: "numeric"; values: Array<number | null> }>; next_id: number };
+  profile: typeof PSTAT_PROFILE | typeof PSTAT_PROFILE_2;
+  dataset: { name: string; variables: Variable[]; columns: Array<{ type: "numeric"; values: Array<number | null> } | { type: "text"; values: Array<string | null> }>; next_id: number };
   source: { file_name: string; report: { rows: number; variables: number; renamed: never[]; short_rows: 0; notes: string[] } };
   operations: never[];
   results: never[];
@@ -155,11 +161,176 @@ export function pstatProject(record: TestRecord, scores: readonly SheetScore[], 
  * the same file. JSON.stringify writes a whole number as an integer (`3`, never `3.0`), which the format requires, and every number
  * here is finite.
  */
-export function writePstatFile(project: PstatProject): Uint8Array {
-  return zipSync([{ name: PSTAT_ENTRY, data: new TextEncoder().encode(JSON.stringify(project)), date: new Date(1980, 0, 1) }]);
+export function writePstatFile(project: PstatProject, part?: AssessmentPart): Uint8Array {
+  const at = new Date(1980, 0, 1);
+  return zipSync([
+    { name: PSTAT_ENTRY, data: new TextEncoder().encode(JSON.stringify(project)), date: at },
+    // Profile 2's part, after project.json, as the format orders them.
+    ...(part ? [{ name: PSTAT_PART, data: new TextEncoder().encode(JSON.stringify(part)), date: at }] : []),
+  ]);
 }
 
 /** The file's name: the test's title and the date, cut and cleaned as every other file the program names itself. */
 export function pstatFileName(testName: string, date: string): string {
   return `${safeName(testName, "Test")} - Results for statistics ${date}${PSTAT_EXTENSION}`;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Profile 2: the letters marked, and the key and details of every question (PSTAT-1 section 7.2)
+
+type PartType = "multiple_choice" | "select_all" | "true_false" | "other";
+
+export interface KeyEntry {
+  versions?: number[];
+  correct: string[];
+  points: number;
+  adjustment: "none" | "dropped" | "credit_all";
+  partial_credit: boolean;
+}
+
+export interface AssessmentPart {
+  part: "OpenAssess assessment";
+  version: 1;
+  test: { id: string; name: string; given: string | null; source: "scanned sheets" | "learning system report"; versions: string[]; questions: number; sheets_left_out: number };
+  questions: Array<{
+    number: number;
+    bank_id: string;
+    revision: number;
+    points_variable: number | null;
+    answer_variable: number | null;
+    type: PartType;
+    options: string[];
+    option_ids: string[];
+    option_labels: { A: "True"; B: "False" } | null;
+    key: KeyEntry[];
+    details: { objective: string | null; chapter: string | null; section: string | null; page: string | null; bloom: string | null; difficulty: string | null; tags: string[] };
+  }>;
+}
+
+export interface Pstat2Export extends PstatExport {
+  part?: AssessmentPart;
+}
+
+export interface Pstat2Options {
+  /** The adjustments the scores were worked out with: the key written must give every point written. */
+  adjustments?: readonly Adjustment[];
+  /** The day the test was given, YYYY-MM-DD, when the person said; otherwise null. */
+  given?: string;
+  source: "scanned sheets" | "learning system report";
+}
+
+/** Letters of version A for bank answers, sorted, as one answer cell. */
+const lettersOf = (record: TestRecord, id: string, answers: readonly string[]): string =>
+  [...new Set(answers.map((a) => letterFor(record, "A" as VersionLabel, id, a)).filter((l): l is string => l !== undefined))].sort().join("");
+
+/** What profile 2 calls a question: a learning system's report gives points and no letters, so every question there is `other`. */
+function typeOf(question: Question, source: Pstat2Options["source"]): PartType {
+  if (source === "learning system report") return "other";
+  if (isTrueFalse(question)) return "true_false";
+  if (isMultipleResponse(question) && question.body.options.length >= 2 && question.body.options.length <= 26) return "select_all";
+  if (isChoice(question) && question.body.options.length >= 2 && question.body.options.length <= 26) return "multiple_choice";
+  return "other";
+}
+
+/**
+ * The key entry for one version: the scoring of score.ts, said in the spec's words. A question the sheet does not count (it cannot carry
+ * it, it has no usable key, it is worth nothing, or it was dropped) is `dropped`, so its cells are empty as they are in the file; a
+ * question credited to everyone is `credit_all`; otherwise the letters of version A that earn the points, with an answer also accepted
+ * added (one letter more for a one-answer question, one more letter in the string for select-all).
+ */
+function entryFor(record: TestRecord, question: Question, type: PartType, adjustments: readonly Adjustment[], version: number, possible: number | undefined): Omit<KeyEntry, "versions"> {
+  const mine = adjustments.filter((a) => a.questionId === question.id && (a.versions === undefined || a.versions.includes(version)));
+  const partial = type === "select_all" && isMultipleResponse(question) && question.body.partialCredit === true;
+  const stated = [...mine].reverse().find((a): a is Adjustment & { kind: "points" } => a.kind === "points")?.points ?? pointsOf(question);
+  const points = possible ?? stated;
+  // A dropped entry still needs a number above 0; the question counts on none of its versions' sheets, so the number earns nothing.
+  const dropped: Omit<KeyEntry, "versions"> = { correct: [], points: points > 0 ? points : 1, adjustment: "dropped", partial_credit: false };
+  if (type === "other") return possible !== undefined && possible > 0 ? { correct: [], points: possible, adjustment: "none", partial_credit: false } : dropped;
+  if (!hasUsableKey(question) || mine.some((a) => a.kind === "drop") || !(points > 0)) return dropped;
+  if (mine.some((a) => a.kind === "credit")) return { correct: [], points, adjustment: "credit_all", partial_credit: partial };
+  const key = [...keyOf(question), ...mine.flatMap((a) => (a.kind === "alsoRight" ? [a.answer] : []))];
+  const correct = type === "select_all" ? [lettersOf(record, question.id, key)] : [...new Set(key.map((k) => letterFor(record, "A" as VersionLabel, question.id, k)).filter((l): l is string => l !== undefined))].sort();
+  return { correct, points, adjustment: "none", partial_credit: partial };
+}
+
+const nullable = (v: string | undefined): string | null => (v === undefined || v.trim() === "" ? null : v);
+
+/**
+ * The project and its part in profile 2. Everything profile 1 writes is written the same way; then, for scanned sheets, one answer
+ * variable per question variable with the letters marked in version A's lettering ("" for blank, null exactly where the points are
+ * null); then `assessment.json` with every question of version A, those left out among them. No student id or name is written:
+ * OpenAssess holds none (the spec lets a writer that holds them leave them out, and one that holds none writes no such variable).
+ */
+export function pstatProject2(record: TestRecord, scores: readonly SheetScore[], appVersion: string, options: Pstat2Options): Pstat2Export {
+  const one = pstatProject(record, scores, appVersion);
+  if (one.refused) return one;
+  const project = one.project;
+  project.profile = PSTAT_PROFILE_2;
+  const adjustments = options.adjustments ?? [];
+  const sheets = scores.filter((s): s is SheetScore & { version: number } => s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);
+  const first = versionQuestions(record, "A" as VersionLabel);
+  const byName = new Map(project.dataset.variables.map((v) => [v.name, v.id]));
+  const width = Math.max(2, String(first.length).length);
+  const tag = (i: number): string => String(i + 1).padStart(width, "0");
+
+  // The answer variables, for scanned sheets only: a learning system's report gives points and no letters.
+  if (options.source === "scanned sheets") {
+    first.forEach((question, i) => {
+      const points = project.dataset.columns[project.dataset.variables.findIndex((v) => v.name === `q${tag(i)}`)];
+      if (!points) return;
+      const values = sheets.map((s, r) => {
+        if (points.values[r] === null) return null;
+        const q = s.questions.find((x) => x.questionId === question.id);
+        return q && q.outcome !== "blank" ? lettersOf(record, question.id, q.marked) : "";
+      });
+      const id = project.dataset.next_id++;
+      project.dataset.variables.push({ id, name: `r${tag(i)}`, label: `Question ${i + 1} answer`, measure: "nominal", value_labels: [], missing_values: [] });
+      project.dataset.columns.push({ type: "text", values });
+      byName.set(`r${tag(i)}`, id);
+    });
+    project.source.report.variables = project.dataset.variables.length;
+  }
+
+  const versions = record.versions.map((_v, k) => letter(k + 1));
+  const part: AssessmentPart = {
+    part: "OpenAssess assessment",
+    version: 1,
+    test: { id: record.id, name: record.name, given: options.given ?? null, source: options.source, versions, questions: first.length, sheets_left_out: one.leftOut },
+    questions: first.map((question, i) => {
+      const type = typeOf(question, options.source);
+      // A learning system's points: what the question was worth there, the most any attempt was out of.
+      const possible = options.source === "learning system report" ? sheets.reduce((most, s) => Math.max(most, s.questions.find((q) => q.questionId === question.id)?.possible ?? 0), 0) : undefined;
+      const perVersion = versions.map((_l, k) => entryFor(record, question, type, adjustments, k + 1, possible));
+      const same = perVersion.every((e) => JSON.stringify(e) === JSON.stringify(perVersion[0]));
+      const key: KeyEntry[] = same ? [perVersion[0] as KeyEntry] : groupByEntry(perVersion);
+      const order = type === "true_false" ? ["true", "false"] : type === "other" ? [] : record.versions[0]?.options[question.id] ?? (isChoice(question) || isMultipleResponse(question) ? question.body.options.map((o) => o.id) : []);
+      const m = question.metadata;
+      return {
+        number: i + 1,
+        bank_id: question.id,
+        revision: question.version,
+        points_variable: byName.get(`q${tag(i)}`) ?? null,
+        answer_variable: byName.get(`r${tag(i)}`) ?? null,
+        type,
+        options: order.map((_o, k) => String.fromCharCode(65 + k)),
+        option_ids: [...order],
+        option_labels: type === "true_false" ? { A: "True", B: "False" } : null,
+        key,
+        details: { objective: nullable(m.objective), chapter: nullable(m.chapter), section: nullable(m.section), page: nullable(m.page), bloom: m.bloom ?? null, difficulty: m.difficulty ?? null, tags: [...m.tags] },
+      };
+    }),
+  };
+  return { ...one, project, part };
+}
+
+/** Key entries that differ by version, each naming its versions, in the order their first version comes. */
+function groupByEntry(perVersion: ReadonlyArray<Omit<KeyEntry, "versions">>): KeyEntry[] {
+  const groups = new Map<string, KeyEntry>();
+  perVersion.forEach((e, k) => {
+    const id = JSON.stringify(e);
+    const g = groups.get(id);
+    if (g) g.versions?.push(k + 1);
+    else groups.set(id, { versions: [k + 1], ...e });
+  });
+  return [...groups.values()];
 }

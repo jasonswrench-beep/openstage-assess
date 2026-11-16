@@ -26,7 +26,7 @@ import {
   exportResults,
   PSTAT_EXTENSION,
   pstatAppVersion,
-  pstatProject,
+  pstatProject2,
   writePstatFile,
   itemAnalysisHtml,
   newScoresFile,
@@ -192,11 +192,11 @@ async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Pr
   // For PrismStatistics: the core's .pstat profile, the complete sheets only, no names and no question text. `app_version` names the
   // release Check for updates knows this copy as.
   if (what.includes("statistics")) {
-    const pstat = pstatProject(s.test, c.scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION));
+    const pstat = pstatProject2(s.test, c.scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION), { source: "scanned sheets", given: date, adjustments: s.adjustments });
     if (pstat.refused && what.length === 1) throw badRequest(pstat.refused);
     // Asked for with the other files, a .pstat that cannot be written is said beside them rather than left out without a word.
     if (pstat.refused) notes.push(`The file for PrismStatistics was not written. ${pstat.refused}`);
-    else files.push([`${cleanName(s.test.name, "Test")} - Results for statistics ${date}${PSTAT_EXTENSION}`, writePstatFile(pstat.project), "statistics"]);
+    else files.push([`${cleanName(s.test.name, "Test")} - Results for statistics ${date}${PSTAT_EXTENSION}`, writePstatFile(pstat.project, pstat.part), "statistics"]);
   }
   const written = [];
   for (const [wanted, data, kind] of files) {

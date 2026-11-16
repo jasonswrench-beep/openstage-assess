@@ -47,8 +47,8 @@
   {
     "label": "B6 sheets that are not complete go into the .pstat",
     "file": "packages/assess/src/sheets/pstat-export.ts",
-    "from": "s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);",
-    "to": "s.version !== undefined).sort((a, b) => a.number - b.number);",
+    "from": "s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);\n  const leftOut",
+    "to": "s.version !== undefined).sort((a, b) => a.number - b.number);\n  const leftOut",
     "tests": [
       "packages/assess/test/pstat-export.test.ts"
     ]
@@ -56,8 +56,8 @@
   {
     "label": "B7 the sheets are not put in sheet-number order",
     "file": "packages/assess/src/sheets/pstat-export.ts",
-    "from": "s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);",
-    "to": "s.complete && s.version !== undefined);",
+    "from": "s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);\n  const leftOut",
+    "to": "s.complete && s.version !== undefined);\n  const leftOut",
     "tests": [
       "packages/assess/test/pstat-export.test.ts"
     ]
@@ -317,8 +317,8 @@
   {
     "label": "B36 the width of a question's number is the kept questions', not version A's",
     "file": "packages/assess/src/sheets/pstat-export.ts",
-    "from": "const width = Math.max(2, String(first.length).length);",
-    "to": "const width = 2;",
+    "from": "const width = Math.max(2, String(first.length).length);\n  const items:",
+    "to": "const width = 2;\n  const items:",
     "tests": [
       "packages/assess/test/pstat-export.test.ts"
     ]
@@ -330,6 +330,78 @@
     "to": "if (only === \"never\") return \"it was dropped\";",
     "tests": [
       "packages/assess/test/pstat-export.test.ts"
+    ]
+  },
+  {
+    "label": "B38 the letters are the sheet's own version's, not version A's",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "[...new Set(answers.map((a) => letterFor(record, \"A\" as VersionLabel, id, a)).filter(",
+    "to": "[...new Set(answers.map((a) => letterFor(record, \"B\" as VersionLabel, id, a) ?? letterFor(record, \"A\" as VersionLabel, id, a)).filter(",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B39 an answer also accepted is not in the key",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "...mine.flatMap((a) => (a.kind === \"alsoRight\" ? [a.answer] : []))",
+    "to": "...mine.flatMap((a) => (a.kind === \"alsoRightNot\" ? [a.answer] : []))",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B40 a question credited to everyone is written as scored",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "if (mine.some((a) => a.kind === \"credit\")) return { correct: [], points, adjustment: \"credit_all\"",
+    "to": "if (mine.some((a) => a.kind === \"credited\")) return { correct: [], points, adjustment: \"credit_all\"",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B41 a key that differs by version is written as one",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "const same = perVersion.every((e) => JSON.stringify(e) === JSON.stringify(perVersion[0]));",
+    "to": "const same = perVersion.length > 0;",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B42 a learning system's report gets answer variables",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "if (options.source === \"scanned sheets\") {",
+    "to": "if (options.source !== \"nothing\") {",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B43 the part is not written",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "...(part ? [{ name: PSTAT_PART,",
+    "to": "...(part && part.version < 0 ? [{ name: PSTAT_PART,",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B44 a select-all key is written as separate letters",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "const correct = type === \"select_all\" ? [lettersOf(record, question.id, key)]",
+    "to": "const correct = type === \"never\" ? [lettersOf(record, question.id, key)]",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B45 an answer cell is filled where the points are empty",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "if (points.values[r] === null) return null;",
+    "to": "if (points.values[r] === -1) return null;",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
     ]
   }
 ]

@@ -9,7 +9,7 @@
 
 import { join } from "node:path";
 
-import { administrationFrom, ENGINE_VERSION, LMS_REPORTS, lmsResults, PSTAT_EXTENSION, pstatAppVersion, pstatProject, richTextToPlain, writePstatFile, type LmsId } from "./engine.ts";
+import { administrationFrom, ENGINE_VERSION, LMS_REPORTS, lmsResults, PSTAT_EXTENSION, pstatAppVersion, pstatProject2, richTextToPlain, writePstatFile, type LmsId } from "./engine.ts";
 import type { ApiRequest, ApiResponse, Context } from "./api.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { checkName, cleanName, fitFileName, writeNewFile } from "./library.ts";
@@ -48,10 +48,10 @@ export async function lmsResultsRoute(ctx: Context, req: ApiRequest, bankName: s
 
   const written: Array<{ name: string; path: string; kind: string }> = [];
   if (write === "statistics") {
-    const made = pstatProject(record, scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION));
+    const made = pstatProject2(record, scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION), { source: "learning system report", given: date });
     if (made.refused) throw badRequest(made.refused.replace("No sheet is complete", "No attempt has points for every question").replace("settle the flagged questions first", "the learning system gave no points for some question"));
     made.project.source.report.notes.unshift(`From ${report.lms}'s ${report.report} report, with the learning system's own points.`);
-    const file = await writeNewFile(ctx.library.exports, checkName(fitFileName(`${cleanName(name, "Quiz")} - Results for statistics ${date}${PSTAT_EXTENSION}`)), writePstatFile(made.project));
+    const file = await writeNewFile(ctx.library.exports, checkName(fitFileName(`${cleanName(name, "Quiz")} - Results for statistics ${date}${PSTAT_EXTENSION}`)), writePstatFile(made.project, made.part));
     written.push({ name: file, path: join(ctx.library.exports, file), kind: "statistics" });
   }
   let kept: { id: string; sheets: number } | undefined;

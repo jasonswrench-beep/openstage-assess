@@ -49,6 +49,20 @@ Two things in OpenAssess changed that the checker touches, and neither moved a f
    with three variables, which `checkPstat` refuses. OpenAssess no longer writes such a file and says why; the spec could say a
    writer must not.
 
+## 2b. Second round (after core commit 13b210c, PSTAT-1 1.1, set 1.1.0)
+
+- **Numbering:** back to version A's numbers with gaps; the export of `omitted-25` equals the set's file.
+- **Profile 2 is written** (`pstatProject2` in `packages/assess/src/sheets/pstat-export.ts`), by the app's Score screen, by
+  `sheets score --out`, and from a learning system's report (no `r` variables, every question `other`). `pstat-profile2.test.ts`
+  scores `letters-60` with OpenAssess's own scorer (an extra accepted answer, a credited and a dropped question as adjustments), and
+  the points equal `scores.csv` and the file equals `letters-60.pstat`, part and all; `checkPstat` finds nothing, and refuses a file
+  whose key is changed or whose part is missing.
+- **The author's decisions you asked for (15 November 2026):**
+  - **`student_id`: allowed, off by default.** Keep it in the spec as it is. OpenAssess holds no ids, so it writes none for now.
+  - **A credited question left blank counts as credited** (OpenAssess's way). PrismStatistics should change to match, and a case can
+    hold one.
+- **Not done:** reporting each 27 percent group's own share (`upper_27`, `lower_27`). The checker still says it is not checked.
+
 ## 3. For PrismStatistics (passed on through the core, since the two tools share files and not code)
 
 - **Keep the `profile` member when saving** a project that has one. Today it is dropped, which the spec allows, but then a file

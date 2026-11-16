@@ -665,7 +665,7 @@ try {
   const lmsJson = await lms.json();
   const pstatFile = lmsJson.written?.[0];
   const pstatText = pstatFile ? Buffer.from(unzip26(new Uint8Array(readFileSync(pstatFile.path))).get("project.json")).toString("utf8") : "";
-  check("a Canvas results report is read, matched, written as a .pstat with no student in it, and its figures kept", lms.status === 200 && lmsJson.attempts === 31 && lmsJson.matched?.length === 1 && /"profile":"OpenAssess item results 1"/.test(pstatText) && !/Student 1|9001/.test(pstatText) && lmsJson.kept?.sheets === 31, `${lms.status} ${JSON.stringify(lmsJson).slice(0, 160)}`);
+  check("a Canvas results report is read, matched, written as a .pstat with no student in it, and its figures kept", lms.status === 200 && lmsJson.attempts === 31 && lmsJson.matched?.length === 1 && /"profile":"OpenAssess item results 2"/.test(pstatText) && !/Student 1|9001/.test(pstatText) && lmsJson.kept?.sheets === 31, `${lms.status} ${JSON.stringify(lmsJson).slice(0, 160)}`);
   const history = await (await send("GET", "/api/sheets/Results/history")).json();
   check("the kept figures come back as the question's history", history.classes === 1 && history.questions?.[0]?.runs?.length === 1 && history.questions[0].runs[0].current === true, JSON.stringify(history).slice(0, 160));
 

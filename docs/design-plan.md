@@ -588,10 +588,10 @@ shared core (`openstage-core`, `CORE-NOTES.md`).
 - **Checked against R through the shared test set (C3).** OpenAssess and PrismStatistics share no item-analysis code; both run the
   core's set of scored classes with R's figures and match them. OpenAssess's point-biserial keeps the question in the total and is
   labelled so; PrismStatistics's corrected item-total r leaves it out. The SD divides by the number of sheets, and says so.
-- **The `.pstat` file for PrismStatistics.** The core's format (PSTAT-1) and its profile `OpenAssess item results 1`, written by
-  OpenAssess's own code and held in its tests to the core's reader, checker and test-set files. Complete sheets only, points per
-  question, no names and no question text. What the list asks beyond the profile (letters, key, item details, bank ids) is asked of
-  the core (`CORE-REQUESTS.md`) and not added here.
+- **The `.pstat` file for PrismStatistics.** The core's format (PSTAT-1, revision 1.1) and its profile `OpenAssess item results 2`,
+  written by OpenAssess's own code and held in its tests to the core's reader, checker and test-set files: the points per question,
+  the letters marked in version A's lettering, and the key and details of every question by its bank id, so files from different
+  semesters match. Complete sheets only, no names, no student ids and no question text.
 - **A learning system's results.** Canvas's Student Analysis, Brightspace's quiz statistics export and Blackboard's Download Results
   are read by their column names into the same scored rows as sheets: the system's own points, no student column read, each question
   matched by words one bank question alone has. The layouts are from documentation; no real report has been read.

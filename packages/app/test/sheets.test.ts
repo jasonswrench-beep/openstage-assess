@@ -723,10 +723,17 @@ test("will not open scores against a test whose record has changed since, even u
       assert.match(pstatName, / - Results for statistics 2026-11-04\.pstat$/);
       const pstat = unzipSync(new Uint8Array(readFileSync(join(home, "Exports", pstatName))));
       const project = JSON.parse(new TextDecoder().decode(pstat.get("project.json")));
-      assert.equal(project.profile, "OpenAssess item results 1");
+      // Profile 2: the letters marked beside the points, and the key and details in assessment.json by bank id.
+      assert.equal(project.profile, "OpenAssess item results 2");
       assert.match(project.app_version, /^OpenAssess /);
       assert.deepEqual(project.operations, []);
-      const projectText = new TextDecoder().decode(pstat.get("project.json"));
+      assert.deepEqual([...pstat.keys()], ["project.json", "assessment.json"]);
+      assert.ok(project.dataset.variables.some((v: Json) => v.name === "r01" && v.label === "Question 1 answer"));
+      const part = JSON.parse(new TextDecoder().decode(pstat.get("assessment.json")));
+      assert.equal(part.test.source, "scanned sheets");
+      assert.equal(part.test.given, "2026-11-04");
+      assert.match(part.questions[0].bank_id, /^q_[0-9A-Z]{26}$/);
+      const projectText = new TextDecoder().decode(pstat.get("project.json")) + new TextDecoder().decode(pstat.get("assessment.json"));
       for (const label of labels) assert.ok(!projectText.includes(label.replace(/\.png$/, "")), "no file label of a scan");
       const csv = readFileSync(join(home, "Exports", written.find((w) => w.kind === "csv")!.name), "utf8");
       assert.ok(csv.startsWith("﻿Sheet,Version,Name,"), "Excel opens it with the byte order mark, and the Name column is there for the instructor to fill");

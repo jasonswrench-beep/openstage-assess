@@ -511,7 +511,14 @@ holds it (revision 1.1): complete sheets only; each question named and labelled 
 digits, so the names skip a question left out (`q01`, `q03`; the 1.0 checker wrongly wanted them in a row, and was followed for a few
 hours); empty (never 0) where a
 question does not count; a total that is the sum of its cells to the last digit; no question text, no name, no file name, empty
-`operations` and `results`; and no file at all for a class with no complete sheet or no question (`refused`). It is not the core's `@openstage/pstat`, because the engine has no runtime dependency;
+`operations` and `results`; and no file at all for a class with no complete sheet or no question (`refused`). What the app and the
+command line write is profile 2 (section 7.2, `pstatProject2`): profile 1, then for scanned sheets an `r` variable per question with
+the letters marked in version A's lettering (`""` blank, `null` exactly where the points are), and the part `assessment.json` with
+every question of version A by its bank id, its revision, its type, its options' ids, its details and a key that reproduces every
+point by the spec's rule (adjustments as `dropped`, `credit_all`, an extra accepted letter; a key that differs by version names its
+versions). A learning system's report writes no letters and calls every question `other`, worth what the system said. No student
+id or name is written: OpenAssess holds none. The spec forbids writing profile 2 from scoring that differs from its rule, so a change
+to `score.ts` is checked against `pstat-profile2.test.ts`, which scores the core's `letters-60` case and must write its file. It is not the core's `@openstage/pstat`, because the engine has no runtime dependency;
 `pstat-export.test.ts` reads every case of the core's item-analysis test set with the core's `readPstat` and `checkPstat` when the core
 is beside this repository, and `item-analysis-reference.test.ts` runs the set's checker on `sheets/stats.ts`. Neither copies the
 core. A field the profile does not have (the letters, the key, bank ids) is asked of the core in `CORE-REQUESTS.md` and is not added
