@@ -39,7 +39,7 @@ import tomllib
 from pathlib import Path
 
 # The release this build is. Raise it for every release: Check for updates compares it with the newest published tag.
-RELEASE = "0.1.0-alpha.27"
+RELEASE = "0.1.0-alpha.28"
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
