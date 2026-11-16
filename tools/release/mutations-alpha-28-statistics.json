@@ -1,0 +1,170 @@
+[
+  {
+    "label": "B1 calibration may propose lines that read a marked answer as blank",
+    "file": "packages/assess/src/sheets/calibrate.ts",
+    "from": "t.wrong === 0 && t.missed === 0 && t.version.wrong === 0;",
+    "to": "t.wrong === 0 && t.version.wrong === 0;",
+    "tests": ["packages/assess/test/sheet-calibrate.test.ts"]
+  },
+  {
+    "label": "B2 every sheet falls in the half the lines are tried on",
+    "file": "packages/assess/src/sheets/calibrate.ts",
+    "from": "half = n % 2 === 0;",
+    "to": "half = true;",
+    "tests": ["packages/assess/test/sheet-calibrate.test.ts"]
+  },
+  {
+    "label": "B3 any answer read counts as right, an erasure read as a mark among them",
+    "file": "packages/assess/src/sheets/calibrate.ts",
+    "from": "if (plain && d.marked.length === e.length && d.marked.every((m, i) => m === e[i])) t.right++;",
+    "to": "if (d.marked.length > 0) t.right++;",
+    "tests": ["packages/assess/test/sheet-calibrate.test.ts"]
+  },
+  {
+    "label": "B4 lines proposed from a handful of sheets",
+    "file": "packages/assess/src/sheets/calibrate.ts",
+    "from": "if (now.tune.answers < LEAST_TO_TUNE) {",
+    "to": "if (now.tune.answers < 0) {",
+    "tests": ["packages/assess/test/sheet-calibrate.test.ts"]
+  },
+  {
+    "label": "B5 a question that does not count is written as 0 points, not empty",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "return q && q.possible > 0 ? q.earned : null;",
+    "to": "return q ? q.earned : null;",
+    "tests": ["packages/assess/test/pstat-export.test.ts"]
+  },
+  {
+    "label": "B6 sheets that are not complete go into the .pstat",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);",
+    "to": "s.version !== undefined).sort((a, b) => a.number - b.number);",
+    "tests": ["packages/assess/test/pstat-export.test.ts"]
+  },
+  {
+    "label": "B7 the sheets are not put in sheet-number order",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);",
+    "to": "s.complete && s.version !== undefined);",
+    "tests": ["packages/assess/test/pstat-export.test.ts"]
+  },
+  {
+    "label": "B8 app_version does not name the program",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "return tag ? `OpenAssess ${tag}`",
+    "to": "return tag ? `${tag}`",
+    "tests": ["packages/assess/test/pstat-export.test.ts"]
+  },
+  {
+    "label": "B9 the 27 percent group rounds down",
+    "file": "packages/assess/src/sheets/stats.ts",
+    "from": "Math.floor((27 * complete.length + 50) / 100)",
+    "to": "Math.floor((27 * complete.length) / 100)",
+    "tests": ["packages/assess/test/sheet-score.test.ts"]
+  },
+  {
+    "label": "B10 a name column of a results report is not known as one about a student",
+    "file": "packages/assess/src/results/lms-results.ts",
+    "from": "const PERSONAL = [\"name\", \"first name\",",
+    "to": "const PERSONAL = [\"first name\",",
+    "tests": ["packages/assess/test/lms-results.test.ts"]
+  },
+  {
+    "label": "B11 a response is counted against an answer whose words it only holds",
+    "file": "packages/assess/src/results/lms-results.ts",
+    "from": "const whole = options.filter((o) => o.words === words);",
+    "to": "const whole = options.filter((o) => o.words.includes(words) || words.includes(o.words));",
+    "tests": ["packages/assess/test/lms-results.test.ts"]
+  },
+  {
+    "label": "B12 words two bank questions share are matched to the first",
+    "file": "packages/assess/src/results/lms-results.ts",
+    "from": "if (words.length === 1) return { key: lq.key, questionId: words[0] as string, by: \"words\" as const };",
+    "to": "if (words.length >= 1) return { key: lq.key, questionId: words[0] as string, by: \"words\" as const };",
+    "tests": ["packages/assess/test/lms-results.test.ts"]
+  },
+  {
+    "label": "B13 part of the points is taken as right",
+    "file": "packages/assess/src/results/lms-results.ts",
+    "from": ": earned >= possible ? \"right\" :",
+    "to": ": earned > 0 ? \"right\" :",
+    "tests": ["packages/assess/test/lms-results.test.ts"]
+  },
+  {
+    "label": "B14 a Canvas question column with no points column after it is read anyway",
+    "file": "packages/assess/src/results/lms-results.ts",
+    "from": "if (typeof next !== \"number\") return { ok: false,",
+    "to": "if (next === \"bad\" && false) return { ok: false,",
+    "tests": ["packages/assess/test/lms-results.test.ts"]
+  },
+  {
+    "label": "B15 the app keeps the class figures without confirm=true",
+    "file": "packages/app/src/lms-results.ts",
+    "from": "if (confirm === \"true\") {",
+    "to": "if (confirm !== \"false\") {",
+    "tests": ["packages/app/test/lms-results.test.ts"]
+  },
+  {
+    "label": "B16 the app takes any word for what to write",
+    "file": "packages/app/src/lms-results.ts",
+    "from": "if (write !== null && write !== \"statistics\") throw badRequest",
+    "to": "if (write === \"nothing at all\") throw badRequest",
+    "tests": ["packages/app/test/lms-results.test.ts"]
+  },
+  {
+    "label": "B17 item history notes on fewer than 30 attempts",
+    "file": "packages/assess/src/bank/item-history.ts",
+    "from": "if (sheets < SMALL_GROUP) continue;",
+    "to": "if (sheets < 1) continue;",
+    "tests": ["packages/assess/test/item-history.test.ts"]
+  },
+  {
+    "label": "B18 every class counts as having seen the question as it is now",
+    "file": "packages/assess/src/bank/item-history.ts",
+    "from": "current: version === question.version,",
+    "to": "current: true,",
+    "tests": ["packages/assess/test/item-history.test.ts"]
+  },
+  {
+    "label": "B19 unchosen answers are noted on a question with no key",
+    "file": "packages/assess/src/bank/item-history.ts",
+    "from": "if (unchosen.length > 0 && right.size > 0) {",
+    "to": "if (unchosen.length > 0) {",
+    "tests": ["packages/assess/test/item-history.test.ts"]
+  },
+  {
+    "label": "B20 the test's own copy is not used for the version a class saw",
+    "file": "packages/assess/src/bank/item-history.ts",
+    "from": "if (copy) return copy.version;",
+    "to": "if (copy && copy.version < 0) return copy.version;",
+    "tests": ["packages/assess/test/item-history.test.ts"]
+  },
+  {
+    "label": "B21 an equation in a QTI 3.0 item loses its MathML namespace",
+    "file": "packages/assess/src/export/qti3.ts",
+    "from": "if (el.name === \"math\" || el.name.endsWith(\":math\")) return withMathNamespace(el);",
+    "to": "if (el.name === \"math\" || el.name.endsWith(\":math\")) return el;",
+    "tests": ["packages/assess/test/qti3.test.ts"]
+  },
+  {
+    "label": "B22 a QTI 3.0 file names xsi:schemaLocation without declaring xsi",
+    "file": "packages/assess/src/export/qti3.ts",
+    "from": "if (Object.keys(el.attrs).some((k) => k.startsWith(\"xsi:\"))) attrs[\"xmlns:xsi\"] = XSI;",
+    "to": "if (Object.keys(el.attrs).some((k) => k.startsWith(\"xsi-never:\"))) attrs[\"xmlns:xsi\"] = XSI;",
+    "tests": ["packages/assess/test/qti3.test.ts"]
+  },
+  {
+    "label": "B23 a paragraph of an item's text is renamed as though it were QTI",
+    "file": "packages/assess/src/export/qti3.ts",
+    "from": " kbd li object ol p param pre ",
+    "to": " kbd li object ol param pre ",
+    "tests": ["packages/assess/test/qti3.test.ts"]
+  },
+  {
+    "label": "B24 a QTI 3.0 file is not renamed to 2.1 before it is read",
+    "file": "packages/assess/src/import/qti.ts",
+    "from": "if (!isQti3Root(root)) return root;",
+    "to": "if (root) return root;",
+    "tests": ["packages/assess/test/qti3.test.ts"]
+  }
+]
