@@ -21,7 +21,9 @@ All are fixed, each with a test and a planted fault in `tools/release/mutations-
 
 - **The `.pstat` was refused by the core's own checker** when a question was left out (named by its version A number, with a gap),
   when a class had no complete sheet or every question was dropped (a file with no question), and when points had seven places (the
-  total rounded to six). Now numbered in a row with a note, never written empty, and the total is the sum to the last digit.
+  total rounded to six). The empty file and the total are fixed (never written empty; the total is the sum to the last digit). The
+  numbering was first changed to the 1.0 checker's (in a row); the core then settled in PSTAT-1 revision 1.1 that the text was right and
+  the checker wrong, so the names are version A's numbers again, gaps and all, and the 1.1 checker accepts them.
 - **One student's answer was given to another** in a results report sorted by question with the names taken out: attempts were
   told apart only by a repeated question. A long report with no column saying whose a row is, or with one attempt's rows apart, is
   refused now.

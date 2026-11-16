@@ -36,13 +36,8 @@ Two things in OpenAssess changed that the checker touches, and neither moved a f
    - **test details**: test id, date given, and source (scanned sheets or a learning system's report).
    Plus test-set cases for each, so both tools are held to the same files. OpenAssess will not put any of this in an unknown member,
    since PrismStatistics drops members it does not know when it saves.
-2. **A sentence in 7.1 on numbering when a question is left out.** The text says each `q` variable is labelled with "the
-   question's number on version A", and `checkPstat` holds the kept questions to `q01`, `q02` and on in a row, labelled `Question 1`,
-   `Question 2` and on, with the width from how many are kept. The two disagree as soon as a question counts on no sheet (dropped, an
-   essay on a bubble sheet, no usable key). OpenAssess first followed the text and wrote `q01, q03`, which `checkPstat` refused; it now
-   follows the checker and adds a note in `source.report.notes` saying which question of version A each renumbered variable is
-   ("q02 is question 3 of version A"). Please make the text say what the checker does (or the other way about), and add a test-set
-   case with a question left out.
+2. **Numbering when a question is left out: settled in PSTAT-1 revision 1.1, done.** OpenAssess names each `q` variable by its
+   number on version A again (`q01`, `q03`), with version A's width of digits, and its export of `omitted-25` equals the set's file.
 4. **C7, the source ledger** (OpenAssess list item 7): a passage-reference format with a spec, the comparison of two editions of a
    .docx or PDF source (unchanged, changed with old and new text, or gone), and a test set of two editions.
 5. **C8, the local AI runtime and assistant server** (OpenAssess items 8 and 9): how a tool asks whether a model or key is there and

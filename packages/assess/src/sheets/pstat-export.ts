@@ -70,6 +70,18 @@ export function pstatAppVersion(release: string | undefined, engineVersion: stri
 
 const letter = (version: number): string => VERSION_LABELS[version - 1] ?? String(version);
 
+/** Why a question counts on no sheet, in the words the core's test set uses for a dropped one, when every sheet gives one reason. */
+function whyLeftOut(sheets: readonly SheetScore[], id: string): string {
+  const outcomes = new Set(sheets.map((s) => s.questions.find((q) => q.questionId === id)?.outcome ?? "notOnSheet"));
+  if (outcomes.size === 1) {
+    const only = [...outcomes][0];
+    if (only === "dropped") return "it was dropped";
+    if (only === "notOnSheet") return "the sheet does not carry it";
+    if (only === "notScored") return "it has no usable answer key, so it is not scored";
+  }
+  return "it was dropped, or the sheet does not carry it";
+}
+
 /** The project for the scored sheets of a test, in the item results profile. */
 export function pstatProject(record: TestRecord, scores: readonly SheetScore[], appVersion: string): PstatExport {
   const sheets = scores.filter((s): s is SheetScore & { version: number } => s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);
@@ -77,24 +89,24 @@ export function pstatProject(record: TestRecord, scores: readonly SheetScore[], 
   const notes: string[] = [];
   if (leftOut > 0) notes.push(`${leftOut} sheet${leftOut === 1 ? " was" : "s were"} left out because ${leftOut === 1 ? "it is" : "they are"} not complete: a question that counts is not settled, a page is missing, or the version is not known.`);
 
-  // The questions in the order the test was assembled, which is version A's order. The ones kept are numbered q01, q02 and on with no
-  // gap and labelled Question 1, Question 2 and on, as the core's checker holds the profile to (rule F1); when a question counts on no
-  // sheet and is left out, the numbers after it are not version A's any more, and a note says which question each is. Named by the
-  // version A number instead, the file was refused by the checker whenever a question was dropped or the sheet could not carry it.
+  // The questions in the order the test was assembled, which is version A's order, each named and labelled by its number there, with
+  // the digits version A's count of questions needs. A question that counts on no sheet is left out and its number is not used, so
+  // the names may skip (q01, q03), as PSTAT-1 revision 1.1 settles. For a few hours of 15 November 2026 the kept questions were
+  // numbered in a row instead, to satisfy the core's 1.0 checker, which wrongly demanded it; the 1.1 checker refuses that.
   const first = versionQuestions(record, "A" as VersionLabel);
-  const kept = first.map((question, i) => ({ question, number: i + 1, cells: sheets.map((s) => {
-    const q = s.questions.find((x) => x.questionId === question.id);
-    return q && q.possible > 0 ? q.earned : null;
-  }) }));
-  for (const k of kept) if (sheets.length > 0 && k.cells.every((c) => c === null)) notes.push(`Question ${k.number} counts on none of the sheets written (it was dropped, or the sheet does not carry it), so it is left out.`);
-  const counted = kept.filter((k) => k.cells.some((c) => c !== null));
-  const width = Math.max(2, String(counted.length).length);
+  const width = Math.max(2, String(first.length).length);
   const items: Array<{ id: string; name: string; label: string; cells: Array<number | null> }> = [];
-  const renumbered: string[] = [];
-  counted.forEach(({ question, number, cells }, j) => {
-    const name = `q${String(j + 1).padStart(width, "0")}`;
-    if (j + 1 !== number) renumbered.push(`${name} is question ${number}`);
-    items.push({ id: question.id, name, label: `Question ${j + 1}`, cells });
+  first.forEach((question, i) => {
+    const cells = sheets.map((s) => {
+      const q = s.questions.find((x) => x.questionId === question.id);
+      return q && q.possible > 0 ? q.earned : null;
+    });
+    const name = `q${String(i + 1).padStart(width, "0")}`;
+    if (cells.every((c) => c === null)) {
+      if (sheets.length > 0) notes.push(`Question ${i + 1} counts on none of the sheets written (${whyLeftOut(sheets, question.id)}), so it is left out.`);
+      return;
+    }
+    items.push({ id: question.id, name, label: `Question ${i + 1}`, cells });
     // Where a question does not count on some sheets, say on which: by version when it is empty on every sheet of those versions.
     const empty = sheets.filter((_s, j) => cells[j] === null);
     if (empty.length > 0) {
@@ -103,8 +115,6 @@ export function pstatProject(record: TestRecord, scores: readonly SheetScore[], 
       notes.push(byVersion ? `${name} does not count on version ${versions.map(letter).join(", ")}, so its cells there are empty.` : `${name} does not count on ${empty.length} of the sheets, so its cells there are empty.`);
     }
   });
-
-  if (renumbered.length > 0) notes.push(`Because a question is left out, the questions after it are numbered in order here and not as on version A: ${renumbered.join(", ")} of version A.`);
 
   const used = [...new Set(sheets.map((s) => s.version))].sort((a, b) => a - b);
   const variables: Variable[] = [

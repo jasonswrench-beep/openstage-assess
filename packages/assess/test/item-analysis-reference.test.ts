@@ -33,7 +33,7 @@ describe("item statistics against the shared test set (C3)", () => {
     const r = runChecker();
     assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
     assert.match(r.stdout, /OpenAssess/);
-    assert.doesNotMatch(r.stdout, /FAIL|differ/i);
+    assert.match(r.stdout, /OpenAssess: \d+ figures match, 0 do not\./);
   });
 
   test("the checker fails when one of R's figures is changed", { skip: core ? false : "openstage-core is not on this machine" }, () => {

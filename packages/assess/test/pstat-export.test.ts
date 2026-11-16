@@ -38,7 +38,7 @@ function scoresOf(record: ReturnType<typeof createTest>, rows: Array<{ sheet: nu
     const questions: QuestionScore[] = record.questions.map((q, j) => {
       const earned = r.points[j] ?? null;
       const counts = earned !== null;
-      return { number: j + 1, questionId: q.id, outcome: counts ? (earned === possible[j] ? "right" : earned === 0 ? "wrong" : "partial") : "notCounted", earned: counts ? earned : 0, possible: counts ? (possible[j] as number) : 0, marked: [] } as QuestionScore;
+      return { number: j + 1, questionId: q.id, outcome: counts ? (earned === possible[j] ? "right" : earned === 0 ? "wrong" : "partial") : "dropped", earned: counts ? earned : 0, possible: counts ? (possible[j] as number) : 0, marked: [] } as QuestionScore;
     });
     const earned = questions.reduce((s, q) => s + q.earned, 0);
     return { number: r.sheet, version: r.version, earned, possible: questions.reduce((s, q) => s + q.possible, 0), settled: questions.length, unsettled: r.complete === false ? 1 : 0, complete: r.complete !== false, problems: [], questions };
@@ -109,10 +109,9 @@ describe("the .pstat export", () => {
   test("leaves out a question that counts on no sheet, and says so", () => {
     const dropped = scoresOf(record, [{ sheet: 1, version: 1, points: [1, null, 1, 1] }, { sheet: 2, version: 2, points: [0, null, 1, null] }], [1, 1, 1, 1]);
     const p = pstatProject(record, dropped, "OpenAssess test").project;
-    // Numbered in a row, as the core's checker holds the profile to, with a note on which question of version A each is.
-    assert.deepEqual(p.dataset.variables.map((v) => [v.name, v.label]), [["sheet", "Sheet number"], ["version", "Version"], ["q01", "Question 1"], ["q02", "Question 2"], ["q03", "Question 3"], ["total", "Total score"]]);
-    assert.ok(p.source.report.notes.includes("Question 2 counts on none of the sheets written (it was dropped, or the sheet does not carry it), so it is left out."));
-    assert.ok(p.source.report.notes.includes("Because a question is left out, the questions after it are numbered in order here and not as on version A: q02 is question 3, q03 is question 4 of version A."), p.source.report.notes.join(" | "));
+    // Each by its number on version A, so the names skip the one left out (PSTAT-1 revision 1.1).
+    assert.deepEqual(p.dataset.variables.map((v) => [v.name, v.label]), [["sheet", "Sheet number"], ["version", "Version"], ["q01", "Question 1"], ["q03", "Question 3"], ["q04", "Question 4"], ["total", "Total score"]]);
+    assert.ok(p.source.report.notes.includes("Question 2 counts on none of the sheets written (it was dropped), so it is left out."), p.source.report.notes.join(" | "));
   });
 
   test("refuses to make a file with no sheet or no question, which the profile has no room for", () => {
@@ -134,11 +133,10 @@ describe("the .pstat export", () => {
     const p = pstatProject(many, scoresOf(many, [{ sheet: 1, version: 1, points: many.questions.map(() => 1) }], many.questions.map(() => 1)), "x").project;
     assert.equal(p.dataset.variables[2]?.name, "q001");
     assert.equal(p.dataset.variables[102]?.name, "q101");
-    // With two of the 101 left out there are 99 kept, and two digits are enough: the width is the kept questions', as the core's checker
-    // has it.
+    // With two of the 101 left out the width is still version A's: three digits, and the names stop at q099.
     const fewer = pstatProject(many, scoresOf(many, [{ sheet: 1, version: 1, points: many.questions.map((_q, i) => (i >= 99 ? null : 1)) }], many.questions.map(() => 1)), "x").project;
-    assert.equal(fewer.dataset.variables[2]?.name, "q01");
-    assert.equal(fewer.dataset.variables.at(-2)?.name, "q99");
+    assert.equal(fewer.dataset.variables[2]?.name, "q001");
+    assert.equal(fewer.dataset.variables.at(-2)?.name, "q099");
   });
 
   test("the same sheets make the same bytes, and the file is a single deflated project.json", () => {
@@ -170,7 +168,13 @@ describe("the .pstat export against the core", () => {
     const casesDir = join(core as string, "testsets", "item-analysis", "cases");
     const names = readdirSync(casesDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
     assert.ok(names.length >= 7);
+    // Profile 2's case (letters-60) is a file OpenAssess does not write yet; every profile 1 case is held to, omitted-25 among them
+    // when the core's set is 1.1.0 or later.
+    let compared = 0;
     for (const name of names) {
+      const setFile = new Uint8Array(readFileSync(join(casesDir, name, `${name}.pstat`)));
+      if (pstat.readPstat(setFile).profile !== "OpenAssess item results 1") continue;
+      compared++;
       const info = JSON.parse(readFileSync(join(casesDir, name, "case.json"), "utf8")) as { versions?: number; items: Array<{ id: string; possible: number; partial_credit: boolean }> };
       const [head, ...lines] = readFileSync(join(casesDir, name, "scores.csv"), "utf8").trim().split(/\r?\n/);
       const cols = (head as string).split(",");
@@ -181,13 +185,14 @@ describe("the .pstat export against the core", () => {
       const ours = writePstatFile(pstatProject(record, scores, "OpenAssess test").project);
       assert.deepEqual(pstat.checkPstat(ours), [], `${name}: the core's checker`);
       const mine = pstat.readPstat(ours);
-      const theirs = pstat.readPstat(new Uint8Array(readFileSync(join(casesDir, name, `${name}.pstat`))));
+      const theirs = pstat.readPstat(setFile);
       assert.deepEqual({ ...mine, app_version: "" }, { ...theirs, app_version: "" }, `${name}: the set's file`);
       assert.match(mine.app_version, /^OpenAssess /);
     }
+    assert.ok(compared >= 7, `only ${compared} cases compared`);
   });
 
-  test("the files the review found refused by the core's checker are accepted now: a question left out, 100 questions with one left out, points with seven places", { skip }, async () => {
+  test("the files the review found refused by the core's checker are accepted: a question left out, 100 questions with one left out, points with seven places", { skip }, async () => {
     const pstat = await import(pathToFileURL(join(core as string, "packages", "pstat", "src", "index.js")).href);
     const four = createTest({ id: `t_${"6".padStart(26, "0")}`, name: "Four", questions: [question(), question(), question(), question()], versions: 1, seed: "s", at: AT });
     const dropped = writePstatFile(pstatProject(four, scoresOf(four, [{ sheet: 1, version: 1, points: [1, null, 0, 1] }, { sheet: 2, version: 1, points: [0, null, 1, 1] }], [1, 1, 1, 1]), "OpenAssess test").project);

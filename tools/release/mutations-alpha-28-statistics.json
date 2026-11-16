@@ -279,10 +279,10 @@
     ]
   },
   {
-    "label": "B32 the questions kept are named by their version A number, with gaps",
+    "label": "B32 the questions kept are labelled in a row, not by their version A number",
     "file": "packages/assess/src/sheets/pstat-export.ts",
-    "from": "const name = `q${String(j + 1).padStart(width, \"0\")}`;",
-    "to": "const name = `q${String(number).padStart(width, \"0\")}`;",
+    "from": "items.push({ id: question.id, name, label: `Question ${i + 1}`, cells });",
+    "to": "items.push({ id: question.id, name, label: `Question ${items.length + 1}`, cells });",
     "tests": [
       "packages/assess/test/pstat-export.test.ts"
     ]
@@ -312,6 +312,24 @@
     "to": "if (stimuli.length < 0) r.note(",
     "tests": [
       "packages/assess/test/qti3.test.ts"
+    ]
+  },
+  {
+    "label": "B36 the width of a question's number is the kept questions', not version A's",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "const width = Math.max(2, String(first.length).length);",
+    "to": "const width = 2;",
+    "tests": [
+      "packages/assess/test/pstat-export.test.ts"
+    ]
+  },
+  {
+    "label": "B37 a dropped question is not said to be dropped",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "if (only === \"dropped\") return \"it was dropped\";",
+    "to": "if (only === \"never\") return \"it was dropped\";",
+    "tests": [
+      "packages/assess/test/pstat-export.test.ts"
     ]
   }
 ]

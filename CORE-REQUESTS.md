@@ -31,11 +31,10 @@ help OpenAssess most:
    table. Item details are not secret in the way question text is; question text stays out, as 7.1 says.
 4. Test set cases for the new parts, so PrismStatistics and OpenAssess are held to the same files.
 
-One wording point in 7.1: it says each `q` variable is labelled with "the question's number on version A", while `checkPstat` holds
-the kept questions to `q01`, `q02` and on in a row, labelled `Question 1` and on. They disagree when a question counts on no sheet.
-OpenAssess first followed the text (`q01`, `q03`), which `checkPstat` refused; it now follows the checker and says in
-`source.report.notes` which question of version A each renumbered variable is. The set has no case with a question left out. A
-sentence in 7.1, and a case, would settle it.
+**Answered in PSTAT-1 revision 1.1 (core commit 13b210c):** profile `OpenAssess item results 2` (section 7.2) carries the letters and
+`assessment.json` (the key, the item details, the test details, bank ids), with the case `letters-60`; and the numbering is settled as
+version A's numbers with gaps (case `omitted-25`), which OpenAssess writes again. Profile 2 is not written by OpenAssess yet, and the
+core asks that `student_id` is not written until the author decides whether profile 2 carries one at all.
 
 ## 2. C7, the source ledger (for list item 7)
 
