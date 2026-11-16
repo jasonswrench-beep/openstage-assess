@@ -746,6 +746,13 @@ test("will not open scores against a test whose record has changed since, even u
       assert.equal(served.bytes.subarray(0, 2).toString("latin1"), "PK", "a real zip");
       assert.equal((await client.post<Json>(`/api/scoring/${sid}/export`, { what: ["zip"] })).status, 400);
       assert.equal((await client.post<Json>(`/api/scoring/${sid}/export`, { date: "yesterday" })).status, 400);
+      // A day that does not exist: Date.parse rolled it into March and it reached the file.
+      assert.equal((await client.post<Json>(`/api/scoring/${sid}/export`, { date: "2026-02-31" })).status, 400);
+      // With no date given, the file says the day is not known rather than today's.
+      const undated = await client.post<Json>(`/api/scoring/${sid}/export`, { what: ["statistics"] });
+      assert.equal(undated.status, 200, undated.text);
+      const undatedPart = JSON.parse(new TextDecoder().decode(unzipSync(new Uint8Array(readFileSync(join(home, "Exports", (undated.json["written"] as Json[])[0]!["name"])))).get("assessment.json")));
+      assert.equal(undatedPart.test.given, null);
     });
   });
 

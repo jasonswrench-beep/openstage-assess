@@ -480,6 +480,8 @@ export function validateQuestion(raw: unknown): ValidationResult {
 
   if (!isId(raw["id"], "q")) c.fail("id", "must be a question id of the form q_<26 characters>");
   c.number(raw["version"], "version", { min: 1 });
+  // A version is a count of edits: 1.5 was accepted, and the .pstat's revision, which must be whole, was refused for it.
+  if (typeof raw["version"] === "number" && !Number.isInteger(raw["version"])) c.fail("version", "must be a whole number");
   c.string(raw["title"], "title", { max: MAX_TITLE_LENGTH });
   c.richText(raw["stem"], "stem", { allowEmpty: false });
   c.number(raw["points"], "points", { min: 0, max: MAX_POINTS });

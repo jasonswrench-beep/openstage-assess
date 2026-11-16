@@ -74,6 +74,7 @@ export function today(): string {
 
 export function dateOf(value: unknown): string {
   if (value === undefined || value === null || value === "") return today();
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value))) throw badRequest("The date must be written like 2026-11-04.");
+  // A day that is a day: Date.parse rolls 2026-02-31 over into March, so the day is also written back and compared.
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`)) || new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value) throw badRequest("The date must be a day written like 2026-11-04.");
   return value;
 }

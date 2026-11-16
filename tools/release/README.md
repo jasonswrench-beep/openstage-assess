@@ -36,7 +36,9 @@ commands are written for Git Bash; PowerShell is named where it differs).
 6. Run both suites on a FRESH CLONE (`git clone` into an empty folder, then `npm test` there, or the `node --test` commands of each
    package's `test` script). A checkout on Windows makes every file CRLF, and three tests that matched text across lines failed on a
    fresh clone for months without anyone seeing it, because the working copy here is LF. Files in the private fixtures folders are not
-   in a clone, so those tests skip.
+   in a clone, so those tests skip. The shared core is public (since 15 November 2026): clone it beside the fresh clone too
+   (`git clone https://github.com/jasonswrench-beep/openstage-core` into the same parent folder, or set `OPENSTAGE_CORE`), so the
+   tests that hold OpenAssess to the core's test set and `.pstat` checker run there as well and do not skip.
 7. The sweeps over real files (a folder of PDFs, Word files, spreadsheets, zips): read them again and compare file by file with the
    last release's, so that no real file reads differently; only the readers' own time limits (each file in its own process) are needed.
 

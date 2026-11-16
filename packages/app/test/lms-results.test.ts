@@ -71,6 +71,11 @@ describe("results from a learning system", () => {
       assert.equal(file?.["name"], "Quiz 3 - Results for statistics 2026-10-02.pstat");
       const text = new TextDecoder().decode(unzipSync(new Uint8Array(readFileSync(join(home, "Exports", file?.["name"])))).get("project.json"));
       assert.match(text, /From Canvas's Student Analysis report/);
+      const part = JSON.parse(new TextDecoder().decode(unzipSync(new Uint8Array(readFileSync(join(home, "Exports", file?.["name"])))).get("assessment.json")));
+      assert.deepEqual([part.test.source, part.test.given], ["learning system report", "2026-10-02"], "the day the person gave");
+      const undated = await client.post<Json>(`${path}?lms=canvas&name=Quiz%204&write=statistics`, report);
+      const undatedFile = (undated.json["written"] as Json[])[0]!["name"];
+      assert.equal(JSON.parse(new TextDecoder().decode(unzipSync(new Uint8Array(readFileSync(join(home, "Exports", undatedFile)))).get("assessment.json"))).test.given, null, "none given, none written");
       for (const p of PERSONAL) assert.ok(!text.includes(p), p);
 
       assert.equal((await client.post<Json>(`${path}?lms=canvas&confirm=yes`, report)).status, 400);

@@ -48,7 +48,7 @@ export async function lmsResultsRoute(ctx: Context, req: ApiRequest, bankName: s
 
   const written: Array<{ name: string; path: string; kind: string }> = [];
   if (write === "statistics") {
-    const made = pstatProject2(record, scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION), { source: "learning system report", given: date });
+    const made = pstatProject2(record, scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION), { source: "learning system report", ...(req.query.get("date") ? { given: date } : {}) });
     if (made.refused) throw badRequest(made.refused.replace("No sheet is complete", "No attempt has points for every question").replace("settle the flagged questions first", "the learning system gave no points for some question"));
     made.project.source.report.notes.unshift(`From ${report.lms}'s ${report.report} report, with the learning system's own points.`);
     const file = await writeNewFile(ctx.library.exports, checkName(fitFileName(`${cleanName(name, "Quiz")} - Results for statistics ${date}${PSTAT_EXTENSION}`)), writePstatFile(made.project, made.part));

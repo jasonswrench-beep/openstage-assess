@@ -403,5 +403,68 @@
     "tests": [
       "packages/assess/test/pstat-profile2.test.ts"
     ]
+  },
+  {
+    "label": "B46 the key's points are not rounded as the scorer rounds them",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "const stated = round6([...mine]",
+    "to": "const stated = ([...mine]",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B47 the key is not checked against the points before writing",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "const problem = keyProblem(project, part);",
+    "to": "const problem = part.version < 0 ? keyProblem(project, part) : undefined;",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B48 the day the file was written is given as the day of the test",
+    "file": "packages/app/src/lms-results.ts",
+    "from": "...(req.query.get(\"date\") ? { given: date } : {})",
+    "to": "...{ given: date }",
+    "tests": [
+      "packages/app/test/lms-results.test.ts"
+    ]
+  },
+  {
+    "label": "B49 a day that does not exist is taken",
+    "file": "packages/app/src/request.ts",
+    "from": ".toISOString().slice(0, 10) !== value) throw badRequest(\"The date must be a day",
+    "to": ".toISOString().slice(0, 10) === \"never\") throw badRequest(\"The date must be a day",
+    "tests": [
+      "packages/app/test/sheets.test.ts"
+    ]
+  },
+  {
+    "label": "B50 an answer counted as right that the question does not have is taken",
+    "file": "packages/assess/src/sheets/score.ts",
+    "from": "if (!answers.includes(a.answer)) return",
+    "to": "if (answers.length < 0) return",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B51 a question's version that is not whole is taken",
+    "file": "packages/assess/src/model/schema.ts",
+    "from": "!Number.isInteger(raw[\"version\"])) c.fail(\"version\", \"must be a whole number\");",
+    "to": "Number.isNaN(raw[\"version\"])) c.fail(\"version\", \"must be a whole number\");",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
+  },
+  {
+    "label": "B52 a credited question with marks not settled is not said",
+    "file": "packages/assess/src/sheets/score.ts",
+    "from": "...(!answer || answer.kind === \"unsettled\" ? { why: CREDITED_UNSETTLED } : {})",
+    "to": "...({})",
+    "tests": [
+      "packages/assess/test/pstat-profile2.test.ts"
+    ]
   }
 ]

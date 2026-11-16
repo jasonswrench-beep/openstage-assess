@@ -50,7 +50,7 @@ export { printTestPaper, DEFAULT_PAPER } from "./sheets/paper.ts";
 export type { PaperFile, PaperOptions, PaperResult } from "./sheets/paper.ts";
 export { assembleBatch } from "./sheets/batch.ts";
 export type { Batch, BatchEntry, BatchFlag, BatchSheet } from "./sheets/batch.ts";
-export { adjustmentEffect, adjustmentWords, keyOf, pointsOf, scoreSheets, settleSheets } from "./sheets/score.ts";
+export { adjustmentEffect, adjustmentProblem, adjustmentWords, CREDITED_UNSETTLED, keyOf, pointsOf, scoreSheets, settleSheets } from "./sheets/score.ts";
 export type { Adjustment, Decision, Outcome, QuestionScore, SettledAnswer, SettledSheet, SheetScore } from "./sheets/score.ts";
 export { SMALL_GROUP, itemStatistics } from "./sheets/stats.ts";
 export type { ItemStatistics, OptionCount, TestStatistics } from "./sheets/stats.ts";

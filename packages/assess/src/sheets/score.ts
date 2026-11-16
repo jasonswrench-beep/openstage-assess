@@ -187,6 +187,27 @@ export interface SheetScore {
 
 const round = (value: number): number => Math.round(value * 1e6) / 1e6;
 
+/** What a question credited to everyone says when its marks on the sheet were never settled (the .pstat's letters say so). */
+export const CREDITED_UNSETTLED = "Credited to everyone; its marks on this sheet were not settled.";
+
+/**
+ * Whether the adjustments fit the test: an answer counted as right as well is one of the question's own answers (an option's id, or
+ * true or false). A scores file is read from disk and may have been edited; an unknown answer was added to the key and scored as right
+ * by nobody, so the share of a select-all question came out wrong. Undefined when every adjustment fits.
+ */
+export function adjustmentProblem(record: TestRecord, adjustments: readonly Adjustment[]): string | undefined {
+  for (const a of adjustments) {
+    const q = record.questions.find((x) => x.id === a.questionId);
+    if (!q) return `An adjustment names a question this test does not hold (${a.questionId}).`;
+    if (a.kind === "alsoRight") {
+      const answers = isTrueFalse(q) ? ["true", "false"] : isChoice(q) || isMultipleResponse(q) ? q.body.options.map((o) => o.id) : [];
+      if (!answers.includes(a.answer)) return `An adjustment counts an answer as right that question ${record.questions.indexOf(q) + 1} does not have (${a.answer}).`;
+    }
+    if (a.versions && !a.versions.every((v) => Number.isInteger(v) && v >= 1 && v <= record.versions.length)) return `An adjustment names a version this test does not have.`;
+  }
+  return undefined;
+}
+
 export const pointsOf = (question: Question): number => (Number.isFinite(question.points) && question.points >= 0 ? question.points : 1);
 
 /** The bank's answers a set of marked places stand for, in one version. */
@@ -212,7 +233,7 @@ function scoreQuestion(question: Question, number: number, answer: SettledAnswer
   if (mine.some((a) => a.kind === "drop")) return { ...base, outcome: "dropped", earned: 0, possible: 0, why: "Dropped from the total." };
 
   const points = [...mine].reverse().find((a): a is Adjustment & { kind: "points" } => a.kind === "points")?.points ?? pointsOf(question);
-  if (mine.some((a) => a.kind === "credit")) return { ...base, outcome: "credited", earned: round(points), possible: round(points), marked: answer?.kind === "marked" ? answersFor(question, answer.places) : [] };
+  if (mine.some((a) => a.kind === "credit")) return { ...base, outcome: "credited", earned: round(points), possible: round(points), marked: answer?.kind === "marked" ? answersFor(question, answer.places) : [], ...(!answer || answer.kind === "unsettled" ? { why: CREDITED_UNSETTLED } : {}) };
   if (!answer || answer.kind === "unsettled") return { ...base, outcome: "unsettled", earned: 0, possible: round(points), why: answer?.kind === "unsettled" ? answer.why : "The sheet has nothing for this question." };
   if (answer.kind === "blank") return { ...base, outcome: "blank", earned: 0, possible: round(points) };
 

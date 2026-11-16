@@ -134,6 +134,75 @@ describe("profile 2 against the core's letters-60 case", () => {
   });
 });
 
+describe("faults found by an independent review of profile 2", () => {
+  const mc = (n: number, points = 1) => createQuestion({ type: "multipleChoice", stem: plainToRich("Q"), body: { shuffle: false, options: [0, 1, 2].map((k) => ({ id: `o${k}`, content: plainToRich(`A${k}`), correct: k === 1 })) }, by: "t", at: AT, id: ulid("q", 70 + n), points });
+  // A sheet for each place given, with every question of the test marked at that place.
+  const sheetsFor = (record: TestRecord, places: number[]): SettledSheet[] =>
+    places.map((p, i) => ({ number: i + 1, version: 1, answers: Object.fromEntries(record.questions.map((_q, k) => [k + 1, { kind: "marked" as const, places: [p], by: "reader" as const }])), problems: [] }));
+
+  test("points with more than six places are written as the scorer rounded them, and a worth that rounds to nothing is dropped", async () => {
+    const record = createTest({ id: ulid("t", 50), name: "Places", questions: [mc(1, 0.3333333), mc(2, 1)], versions: 1, seed: "s", at: AT });
+    const adjustments: Adjustment[] = [{ id: "adj_1", kind: "points", questionId: ulid("q", 72), points: 0.1234567, at: AT }];
+    const made = pstatProject2(record, scoreSheets(record, sheetsFor(record, [1, 0]), adjustments), "OpenAssess test", { source: "scanned sheets", adjustments });
+    assert.equal(made.fellBack, undefined, made.fellBack);
+    assert.deepEqual(made.part?.questions.map((q) => q.key[0]?.points), [0.333333, 0.123457]);
+    const tiny = createTest({ id: ulid("t", 51), name: "Tiny", questions: [mc(3, 1e-7), mc(4, 1)], versions: 1, seed: "s", at: AT });
+    const t = pstatProject2(tiny, scoreSheets(tiny, sheetsFor(tiny, [1])), "OpenAssess test", { source: "scanned sheets" });
+    assert.equal(t.part?.questions[0]?.key[0]?.adjustment, "dropped");
+    if (core) {
+      const pstat = await import(pathToFileURL(join(core, "packages", "pstat", "src", "index.js")).href);
+      assert.deepEqual(pstat.checkPstat(writePstatFile(made.project, made.part)), []);
+      assert.deepEqual(pstat.checkPstat(writePstatFile(t.project, t.part)), []);
+    }
+  });
+
+  test("a learning system's points the key cannot give (above the worth, below 0, worth nothing on one attempt) are written in profile 1, and said", () => {
+    const record = createTest({ id: ulid("t", 52), name: "Online", questions: [mc(5)], versions: 1, seed: "s", at: AT });
+    const attempt = (n: number, earned: number, possible: number) => ({ number: n, version: 1, earned, possible, settled: 1, unsettled: 0, complete: true, problems: [], questions: [{ number: 1, questionId: ulid("q", 75), outcome: "right" as const, earned, possible, marked: [] }] });
+    for (const scores of [[attempt(1, 1.5, 1), attempt(2, 1, 1)], [attempt(1, -0.5, 1), attempt(2, 1, 1)], [attempt(1, 0, 0), attempt(2, 1, 1)]]) {
+      const made = pstatProject2(record, scores, "OpenAssess test", { source: "learning system report" });
+      assert.ok(made.fellBack, JSON.stringify(scores.map((s) => s.earned)));
+      assert.equal(made.part, undefined);
+      assert.equal(made.project.profile, "OpenAssess item results 1");
+      assert.match(made.project.source.report.notes.at(-1) ?? "", /^Written with the points only \(profile 1\)/);
+    }
+  });
+
+  test("the day the test was given is written only when the person gave one", () => {
+    const record = createTest({ id: ulid("t", 53), name: "Day", questions: [mc(6)], versions: 1, seed: "s", at: AT });
+    const scores = scoreSheets(record, sheetsFor(record, [1]));
+    assert.equal(pstatProject2(record, scores, "x", { source: "scanned sheets" }).part?.test.given, null);
+    assert.equal(pstatProject2(record, scores, "x", { source: "scanned sheets", given: "2026-11-10" }).part?.test.given, "2026-11-10");
+  });
+
+  test("an answer counted as right that the question does not have, read from a scores file, is refused", async () => {
+    const { adjustmentProblem } = await import("../src/sheets/score.ts");
+    const record = createTest({ id: ulid("t", 54), name: "Adj", questions: [mc(7)], versions: 2, seed: "s", at: AT });
+    assert.equal(adjustmentProblem(record, [{ id: "a", kind: "alsoRight", questionId: ulid("q", 77), answer: "o2", at: AT }]), undefined);
+    assert.match(adjustmentProblem(record, [{ id: "a", kind: "alsoRight", questionId: ulid("q", 77), answer: "o99", at: AT }]) ?? "", /does not have \(o99\)/);
+    assert.match(adjustmentProblem(record, [{ id: "a", kind: "drop", questionId: ulid("q", 77), versions: [3], at: AT }]) ?? "", /version this test does not have/);
+    assert.match(adjustmentProblem(record, [{ id: "a", kind: "drop", questionId: "q_nothere", at: AT }]) ?? "", /does not hold/);
+  });
+
+  test("a question's version that is not a whole number is refused when a bank is read", async () => {
+    const { validateQuestion } = await import("../src/model/schema.ts");
+    const q = mc(8);
+    assert.equal(validateQuestion(q).ok, true);
+    const bad = validateQuestion({ ...q, version: 1.5 });
+    assert.equal(bad.ok, false);
+  });
+
+  test("a credited question whose marks were not settled is said, since its answer cell reads like a blank", () => {
+    const record = createTest({ id: ulid("t", 55), name: "Credit", questions: [mc(9), mc(10)], versions: 1, seed: "s", at: AT });
+    const adjustments: Adjustment[] = [{ id: "adj_1", kind: "credit", questionId: ulid("q", 79), at: AT }];
+    const sheets: SettledSheet[] = [{ number: 1, version: 1, answers: { 1: { kind: "unsettled", why: "faint" }, 2: { kind: "marked", places: [1], by: "reader" } }, problems: [] }];
+    const scores = scoreSheets(record, sheets, adjustments);
+    assert.equal(scores[0]?.complete, true);
+    const made = pstatProject2(record, scores, "x", { source: "scanned sheets", adjustments });
+    assert.ok(made.project.source.report.notes.some((n) => /^r01: question 1 was credited to everyone, and on 1 sheet its marks were not settled/.test(n)), made.project.source.report.notes.join(" | "));
+  });
+});
+
 describe("profile 2 on its own", () => {
   const q = (n: number, correct: number) => createQuestion({ type: "multipleChoice", stem: plainToRich("Q"), body: { shuffle: false, options: [0, 1, 2].map((k) => ({ id: `o${k}`, content: plainToRich(`A${k}`), correct: k === correct })) }, by: "t", at: AT, id: ulid("q", 90 + n), metadata: { status: "draft", tags: ["unit 3"], chapter: "3", bloom: "apply", difficulty: "easy" } });
 

@@ -48,7 +48,7 @@ import { formatGate, runSheetGate } from "../sheets/gate.ts";
 import { imageFingerprint } from "../sheets/image.ts";
 import { openScans } from "../sheets/intake.ts";
 import { assembleBatch, type BatchEntry, type BatchSheet } from "../sheets/batch.ts";
-import { adjustmentWords, scoreSheets, settleSheets, type Adjustment, type Decision } from "../sheets/score.ts";
+import { adjustmentProblem, adjustmentWords, scoreSheets, settleSheets, type Adjustment, type Decision } from "../sheets/score.ts";
 import { itemStatistics } from "../sheets/stats.ts";
 import { exportResults, itemAnalysisHtml } from "../sheets/results-export.ts";
 import { newScoresFile, readScoresFile, restore, scoresFileName, writeScoresFile } from "../sheets/scores-file.ts";
@@ -649,7 +649,7 @@ async function cmdResults(args: string[]): Promise<number> {
   if (out) {
     const folder = resolve(out);
     await mkdir(folder, { recursive: true });
-    const made = pstatProject2(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION), { source: "learning system report", given: date });
+    const made = pstatProject2(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION), { source: "learning system report", ...(arg(args, "date") !== undefined ? { given: date } : {}) });
     if (made.refused) return fail(`No file for PrismStatistics: ${made.refused}`);
     made.project.source.report.notes.unshift(`From ${report.lms}'s ${report.report} report, with the learning system's own points.`);
     let target = join(folder, pstatFileName(record.name, date));
@@ -1045,6 +1045,7 @@ async function cmdSheets(args: string[]): Promise<number> {
     if (!bankPath || rest2.length === 0) return fail(sub === "score" ? "Name a bank file and the scans: sheets score <bank> <picture.png|scan.pdf|folder...>." : "Name a bank file and a scores file: sheets rescore <bank> <file.openassess-scores>.");
     const { bank } = await Bank.open(resolve(bankPath));
     const date = arg(rest, "date") ?? new Date().toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date) return fail(`--date is a day written like 2026-11-04, not "${date}".`);
     let record: TestRecord;
     let sheets: BatchSheet[];
     let entries: BatchEntry[];
@@ -1071,6 +1072,8 @@ async function cmdSheets(args: string[]): Promise<number> {
       const found = bank.getTest(loaded.file.testId);
       if (!found) return fail(`This scores file is for the test "${loaded.file.testName}" (${loaded.file.testId}), which this bank does not hold.`);
       if (found.fingerprint !== loaded.file.testFingerprint) return fail("This scores file is for a test whose record has changed since: its fingerprint is not the one in the bank.");
+      const misfit = adjustmentProblem(found, loaded.file.adjustments);
+      if (misfit) return fail(`This scores file cannot be read against its test. ${misfit}`);
       record = found;
       const back = restore(loaded.file);
       sheets = back.sheets;
@@ -1130,7 +1133,7 @@ async function cmdSheets(args: string[]): Promise<number> {
         [`${safeName(record.name, "Test")} - Item analysis ${date}.html`, itemAnalysisHtml(record, stats, date)],
       ];
       // The file for PrismStatistics only when it holds a sheet and a question: one with neither is refused by the core's checker.
-      const pstat = pstatProject2(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION), { source: "scanned sheets", given: date, adjustments });
+      const pstat = pstatProject2(record, scores, pstatAppVersion(process.env.OPENASSESS_RELEASE, ENGINE_VERSION), { source: "scanned sheets", ...(arg(rest, "date") !== undefined ? { given: date } : {}), adjustments });
       if (pstat.refused) console.log(`No file for PrismStatistics: ${pstat.refused}`);
       else writes.push([pstatFileName(record.name, date), writePstatFile(pstat.project, pstat.part)]);
       for (const [name, data] of writes) {

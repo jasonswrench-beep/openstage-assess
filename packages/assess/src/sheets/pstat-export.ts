@@ -21,7 +21,7 @@ import { safeName } from "../export/text.ts";
 import { isChoice, isMultipleResponse, isTrueFalse, type Question } from "../model/question.ts";
 import { letterFor, versionQuestions, VERSION_LABELS, type TestRecord, type VersionLabel } from "../model/test.ts";
 import { hasUsableKey } from "../quality/answer-key.ts";
-import { keyOf, pointsOf, type Adjustment, type SheetScore } from "./score.ts";
+import { CREDITED_UNSETTLED, keyOf, pointsOf, type Adjustment, type SheetScore } from "./score.ts";
 
 export const PSTAT_EXTENSION = ".pstat";
 export const PSTAT_FORMAT = "PrismStatistics project";
@@ -209,6 +209,8 @@ export interface AssessmentPart {
 
 export interface Pstat2Export extends PstatExport {
   part?: AssessmentPart;
+  /** Why the file is profile 1 after all, when the key could not give every point. */
+  fellBack?: string;
 }
 
 export interface Pstat2Options {
@@ -241,7 +243,9 @@ function typeOf(question: Question, source: Pstat2Options["source"]): PartType {
 function entryFor(record: TestRecord, question: Question, type: PartType, adjustments: readonly Adjustment[], version: number, possible: number | undefined): Omit<KeyEntry, "versions"> {
   const mine = adjustments.filter((a) => a.questionId === question.id && (a.versions === undefined || a.versions.includes(version)));
   const partial = type === "select_all" && isMultipleResponse(question) && question.body.partialCredit === true;
-  const stated = [...mine].reverse().find((a): a is Adjustment & { kind: "points" } => a.kind === "points")?.points ?? pointsOf(question);
+  // Rounded to the millionth, as score.ts rounds what a question is worth: a points adjustment of 0.1234567 scored 0.123457, and a key
+  // written with the number as given said what the scorer never used. A worth that rounds to nothing is dropped, as its cells are.
+  const stated = round6([...mine].reverse().find((a): a is Adjustment & { kind: "points" } => a.kind === "points")?.points ?? pointsOf(question));
   const points = possible ?? stated;
   // A dropped entry still needs a number above 0; the question counts on none of its versions' sheets, so the number earns nothing.
   const dropped: Omit<KeyEntry, "versions"> = { correct: [], points: points > 0 ? points : 1, adjustment: "dropped", partial_credit: false };
@@ -252,6 +256,8 @@ function entryFor(record: TestRecord, question: Question, type: PartType, adjust
   const correct = type === "select_all" ? [lettersOf(record, question.id, key)] : [...new Set(key.map((k) => letterFor(record, "A" as VersionLabel, question.id, k)).filter((l): l is string => l !== undefined))].sort();
   return { correct, points, adjustment: "none", partial_credit: partial };
 }
+
+const round6 = (v: number): number => Math.round(v * 1e6) / 1e6;
 
 const nullable = (v: string | undefined): string | null => (v === undefined || v.trim() === "" ? null : v);
 
@@ -264,7 +270,8 @@ const nullable = (v: string | undefined): string | null => (v === undefined || v
 export function pstatProject2(record: TestRecord, scores: readonly SheetScore[], appVersion: string, options: Pstat2Options): Pstat2Export {
   const one = pstatProject(record, scores, appVersion);
   if (one.refused) return one;
-  const project = one.project;
+  // Built on a copy, so that profile 1 is still there to write if the key cannot be made to give every point (below).
+  const project: PstatProject = structuredClone(one.project);
   project.profile = PSTAT_PROFILE_2;
   const adjustments = options.adjustments ?? [];
   const sheets = scores.filter((s): s is SheetScore & { version: number } => s.complete && s.version !== undefined).sort((a, b) => a.number - b.number);
@@ -320,7 +327,63 @@ export function pstatProject2(record: TestRecord, scores: readonly SheetScore[],
       };
     }),
   };
+  // A question credited to everyone whose marks on a sheet were never settled has "" in its answer cell, which the format keeps for a
+  // question left blank: it has no word for "credited, marks not known". Said, so a blank count from the letters is read with it.
+  first.forEach((question, i) => {
+    const n = sheets.filter((s) => s.questions.some((q) => q.questionId === question.id && q.outcome === "credited" && q.why === CREDITED_UNSETTLED)).length;
+    if (n > 0 && options.source === "scanned sheets") project.source.report.notes.push(`r${tag(i)}: question ${i + 1} was credited to everyone, and on ${n} sheet${n === 1 ? "" : "s"} its marks were not settled; the answer cell there is empty, as for a blank.`);
+  });
+
+  // The spec forbids a key that does not give the points written. Every cell is checked against the key by the spec's rule before the
+  // file is made; where one is not given (a learning system's points above what the question was worth, below 0, or worth nothing on one
+  // attempt and something on another), the file is written in profile 1, the points alone, and says why. Two such files were refused by
+  // the core's checker before this check was here.
+  const problem = keyProblem(project, part);
+  if (problem) {
+    one.project.source.report.notes.push(`Written with the points only (profile 1), without the letters and the key: ${problem}`);
+    return { ...one, fellBack: problem };
+  }
   return { ...one, project, part };
+}
+
+
+/** Why the part's key does not give a point the file holds, by PSTAT-1 section 7.2's rule, or undefined when it gives every one. */
+function keyProblem(project: PstatProject, part: AssessmentPart): string | undefined {
+  const vars = project.dataset.variables;
+  const cols = project.dataset.columns;
+  const versionAt = vars.findIndex((v) => v.name === "version");
+  for (const q of part.questions) {
+    if (q.points_variable === null) continue;
+    const pAt = vars.findIndex((v) => v.id === q.points_variable);
+    const aAt = q.answer_variable === null ? -1 : vars.findIndex((v) => v.id === q.answer_variable);
+    const points = cols[pAt]?.values ?? [];
+    for (let r = 0; r < points.length; r++) {
+      const v = cols[versionAt]?.values[r] as number;
+      const e = q.key.find((k) => k.versions === undefined || k.versions.includes(v));
+      const got = points[r] as number | null;
+      const where = `question ${q.number}, row ${r + 1}`;
+      if (!e) return `${where} has no key entry for its version.`;
+      if (e.adjustment === "dropped") {
+        if (got !== null) return `${where} counts though its key says it was dropped.`;
+        continue;
+      }
+      if (got === null) return `${where} does not count on that attempt though it counts on others.`;
+      if (got < 0 || got > e.points + 1e-9) return `${where} earned ${got}, outside 0 to the ${e.points} it is worth.`;
+      let expected: number | undefined;
+      if (e.adjustment === "credit_all") expected = e.points;
+      else if (q.type !== "other" && aAt >= 0) {
+        const s = cols[aAt]?.values[r] as string;
+        if (s === "") expected = 0;
+        else if (q.type === "select_all") {
+          const key = e.correct[0] ?? "";
+          const right = [...s].filter((c) => key.includes(c)).length;
+          expected = s === key ? e.points : e.partial_credit ? round6((e.points * Math.max(0, right - (s.length - right))) / key.length) : 0;
+        } else expected = s.length === 1 && e.correct.includes(s) ? e.points : 0;
+      }
+      if (expected !== undefined && Math.abs(got - expected) > 1e-9) return `${where} earned ${got} where the key gives ${expected}.`;
+    }
+  }
+  return undefined;
 }
 
 /** Key entries that differ by version, each naming its versions, in the order their first version comes. */

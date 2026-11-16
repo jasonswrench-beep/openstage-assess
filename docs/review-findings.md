@@ -43,6 +43,15 @@ All are fixed, each with a test and a planted fault in `tools/release/mutations-
 - **The calibration list wrote the labels the window gives the scans into a file**, against the rule that they live only in memory.
   It names pictures by their place now and shows the labels on screen.
 
+A second reader then read profile 2 of the `.pstat` (the letters and `assessment.json`), ran 3,000 random tests through it (every file
+it wrote passed the core's checker) and proved seven faults, all fixed with a test and a planted fault (52 in the list, all caught):
+a key whose points had more than six places when the scorer had rounded them (and a worth that rounds to nothing written as scored);
+a learning system's points the key cannot give (above the worth, below 0, worth nothing on one attempt), which the core refused; the
+day the file was written put down as the day the test was given; an impossible date such as 2026-02-31 taken; an answer counted as
+right that the question does not have, read from an edited scores file; a question's version of 1.5 taken from a hand-edited bank; and
+a credited question whose marks were not settled written as left blank without a word. Before writing profile 2 the writer now checks
+that its key gives every point in the file, and writes profile 1 and says why when it does not.
+
 One consequence to know: the class figures now carry each question's `version`, and a release before alpha 28 refuses a field it
 does not know, so it keeps such a figures file as damaged (byte for byte, reported, as for any part it cannot read) rather than read it.
 

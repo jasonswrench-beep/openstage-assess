@@ -62,6 +62,14 @@ Two things in OpenAssess changed that the checker touches, and neither moved a f
   - **A credited question left blank counts as credited** (OpenAssess's way). PrismStatistics should change to match, and a case can
     hold one.
 - **Not done:** reporting each 27 percent group's own share (`upper_27`, `lower_27`). The checker still says it is not checked.
+- **Checked against PSTAT-1 1.2** (core a3baab3, public): every file OpenAssess writes passes. It holds no students' ids or names, so
+  it writes neither.
+- **A gap in 7.2 to rule on:** a question credited to everyone whose marks on a sheet were never settled (a faint mark, then the
+  question was credited) has no answer cell value: `""` means left blank. OpenAssess writes `""` and says so in `source.report.notes`.
+  A ruling (a value for "not known", or "write the credited question's cell as null") would settle it.
+- **Before writing profile 2, OpenAssess checks that its key gives every point in the file by the rule of 7.2, and writes profile 1
+  and says why when it does not** (a learning system's points above a question's worth, below 0, or worth nothing on one attempt and
+  something on another). A second review found the core's checker refusing such files.
 
 ## 3. For PrismStatistics (passed on through the core, since the two tools share files and not code)
 

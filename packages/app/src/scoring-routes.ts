@@ -13,6 +13,7 @@ import { join } from "node:path";
 import {
   administrationFrom,
   adjustmentEffect,
+  adjustmentProblem,
   adjustmentWords,
   answerAt,
   calibrate,
@@ -123,6 +124,10 @@ async function openScores(ctx: Context, req: ApiRequest): Promise<ApiResponse> {
   if (home.record.fingerprint !== file.testFingerprint) {
     throw new HttpError(409, "These scores are for a test whose record has changed since: its fingerprint is not the one in the bank, so the scores cannot be read against it.");
   }
+  // The adjustments come from a file on disk and are held to the test: an answer counted as right that the question does not have
+  // would be added to its key and change what everyone earned.
+  const misfit = adjustmentProblem(home.record, file.adjustments);
+  if (misfit) throw new HttpError(422, `This scores file cannot be read against its test. ${misfit}`);
   if (name === "") {
     name = await writeNewFile(ctx.library.scores, cleanName(`${file.testName} - Scores ${file.updated.slice(0, 10)}`, "Scores") + SCORES_EXTENSION, bytes);
   }
@@ -192,7 +197,7 @@ async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Pr
   // For PrismStatistics: the core's .pstat profile, the complete sheets only, no names and no question text. `app_version` names the
   // release Check for updates knows this copy as.
   if (what.includes("statistics")) {
-    const pstat = pstatProject2(s.test, c.scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION), { source: "scanned sheets", given: date, adjustments: s.adjustments });
+    const pstat = pstatProject2(s.test, c.scores, pstatAppVersion(ctx.updates?.current, ENGINE_VERSION), { source: "scanned sheets", ...(input["date"] !== undefined && input["date"] !== null && input["date"] !== "" ? { given: date } : {}), adjustments: s.adjustments });
     if (pstat.refused && what.length === 1) throw badRequest(pstat.refused);
     // Asked for with the other files, a .pstat that cannot be written is said beside them rather than left out without a word.
     if (pstat.refused) notes.push(`The file for PrismStatistics was not written. ${pstat.refused}`);
