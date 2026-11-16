@@ -599,6 +599,35 @@ describe("what is kept and what is written", () => {
     return { bank, base, sid, test, record, labels };
   }
 
+  test("sets the fill lines on real paper from the pictures of a sitting: a list with a row for each picture, and a report that changes nothing", async () => {
+    await withApp(async (client, home) => {
+      const { sid, labels, record } = await scored(client);
+      const listed = await client.post<Json>(`/api/scoring/${sid}/calibration-list`);
+      assert.equal(listed.status, 200, listed.text);
+      const file = (listed.json["written"] as Json[])[0]!["name"] as string;
+      assert.match(file, / - Answer list for calibration\.csv$/);
+      const rows = readFileSync(join(home, "Exports", file), "utf8").trim().split("\n");
+      assert.deepEqual(rows.slice(1).map((r) => r.split(",").slice(0, 2)), labels.map((l) => [l, "1"]), "a row for each picture, by the label the window gave it");
+      assert.ok(rows.slice(1).every((r) => r.split(",")[3] === ""), "the source is left for the person, so an untouched row is refused");
+
+      const letters = (places: number[]) => places.map((p) => String.fromCharCode(65 + p)).join("");
+      const head = rows[0];
+      const filled = [head, ...(["A", "B"] as const).map((v, i) => [labels[i], "1", `S${i}`, "photo", "phone - office light", v, ...rightPlaces(record, v).map(letters)].join(",")), "nothere.png,1,X,scan,flatbed,A"].join("\n");
+      const r = await client.post<Json>(`/api/scoring/${sid}/calibrate`, new TextEncoder().encode(filled));
+      assert.equal(r.status, 200, r.text);
+      assert.equal(r.json["pages"], 2);
+      assert.match(r.json["text"], /WRONG AND NOT FLAGGED 0/);
+      assert.match(r.json["text"], /photo, phone - office light: 2 pages, 0 refused/);
+      assert.match(r.json["noProposal"], /at least 200 are needed/);
+      assert.ok((r.json["problems"] as string[]).some((p) => /Line 4: no picture of this sitting is nothere\.png, page 1/.test(p)));
+
+      assert.equal((await client.post<Json>(`/api/scoring/${sid}/calibrate`, new Uint8Array())).status, 400);
+      const none = await client.post<Json>(`/api/scoring/${sid}/calibrate`, new TextEncoder().encode(`${head}\nnothere.png,1,X,scan,flatbed,A`));
+      assert.equal(none.status, 422);
+      assert.match(none.json["error"], /No row of the list names a picture of this sitting/);
+    });
+  });
+
   test("saves a scores file that holds no file name and no picture, and opens it again with the same scores and decisions", async () => {
     await withApp(async (client, home) => {
       const { sid, labels } = await scored(client);

@@ -15,6 +15,13 @@ import {
   adjustmentEffect,
   adjustmentWords,
   answerAt,
+  calibrate,
+  decodeTableText,
+  formatCalibration,
+  listTemplate,
+  parseDelimited,
+  readList,
+  type CorpusPage,
   ENGINE_VERSION,
   exportResults,
   PSTAT_EXTENSION,
@@ -194,6 +201,36 @@ async function exportFiles(ctx: Context, req: ApiRequest, s: ScoringSession): Pr
     written.push({ name, path: join(ctx.library.exports, name), kind });
   }
   return ok({ written });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Setting the fill lines on real paper (the engine's calibrate.ts), from the pictures of this sitting. The window decodes a phone's
+// JPEG, which the command line cannot, so a corpus of photographs is calibrated here. Nothing is changed: the lines are proposed.
+
+/** POST /scoring/<id>/calibration-list: an answer list with a row for each picture of the sitting, written into Exports. */
+async function calibrationList(ctx: Context, s: ScoringSession): Promise<ApiResponse> {
+  const pages = compute(s).entries.map((e) => e.source);
+  if (pages.length === 0) throw badRequest("Add the scans of the volunteers' sheets first: the list has a row for each picture.");
+  const name = await writeNewFile(ctx.library.exports, checkName(fitFileName(`${cleanName(s.test.name, "Test")} - Answer list for calibration.csv`)), listTemplate(s.test.questions.length, pages));
+  return ok({ written: [{ name, path: join(ctx.library.exports, name), kind: "calibration-list" }] });
+}
+
+/** POST /scoring/<id>/calibrate, with the filled-in answer list as the body: the report, for reading. */
+function calibrateSitting(req: ApiRequest, s: ScoringSession): ApiResponse {
+  if (req.body.length === 0) throw badRequest("Send the answer list the volunteers filled in.");
+  const list = readList(parseDelimited(decodeTableText(new Uint8Array(req.body)).text).rows.map((r) => r.cells));
+  const problems = list.problems.map((p) => `Line ${p.line}: ${p.message}`);
+  const entries = compute(s).entries;
+  const pages: CorpusPage[] = [];
+  for (const row of list.rows) {
+    const found = entries.filter((e) => e.source.file === row.file && e.source.page === row.page);
+    if (found.length === 0) problems.push(`Line ${row.line}: no picture of this sitting is ${row.file}, page ${row.page}.`);
+    else if (found.length > 1) problems.push(`Line ${row.line}: ${found.length} pictures of this sitting are ${row.file}, page ${row.page}, so which one is meant is not known.`);
+    else pages.push({ where: `${row.file} p${row.page}`, sheet: row.sheet, source: row.source, condition: row.condition, ...(row.version !== undefined ? { version: row.version } : {}), answers: row.answers, reading: (found[0] as BatchEntry).result });
+  }
+  if (pages.length === 0) throw new HttpError(422, ["No row of the list names a picture of this sitting.", ...problems.slice(0, 20)].join(" "));
+  const report = calibrate(pages, s.reader);
+  return ok({ text: formatCalibration(report), problems, proposed: report.proposed?.lines, noProposal: report.noProposal, pages: report.pages });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -395,6 +432,9 @@ export async function scoringRoute(ctx: Context, req: ApiRequest): Promise<ApiRe
 
   if (what === "save" && req.method === "POST") return save(ctx, s);
   if (what === "export" && req.method === "POST") return exportFiles(ctx, req, s);
+
+  if (what === "calibration-list" && a === undefined && req.method === "POST") return calibrationList(ctx, s);
+  if (what === "calibrate" && a === undefined && req.method === "POST") return calibrateSitting(req, s);
 
   if (what === "statistics" && req.method === "POST") {
     const input = jsonObject(req);

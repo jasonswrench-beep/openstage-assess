@@ -470,3 +470,6 @@ table.results tr.current { background: var(--note-bg); }
   .qrow[aria-current="true"]:focus-visible { outline: 3px solid Highlight; outline-offset: 2px; }
   .dropzone.over, .export.wide .panel.over, section.panel.over { outline: 3px dashed Highlight; outline-offset: 2px; }
 }
+
+/* A report in plain text (the calibration report): kept as written, wrapped so it never runs off the page. */
+pre.report { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9em; background: var(--card); border: 1px solid currentColor; padding: 0.75em; border-radius: 4px; }

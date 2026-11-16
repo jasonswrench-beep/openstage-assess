@@ -773,9 +773,51 @@ export async function renderScoring(host, params, shell) {
       tick("statistics", "A file for PrismStatistics (.pstat)", "The points on each question of every complete sheet, by version, for deeper analysis; it opens in PrismStatistics with a double-click. No name and no question text go in."),
       h("div", { class: "editor-actions" }, write),
       written,
+      calibrationPanel(),
       h("h3", { text: "The class figures" }),
       h("p", { class: "sub", text: "A bank can keep how each question did for this class: its difficulty and discrimination, and how many sheets marked each answer. Nothing about any sheet or student goes in, and nothing is kept unless you ask." }),
       h("div", { class: "editor-actions" }, keep),
+    );
+  }
+
+  /**
+   * Setting the fill lines on real paper: for a sitting of sheets volunteers filled in to a written list, not for a class. The list is
+   * written with a row for each picture here, the person fills in what each volunteer marked, and the report says what the lines in use
+   * do and what lines the sheets would suggest. Nothing is changed by it.
+   */
+  function calibrationPanel() {
+    const out = h("div", { attrs: { "aria-live": "polite" } });
+    const list = h("button", { type: "button", text: "Write an answer list for these pictures", disabled: view.sheets.length === 0 });
+    list.addEventListener("click", async () => {
+      try {
+        const done = await post(`${base}/calibration-list`);
+        clear(out);
+        put(out, h("div", { class: "written" }, ...done.written.map(/** @param {any} file */ (file) => h("div", { class: "file-row" }, h("span", { class: "file-name", text: file.name }), ...fileButtons(file, shell)))));
+      } catch (error) {
+        tell(error);
+      }
+    });
+    const upload = h("input", { type: "file", id: "calibration-list", accept: ".csv,.txt" });
+    upload.addEventListener("change", async () => {
+      const file = upload.files?.[0];
+      if (!file) return;
+      try {
+        const r = await post(`${base}/calibrate`, new Uint8Array(await file.arrayBuffer()));
+        clear(out);
+        put(out, ...r.problems.slice(0, 30).map(/** @param {string} p */ (p) => h("p", { class: "hint", text: p })), h("pre", { class: "report", text: r.text }));
+      } catch (error) {
+        tell(error);
+      }
+      upload.value = "";
+    });
+    return h(
+      "details",
+      { class: "calibration" },
+      h("summary", { text: "Set the fill lines on real paper" }),
+      h("p", { class: "sub", text: "For testing the reader, not for a class: scan or photograph sheets that volunteers filled in to a written list of answers, add them above, write the answer list, fill in what each volunteer marked (the letters, nothing for a blank, ? for a mark meant to be unclear, and scan or photo), and open it here. The lines are tried on half the sheets and reported on the other half. Nothing is changed: lines it proposes are written into the program by hand." }),
+      h("div", { class: "editor-actions" }, list),
+      h("div", { class: "field" }, h("label", { for: "calibration-list", class: "field-label", text: "The filled-in answer list" }), upload),
+      out,
     );
   }
 

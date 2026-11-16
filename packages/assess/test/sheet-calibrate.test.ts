@@ -87,6 +87,16 @@ describe("the answer list", () => {
   });
 });
 
+describe("the list for pictures already read", () => {
+  test("has a row for each picture with its file and page, quotes a name with a comma, and leaves the source for the person", () => {
+    const text = listTemplate(3, [{ file: "IMG_1.jpg", page: 1 }, { file: "scan, class 2.pdf", page: 2 }]);
+    assert.deepEqual(text.trim().split("\n").slice(1), ["IMG_1.jpg,1,,,,,,,", '"scan, class 2.pdf",2,,,,,,,']);
+    const { rows, problems } = readList([["file", "page", "sheet", "source", "condition", "version", "1", "2", "3"], ["IMG_1.jpg", "1", "", "", "", "", "", "", ""]]);
+    assert.equal(rows.length, 0, "a row nobody filled in is not read as a scan with every question blank");
+    assert.match(problems[0]?.message ?? "", /neither scan nor photo/);
+  });
+});
+
 describe("the halves", () => {
   test("every condition is dealt into both halves, and the pages of one sheet stay together", () => {
     const p = (sheet: string, condition: string): CorpusPage => ({ ...page(0, {}, 0.8, 0), sheet, condition });

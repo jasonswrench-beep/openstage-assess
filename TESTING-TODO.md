@@ -385,9 +385,11 @@ in the tests and in `assess sheets gate`.
   (empty for left blank, `?` for a mark meant to be unclear, such as an erasure). Then `sheets calibrate <bank> <folder>` tries the
   lines on half the sheets, reports them on the other half, and prints the fill of marked and empty bubbles for each condition and
   each target of the spec. It proposes lines and changes none: if it proposes, write them into `sheets/decide.ts` yourself (or ask a
-  session to), run `npm test` and `sheets gate`, and name the corpus in the commit. The command line cannot decode a JPEG, so save
-  phone photos as PNG first (Photos or Paint, Save as PNG, which keeps them upright). Needs at least 200 marked answers in each
-  half before it will propose anything: about 20 sheets of 20 questions.
+  session to), run `npm test` and `sheets gate`, and name the corpus in the commit. The command line cannot decode a JPEG, so for
+  phone photos use the app instead: open Score a class for the test, add the photos and scans (the window decodes a phone's JPEG and
+  turns it upright), open "Set the fill lines on real paper" under Keep and write, press "Write an answer list for these pictures"
+  (it has a row for each picture already), fill it in, and open it there; the report is the same. Needs at least 200 marked answers in
+  each half before it will propose anything: about 20 sheets of 20 questions.
 - [ ] **Print the sheet on the department printer and photocopy it.** Check my printing should read a scan of one blank photocopy:
   corner marks, code strip, no blank bubble read as filled, and the scale within 2 percent. (`assess sheets check <bank> <picture.png>`
   does this on a PNG now; it says the printed size only when the picture says how many dots to the inch it was scanned at.)

@@ -68,11 +68,19 @@ export const TARGETS = Object.freeze({ scanFlagged: 0.01, photoFlagged: 0.05, re
 
 const LIST_COLUMNS = ["file", "page", "sheet", "source", "condition", "version"] as const;
 
-/** The header of an answer list for a test of `questions` questions, to hand to the volunteers. */
-export function listTemplate(questions: number): string {
+/** A cell of a CSV: quoted when it holds a comma, a quote or a line end, as a spreadsheet writes it. */
+const csvCell = (text: string): string => (/[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text);
+
+/**
+ * The header of an answer list for a test of `questions` questions, to hand to the volunteers. With `pages` (the pictures already
+ * read, as the app has them), a row for each with its file and page filled in and the rest left for the person: the source is left
+ * empty on purpose, so a row nobody filled in is refused rather than read as a scan with every question blank.
+ */
+export function listTemplate(questions: number, pages?: ReadonlyArray<{ file: string; page: number }>): string {
   const head = [...LIST_COLUMNS, ...Array.from({ length: questions }, (_x, i) => String(i + 1))];
-  const example = ["sheet-01.pdf", "1", "Ana 1", "scan", "copier 300 grey - #2 pencil", "A", ...Array.from({ length: questions }, () => "")];
-  return `${head.join(",")}\n${example.join(",")}\n`;
+  const blanks = Array.from({ length: questions }, () => "");
+  const rows = pages && pages.length > 0 ? pages.map((p) => [p.file, String(p.page), "", "", "", "", ...blanks]) : [["sheet-01.pdf", "1", "Ana 1", "scan", "copier 300 grey - #2 pencil", "A", ...blanks]];
+  return `${[head, ...rows].map((r) => r.map(csvCell).join(",")).join("\n")}\n`;
 }
 
 /**
