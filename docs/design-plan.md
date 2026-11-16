@@ -442,6 +442,14 @@ shows nothing about whether Canvas or Brightspace accepts it, which only an impo
 are written to five decimals, so two ways of getting the same part of a matching or partial-credit question right can differ by a
 hundred-thousandth of a point.
 
+### QTI 3.0 package
+
+Built 15 November 2026 (development list item 6). QTI 3.0 keeps 2.1's model of an item and changes its spelling (`qti-` and kebab
+case for every QTI element and attribute, a new namespace, new template and resource type addresses). So `export/qti3.ts` renames
+a 2.1 tree to 3.0 and back, the exporter is the 2.1 package renamed (it keeps and loses exactly what 2.1 does), and the reader
+renames a 3.0 file to 2.1 and reads it by the 2.1 rules. Written from the specification; no learning system has been given one, and
+the export screen says to check that the system imports 3.0 before choosing it.
+
 ### Common Cartridge 1.3 package (Brightspace)
 
 `src/export/common-cartridge.ts`, destination `common-cartridge`, written as `<name> - Common Cartridge.imscc`. It exists because
@@ -572,6 +580,30 @@ as the import is: sheets generated with known answers, then noise, tilt and blur
 added, plus a small set of real scans, with every uncertain mark counted as
 flagged, never as correct.
 
+## Item statistics beyond one class
+
+Built 15 November 2026 (development list items 1 to 5). The decisions behind them are in the OpenStage development lists and the
+shared core (`openstage-core`, `CORE-NOTES.md`).
+
+- **Checked against R through the shared test set (C3).** OpenAssess and PrismStatistics share no item-analysis code; both run the
+  core's set of scored classes with R's figures and match them. OpenAssess's point-biserial keeps the question in the total and is
+  labelled so; PrismStatistics's corrected item-total r leaves it out. The SD divides by the number of sheets, and says so.
+- **The `.pstat` file for PrismStatistics.** The core's format (PSTAT-1) and its profile `OpenAssess item results 1`, written by
+  OpenAssess's own code and held in its tests to the core's reader, checker and test-set files. Complete sheets only, points per
+  question, no names and no question text. What the list asks beyond the profile (letters, key, item details, bank ids) is asked of
+  the core (`CORE-REQUESTS.md`) and not added here.
+- **A learning system's results.** Canvas's Student Analysis, Brightspace's quiz statistics export and Blackboard's Download Results
+  are read by their column names into the same scored rows as sheets: the system's own points, no student column read, each question
+  matched by words one bank question alone has. The layouts are from documentation; no real report has been read.
+- **Item history.** The class figures a bank keeps are read back across classes, with notes on questions worth another look. The
+  notes are worked out each time, use only classes that saw the question as it is now and only from 30 attempts, and change nothing.
+- **Setting the fill lines on real paper.** `sheets calibrate` and the app's "Set the fill lines on real paper" read a real-sheet
+  corpus against what the volunteers wrote down, try the lines on half and report on the other half. They propose; a person changes
+  the lines in `sheets/decide.ts`.
+
+Waiting on the core: the source ledger (C7, list item 7), and AI drafting, import rescue, an assistant server and reading handwritten
+short answers (C8, list items 8 and 9).
+
 ## Order of work
 
 The nine-phase build plan is not in this repository. The code names phases 1, 2,
@@ -638,7 +670,7 @@ home screen and stops its server when it is closed; the installer is unsigned.
   and imported twice into a real course: once seen for three of its seven types, and once with all seven, reported to have
   worked fine without a record of each question. A QTI 1.2 package (Brightspace and Canvas) and a
   Blackboard upload file are built and tested against the standard and the help pages, and have not been imported anywhere;
-  a QTI 2.1 package is built the same way and has not been imported anywhere (below); QTI 3.0, and the 3.x subset of Brightspace's Course Import, are not started.
+  a QTI 2.1 package is built the same way and has not been imported anywhere (below); a QTI 3.0 package (15 November 2026) is the 2.1 package renamed and has not been imported anywhere either. What has been imported where is kept in `docs/lms-compatibility.md`.
 - **M3, banks and tests.** Folders, tags, duplicates, the objective coverage grid,
   pools, blueprints, versions, the item quality and accessibility checks (phase
   7), and the web quiz. Done so far: versions (the test record), copies, and a first set of

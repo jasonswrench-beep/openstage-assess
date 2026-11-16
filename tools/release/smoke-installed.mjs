@@ -645,6 +645,39 @@ try {
   const sentReply = await send("GET", "/api/banks/Sent");
   const sentText = await sentReply.text();
   check("a bank holding a script and an event attribute opens with both taken out, and says so", sentReply.status === 200 && !/<script|onerror|alert\(/.test(sentText) && /Some formatting in 1 question was removed/.test(sentText), `${sentReply.status} ${sentText.slice(0, 80)}`);
+  // New in alpha 28: a QTI 3.0 package, a learning system's results, item history, the file for PrismStatistics, and calibration.
+  const destinations28 = (await (await send("GET", "/api/destinations")).json()).destinations.map((d) => d.id);
+  check("the export screen offers a QTI 3.0 package", destinations28.includes("qti-3.0"), destinations28.join(", "));
+  const qti3Out = await (await send("POST", `/api/banks/${bank}/export`, { destination: "qti-3.0" })).json();
+  const qti3File = qti3Out.written?.[0];
+  const qti3Items = qti3File ? [...unzip26(new Uint8Array(readFileSync(qti3File.path)))].filter(([n]) => /^q\d+\.xml$/.test(n)) : [];
+  check("the bank was written as a QTI 3.0 package, its items spelled as 3.0", Boolean(qti3File) && /QTI 3\.0\.zip$/.test(qti3File.name) && qti3Items.length === 1 && /<qti-assessment-item xmlns="http:\/\/www\.imsglobal\.org\/xsd\/imsqtiasi_v3p0"/.test(Buffer.from(qti3Items[0][1]).toString("utf8")), qti3File?.name);
+  const qti3Back = await (await send("POST", "/api/import?name=" + encodeURIComponent(qti3File.name), new Uint8Array(readFileSync(qti3File.path)))).json();
+  check("and that package was read back as the same question with its key", qti3Back.profile === "qti" && qti3Back.counts?.total === 1 && qti3Back.counts?.failed === 0 && (await onlyAltNote(qti3Back)), JSON.stringify(qti3Back.counts));
+
+  const reports = (await (await send("GET", "/api/lms-reports")).json()).reports ?? [];
+  check("the results menu names Canvas, Brightspace and Blackboard and the report to get from each", reports.length === 3 && reports.every((r) => r.report && r.how), JSON.stringify(reports.map((r) => r.id)));
+  const resultsBank = Bank.createEmpty("Results");
+  resultsBank.add(createQuestion({ type: "multipleChoice", stem: plainToRich("What is 2 + 2?"), body: { shuffle: false, options: ["3", "4", "5"].map((t, i) => ({ id: `o${i}`, content: plainToRich(t), correct: i === 1 })) } }));
+  writeFileSync(join(home, "Banks", "Results.openassess"), resultsBank.toBytes());
+  const canvas = ["name,id,attempt,101: What is 2 + 2?,1.0", ...Array.from({ length: 31 }, (_x, i) => `Student ${i},${9000 + i},1,${i % 4 ? 4 : 5},${i % 4 ? 1 : 0}`)].join("\r\n");
+  const lms = await send("POST", "/api/sheets/Results/lms-results?lms=canvas&name=Quiz&date=2026-10-01&write=statistics&confirm=true", new TextEncoder().encode(canvas));
+  const lmsJson = await lms.json();
+  const pstatFile = lmsJson.written?.[0];
+  const pstatText = pstatFile ? Buffer.from(unzip26(new Uint8Array(readFileSync(pstatFile.path))).get("project.json")).toString("utf8") : "";
+  check("a Canvas results report is read, matched, written as a .pstat with no student in it, and its figures kept", lms.status === 200 && lmsJson.attempts === 31 && lmsJson.matched?.length === 1 && /"profile":"OpenAssess item results 1"/.test(pstatText) && !/Student 1|9001/.test(pstatText) && lmsJson.kept?.sheets === 31, `${lms.status} ${JSON.stringify(lmsJson).slice(0, 160)}`);
+  const history = await (await send("GET", "/api/sheets/Results/history")).json();
+  check("the kept figures come back as the question's history", history.classes === 1 && history.questions?.[0]?.runs?.length === 1 && history.questions[0].runs[0].current === true, JSON.stringify(history).slice(0, 160));
+
+  const tests = await (await send("POST", "/api/sheets/Results/tests", { name: "Smoke test", questionIds: [resultsBank.sortedQuestions()[0].id], versions: 1 })).json();
+  const sitting = await (await send("POST", `/api/sheets/Results/tests/${tests.test?.id}/score`)).json();
+  const noSheets = await send("POST", `/api/scoring/${sitting.id}/export`, { what: ["statistics"] });
+  check("the Score screen's file for PrismStatistics is there, and waits for sheets", noSheets.status === 400 && /no sheets/.test(await noSheets.text()), String(noSheets.status));
+  const noScans = await send("POST", `/api/scoring/${sitting.id}/calibration-list`);
+  check("calibration on real paper is there in the app, and waits for scans", noScans.status === 400 && /Add the scans/.test(await noScans.text()), String(noScans.status));
+  const scoring28 = await text("/scoring.js");
+  check("the Score screen names the correlation with the total that includes the question", scoring28.includes("Point-biserial (total includes the question)"));
+
   check("the library folders were made", ["Banks", "Exports", "Deleted"].every((d) => existsSync(join(home, d))), readdirSync(home).join(", "));
 } catch (error) {
   results.push("FAIL " + (error instanceof Error ? error.message : String(error)));
