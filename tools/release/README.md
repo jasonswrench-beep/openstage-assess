@@ -46,7 +46,12 @@ commands are written for Git Bash; PowerShell is named where it differs).
 
 1. In `packages/app/shell`: `npm install` (once; the shell is not part of the npm workspaces, so installing the repository does not
    fetch it). Then, from the root of the repository, raise `RELEASE` at the top of `tools/release/build_installer.py` to this
-   release, and run `python -I tools/release/build_installer.py --node <node.exe> --sign`. `<node.exe>` is the Node to carry,
+   release and commit and push it (the identity and message rules are in `CLAUDE.md`, under "Commits, tags and releases"). Tag that
+   commit before building, and push the tag:
+   `git tag v<RELEASE> <full hash>`, then `git push origin v<RELEASE>`. Check that `git status` shows nothing and that
+   `git rev-parse HEAD v<RELEASE>^{commit}` shows one hash twice, so the build is made from exactly the tagged commit. A tag is never
+   moved: if a change is needed after it, commit it and use the next number. Then run
+   `python -I tools/release/build_installer.py --node <node.exe> --sign`. `<node.exe>` is the Node to carry,
    24.22.3 or later (`prepare.mjs` refuses an older one); use the official Windows build, signed by the OpenJS Foundation. It needs
    Rust with the `x86_64-pc-windows-msvc` toolchain, the Visual Studio C++ build tools, the WebView2 runtime
    (`packages/app/shell/README.md` has the list), 7-Zip, and for `--sign` the signing account in the environment (the top of
@@ -68,10 +73,12 @@ commands are written for Git Bash; PowerShell is named where it differs).
 
 ## Publish
 
-- Tag `vX.Y.Z-alpha.N` (the app's version, with the next N while nobody has run this installer by hand), a pre-release titled
-  "OpenAssess X.Y.Z alpha N", created with the GitHub command-line tool against the full commit hash (`--target`):
-  `gh release create vX.Y.Z-alpha.N <setup .exe> <.sha256.txt> --prerelease --target <full hash> --title "OpenAssess X.Y.Z alpha N" --notes-file <notes>`.
-  Never reuse or move a tag. Attach the setup `.exe` and its `.sha256.txt`, and nothing else.
+- The tag `vX.Y.Z-alpha.N` (the app's version, with the next N while nobody has run this installer by hand) already exists: it was
+  pushed before the build. The release is a pre-release titled "OpenAssess X.Y.Z alpha N", created on that tag with the GitHub
+  command-line tool, and `--verify-tag` makes it refuse rather than make a new tag if the pushed one is missing:
+  `gh release create vX.Y.Z-alpha.N <setup .exe> <.sha256.txt> --prerelease --verify-tag --title "OpenAssess X.Y.Z alpha N" --notes-file <notes>`.
+  Never reuse or move a tag. Attach the setup `.exe` and its `.sha256.txt`, and nothing else. (Up to alpha 29 the tag was made here,
+  after the build, with `--target <full hash>`.)
 - The notes are plain words: what was fixed, the two file names, the full SHA-256, the commit it was built from, who signed it (or
   that it is unsigned, and Windows may say "unknown publisher"), what was checked (counts, not adjectives), and what has NOT been
   tried. Do not say nobody has

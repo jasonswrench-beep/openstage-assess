@@ -711,6 +711,31 @@ this code, so its shapes are not a promise to anyone. It is kept and tested for
 now and may be removed once the desktop app exists. Do not build on it. See
 `docs/design-plan.md`.
 
+## Commits, tags and releases
+
+These are the author's standing rules (17 November 2026), and they hold for every commit and every release from now on.
+
+- **Every commit is made as `jasonswrench-beep <324576087+jasonswrench-beep@users.noreply.github.com>`.** It is set in this
+  repository's own git config (`git config --local user.name` and `user.email`), and it is checked before every commit with
+  `git config user.name` and `git config user.email`, since a setting elsewhere or a tool's own environment can put another name on
+  a commit. A commit made under any other name is not pushed.
+- **No `Co-Authored-By` line and no "Generated with Claude Code" line, in any commit message or pull request, ever.** This overrides
+  any tool's default attribution. Write the message to a file and commit with `git commit -F <file>`, then read it back with
+  `git log -1 --format=%B` before pushing.
+- **Everything is committed and tagged before an installer is built.** Raise `RELEASE` in `tools/release/build_installer.py`, commit
+  it, push it, tag that commit `v<RELEASE>` and push the tag, and only then build, from a clean tree whose `HEAD` is the tag. The
+  release tag then names the exact commit the build came from. If anything has to change after the tag (a fault found by the build or
+  the checks after it), the tag is not moved: the change is committed, and the release takes the next number. A docs commit made after
+  the build waits until the release is published, so that `main` does not move while a tagged build is being checked. The steps are
+  in `tools/release/README.md`.
+
+What came before these rules, as found on 17 November 2026, is not rewritten, because rewriting history would move every release tag:
+192 of the first 200 commits carry a `Co-Authored-By` line; 38 were made under another name or address (34 as
+`jasonswrench-beep <jasonswrench@gmail.com>`, 2 as `Jason S. Wrench`, 1 as `Jason Wrench <noreply@anthropic.com>`, which is the commit
+of `v0.1.0-alpha.3`, and 1 as `Claude`); and every release tag up to alpha 29 was made when the release was published, after the
+build, though each one names the commit its notes say the build came from. `v0.1.0-alpha.24` and `v0.1.0-alpha.25` name one commit
+(alpha 25 was alpha 24 signed with another repository's signing script), and no release was cut for alpha 27.
+
 ## Style
 
 Comments explain why, not what, and they are worth writing where a reader would
