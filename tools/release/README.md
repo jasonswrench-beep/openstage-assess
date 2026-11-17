@@ -50,7 +50,8 @@ commands are written for Git Bash; PowerShell is named where it differs).
    commit before building, and push the tag:
    `git tag v<RELEASE> <full hash>`, then `git push origin v<RELEASE>`. Check that `git status` shows nothing and that
    `git rev-parse HEAD v<RELEASE>^{commit}` shows one hash twice, so the build is made from exactly the tagged commit. A tag is never
-   moved: if a change is needed after it, commit it and use the next number. Then run
+   moved: if a change is needed after it, commit it and use the next number. GitHub refuses it anyway: a ruleset on the repository
+   stops any `v*` tag being moved or deleted, with no one allowed to bypass it, so a tag pushed too early cannot be taken back. Then run
    `python -I tools/release/build_installer.py --node <node.exe> --sign`. `<node.exe>` is the Node to carry,
    24.22.3 or later (`prepare.mjs` refuses an older one); use the official Windows build, signed by the OpenJS Foundation. It needs
    Rust with the `x86_64-pc-windows-msvc` toolchain, the Visual Studio C++ build tools, the WebView2 runtime

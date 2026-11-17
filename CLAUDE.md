@@ -736,6 +736,11 @@ of `v0.1.0-alpha.3`, and 1 as `Claude`); and every release tag up to alpha 29 wa
 build, though each one names the commit its notes say the build came from. `v0.1.0-alpha.24` and `v0.1.0-alpha.25` name one commit
 (alpha 25 was alpha 24 signed with another repository's signing script), and no release was cut for alpha 27.
 
+GitHub holds the tag rule as well: the ruleset "Release tags are never moved or deleted" (id 27506544, made 17 November 2026) refuses
+an update or a deletion of any tag `refs/tags/v*`, and nobody can bypass it, the owner included. A tag pushed by mistake therefore
+stays, and the release takes the next number; `gh release delete --cleanup-tag` cannot take the tag either. Undoing it means turning
+the ruleset off in the repository's settings (Rules, Rulesets), which is the author's decision alone.
+
 ## Style
 
 Comments explain why, not what, and they are worth writing where a reader would
