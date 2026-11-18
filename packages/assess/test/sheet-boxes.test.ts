@@ -290,7 +290,7 @@ describe("reading and scoring boxes", () => {
     assert.match(none.ok ? "" : none.reason, /a written-answer page lists no boxes/);
   });
 
-  test("the .pstat carries a person's points for a box, as a question the key gives by its points, and says its answer cell is empty", async () => {
+  test("the .pstat carries a person's points for a box, as a question of type other with no answer variable (PSTAT-1 1.3)", async () => {
     const decisions: Decision[] = [{ sheet: 1, kind: "written", question: 2, awarded: 1.5, of: 2 }];
     const { scores } = sitting(decisions);
     const made = pstatProject2(record, scores, "OpenAssess test", { source: "scanned sheets" });
@@ -299,11 +299,13 @@ describe("reading and scoring boxes", () => {
     assert.deepEqual([q2?.type, q2?.key], ["other", [{ correct: [], points: 2, adjustment: "none", partial_credit: false }]]);
     const cells = made.project.dataset.columns[made.project.dataset.variables.findIndex((v) => v.name === "q02")]?.values;
     assert.deepEqual(cells, [1.5]);
-    // The box has no letters; the format wants an answer variable for it all the same and has no word for "scored by a person", so its
-    // cell is "" as for a blank, and the file says so.
-    const r02 = made.project.dataset.columns[made.project.dataset.variables.findIndex((v) => v.name === "r02")]?.values;
-    assert.deepEqual(r02, [""]);
-    assert.ok(made.project.source.report.notes.some((n) => /^r02: question 2 is written in a box and scored by a person/.test(n)), made.project.source.report.notes.join(" | "));
+    // The box has no letters, and since PSTAT-1 1.3 a question of type other has no answer variable. 1.2 wanted one, and its cell was ""
+    // as for a blank, with a note to say so; neither is written now.
+    assert.equal(made.project.dataset.variables.some((v) => v.name === "r02"), false, "no answer variable for the box");
+    assert.equal(q2?.answer_variable, null);
+    assert.ok(made.project.dataset.variables.some((v) => v.name === "r01"), "the bubble question beside it still has its letters");
+    assert.equal(made.part?.questions[0]?.answer_variable, made.project.dataset.variables.find((v) => v.name === "r01")?.id);
+    assert.ok(!made.project.source.report.notes.some((n) => /written in a box and scored by a person/.test(n)), "1.2's note is not needed any more");
     const bytes = writePstatFile(made.project, made.part);
     const core = [process.env["OPENSTAGE_CORE"], join(import.meta.dirname, "..", "..", "..", "..", "openstage-core")].find((c) => c && existsSync(join(c, "packages", "pstat", "src", "index.js")));
     if (core) {

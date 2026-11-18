@@ -270,9 +270,11 @@ const round6 = (v: number): number => Math.round(v * 1e6) / 1e6;
 const nullable = (v: string | undefined): string | null => (v === undefined || v.trim() === "" ? null : v);
 
 /**
- * The project and its part in profile 2. Everything profile 1 writes is written the same way; then, for scanned sheets, one answer
- * variable per question variable with the letters marked in version A's lettering ("" for blank, null exactly where the points are
- * null; "" also for a short answer scored in its box, which has no letters, and said); then `assessment.json` with every question of version A, those left out among them. No student id or name is written:
+ * The project and its part in profile 2 (PSTAT-1 revision 1.3). Everything profile 1 writes is written the same way; then, for scanned
+ * sheets, one answer variable per question variable that has letters, with the letters marked in version A's lettering ("" for blank,
+ * null where the points are null, and null beside the points of a question credited to everyone whose marks on that sheet were never
+ * settled); a short answer scored in its box is of type `other` and has no answer variable; then `assessment.json` with every question
+ * of version A, those left out among them. No student id or name is written:
  * OpenAssess holds none (the spec lets a writer that holds them leave them out, and one that holds none writes no such variable).
  */
 export function pstatProject2(record: TestRecord, scores: readonly SheetScore[], appVersion: string, options: Pstat2Options): Pstat2Export {
@@ -288,14 +290,20 @@ export function pstatProject2(record: TestRecord, scores: readonly SheetScore[],
   const width = Math.max(2, String(first.length).length);
   const tag = (i: number): string => String(i + 1).padStart(width, "0");
 
-  // The answer variables, for scanned sheets only: a learning system's report gives points and no letters.
+  // The answer variables, for scanned sheets only: a learning system's report gives points and no letters. A question of type
+  // `other` (a short answer written in its box and scored by a person) has none either (PSTAT-1 1.3): 1.2 wanted one for every
+  // question, and the cells were "" as for a blank whatever the person gave, with a note to say so.
   if (options.source === "scanned sheets") {
     first.forEach((question, i) => {
       const points = project.dataset.columns[project.dataset.variables.findIndex((v) => v.name === `q${tag(i)}`)];
       if (!points) return;
+      if (typeOf(question, options.source) === "other") return;
       const values = sheets.map((s, r) => {
         if (points.values[r] === null) return null;
         const q = s.questions.find((x) => x.questionId === question.id);
+        // A question credited to everyone whose marks on this sheet were never settled: null beside its points (PSTAT-1 1.3). The
+        // reader saw nothing it could vouch for, and "" would say the sheet left it blank, which nobody knows.
+        if (q && q.outcome === "credited" && q.why === CREDITED_UNSETTLED) return null;
         return q && q.outcome !== "blank" ? lettersOf(record, question.id, q.marked) : "";
       });
       const id = project.dataset.next_id++;
@@ -337,20 +345,8 @@ export function pstatProject2(record: TestRecord, scores: readonly SheetScore[],
       };
     }),
   };
-  // A question credited to everyone whose marks on a sheet were never settled has "" in its answer cell, which the format keeps for a
-  // question left blank: it has no word for "credited, marks not known". Said, so a blank count from the letters is read with it.
-  first.forEach((question, i) => {
-    const n = sheets.filter((s) => s.questions.some((q) => q.questionId === question.id && q.outcome === "credited" && q.why === CREDITED_UNSETTLED)).length;
-    if (n > 0 && options.source === "scanned sheets") project.source.report.notes.push(`r${tag(i)}: question ${i + 1} was credited to everyone, and on ${n} sheet${n === 1 ? "" : "s"} its marks were not settled; the answer cell there is empty, as for a blank.`);
-  });
-  // A short answer written in its box and scored by a person has no letters, and the format wants an answer variable for every question
-  // variable and keeps null for where the points are null, so its cells are "" whatever the person gave. Said, for the same reason; the
-  // core is asked for a word for it (CORE-HANDOFF.md).
-  first.forEach((question, i) => {
-    if (options.source !== "scanned sheets" || typeOf(question, options.source) !== "other") return;
-    const n = sheets.filter((s) => s.questions.some((q) => q.questionId === question.id && q.possible > 0 && q.outcome !== "blank")).length;
-    if (n > 0) project.source.report.notes.push(`r${tag(i)}: question ${i + 1} is written in a box and scored by a person, and has no letters; its answer cell is empty on the ${n} sheet${n === 1 ? "" : "s"} where it was not left blank, as for a blank. Its points are in q${tag(i)}.`);
-  });
+  // The two notes 1.2 needed are gone with 1.3: a credited question's unsettled marks are null, which a reader never counts as blank,
+  // and a box has no answer variable to be read as one. A reader of 1.2 that finds null there opens the file as before.
 
   // The spec forbids a key that does not give the points written. Every cell is checked against the key by the spec's rule before the
   // file is made; where one is not given (a learning system's points above what the question was worth, below 0, or worth nothing on one

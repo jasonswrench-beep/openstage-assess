@@ -67,6 +67,7 @@ Two things in OpenAssess changed that the checker touches, and neither moved a f
 - **A gap in 7.2 to rule on:** a question credited to everyone whose marks on a sheet were never settled (a faint mark, then the
   question was credited) has no answer cell value: `""` means left blank. OpenAssess writes `""` and says so in `source.report.notes`.
   A ruling (a value for "not known", or "write the credited question's cell as null") would settle it.
+  **Settled in PSTAT-1 1.3 (2026-11-16), and followed on 2026-11-17:** the cell is `null` beside the points, and the note is gone.
 - **Before writing profile 2, OpenAssess checks that its key gives every point in the file by the rule of 7.2, and writes profile 1
   and says why when it does not** (a learning system's points above a question's worth, below 0, or worth nothing on one attempt and
   something on another). A second review found the core's checker refusing such files.
@@ -84,6 +85,9 @@ Two things in OpenAssess changed that the checker touches, and neither moved a f
   Either of these would settle it: let `answer_variable` be null and the `r` variable be left out for a question of type `other` on
   scanned sheets, or name a cell value for "no letters" (for example `null` with the points present, for type `other` only). A reader
   that counts blanks from the letters would then not count a scored box as one.
+- **Settled in PSTAT-1 1.3 (2026-11-16), and followed on 2026-11-17:** a question of type `other` has no answer variable, and
+  `answer_variable` is `null`. OpenAssess writes no `r` variable for a box and no note about it; the core's `checkPstat` (1.3) finds
+  nothing in its files, and its item-analysis check (set 2.0.0) matches 598 of 598 figures.
 
 ## 3. For PrismStatistics (passed on through the core, since the two tools share files and not code)
 

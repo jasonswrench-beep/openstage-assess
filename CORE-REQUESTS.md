@@ -36,7 +36,8 @@ help OpenAssess most:
 version A's numbers with gaps (case `omitted-25`), which OpenAssess writes again. Profile 2 is not written by OpenAssess yet, and the
 core asks that `student_id` is not written until the author decides whether profile 2 carries one at all.
 
-**Still open in 7.2 (15 November 2026), as `CORE-HANDOFF.md` section 2c says:** an answer cell for a question that has no letters on
+**Settled in PSTAT-1 1.3 (16 November 2026) and followed on 17 November: a question of type `other` has no `r` variable.** What was
+asked, kept for the record (`CORE-HANDOFF.md` section 2c): an answer cell for a question that has no letters on
 scanned sheets (a short answer written in its box and scored by a person). The checker wants an `r` variable for each `q` variable and
 keeps null for where the points are null, so OpenAssess writes `""`, which the spec means as left blank, and says so in the file's
 notes. A ruling (no `r` variable for type `other`, or a value for "no letters") would let a blank count from the letters be trusted.

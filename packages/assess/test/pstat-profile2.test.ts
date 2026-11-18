@@ -24,6 +24,13 @@ const repo = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const core = [process.env.OPENSTAGE_CORE, join(repo, "..", "openstage-core")].filter((c): c is string => !!c).find((c) => existsSync(join(c, "testsets", "item-analysis", "cases", "letters-60", "answers.csv")));
 const skip = core ? false : "openstage-core with set 1.1.0 is not on this machine (set OPENSTAGE_CORE to its folder)";
 
+/** The core's own checker finds nothing in the file, when the core is beside this repository (read where it is, never copied). */
+async function assertCoreAccepts(made: { project: Parameters<typeof writePstatFile>[0]; part?: Parameters<typeof writePstatFile>[1] }): Promise<void> {
+  if (!core) return;
+  const pstat = await import(pathToFileURL(join(core, "packages", "pstat", "src", "index.js")).href);
+  assert.deepEqual(pstat.checkPstat(writePstatFile(made.project, made.part)), [], "the core's checker finds nothing");
+}
+
 interface Item {
   id: string;
   possible: number;
@@ -192,14 +199,27 @@ describe("faults found by an independent review of profile 2", () => {
     assert.equal(bad.ok, false);
   });
 
-  test("a credited question whose marks were not settled is said, since its answer cell reads like a blank", () => {
+  test("a credited question whose marks were not settled has an empty (null) answer cell beside its points, never a blank (PSTAT-1 1.3)", async () => {
     const record = createTest({ id: ulid("t", 55), name: "Credit", questions: [mc(9), mc(10)], versions: 1, seed: "s", at: AT });
     const adjustments: Adjustment[] = [{ id: "adj_1", kind: "credit", questionId: ulid("q", 79), at: AT }];
-    const sheets: SettledSheet[] = [{ number: 1, version: 1, answers: { 1: { kind: "unsettled", why: "faint" }, 2: { kind: "marked", places: [1], by: "reader" } }, problems: [] }];
+    const sheets: SettledSheet[] = [
+      { number: 1, version: 1, answers: { 1: { kind: "unsettled", why: "faint" }, 2: { kind: "marked", places: [1], by: "reader" } }, problems: [] },
+      { number: 2, version: 1, answers: { 1: { kind: "blank", by: "reader" }, 2: { kind: "marked", places: [1], by: "reader" } }, problems: [] },
+      { number: 3, version: 1, answers: { 1: { kind: "marked", places: [2], by: "reader" }, 2: { kind: "marked", places: [1], by: "reader" } }, problems: [] },
+    ];
     const scores = scoreSheets(record, sheets, adjustments);
-    assert.equal(scores[0]?.complete, true);
-    const made = pstatProject2(record, scores, "x", { source: "scanned sheets", adjustments });
-    assert.ok(made.project.source.report.notes.some((n) => /^r01: question 1 was credited to everyone, and on 1 sheet its marks were not settled/.test(n)), made.project.source.report.notes.join(" | "));
+    assert.deepEqual(scores.map((s) => s.complete), [true, true, true]);
+    const made = pstatProject2(record, scores, "OpenAssess test", { source: "scanned sheets", adjustments });
+    assert.equal(made.fellBack, undefined, made.fellBack);
+    const column = (name: string): unknown[] | undefined => made.project.dataset.columns[made.project.dataset.variables.findIndex((v) => v.name === name)]?.values;
+    const r01 = column("r01");
+    assert.equal(r01?.[0], null, "marks never settled: null, which no reader counts as blank");
+    assert.equal(r01?.[1], "", "a sheet that left it blank is still \"\"");
+    assert.equal(typeof r01?.[2], "string", "and one that marked a letter has the letter");
+    assert.notEqual(r01?.[2], "");
+    assert.deepEqual(column("q01")?.map((p) => p !== null), [true, true, true], "every sheet earns the credited points");
+    assert.ok(!made.project.source.report.notes.some((n) => /marks were not settled/.test(n)), "1.2's note is not needed any more");
+    await assertCoreAccepts(made);
   });
 });
 

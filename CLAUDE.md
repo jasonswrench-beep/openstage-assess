@@ -481,8 +481,8 @@ size, sharpness) and lists its boxes (`written`); each box is cut out upright fo
 with the worth the question had then, so a later change of points scales them and never above the worth) are the score. A box not yet
 scored is unsettled and earns nothing, points for a box are taken only for a box the sheet holds on its version (a flagged row of
 bubbles is unsettled too, and is not a box), and bubbles given by hand to a boxed question do not score it. A model's reading of the
-writing waits on the core's C8 and would be a suggestion a person accepts. In the .pstat such a question is type `other` with an
-empty answer cell, said in the notes, until the core rules on it (`CORE-HANDOFF.md` 2c). The faults are planted by
+writing waits on the core's C8 and would be a suggestion a person accepts. In the .pstat such a question is type `other` and has no
+answer variable, as PSTAT-1 1.3 settled (1.2 wanted one, and it was written `""` as for a blank, with a note). The faults are planted by
 `tools/release/mutations-alpha-29-boxes.json`.
 
 **The sheet reader flags what it cannot vouch for, and an answer read wrong without a flag fails the gate.**
@@ -521,13 +521,15 @@ and do not write figures into a bank unless the instructor asked (`--save-statis
 
 **The file for PrismStatistics is the core's format, written by our own code and held to the core's files.** `sheets/pstat-export.ts`
 writes a `.pstat` in profile `OpenAssess item results 1` of `specs/pstat/PSTAT-1.md` in `openstage-core`, as the core's `checkPstat`
-holds it (revision 1.1): complete sheets only; each question named and labelled by its number on version A, with version A's width of
+holds it (revision 1.3): complete sheets only; each question named and labelled by its number on version A, with version A's width of
 digits, so the names skip a question left out (`q01`, `q03`; the 1.0 checker wrongly wanted them in a row, and was followed for a few
 hours); empty (never 0) where a
 question does not count; a total that is the sum of its cells to the last digit; no question text, no name, no file name, empty
 `operations` and `results`; and no file at all for a class with no complete sheet or no question (`refused`). What the app and the
-command line write is profile 2 (section 7.2, `pstatProject2`): profile 1, then for scanned sheets an `r` variable per question with
-the letters marked in version A's lettering (`""` blank, `null` exactly where the points are), and the part `assessment.json` with
+command line write is profile 2 (section 7.2, `pstatProject2`): profile 1, then for scanned sheets an `r` variable per question that
+has letters, with the letters marked in version A's lettering (`""` blank, `null` where the points are `null`, and `null` beside the
+points of a question credited to everyone whose marks on that sheet were never settled; a box scored by a person is type `other` and
+has no `r` variable, as revision 1.3 rules, held by `tools/release/mutations-pstat-1-3.json`), and the part `assessment.json` with
 every question of version A by its bank id, its revision, its type, its options' ids, its details and a key that reproduces every
 point by the spec's rule (adjustments as `dropped`, `credit_all`, an extra accepted letter; a key that differs by version names its
 versions). A learning system's report writes no letters and calls every question `other`, worth what the system said. No student

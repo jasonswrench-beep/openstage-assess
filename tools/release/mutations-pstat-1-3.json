@@ -1,0 +1,30 @@
+[
+  {
+    "label": "P1 a box scored by a person is given an answer variable again, as 1.2 had it",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "      if (typeOf(question, options.source) === \"other\") return;\n      const values = sheets.map((s, r) => {",
+    "to": "      const values = sheets.map((s, r) => {",
+    "tests": ["packages/assess/test/sheet-boxes.test.ts"]
+  },
+  {
+    "label": "P2 a credited question's unsettled marks are written as a blank",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "if (q && q.outcome === \"credited\" && q.why === CREDITED_UNSETTLED) return null;",
+    "to": "if (q && q.outcome === \"credited\" && q.why === CREDITED_UNSETTLED) return \"\";",
+    "tests": ["packages/assess/test/pstat-profile2.test.ts"]
+  },
+  {
+    "label": "P3 every sheet of a credited question loses its letters, settled or not",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "if (q && q.outcome === \"credited\" && q.why === CREDITED_UNSETTLED) return null;",
+    "to": "if (q && q.outcome === \"credited\") return null;",
+    "tests": ["packages/assess/test/pstat-profile2.test.ts"]
+  },
+  {
+    "label": "P4 a question left blank on a sheet is written as null, which a reader never counts as blank",
+    "file": "packages/assess/src/sheets/pstat-export.ts",
+    "from": "return q && q.outcome !== \"blank\" ? lettersOf(record, question.id, q.marked) : \"\";",
+    "to": "return q && q.outcome !== \"blank\" ? lettersOf(record, question.id, q.marked) : null;",
+    "tests": ["packages/assess/test/pstat-profile2.test.ts"]
+  }
+]
