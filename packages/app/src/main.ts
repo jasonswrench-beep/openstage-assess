@@ -56,6 +56,8 @@ const server = await startServer({
 console.log(`OPENASSESS_READY ${server.entry}`);
 console.log(`${PRODUCT_NAME} is running at ${server.url}`);
 console.log(`Your banks and exports are in ${server.context.library.home}`);
+// The window shows the same in words (`ui/in-use.html`); this is for the browser launcher's console.
+if (server.inUse()) console.log("That library is open in another copy of OpenAssess, so this copy has not opened it. Close the other copy, then choose Try again.");
 console.log("Close this window to stop it.");
 
 if (flag("open")) openInBrowser(server.entry);

@@ -14,6 +14,28 @@ at.** Most of the serious findings are variations on that.
 
 ---
 
+## One copy at a time on a library (17 November 2026)
+
+Two copies of the app open on one library each held their own picture of the banks in memory and saved it whole, so the second save
+wrote over the first without a word. The author decided that the second copy refuses. `src/library-lock.ts` claims the library with
+a file in its folder ("OpenAssess is open here.lock"), created with `wx` once the server listens, holding the server's port and a
+random id. Every answer of the holder carries that id in `x-openassess-lock`. A copy that finds the file asks the port: the same id,
+or a connection that is accepted and not answered within 5 seconds (a copy busy with a large import), is a copy that has the library;
+a refused connection (a copy that crashed) or an answer without the id (another program given the port later) is a stale lock, which
+is taken over and said in the log. The refused copy still opens its window, at a page that says which library and since when, with
+Try again, and it answers every other request with 423 and reads and writes nothing in the library. A copy gives up only its own lock,
+on close and on exit. `test/library-lock.test.ts` holds it, with two real copies, a killed copy, a silent port, four copies started
+together, and the window's copy closing its stdin; `tools/release/mutations-library-lock.json` plants 12 faults and all are caught.
+
+Not covered, and known:
+- **A library on a synced drive shared by two computers.** The other computer's port is not on this one, so its lock reads as stale
+  and is taken over. Two computers editing one synced library can still overwrite each other.
+- **A narrow race in taking over a stale lock.** The lock is read again just before it is removed and removed only if unchanged, but
+  a copy that replaced it between that read and the removal would lose its claim. It needs two copies started within the same few
+  milliseconds after a crash; four started at once in the test end with exactly one holder.
+- **The window's own handling.** The refused page was looked at in a browser and Try again opened the app once the other copy was
+  killed. It has not been seen in the installed window (`TESTING-TODO.md`).
+
 ## Review of the 15 November 2026 round (alpha 28: calibration, the .pstat file, LMS results, item history, QTI 3.0)
 
 An independent reader proved ten faults in the new code, each with a script, and pointed at one more in code written while it read.
@@ -1312,7 +1334,7 @@ Not done, and not verified (the order to take them in):
   run by their implementers before the merge; the six lists of alpha 20 to 22 were last run before these changes and were only checked
   to apply.
 - Two copies of the app on one library still lose edits (each holds its own copy of the bank in memory); a lock on the library is a
-  decision for the user. A 600 dpi colour letter page is refused in words by the printer and for Word as well, and a 16-bit colour one
+  decision for the user. (Decided and built on 17 November 2026: see "One copy at a time on a library" at the top.) A 600 dpi colour letter page is refused in words by the printer and for Word as well, and a 16-bit colour one
   by the sheet reader. Text stored in a bank that was never sanitized and holds an unclosed `<oa-media` reads differently from before.
   The interface's 79 DOM builder spreads were not looked at in a browser.
 - Still as in alpha 22: one huge token in a PDF content stream, the peak memory of a zip, a stem table of `colspan="999"`, and the

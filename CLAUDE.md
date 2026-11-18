@@ -580,10 +580,19 @@ with the reader's own words kept in `readerSaw`; and Z takes the last back. The 
 bubbles, 0 for blank, Enter for several, and the arrows: they are part of the screen and are tested in a browser
 by hand (`TESTING-TODO.md`), so do not rebind one without looking.
 
+**One copy at a time on a library.** Each copy holds the banks in memory and saves them whole, so two copies on one library wrote
+over each other without a word, and the author decided (17 November 2026) that the second copy refuses. `src/library-lock.ts` claims
+the library with a file in its folder made with `wx` once the server listens; a copy that finds it asks the port it names and counts
+the library in use when the answer carries the same id in `x-openassess-lock` or the connection is accepted and not answered (a busy
+copy is never taken for a dead one), and takes the lock over only when the connection is refused or the answer has no id, saying so
+in the log. The refused copy shows `ui/in-use.html` with Try again, and answers everything else with 423 and touches nothing in the
+library. A copy removes only its own lock. Do not take a lock over on a timeout, remove a lock without reading it again first, or let
+a refused copy answer a request that reads or writes the library.
+
 ## Commands
 
 ```
-npm test                       # 3802 engine tests and 470 app tests, Node's own runner
+npm test                       # 3802 engine tests and 481 app tests, Node's own runner
 npm run typecheck              # strict, and it currently passes clean (the app's interface is checked as JavaScript)
 npm start --workspace packages/app   # the app, in your browser
 npm run assess -- score        # the 95 percent import gate

@@ -1,0 +1,86 @@
+[
+  {
+    "label": "L1 a copy too busy to answer is taken for one that crashed, and its library taken over",
+    "file": "packages/app/src/library-lock.ts",
+    "from": "if (answer === \"holder\" || answer === \"busy\") return",
+    "to": "if (answer === \"holder\") return",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L2 closing a copy removes the lock whoever it belongs to",
+    "file": "packages/app/src/library-lock.ts",
+    "from": "if (parse(await readFile(claim.path, \"utf8\"))?.id === claim.record.id) await unlink(claim.path);",
+    "to": "await unlink(claim.path);",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L3 the copy the window started never gives the library up when it exits",
+    "file": "packages/app/src/server.ts",
+    "from": "process.on(\"exit\", onExit);",
+    "to": "void onExit;",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L4 the lock is written over and not claimed by creating it, so a second copy simply takes it",
+    "file": "packages/app/src/library-lock.ts",
+    "from": "{ flag: \"wx\" }",
+    "to": "{ flag: \"w\" }",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L5 a stale lock is removed without reading it again, so a lock another copy took a moment earlier is removed",
+    "file": "packages/app/src/library-lock.ts",
+    "from": "if ((await readFile(path, \"utf8\")) !== text) continue;",
+    "to": "void text;",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L6 a refused copy still answers the app's requests, and reads and writes the library",
+    "file": "packages/app/src/server.ts",
+    "from": "if (url.pathname.startsWith(\"/api/\") || url.pathname.startsWith(\"/files/\")) throw new HttpError(423, IN_USE_MESSAGE);",
+    "to": "if (false) throw new HttpError(423, IN_USE_MESSAGE);",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L7 the holder's answers carry no id, so every other copy takes it for a dead one",
+    "file": "packages/app/src/server.ts",
+    "from": "...(claim ? { [LOCK_HEADER]: claim.record.id } : {}),",
+    "to": "...({}),",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L8 any program that answers on the old port is taken for the holder",
+    "file": "packages/app/src/library-lock.ts",
+    "from": "done(said === id ? \"holder\" : \"other\");",
+    "to": "done(\"holder\");",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L9 a refused connection is taken for a busy copy, so a crashed copy's lock is never taken over",
+    "file": "packages/app/src/library-lock.ts",
+    "from": "done(error.code === \"ECONNREFUSED\" ? \"nothing\" : \"other\")",
+    "to": "done(error.code === \"ECONNREFUSED\" ? \"busy\" : \"other\")",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L10 Try again is a change that does not need the app's own header",
+    "file": "packages/app/src/server.ts",
+    "from": "if (url.pathname === \"/api/library/try-again\" && method === \"POST\") {\n      if (req.headers[\"x-openassess\"] !== \"1\") throw new HttpError(403, \"That request did not come from OpenAssess.\");",
+    "to": "if (url.pathname === \"/api/library/try-again\" && method === \"POST\") {",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L11 Try again never claims the library, so the refused copy stays refused after the other closes",
+    "file": "packages/app/src/server.ts",
+    "from": "if (refusal) await claimIt();",
+    "to": "if (false) await claimIt();",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  },
+  {
+    "label": "L12 closing a copy keeps the lock, so the next copy is refused until it times out",
+    "file": "packages/app/src/server.ts",
+    "from": "if (claim) await releaseLibrary(claim);",
+    "to": "void releaseLibrary;",
+    "tests": ["packages/app/test/library-lock.test.ts"]
+  }
+]

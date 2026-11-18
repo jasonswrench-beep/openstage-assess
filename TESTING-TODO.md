@@ -710,6 +710,11 @@ run on a machine other than the one it was built on.
 - [ ] **Import a Moodle XML or GIFT file you really use** (the exporters were checked by reading their own output back; no
   Moodle was available, so neither file has been imported into one). `docs/design-plan.md` lists sandboxes as an open
   question.
+- [ ] **Open OpenAssess twice.** The second window should say "This library is already open", name the folder and the time the
+  first one opened it, and touch nothing. Close the first window and choose Try again in the second: it should open the library.
+  Then end the first copy from Task Manager instead of closing it, open OpenAssess again, and see that it opens (a copy that crashed
+  leaves its lock behind, and the next one takes it over). Try the page with the keyboard and a screen reader: Try again is the only
+  control, and "The library is still open in the other copy" should be read out when it is.
 - [ ] **Decide whether the installer should be signed.** A code-signing certificate costs money, so it was not bought.
   Until it is, every other computer shows a warning on first run.
 

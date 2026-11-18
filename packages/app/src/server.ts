@@ -26,6 +26,7 @@ import { handleApi, type ApiRequest, type ApiResponse, type Context } from "./ap
 import { BankStore } from "./banks.ts";
 import { HttpError } from "./errors.ts";
 import { checkName, openLibrary } from "./library.ts";
+import { claimLibrary, LOCK_HEADER, releaseLibrary, releaseLibrarySync, type Claim, type Holder, type Probe, type Refusal } from "./library-lock.ts";
 import { sampleById, samplePath } from "./samples.ts";
 import { ScoringSessions } from "./scoring.ts";
 import { Sessions } from "./sessions.ts";
@@ -86,6 +87,8 @@ export interface ServerOptions {
    * which a test replaces. Left out, checking is on, the copy has no release, and the list is fetched from GitHub when asked for.
    */
   updates?: Partial<UpdateSettings>;
+  /** How another copy's lock is checked (`library-lock.ts`); a test replaces it. */
+  probe?: Probe;
 }
 
 export interface RunningServer {
@@ -96,6 +99,11 @@ export interface RunningServer {
   port: number;
   token: string;
   context: Context;
+  /**
+   * The other copy that has this library open, when this copy found it in use and refused it. The copy still runs and its window
+   * shows why (`ui/in-use.html`), with Try again; it reads and writes nothing in the library while this is set.
+   */
+  inUse(): Holder | undefined;
   close(): Promise<void>;
 }
 
@@ -211,12 +219,33 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   // Each copy names its cookie by its port, and a request carries every cookie of the host, so each finds its own.
   const cookieName = (): string => `${COOKIE}_${port}`;
 
+  // The library's lock (`library-lock.ts`): claimed once the server listens, since the lock names the port it answers on.
+  let claim: Claim | undefined;
+  let refusal: Refusal | undefined;
+  const onExit = (): void => {
+    if (claim) releaseLibrarySync(claim);
+  };
+  async function claimIt(): Promise<void> {
+    const result = await claimLibrary(library.home, port, options.probe);
+    if (result.held) {
+      claim = result;
+      refusal = undefined;
+      process.on("exit", onExit);
+      if (result.replaced) options.log?.(`LOCK taken over from a copy that is no longer running (${result.replaced === "unreadable" ? "the lock file could not be read" : `process ${result.replaced.pid}, port ${result.replaced.port}`})`);
+    } else {
+      refusal = result;
+    }
+  }
+  const IN_USE_MESSAGE = "This library is open in another copy of OpenAssess. Close that copy, then choose Try again.";
+
   function headers(extra: Record<string, string> = {}): Record<string, string> {
     return {
       "content-security-policy": POLICY,
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
       "cache-control": "no-store",
+      // Another copy that finds this one's lock asks the port, and only an answer with this id means the library is in use.
+      ...(claim ? { [LOCK_HEADER]: claim.record.id } : {}),
       ...extra,
     };
   }
@@ -305,6 +334,28 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       throw new HttpError(401, "Open OpenAssess from its own window or from the shortcut. This address only works there.");
     }
 
+    // The two questions the in-use page asks. They are answered whether or not the library is in use, so the page can tell.
+    if (url.pathname === "/api/library/in-use" && method === "GET") {
+      sendJson(res, 200, { inUse: refusal ? { home: library.home, ...refusal.holder } : null });
+      return;
+    }
+    if (url.pathname === "/api/library/try-again" && method === "POST") {
+      if (req.headers["x-openassess"] !== "1") throw new HttpError(403, "That request did not come from OpenAssess.");
+      const origin = req.headers.origin;
+      if (origin !== undefined && !origins().includes(origin)) throw new HttpError(403, "That request came from another page.");
+      if (refusal) await claimIt();
+      sendJson(res, 200, { inUse: refusal ? { home: library.home, ...refusal.holder } : null });
+      return;
+    }
+    // While another copy has the library, this one touches nothing in it: no list of banks, no file, no save. Only the page that
+    // says so, and what that page needs to be drawn, are sent.
+    if (refusal) {
+      if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/files/")) throw new HttpError(423, IN_USE_MESSAGE);
+      if (method !== "GET") throw new HttpError(405, "That is not allowed.");
+      await serveStatic(res, url.pathname === "/" || url.pathname === "/index.html" ? "/in-use.html" : url.pathname);
+      return;
+    }
+
     if (url.pathname.startsWith("/api/")) {
       if (method !== "GET") {
         if (req.headers["x-openassess"] !== "1") throw new HttpError(403, "That request did not come from OpenAssess.");
@@ -372,6 +423,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     server.listen(options.port ?? 0, "127.0.0.1", () => resolve());
   });
   port = (server.address() as AddressInfo).port;
+  await claimIt();
 
   return {
     url: `http://127.0.0.1:${port}/`,
@@ -379,10 +431,15 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     port,
     token,
     context,
-    close: () =>
-      new Promise<void>((resolve) => {
+    inUse: () => refusal?.holder,
+    close: async () => {
+      await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
-      }),
+      });
+      if (claim) await releaseLibrary(claim);
+      claim = undefined;
+      process.off("exit", onExit);
+    },
   };
 }
