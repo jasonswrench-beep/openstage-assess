@@ -729,12 +729,16 @@ These are the author's standing rules (17 November 2026), and they hold for ever
   the build waits until the release is published, so that `main` does not move while a tagged build is being checked. The steps are
   in `tools/release/README.md`.
 
-What came before these rules, as found on 17 November 2026, is not rewritten, because rewriting history would move every release tag:
-192 of the first 200 commits carry a `Co-Authored-By` line; 38 were made under another name or address (34 as
-`jasonswrench-beep <jasonswrench@gmail.com>`, 2 as `Jason S. Wrench`, 1 as `Jason Wrench <noreply@anthropic.com>`, which is the commit
-of `v0.1.0-alpha.3`, and 1 as `Claude`); and every release tag up to alpha 29 was made when the release was published, after the
-build, though each one names the commit its notes say the build came from. `v0.1.0-alpha.24` and `v0.1.0-alpha.25` name one commit
-(alpha 25 was alpha 24 signed with another repository's signing script), and no release was cut for alpha 27.
+What came before these rules was rewritten on 17 November 2026, at the author's word. Of the first 200 commits, 192 carried a
+`Co-Authored-By` line and 38 were made under another name or address (34 as `jasonswrench-beep <jasonswrench@gmail.com>`, 2 as
+`Jason S. Wrench`, 1 as `Jason Wrench <noreply@anthropic.com>` and 1 as `Claude`). All 202 commits up to then are now made as the one
+identity with no such line, with the same files, dates and parents, and the 26 release tags were moved to the new commit of the one
+each named (the ruleset below was turned off for that push and on again). Every hash written before that day names an old commit:
+`docs/history-rewrite-2026-11-17.md` gives the new commit for each. What the rewrite could not change: every release tag up to alpha 29
+was made when the release was published, after the build, though each names the commit its notes say the build came from;
+`v0.1.0-alpha.24` and `v0.1.0-alpha.25` name one commit (alpha 25 was alpha 24 signed with another repository's signing script); and
+no release was cut for alpha 27. A copy of the history as it was is kept outside the repository, in
+`C:\Dev\openassess-history-before-rewrite-2026-11-17.bundle`.
 
 GitHub holds the tag rule as well: the ruleset "Release tags are never moved or deleted" (id 27506544, made 17 November 2026) refuses
 an update or a deletion of any tag `refs/tags/v*`, and nobody can bypass it, the owner included. A tag pushed by mistake therefore

@@ -1798,7 +1798,7 @@ held back. It is a warning only when an Answers entry was held back for a repeat
 because two pasted chapters look the same). Every other warning on those files was read and is accurate: the joined page references,
 the heading used as a stem, the question with no type line, the formatting that was not often enough to be a key.
 
-**A reader who had not seen the code reviewed these changes** (the commits from alpha 11 to 1c2f06d, the day alpha 12 was cut) and proved
+**A reader who had not seen the code reviewed these changes** (the commits from alpha 11 to 64f2a2e, the day alpha 12 was cut) and proved
 eight points, of which seven were real and are fixed, each with a test and planted faults. They are worth keeping because every one is
 a place where a rule made quieter on real banks went quiet on a case it should not have:
 the negative stem rule was silent for a "when", "where" or "while" that opens a question ("When should a nurse not administer this
