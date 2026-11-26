@@ -112,7 +112,7 @@ describe("openassess blueprint", () => {
     assert.match(r.out, /^Big, seed abc\n/);
     assert.match(r.out, /9 where chapter is Chapter 1:\n( {4}q_[0-9A-Z]{26} {2}Matter \d+\n){6}/, "six questions are in chapter one");
     assert.match(r.out, /6 of 9 questions taken, 3 short\./);
-    assert.match(r.out, /chapter Chapter 1: wanted 9, took 6; the bank has no more\./);
+    assert.match(r.out, /chapter is Chapter 1: wanted 9, took 6; the bank has no more\./);
     assert.match(r.out, /Nothing was written\./);
     assert.equal(digest(), kept, "drawing wrote nothing");
     assert.notEqual(before, kept, "and adding did");
@@ -176,7 +176,7 @@ describe("openassess blueprint, a rule for several values together", () => {
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, /\n2 where chapter is Chapter 1 and bloom is apply:\n( {4}q_[0-9A-Z]{26} {2}Matter \d+\n){2}/, "the two at the apply level in chapter one");
     assert.match(r.out, /\n5 where chapter is Chapter 1 and bloom is remember:\n( {4}q_[0-9A-Z]{26} {2}Matter \d+\n){4}\n/, "four at the remember level, and no more in chapter one");
-    assert.match(r.out, /chapter Chapter 1 and bloom remember: wanted 5, took 4; the bank has no more\./);
+    assert.match(r.out, /chapter is Chapter 1 and Bloom level is remember: wanted 5, took 4; the bank has no more\./);
     assert.match(r.out, /7 of 8 questions taken, 1 short\./, "two, four and one: the third rule is a plain one and takes from any chapter");
     assert.equal(digest(), before, "drawing wrote nothing");
   });

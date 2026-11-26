@@ -271,6 +271,9 @@ export async function renderSheets(host, params, shell) {
         clear(result);
         put(
           result,
+          // The chooser is emptied below so the same file can be chosen again, and then reads "No file chosen" beside the result; the
+          // result says which file it is about. The name is shown and kept nowhere.
+          h("p", { class: "sub", text: `Checked ${file.name}.` }),
           h("p", { class: outcome.ok ? "written" : "problem", text: outcome.ok ? "The printing is fine: a blank copy reads as blank, and the sheet is the size it was made." : "There is something to put right before this sheet is used for a class." }),
           h("ul", { class: "general" }, ...outcome.found.map(/** @param {string} line */ (line) => h("li", { text: line }))),
           outcome.problems.length > 0 ? h("div", { class: "note-group" }, h("h3", { text: "To put right" }), h("ul", null, ...outcome.problems.map(/** @param {string} p */ (p) => h("li", { text: p })))) : null,
@@ -394,6 +397,8 @@ export async function renderSheets(host, params, shell) {
       if (!quiz.value.trim()) quiz.value = file.name.replace(/\.[a-z]{2,4}$/i, "").slice(0, 100);
       try {
         showResult(await send(""));
+        // As for Check my printing: the chooser is emptied so the same file can be chosen again, so the result names the file it read.
+        resultHost.prepend(h("p", { class: "sub", text: `Read ${file.name}.` }));
       } catch (error) {
         clear(resultHost);
         tell(error);

@@ -105,7 +105,9 @@ export function itemStatistics(record: TestRecord, scores: readonly SheetScore[]
   const leftOut = scores.length - complete.length;
   if (leftOut > 0) notes.push(`${leftOut} sheet${leftOut === 1 ? " was" : "s were"} left out because ${leftOut === 1 ? "it has" : "they have"} a question not yet settled, a page missing, or no version.`);
   const unstable = complete.length < SMALL_GROUP;
-  if (unstable) notes.push(`Only ${complete.length} sheet${complete.length === 1 ? "" : "s"}: fewer than ${SMALL_GROUP}, so these figures are unstable and should not be over-read.`);
+  // Not for a class with no complete sheet: there are no figures to be unstable, and the screen already says no sheet is complete yet.
+  // "Only 0 sheets: fewer than 30" read beside it.
+  if (unstable && complete.length > 0) notes.push(`Only ${complete.length} sheet${complete.length === 1 ? "" : "s"}: fewer than ${SMALL_GROUP}, so these figures are unstable and should not be over-read.`);
   if (complete.length === 0) return { sheets: 0, leftOut, unstable, items: [], notes };
 
   const totals = complete.map((s) => s.earned);

@@ -409,6 +409,9 @@ table.results th, table.results td { text-align: left; padding: 5px 8px; border-
 table.results thead th { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
 table.results tbody th { font-weight: 700; }
 table.results tr.current { background: var(--note-bg); }
+/* A cell may break anywhere, so a long file name cannot push the table wider than the page; a button's one word must not, or "Look"
+   showed as "Lo" above "ok" in a window 1920 wide. */
+table.results .nowrap { white-space: nowrap; overflow-wrap: normal; }
 @media (max-width: 860px) { table.results { display: block; overflow-x: auto; } }
 
 /* Pictures in a question: each shown beside the words a screen reader says for it. */

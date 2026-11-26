@@ -116,7 +116,7 @@ describe("drawing from a blueprint", () => {
       assert.ok(!got.includes((ids["unkeyed"] as string[])[0] as string), "a question with no usable key is never drawn");
       assert.deepEqual(reply.json["rules"].map((r: Json) => [r.axis, r.value, r.count, r.taken, r.short]), [["chapter", "1", 5, 5, 0], ["chapter", "2", 6, 4, 2]]);
       assert.match(reply.json["notes"].join("\n"), /9 of 11 questions taken, 2 short/);
-      assert.match(reply.json["notes"].join("\n"), /chapter 2: wanted 6, took 4; the bank has no more/);
+      assert.match(reply.json["notes"].join("\n"), /chapter is 2: wanted 6, took 4; the bank has no more/);
       assert.match(reply.json["seed"], /^[0-9a-f]{12}$/);
     });
   });
@@ -259,7 +259,7 @@ describe("a rule for several values together", () => {
       assert.equal(got.filter((id) => (ids["2"] as string[]).includes(id)).length, 2);
       assert.equal(reply.json["short"], 2);
       assert.deepEqual(reply.json["rules"].map((r: Json) => [r.axis, r.value, r.and ?? null, r.count, r.taken, r.short]), [["chapter", "1", [{ axis: "bloom", value: "apply" }], 5, 3, 2], ["chapter", "2", null, 2, 2, 0]]);
-      assert.match(reply.json["notes"].join("\n"), /chapter 1 and bloom apply: wanted 5, took 3; the bank has no more/);
+      assert.match(reply.json["notes"].join("\n"), /chapter is 1 and Bloom level is apply: wanted 5, took 3; the bank has no more/);
 
       // A change to the name leaves the rules, other values included; a change to the rules replaces them.
       const renamed = await client.put<Json>(`${bp}/${one.id}`, { name: "Grid 1" });

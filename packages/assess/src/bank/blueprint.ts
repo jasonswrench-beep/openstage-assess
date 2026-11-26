@@ -58,10 +58,25 @@ export function conditionsOf(rule: Pick<BlueprintRule, "axis" | "value" | "and">
   return [{ axis: rule.axis, value: rule.value }, ...(rule.and ?? [])];
 }
 
-/** A rule's values in words, as the notes about a draw say them: `chapter Chapter 2 and bloom apply`. */
+/**
+ * What each axis is called where a person reads it, the app's Blueprints panel's words (`RULE_AXES` in `ui/blueprints.js`). The notes
+ * of a draw named the field ("bloom analyze: wanted 4, took 2") where the panel above them said "Bloom level".
+ */
+const AXIS_WORDS: ReadonlyMap<string, string> = new Map([
+  ["objective", "objective"],
+  ["chapter", "chapter"],
+  ["section", "section"],
+  ["tag", "tag"],
+  ["bloom", "Bloom level"],
+  ["difficulty", "difficulty"],
+  ["type", "kind of question"],
+  ["status", "status"],
+]);
+
+/** A rule's values in words, as the notes about a draw say them: `chapter is Chapter 2 and Bloom level is apply`. */
 export function conditionsText(rule: Pick<BlueprintRule, "axis" | "value" | "and">): string {
   return conditionsOf(rule)
-    .map((c) => `${c.axis} ${c.value}`)
+    .map((c) => `${AXIS_WORDS.get(c.axis) ?? c.axis} is ${c.value === NONE ? "not set" : c.value}`)
     .join(" and ");
 }
 

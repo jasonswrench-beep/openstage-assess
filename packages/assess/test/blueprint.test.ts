@@ -119,7 +119,7 @@ describe("drawing from a blueprint", () => {
     assert.equal(draw.short, 3);
     assert.equal(draw.ids.length, 4, "two from chapter 3 and two from chapter 1, and nothing added to reach seven");
     assert.match(describeDraw(draw).join("\n"), /4 of 7 questions taken, 3 short/);
-    assert.match(describeDraw(draw).join("\n"), /chapter 3: wanted 5, took 2; the bank has no more/);
+    assert.match(describeDraw(draw).join("\n"), /chapter is 3: wanted 5, took 2; the bank has no more/);
   });
 
   test("a question that fits two rules is taken once, and the second rule says it found it taken", () => {
@@ -370,8 +370,10 @@ describe("a rule that asks for values on more than one axis", () => {
 
     test("conditionsOf and conditionsText give the first value and then the others", () => {
       assert.deepEqual(conditionsOf(cell("2", "apply", 1)), [{ axis: "chapter", value: "2" }, { axis: "bloom", value: "apply" }]);
-      assert.equal(conditionsText(cell("2", "apply", 1)), "chapter 2 and bloom apply");
-      assert.equal(conditionsText(rule("chapter", "2", 1)), "chapter 2", "a rule of one value reads as it always did");
+      assert.equal(conditionsText(cell("2", "apply", 1)), "chapter is 2 and Bloom level is apply", "each axis named as the panel names it");
+      assert.equal(conditionsText(rule("chapter", "2", 1)), "chapter is 2");
+      assert.equal(conditionsText(rule("bloom", "analyze", 1)), "Bloom level is analyze", "not the field's name, bloom");
+      assert.equal(conditionsText(rule("type", "essay", 1)), "kind of question is essay");
     });
   });
 
@@ -380,7 +382,7 @@ describe("a rule that asks for values on more than one axis", () => {
       const draw = drawBlueprint(grid, recipe([cell("2", "apply", 5)]), { seed: "s" });
       assert.deepEqual(where(draw.ids), ["2/apply", "2/apply"], "chapter 2 has four at the remember level and chapter 1 has four at apply, and none of them was taken");
       assert.equal(draw.short, 3);
-      assert.match(describeDraw(draw).join("\n"), /chapter 2 and bloom apply: wanted 5, took 2; the bank has no more/);
+      assert.match(describeDraw(draw).join("\n"), /chapter is 2 and Bloom level is apply: wanted 5, took 2; the bank has no more/);
     });
 
     test("a plan on both axes takes each cell from its own", () => {
@@ -394,7 +396,7 @@ describe("a rule that asks for values on more than one axis", () => {
       assert.equal(draw.rules[1]?.ids.length, 4, "the four at the remember level");
       assert.equal(draw.rules[1]?.short, 2);
       assert.equal(draw.rules[1]?.pick.left.chosen, 4);
-      assert.match(describeDraw(draw).join("\n"), /chapter 1: wanted 6, took 4; left out 4 already in the test/);
+      assert.match(describeDraw(draw).join("\n"), /chapter is 1: wanted 6, took 4; left out 4 already in the test/);
     });
 
     test("a question must have both tags, and no more tags than that are asked for", () => {

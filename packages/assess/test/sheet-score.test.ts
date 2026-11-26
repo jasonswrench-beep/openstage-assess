@@ -398,6 +398,15 @@ describe("item statistics", () => {
     assert.deepEqual(many.notes, []);
     assert.deepEqual(many.items[0]?.notes, []);
     assert.equal(itemStatistics(record, []).sheets, 0);
+    // No complete sheet: no figures to call unstable, so no "Only 0 sheets" beside the screen's "No sheet is complete yet".
+    const none = itemStatistics(record, scoreSheets(record, [settled(1, 1, { 1: [0], 2: "?" })]));
+    assert.equal(none.sheets, 0);
+    assert.ok(!none.notes.some((n) => /^Only /.test(n)), none.notes.join(" | "));
+    assert.ok(none.notes.some((n) => /1 sheet was left out/.test(n)), "the sheet left out is still said");
+    // One sheet reads in the singular.
+    const one = itemStatistics(record, scoreSheets(record, table([[1, 0]])));
+    assert.ok(one.notes.some((n) => /^Only 1 sheet: fewer than 30/.test(n)), one.notes.join(" | "));
+    assert.ok(one.items[0]?.notes.some((n) => /^Only 1 sheet: the figures for this question/.test(n)));
   });
 
   test("shows Cronbach's alpha and says so when a question gives partial credit, and nothing when nothing varies", () => {

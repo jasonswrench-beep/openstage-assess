@@ -31,6 +31,14 @@ const OUTCOME_WORDS = {
 const figure = (n, digits = 2) => (n === undefined || n === null ? "-" : n.toFixed(digits));
 
 /**
+ * Points as a person reads them: at most four places, as the class's mean is shown, with no trailing zeros. A share of part credit is
+ * kept to the millionth (`sheets/score.ts`), and showing it so read "13.833333 of 25" and "6.333334 of 25". Only the words change: what
+ * is scored, saved and exported keeps every place.
+ * @param {number | string | null | undefined} n
+ */
+const pts = (n) => (typeof n === "number" && Number.isFinite(n) ? String(Number(n.toFixed(4))) : String(n ?? ""));
+
+/**
  * Chooses the bubbles that are marked, in a dialog. Resolves to the places, "blank", or null when nothing was chosen.
  * @param {string} title
  * @param {string[]} labels
@@ -262,7 +270,7 @@ export async function renderScoring(host, params, shell) {
       try {
         const next = await post(`${base}/decisions`, { sheet: item.sheet, kind: "written", question: item.question, awarded });
         trail.push({ sheet: item.sheet, kind: "written", question: item.question });
-        say(`Recorded ${awarded === "blank" ? "blank" : `${awarded} of ${w.worth}`} for sheet ${item.sheet}, question ${item.question}. ${next.queue.total === 0 ? "That was the last one." : `${next.queue.total} to go.`}`);
+        say(`Recorded ${awarded === "blank" ? "blank" : `${pts(awarded)} of ${pts(w.worth)}`} for sheet ${item.sheet}, question ${item.question}. ${next.queue.total === 0 ? "That was the last one." : `${next.queue.total} to go.`}`);
         apply(next);
         focusCard();
       } catch (error) {
@@ -274,7 +282,7 @@ export async function renderScoring(host, params, shell) {
     const recordTyped = () => {
       const value = points.value.trim() === "" ? NaN : Number(points.value);
       if (!(value >= 0 && value <= w.worth)) {
-        say(`Type the points, from 0 to ${w.worth}, or say the box was left blank.`);
+        say(`Type the points, from 0 to ${pts(w.worth)}, or say the box was left blank.`);
         live.textContent = said;
         points.focus();
         return;
@@ -305,7 +313,7 @@ export async function renderScoring(host, params, shell) {
         tell(error);
       }
     };
-    const rubric = `Worth ${w.worth} point${w.worth === 1 ? "" : "s"}. Accepted answers: ${w.accepted.length > 0 ? w.accepted.join("; ") : "none given"}${w.caseSensitive ? " (capital letters count)" : ""}.`;
+    const rubric = `Worth ${pts(w.worth)} point${w.worth === 1 ? "" : "s"}. Accepted answers: ${w.accepted.length > 0 ? w.accepted.join("; ") : "none given"}${w.caseSensitive ? " (capital letters count)" : ""}.`;
     put(
       card,
       h("h3", { text: `Sheet ${item.sheet}, question ${item.question}, version ${item.version}: a written answer` }),
@@ -315,7 +323,7 @@ export async function renderScoring(host, params, shell) {
         ? h("img", { class: "crop", src: `/api/scoring/${encodeURIComponent(sid)}/entries/${item.entry}/crops/q${item.question}`, attrs: { alt: `What is written in the box for question ${item.question}, as scanned. Nothing in it is read by the program.` } })
         : h("p", { class: "hint", text: item.entry === undefined ? "There is no picture of this box." : "No picture is kept of this one: scores opened from a saved file carry the readings but no pictures." }),
       h("p", { class: "rubric", id: "written-rubric", text: rubric }),
-      h("div", { class: "field" }, h("label", { for: "written-points", class: "field-label", text: `Points, from 0 to ${w.worth}` }), points),
+      h("div", { class: "field" }, h("label", { for: "written-points", class: "field-label", text: `Points, from 0 to ${pts(w.worth)}` }), points),
       h(
         "div",
         { class: "review-actions" },
@@ -564,10 +572,10 @@ export async function renderScoring(host, params, shell) {
               { class: openSheet === s.number ? "current" : "" },
               h("th", { scope: "row", text: String(s.number) }),
               h("td", { text: s.version ?? "?" }),
-              h("td", { text: `${s.earned} of ${s.possible}` }),
+              h("td", { text: `${pts(s.earned)} of ${pts(s.possible)}` }),
               h("td", { text: s.percent === null ? "" : `${s.percent.toFixed(1)}%` }),
               h("td", { text: s.complete ? "Complete" : `${s.unsettled === 0 ? "" : `${plural(s.unsettled, "question", "questions")} to settle. `}${s.problems.join(" ")}`.trim() }),
-              h("td", null, h("button", { type: "button", class: "small-button", text: openSheet === s.number ? "Hide" : "Look", attrs: { "aria-expanded": String(openSheet === s.number), "aria-label": `${openSheet === s.number ? "Hide" : "Look at"} sheet ${s.number}` }, on: { click: () => void look(s.number) } })),
+              h("td", null, h("button", { type: "button", class: "small-button nowrap", text: openSheet === s.number ? "Hide" : "Look", attrs: { "aria-expanded": String(openSheet === s.number), "aria-label": `${openSheet === s.number ? "Hide" : "Look at"} sheet ${s.number}` }, on: { click: () => void look(s.number) } })),
             ),
           ),
         ),
@@ -593,7 +601,7 @@ export async function renderScoring(host, params, shell) {
       clear(place);
       put(
         place,
-        h("h3", { text: `Sheet ${n}${sheet.version ? `, version ${sheet.version}` : ""}: ${sheet.earned} of ${sheet.possible}` }),
+        h("h3", { text: `Sheet ${n}${sheet.version ? `, version ${sheet.version}` : ""}: ${pts(sheet.earned)} of ${pts(sheet.possible)}` }),
         sheet.problems.length > 0 ? h("p", { class: "problem", text: sheet.problems.join(" ") }) : null,
         h(
           "table",
@@ -609,9 +617,9 @@ export async function renderScoring(host, params, shell) {
                 null,
                 h("th", { scope: "row", text: String(q.number) }),
                 h("td", null, h("span", { text: q.stem }), q.why ? h("span", { class: "hint", text: ` ${q.why}` }) : null, picture),
-                h("td", { text: q.awarded !== undefined ? `written: ${q.awarded} of ${q.of}` : q.written && q.marked === "" ? "blank" : q.written ? "written: not scored" : q.marked === null ? "?" : q.marked === "" ? "blank" : q.marked }),
+                h("td", { text: q.awarded !== undefined ? `written: ${pts(q.awarded)} of ${pts(q.of)}` : q.written && q.marked === "" ? "blank" : q.written ? "written: not scored" : q.marked === null ? "?" : q.marked === "" ? "blank" : q.marked }),
                 h("td", { text: /** @type {Record<string, string>} */ (OUTCOME_WORDS)[q.outcome] ?? q.outcome }),
-                h("td", { text: q.possible === 0 ? "" : `${q.earned} of ${q.possible}` }),
+                h("td", { text: q.possible === 0 ? "" : `${pts(q.earned)} of ${pts(q.possible)}` }),
                 h("td", { text: q.by === "person" ? "You" : q.by === "reader" ? "The reader" : "" }),
                 h(
                   "td",
@@ -667,11 +675,11 @@ export async function renderScoring(host, params, shell) {
    */
   async function scoreWritten(sheet, q) {
     const w = q.written;
-    const typed = await askText(`Score sheet ${sheet}, question ${q.number}`, `Points, from 0 to ${w.worth}, or the word blank. Accepted answers: ${w.accepted.join("; ") || "none given"}.`, q.awarded !== undefined ? String(q.awarded) : "", "Record");
+    const typed = await askText(`Score sheet ${sheet}, question ${q.number}`, `Points, from 0 to ${pts(w.worth)}, or the word blank. Accepted answers: ${w.accepted.join("; ") || "none given"}.`, q.awarded !== undefined ? String(q.awarded) : "", "Record");
     if (typed === null) return;
     const value = typed.trim().toLowerCase() === "blank" ? "blank" : typed.trim() === "" ? NaN : Number(typed);
     if (value !== "blank" && !(value >= 0 && value <= w.worth)) {
-      shell.notify(`Give the points, from 0 to ${w.worth}, or blank.`, "error");
+      shell.notify(`Give the points, from 0 to ${pts(w.worth)}, or blank.`, "error");
       return;
     }
     try {
@@ -758,7 +766,7 @@ export async function renderScoring(host, params, shell) {
         clear(result);
         put(
           result,
-          h("p", { text: effect.changed.length === 0 ? `${effect.words}: this changes no sheet's score.` : `${effect.words}: this changes ${effect.changed.length} of ${plural(effect.sheets, "sheet", "sheets")}: ${effect.changed.slice(0, 12).map(/** @param {any} c */ (c) => `sheet ${c.sheet} from ${c.from} to ${c.to}`).join("; ")}${effect.changed.length > 12 ? `; and ${effect.changed.length - 12} more` : ""}.` }),
+          h("p", { text: effect.changed.length === 0 ? `${effect.words}: this changes no sheet's score.` : `${effect.words}: this changes ${effect.changed.length} of ${plural(effect.sheets, "sheet", "sheets")}: ${effect.changed.slice(0, 12).map(/** @param {any} c */ (c) => `sheet ${c.sheet} from ${pts(c.from)} to ${pts(c.to)}`).join("; ")}${effect.changed.length > 12 ? `; and ${effect.changed.length - 12} more` : ""}.` }),
         );
         apply1.hidden = false;
       } catch (error) {
@@ -784,6 +792,9 @@ export async function renderScoring(host, params, shell) {
         h("div", { class: "file-row" }, h("span", { class: "file-name", text: `Question ${a.question}: ${a.words}${a.versions ? ` (versions ${a.versions.map(/** @param {number} v */ (v) => view.test.versions[v - 1]).join(", ")})` : ""}` }), a.note ? h("span", { class: "meta", text: a.note }) : null, h("button", { type: "button", class: "small-button", text: "Remove", on: { click: () => void (async () => {
           try {
             apply(await del(`${base}/adjustments/${encodeURIComponent(a.id)}`));
+            // Said in the message line, which stays in the page: without it the line still read "The adjustment is made." after the
+            // adjustment had gone.
+            shell.notify(`The adjustment to question ${a.question} is removed.`, "ok");
           } catch (error) {
             tell(error);
           }

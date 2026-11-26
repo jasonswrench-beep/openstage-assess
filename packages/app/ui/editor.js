@@ -518,13 +518,16 @@ export function createEditor(options) {
       return;
     }
     try {
+      const was = question.metadata?.status;
       const result = await api(method, `${options.picturesBase}${suffix}`, file);
       question = result.question;
       original = inputOf(question);
       draft = inputOf(question);
       render();
       options.onPictureChanged?.(result);
-      options.notify(done, "ok");
+      // A picture added, replaced or taken out is a change to what was approved, so the question is a draft again; said, as on a save.
+      const back = (was === "approved" || was === "reviewed") && question.metadata.status === "draft" ? ` It was ${was} and is a draft again, because it changed. Mark it ${was} once it has been checked.` : "";
+      options.notify(`${done}${back}`, "ok");
     } catch (error) {
       options.notify(/** @type {Error} */ (error).message, "error");
     }
@@ -705,6 +708,8 @@ export function createEditor(options) {
     saving = true;
     touch();
     try {
+      // The status the person left it at, to tell them when the save took it back to draft (below).
+      const was = draft.metadata?.status;
       const result = await options.save(draft, question.version);
       question = result.question;
       original = inputOf(question);
@@ -716,6 +721,11 @@ export function createEditor(options) {
       const replaced = result.replaced ?? [];
       if (replaced.some((r) => !WORDS_WRITTEN.has(r.code))) said.push("Your answer replaces what the file's key said (listed under Checks).");
       if (replaced.some((r) => WORDS_WRITTEN.has(r.code))) said.push("The words you wrote replace the placeholder (listed under Checks).");
+      // A reviewed or approved question that is changed goes back to draft (`editQuestion`), because what was approved is not what is
+      // there now. It was done without a word, and the "approved" in the list simply went, which looked like a fault.
+      if ((was === "approved" || was === "reviewed") && question.metadata.status === "draft") {
+        said.push(`It was ${was} and is a draft again, because it changed. Mark it ${was} once it has been checked.`);
+      }
       options.notify(said.length > 0 ? `Saved. ${said.join(" ")}` : "Saved.", "ok");
     } catch (error) {
       options.notify(/** @type {Error} */ (error).message, "error");
